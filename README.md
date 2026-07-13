@@ -24,6 +24,14 @@ through separate testing or review.
 This repository contains the core language grammar (EBNF), released as an
 open specification. The grammar is a work in progress and will evolve.
 
+## Examples
+
+The `examples/` directory contains sample TRIEL specifications:
+
+- [`hello_triel.triel`](examples/hello_triel.triel) — minimal valid specification
+- [`delivery_agreement.triel`](examples/delivery_agreement.triel) — obligations, deadlines, and breach handling
+- [`age_verification.triel`](examples/age_verification.triel) — privacy-preserving verification using native zero-knowledge constraints
+
 ## License
 
 The TRIEL specification is made available under the [Open Web Foundation
