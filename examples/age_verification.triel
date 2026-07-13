@@ -1,0 +1,26 @@
+-- TRIEL example: zero-knowledge constraint, privacy-preserving verification
+-- Demonstrates: ZK<T> field type with PROVES/WITHOUT REVEALING
+
+SPECIFICATION age_verification VERSION 1.0.0
+    JURISDICTION "EU"
+
+SUBJECTS {
+  applicant : PARTY,
+  verifier  : REGULATOR
+}
+
+FACTORS {
+  age : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING self
+        METADATA SOURCE applicant
+}
+
+TERMS {
+  applicant MUST submit_proof(age) BY DATETIME("2026-09-01T00:00:00Z");
+  verifier ON_BREACH
+    NOTIFY applicant,
+    TERMINATE
+}
+
+INVARIANTS {
+  age_verified : SAFETY : ALWAYS(age >= 18)
+}
