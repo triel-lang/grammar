@@ -1,0 +1,420 @@
+(* =========================================================================
+   TRIEL v2.3.3 EBNF Grammar — Normative Specification (PUBLIC / OPEN-SOURCE)
+   Core Language Edition
+   Author: Dmitri Chistyakov
+   © 2026 Dmitri Chistyakov.
+   License: Open Web Foundation Agreement 1.0 (OWFa 1.0)
+   =========================================================================
+*)
+
+(* -------------------------------------------------------------------------
+   1. Top-Level Specification
+   ------------------------------------------------------------------------- *)
+
+specification      ::= declaration_block
+                       subject_block
+                       terms_block
+                       factors_block
+                       [cross_modal_block]
+                       invariants_block
+                       [modalities_block]
+
+(* -------------------------------------------------------------------------
+   2. Declaration Block
+   ------------------------------------------------------------------------- *)
+
+declaration_block  ::= "SPECIFICATION" identifier "VERSION" version_literal
+                       ["STANDARD" standard_ref {"," standard_ref}]
+                       ["JURISDICTION" jurisdiction_literal]
+                       ["IMPORT" import_decl {"," import_decl}]
+                       ["PROVENANCE_REQUIRED" ":" boolean_literal]
+                       ["ANCHOR_MODE" ":" anchor_mode_val]
+                       ["QUORUM_THRESHOLD" ":" integer_literal]
+
+version_literal    ::= integer_literal "." integer_literal ["." integer_literal]
+standard_ref       ::= string_literal
+jurisdiction_literal ::= string_literal
+import_decl        ::= identifier "FROM" string_literal ["AS" identifier]
+
+anchor_mode_val    ::= "NETWORK"
+                     | "LOCAL"
+
+(* -------------------------------------------------------------------------
+   3. Subject Block
+   ------------------------------------------------------------------------- *)
+
+subject_block      ::= "SUBJECTS" "{" subject_decl {"," subject_decl} "}"
+subject_decl       ::= identifier ":" role_type ["DID" did_literal]
+role_type          ::= "PARTY" | "ORACLE" | "REGULATOR" | "SYSTEM"
+did_literal        ::= string_literal
+
+(* -------------------------------------------------------------------------
+   4. Terms Block
+   ------------------------------------------------------------------------- *)
+
+term_element       ::= named_term_decl | term_stmt
+terms_block        ::= "TERMS" "{" term_element {";" term_element} "}"
+
+named_term_decl    ::= identifier ":=" term_stmt
+
+term_stmt          ::= choice_expr
+
+choice_expr        ::= parallel_expr ("OR" parallel_expr)*
+parallel_expr      ::= sequence_expr ("AND" sequence_expr)*
+sequence_expr      ::= unless_expr ("THEN" unless_expr)*
+unless_expr        ::= timeout_expr ("UNLESS" expr "DO" timeout_expr)?
+timeout_expr       ::= base_term ("WITHIN" deadline_expr ["ELSE" base_term])?
+
+base_term          ::= condition_stmt
+                     | obligation_stmt
+                     | permission_stmt
+                     | prohibition_stmt
+                     | trigger_stmt
+                     | breach_handler_stmt
+                     | contract_ref_stmt
+                     | "(" term_stmt ")"
+
+condition_stmt     ::= "IF" expr "THEN" term_stmt
+                       {"ELIF" expr "THEN" term_stmt}
+                       ["ELSE" term_stmt]
+                     | "WHEN" expr "THEN" term_stmt
+
+obligation_stmt    ::= identifier "MUST" action_expr
+                       ["BY" deadline_expr]
+                       ["FROM" datetime_expr]
+                       ["UNTIL" datetime_expr]
+
+permission_stmt    ::= identifier "MAY" action_expr
+                       ["WHEN" expr]
+                       ["WITHIN" deadline_expr]
+
+prohibition_stmt   ::= identifier "MUST_NOT" action_expr
+                       ["WHEN" expr]
+
+trigger_stmt       ::= "ON" event_expr "DO" term_stmt
+
+breach_handler_stmt ::= identifier "ON_BREACH"
+                        breach_action {"," breach_action}
+
+breach_action      ::= "PENALTY" expr
+                     | "NOTIFY" identifier
+                     | "TERMINATE"
+                     | "CURE_BY" deadline_expr
+                     | "ESCALATE_TO" identifier
+
+contract_ref_stmt  ::= "EXECUTE" identifier
+                       ["WITH" "{" binding {"," binding} "}"]
+
+binding            ::= identifier ":=" expr
+
+(* -------------------------------------------------------------------------
+   5. Factors Block
+   ------------------------------------------------------------------------- *)
+
+factors_block      ::= "FACTORS" "{" factor_decl {"," factor_decl} "}"
+
+factor_decl        ::= identifier ":" type_expr
+                       ("POLARITY" polarity_val | "METADATA")
+                       ["THRESHOLD" numeric_literal]
+                       ["SOURCE" factor_source]
+                       ["MAX_AGE" duration_literal]
+                       ["CAUSED_BY" "{" caused_by_entry {"," caused_by_entry} "}"]
+                       ["SENSITIVITY_BOUND" numeric_literal]
+
+polarity_val       ::= float_literal
+
+factor_source      ::= identifier
+
+(* -------------------------------------------------------------------------
+   6. Type Expressions
+   ------------------------------------------------------------------------- *)
+
+type_expr          ::= type_base {"CONSTRAINT" "(" expr ")"}
+
+type_base          ::= primitive_type
+                     | zk_type
+                     | enum_ref
+                     | composite_type
+                     | "Optional" "<" type_expr ">"
+
+primitive_type     ::= "Float" | "Decimal" | "Integer" | "Boolean"
+                     | "String" | "DateTime" | "Duration"
+                     | "Address" | "Hash"
+
+composite_type     ::= "Record" "{" field_decl {"," field_decl} "}"
+                     | "List"   "<" type_expr ">"
+                     | "Map"    "<" type_expr "," type_expr ">"
+
+field_decl         ::= identifier ":" type_expr ["DEFAULT" literal]
+
+enum_ref           ::= identifier
+
+zk_type            ::= "ZK" "<" primitive_type ">" zk_constraints
+
+zk_constraints     ::= "PROVES" "(" zk_constraint {"," zk_constraint} ")"
+                       ["WITHOUT" "REVEALING" zk_visibility]
+                       ["PUBLIC_WITNESS" "(" identifier {"," identifier} ")"]
+
+zk_constraint      ::= "self" comparison_op literal
+                     | "self" "IN" "RANGE" "[" literal "," literal "]"
+                     | "self" "IN" "SET"   "{" literal {"," literal} "}"
+                     | "HASH" "(" "self" ")" comparison_op literal
+
+zk_visibility      ::= "self" | "ALL"
+
+(* -------------------------------------------------------------------------
+   7. Cross-Modal Block
+   ------------------------------------------------------------------------- *)
+
+cross_modal_block  ::= "CROSS_MODAL"
+                       "{" cross_modal_decl {"," cross_modal_decl} "}"
+
+cross_modal_decl   ::= identifier ":"
+                       "{" factor_ref "IN" modality_id ","
+                           factor_ref "IN" modality_id "}"
+                       ["TOLERANCE" numeric_literal]
+                       ["SEVERITY" ("CRITICAL" | "WARNING")]
+
+modality_id        ::= identifier
+
+(* NOTE: modality_id accepts any identifier. Concrete modality names
+   are defined by the compiler implementation, not by this grammar.
+   A reference to an undeclared modality is a semantic analysis error. *)
+
+(* -------------------------------------------------------------------------
+   8. Invariants Block
+   ------------------------------------------------------------------------- *)
+
+invariants_block   ::= "INVARIANTS" "{" invariant_decl {";" invariant_decl} "}"
+
+invariant_decl     ::= identifier [":" invariant_type] ":" temporal_expr
+
+invariant_type     ::= "SAFETY" | "LIVENESS" | "FAIRNESS"
+
+temporal_expr      ::= causal_expr
+                     | ltl_expr
+                     | ctl_expr
+                     | state_invariant
+                     | cross_modal_invariant
+
+causal_expr        ::= "FORALL" identifier "IN" event_class ":"
+                       "EXISTS" identifier "IN" event_class ":"
+                       identifier "HAPPENS_BEFORE" identifier
+
+ltl_expr           ::= ltl_implication
+ltl_implication    ::= ltl_until ("->" ltl_until)*
+ltl_until          ::= ltl_or (("U" | "R" | "W") ltl_or)*
+ltl_or             ::= ltl_and ("||" ltl_and)*
+ltl_and            ::= ltl_unary ("&&" ltl_unary)*
+ltl_unary          ::= "!" ltl_unary
+                     | "G" ltl_unary
+                     | "F" ltl_unary
+                     | "X" ltl_unary
+                     | ltl_atom
+ltl_atom           ::= state_expr | "(" ltl_expr ")"
+
+ctl_expr           ::= ctl_or
+ctl_or             ::= ctl_and ("||" ctl_and)*
+ctl_and            ::= ctl_path_formula ("&&" ctl_path_formula)*
+ctl_path_formula   ::= ("A" | "E") ctl_temporal_op "(" ctl_expr ")"
+                     | ctl_atom
+ctl_temporal_op    ::= "X" | "F" | "G" | "U" | "R"
+ctl_atom           ::= state_expr | "(" ctl_expr ")"
+
+state_invariant    ::= "ALWAYS"     "(" expr ")"
+                     | "EVENTUALLY" "(" expr ")"
+                     | "NEXT"       "(" expr ")"
+                     | "DAG"        "(" identifier ")"
+
+cross_modal_invariant ::= "CROSS_MODAL_CONSISTENT"
+                          "(" identifier {"," identifier} ")"
+
+event_class        ::= identifier ["(" param_decl {"," param_decl} ")"]
+param_decl         ::= identifier ":" type_expr
+
+(* -------------------------------------------------------------------------
+   9. Modalities Block
+   ------------------------------------------------------------------------- *)
+
+modalities_block   ::= "MODALITIES" "{" modality_conf {"," modality_conf} "}"
+
+modality_conf      ::= modality_id ":" "{" modality_param {"," modality_param} "}"
+
+modality_param     ::= identifier ":" literal
+
+(* -------------------------------------------------------------------------
+   10. Expressions
+   ------------------------------------------------------------------------- *)
+
+expr               ::= implication_expr
+
+implication_expr   ::= disjunction_expr ("IMPLIES" disjunction_expr)*
+disjunction_expr   ::= conjunction_expr ("OR" conjunction_expr)*
+conjunction_expr   ::= negation_expr ("AND" negation_expr)*
+negation_expr      ::= "NOT" negation_expr | comparison_expr
+comparison_expr    ::= arithmetic_expr (comparison_op arithmetic_expr)?
+arithmetic_expr    ::= mul_expr (("+" | "-") mul_expr)*
+mul_expr           ::= unary_expr (("*" | "/" | "%") unary_expr)*
+unary_expr         ::= "-" unary_expr | primary
+
+primary            ::= literal
+                     | factor_ref
+                     | function_call
+                     | "(" expr ")"
+                     | if_expr
+                     | let_expr
+
+if_expr            ::= "IF" expr "THEN" expr
+                       {"ELIF" expr "THEN" expr}
+                       "ELSE" expr
+
+let_expr           ::= "LET" identifier ":" type_expr "=" expr "IN" expr
+
+function_call      ::= identifier "(" [expr {"," expr}] ")"
+
+comparison_op      ::= "<" | "<=" | ">" | ">=" | "==" | "!="
+
+action_expr        ::= identifier ["(" [expr {"," expr}] ")"]
+
+event_expr         ::= identifier ["(" [expr {"," expr}] ")"]
+
+factor_ref         ::= identifier ("." identifier)*
+
+deadline_expr      ::= datetime_literal
+                     | duration_literal
+                     | datetime_expr "+" duration_literal
+                     | datetime_expr "-" duration_literal
+                     | factor_ref
+
+datetime_expr      ::= datetime_literal | factor_ref
+state_expr         ::= expr
+
+(* -------------------------------------------------------------------------
+   11. Literals and Identifiers
+   ------------------------------------------------------------------------- *)
+
+literal            ::= numeric_literal
+                     | string_literal
+                     | boolean_literal
+                     | datetime_literal
+                     | duration_literal
+
+numeric_literal    ::= integer_literal | float_literal
+integer_literal    ::= digit+
+float_literal      ::= digit+ "." digit+ [("e" | "E") ["+" | "-"] digit+]
+boolean_literal    ::= "true" | "false"
+string_literal     ::= '"' {character} '"'
+datetime_literal   ::= "DATETIME" "(" string_literal ")"
+duration_literal   ::= integer_literal time_unit
+
+time_unit          ::= "SECOND" | "SECONDS" | "MINUTE" | "MINUTES"
+                     | "HOUR" | "HOURS" | "DAY" | "DAYS"
+                     | "BUSINESS_DAY" | "BUSINESS_DAYS"
+                     | "MONTH" | "MONTHS" | "YEAR" | "YEARS"
+
+identifier         ::= letter (letter | digit | "_")*
+
+(* -------------------------------------------------------------------------
+   11a. Shared Rules
+   ------------------------------------------------------------------------- *)
+
+caused_by_entry    ::= identifier "WEIGHT" numeric_literal
+                       (* WEIGHT ∈ [-1.0, 1.0]; ≠ 0.0 *)
+
+(* -------------------------------------------------------------------------
+   12. Lexical Tokens
+   ------------------------------------------------------------------------- *)
+
+letter             ::= "A".."Z" | "a".."z"
+digit              ::= "0".."9"
+character          ::= ? any-ASCII-character-except-double-quote ?
+
+(* Comments:
+   Single-line : -- comment to end of line
+   Multi-line  : {- comment -}                                               *)
+
+(* =========================================================================
+   SEMANTIC RULES
+   =========================================================================
+
+   PROVENANCE / ANCHOR / QUORUM — RESERVED EXTENSION FIELDS
+
+   The fields PROVENANCE_REQUIRED, ANCHOR_MODE and QUORUM_THRESHOLD are
+   declared in declaration_block (see §2) as syntactic extension points
+   for specification provenance verification.
+
+   The semantics of these fields are defined by the compiler
+   implementation and are not part of the normative TRIEL grammar.
+   The grammar guarantees only syntactic correctness and value types
+   of these fields:
+
+     PROVENANCE_REQUIRED ::= boolean_literal       (default: false)
+     ANCHOR_MODE          ::= "NETWORK" | "LOCAL"   (default: NETWORK)
+     QUORUM_THRESHOLD     ::= integer_literal       (default: 5)
+                               constraint: 1 ≤ QUORUM_THRESHOLD ≤ n,
+                               where n = number of active modalities
+                               declared in the MODALITIES block.
+                               Constraint violation = compile error
+                               at semantic analysis phase.
+
+   If PROVENANCE_REQUIRED is true, the compiler requires provenance
+   verification data before generating modality output; the concrete
+   verification mechanism is implemented at compiler level and is not
+   specified by this grammar.
+
+   =========================================================================
+
+   USAGE EXAMPLES
+
+   Example 1: Specification requiring provenance verification
+   -----------------------------------------------------------
+   SPECIFICATION patient_consent VERSION 1.0.0
+       STANDARD "HL7-FHIR-R4", "GDPR-Art-7"
+       JURISDICTION "EU"
+       PROVENANCE_REQUIRED: true
+       ANCHOR_MODE: NETWORK
+       QUORUM_THRESHOLD: 5
+
+   Example 2: Offline mode
+   -----------------------------------------------------------
+   SPECIFICATION probe_patch VERSION 1.0.0
+       JURISDICTION "DEEP_SPACE"
+       PROVENANCE_REQUIRED: true
+       ANCHOR_MODE: LOCAL
+       QUORUM_THRESHOLD: 5
+
+   Example 3: Backward compatibility
+   -----------------------------------------------------------
+   SPECIFICATION legacy_contract VERSION 1.0.0
+       STANDARD "EU-MiFID-II"
+   -- Fields PROVENANCE_REQUIRED, ANCHOR_MODE, QUORUM_THRESHOLD
+   -- absent → defaults: false, NETWORK, 5.
+
+   Example 4: Elevated threshold
+   -----------------------------------------------------------
+   SPECIFICATION satellite_fw VERSION 2.0.0
+       JURISDICTION "AEROSPACE"
+       PROVENANCE_REQUIRED: true
+       ANCHOR_MODE: LOCAL
+       QUORUM_THRESHOLD: 7
+
+   Example 5: Cross-modal reference using abstract modality names
+   -----------------------------------------------------------
+   CROSS_MODAL {
+     payment_vs_legal: {
+       payment.amount IN modality_a,
+       contract.clause IN modality_b
+     } TOLERANCE 0.01 SEVERITY CRITICAL
+   }
+   -- Modality names are placeholders here and are resolved by the
+   -- compiler. The grammar accepts any identifier in this position.
+
+   =========================================================================
+
+   NOTE ON LTL/CTL MIXING:
+   temporal_expr allows ltl_expr and ctl_expr within the same
+   invariants_block. Each formula is validated according to its own
+   logic, independently of the other. Mixing is permitted.
+
+   =========================================================================
+*)
