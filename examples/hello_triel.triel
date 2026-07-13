@@ -1,0 +1,21 @@
+-- TRIEL example: minimal valid specification
+-- Demonstrates: SUBJECTS, TERMS (obligation), FACTORS, INVARIANTS (liveness)
+
+SPECIFICATION hello_triel VERSION 1.0.0
+
+SUBJECTS {
+  alice : PARTY,
+  bob   : PARTY
+}
+
+TERMS {
+  alice MUST send_greeting
+}
+
+FACTORS {
+  greeting_sent : Boolean METADATA SOURCE alice
+}
+
+INVARIANTS {
+  greeting_happens : LIVENESS : EVENTUALLY(greeting_sent == true)
+}
