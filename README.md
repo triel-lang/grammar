@@ -24,6 +24,14 @@ through separate testing or review.
 This repository contains the core language grammar (EBNF), released as an
 open specification. The grammar is a work in progress and will evolve.
 
+Current version: **v2.4** ([`TRIEL-grammar-v2_4-core.ebnf`](TRIEL-grammar-v2_4-core.ebnf)).
+The previous version remains available for reference: [`TRIEL-grammar-v2.3.3-core.ebnf`](TRIEL-grammar-v2.3.3-core.ebnf).
+
+v2.4 adds three backward-compatible extensions:
+- `REPLACES` in the declaration block, for chaining specification versions
+- an optional `WITHIN` deadline on `EVENTUALLY(...)` invariants, for bounded liveness properties
+- a `Progress<T>` composite type, for expressing graduated status (not just boolean done/not-done)
+
 ## Examples
 
 The `examples/` directory contains sample TRIEL specifications:
