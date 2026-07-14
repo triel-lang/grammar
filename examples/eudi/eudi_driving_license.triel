@@ -1,0 +1,36 @@
+-- TRIEL example: EUDI Wallet driving license — issuance and presentation policy
+-- Demonstrates: conditional obligations, ZK age predicate, prohibition on stale credentials
+
+SPECIFICATION eudi_driving_license VERSION 1.0.0
+    STANDARD "ISO-18013-5", "eIDAS-2.0"
+    JURISDICTION "EU"
+
+SUBJECTS {
+  applicant : PARTY,
+  issuer    : REGULATOR,
+  verifier  : PARTY
+}
+
+FACTORS {
+  age                       : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING self
+                              METADATA SOURCE applicant,
+  vision_correction_needed  : Boolean METADATA SOURCE issuer,
+  license_category          : String  METADATA SOURCE issuer,
+  license_valid             : Boolean METADATA SOURCE issuer MAX_AGE 24 HOURS
+}
+
+TERMS {
+  applicant MUST submit_proof(age) BY DATETIME("2026-09-01T00:00:00Z");
+
+  IF vision_correction_needed THEN
+    issuer MUST attach_restriction("corrective_lenses")
+  ELSE
+    issuer MAY issue_unrestricted_category;
+
+  verifier MUST_NOT accept_presentation WHEN license_valid == false
+}
+
+INVARIANTS {
+  license_requires_adult_holder       : SAFETY : ALWAYS(age >= 18);
+  presentation_requires_valid_license : SAFETY : ALWAYS(license_valid == true)
+}
