@@ -31,6 +31,7 @@ The `examples/` directory contains sample TRIEL specifications:
 - [`hello_triel.triel`](examples/hello_triel.triel) — minimal valid specification
 - [`delivery_agreement.triel`](examples/delivery_agreement.triel) — obligations, deadlines, and breach handling
 - [`age_verification.triel`](examples/age_verification.triel) — privacy-preserving verification using native zero-knowledge constraints
+- [`eudi/eudi_driving_license.triel`](examples/eudi/eudi_driving_license.triel) — EUDI Wallet-style issuance and presentation policy for a driving license credential, combining conditional obligations and a zero-knowledge age predicate
 
 ## License
 
