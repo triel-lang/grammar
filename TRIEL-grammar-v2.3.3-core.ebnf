@@ -65,19 +65,45 @@ sequence_expr      ::= unless_expr ("THEN" unless_expr)*
 unless_expr        ::= timeout_expr ("UNLESS" expr "DO" timeout_expr)?
 timeout_expr       ::= base_term ("WITHIN" deadline_expr ["ELSE" base_term])?
 
-base_term          ::= condition_stmt
-                     | obligation_stmt
-                     | permission_stmt
-                     | prohibition_stmt
-                     | trigger_stmt
-                     | breach_handler_stmt
-                     | contract_ref_stmt
-                     | "(" term_stmt ")"
+(* --- Disambiguation fix (see PATCH log): base_term now routes through
+   matched_term / unmatched_term instead of condition_stmt directly, so
+   that ELSE-binding in nested IF chains is deterministic. --- *)
 
-condition_stmt     ::= "IF" expr "THEN" term_stmt
-                       {"ELIF" expr "THEN" term_stmt}
-                       ["ELSE" term_stmt]
-                     | "WHEN" expr "THEN" term_stmt
+base_term           ::= matched_term | unmatched_term
+
+matched_term        ::= matched_condition
+                      | obligation_stmt
+                      | permission_stmt
+                      | prohibition_stmt
+                      | trigger_stmt
+                      | breach_handler_stmt
+                      | contract_ref_stmt
+                      | "(" term_stmt ")"
+
+unmatched_term       ::= unmatched_condition
+
+condition_stmt       ::= matched_condition | unmatched_condition
+
+(* Every branch of a matched_condition is itself fully resolved — any
+   nested IF inside it must also have an ELSE. This is what makes ELSE
+   binding unambiguous: an ELSE can only ever attach to the nearest
+   still-open (unmatched) IF. *)
+matched_condition    ::= "IF" expr "THEN" matched_term
+                         {"ELIF" expr "THEN" matched_term}
+                         "ELSE" matched_term
+                       | "WHEN" expr "THEN" matched_term
+
+(* An unmatched_condition is an IF/ELIF chain with no ELSE yet at the
+   outermost level — or one whose last ELSE/ELIF branch is itself still
+   unmatched. This is the only place a "dangling" IF can occur, and it
+   can only ever occur once per chain. *)
+unmatched_condition  ::= "IF" expr "THEN" term_stmt
+                       | "IF" expr "THEN" matched_term
+                         {"ELIF" expr "THEN" matched_term}
+                         "ELIF" expr "THEN" unmatched_term
+                       | "IF" expr "THEN" matched_term
+                         {"ELIF" expr "THEN" matched_term}
+                         "ELSE" unmatched_term
 
 obligation_stmt    ::= identifier "MUST" action_expr
                        ["BY" deadline_expr]
@@ -313,9 +339,54 @@ time_unit          ::= "SECOND" | "SECONDS" | "MINUTE" | "MINUTES"
                      | "MONTH" | "MONTHS" | "YEAR" | "YEARS"
 
 identifier         ::= letter (letter | digit | "_")*
+                       (* constraint: MUST NOT be lexically identical to
+                          any reserved keyword listed in §11a below. A
+                          conforming lexer MUST reject, at tokenization
+                          time, any identifier-shaped token that exactly
+                          matches a reserved keyword; it MUST NOT
+                          silently prefer one interpretation over the
+                          other. *)
 
 (* -------------------------------------------------------------------------
-   11a. Shared Rules
+   11a. Reserved Keywords
+   ------------------------------------------------------------------------- *)
+
+(* The following 124 tokens are reserved by this grammar and MUST NOT be
+   used as an identifier, in any position where identifier is a valid
+   production, in any conforming TRIEL specification: *)
+
+   "A", "ALL", "ALWAYS", "ANCHOR_MODE", "AND", "AS", "Address", "BUSINESS_DAY",
+   "BUSINESS_DAYS", "BY", "Boolean", "CAUSED_BY", "CONSTRAINT", "CRITICAL", "CROSS_MODAL", "CROSS_MODAL_CONSISTENT",
+   "CURE_BY", "DAG", "DATETIME", "DAY", "DAYS", "DEFAULT", "DID", "DO",
+   "DateTime", "Decimal", "Duration", "E", "ELIF", "ELSE", "ESCALATE_TO", "EVENTUALLY",
+   "EXECUTE", "EXISTS", "F", "FACTORS", "FAIRNESS", "FORALL", "FROM", "Float",
+   "G", "HAPPENS_BEFORE", "HASH", "HOUR", "HOURS", "Hash", "IF", "IMPLIES",
+   "IMPORT", "IN", "INVARIANTS", "Integer", "JURISDICTION", "LET", "LIVENESS", "LOCAL",
+   "List", "MAX_AGE", "MAY", "METADATA", "MINUTE", "MINUTES", "MODALITIES", "MONTH",
+   "MONTHS", "MUST", "MUST_NOT", "Map", "NETWORK", "NEXT", "NOT", "NOTIFY",
+   "ON", "ON_BREACH", "OR", "ORACLE", "Optional", "PARTY", "PENALTY", "POLARITY",
+   "PROVENANCE_REQUIRED", "PROVES", "PUBLIC_WITNESS", "QUORUM_THRESHOLD", "R", "RANGE", "REGULATOR", "REVEALING",
+   "Record", "SAFETY", "SECOND", "SECONDS", "SENSITIVITY_BOUND", "SET", "SEVERITY", "SOURCE",
+   "SPECIFICATION", "STANDARD", "SUBJECTS", "SYSTEM", "String", "TERMINATE", "TERMS", "THEN",
+   "THRESHOLD", "TOLERANCE", "U", "UNLESS", "UNTIL", "VERSION", "W", "WARNING",
+   "WEIGHT", "WHEN", "WITH", "WITHIN", "WITHOUT", "X", "YEAR", "YEARS",
+   "ZK", "false", "self", "true"
+
+(* IMPLEMENTATION NOTE — single-letter LTL/CTL operators: eight of the
+   reserved tokens above ("A", "E", "F", "G", "R", "U", "W", "X") are
+   single uppercase letters, used as LTL/CTL temporal operators in
+   Section 8 (ltl_unary, ltl_until, ctl_path_formula, ctl_temporal_op).
+   Reserving them is necessary for correctness, but it means no bare
+   single uppercase letter may be used as an identifier anywhere in a
+   TRIEL specification. This is a known, deliberate trade-off. If this
+   proves too restrictive in practice, the alternative is to require
+   the fully-spelled forms already available for state_invariant
+   (ALWAYS/EVENTUALLY/NEXT) and retire the bare single-letter LTL/CTL
+   operator forms in a future version — that would be a breaking
+   syntax change and remains an open design question. *)
+
+(* -------------------------------------------------------------------------
+   11b. Shared Rules
    ------------------------------------------------------------------------- *)
 
 caused_by_entry    ::= identifier "WEIGHT" numeric_literal
