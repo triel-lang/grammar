@@ -515,7 +515,7 @@ character          ::= ? any-ASCII-character-except-double-quote ?
 
    Example 6: REPLACES for version chaining (v2.4)
    -----------------------------------------------------------
-   SPECIFICATION consilium_task_distribution VERSION 2.0.0
+   SPECIFICATION project_task_distribution VERSION 2.0.0
        REPLACES 1.0.0
        JURISDICTION "INTERNAL"
 
@@ -528,7 +528,7 @@ character          ::= ? any-ASCII-character-except-double-quote ?
    Example 8: Progress<T> factor (v2.4)
    -----------------------------------------------------------
    FACTORS {
-     parser_progress : Progress<BuildStatus> METADATA SOURCE gemini
+     parser_progress : Progress<BuildStatus> METADATA SOURCE build_system
    }
 
    =========================================================================
