@@ -3,6 +3,7 @@
 An open specification language for deterministic, verifiable compilation.
 
 Website: https://triel.dev
+
 Interactive demo: https://triel.ai (illustrative examples, not a live compiler)
 
 TRIEL lets a single, human-readable specification compile deterministically into multiple downstream artifacts — including executable code, formal proofs, and structured documentation — from one authoritative source.
