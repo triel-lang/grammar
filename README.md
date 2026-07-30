@@ -2,7 +2,8 @@
 
 An open specification language for deterministic, verifiable compilation.
 
-**Website:** https://triel.dev
+Website: https://triel.dev
+Interactive demo: https://triel.ai (illustrative examples, not a live compiler)
 
 TRIEL lets a single, human-readable specification compile deterministically into multiple downstream artifacts — including executable code, formal proofs, and structured documentation — from one authoritative source.
 
@@ -30,10 +31,10 @@ v2.4 adds three backward-compatible extensions:
 
 The `examples/` directory contains sample TRIEL specifications:
 
-* [`hello_triel.triel`](examples/hello_triel.triel) — minimal valid specification
-* [`delivery_agreement.triel`](examples/delivery_agreement.triel) — obligations, deadlines, and breach handling
-* [`age_verification.triel`](examples/age_verification.triel) — privacy-preserving verification using native zero-knowledge constraints
-* [`eudi/eudi_driving_license.triel`](examples/eudi/eudi_driving_license.triel) — EUDI Wallet-style issuance and presentation policy for a driving license credential, combining conditional obligations and a zero-knowledge age predicate
+* `hello_triel.triel` — minimal valid specification
+* `delivery_agreement.triel` — obligations, deadlines, and breach handling
+* `age_verification.triel` — privacy-preserving verification using native zero-knowledge constraints
+* `eudi/eudi_driving_license.triel` — EUDI Wallet-style issuance and presentation policy for a driving license credential, combining conditional obligations and a zero-knowledge age predicate
 
 ## License
 
