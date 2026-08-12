@@ -1,0 +1,297 @@
+// ============================================================================
+// TRIEL v2.4 — Lark grammar, translated directly from
+// TRIEL-grammar-v2_4-core.ebnf (github.com/triel-lang/grammar).
+//
+// This is a *faithful* translation of the published EBNF, not a corrected
+// one. Where the EBNF is ambiguous (WITHIN, ON...DO, LTL/CTL atoms — see
+// audit findings D-19/D-20/D-21), this grammar reproduces the same
+// ambiguity so the parser's diagnostics reflect the grammar as published,
+// not a silently "fixed" version of it. Those fixes are tracked separately.
+// ============================================================================
+
+start: specification
+
+specification: declaration_block subject_block terms_block factors_block \
+                cross_modal_block? invariants_block modalities_block?
+
+// --- 2. Declaration Block --------------------------------------------------
+
+declaration_block: "SPECIFICATION" identifier "VERSION" version_literal \
+                    ("REPLACES" version_literal)? \
+                    ("STANDARD" standard_ref ("," standard_ref)*)? \
+                    ("JURISDICTION" jurisdiction_literal)? \
+                    ("IMPORT" import_decl ("," import_decl)*)? \
+                    ("PROVENANCE_REQUIRED" ":" boolean_literal)? \
+                    ("ANCHOR_MODE" ":" anchor_mode_val)? \
+                    ("QUORUM_THRESHOLD" ":" INTEGER_LITERAL)?
+
+version_literal: INTEGER_LITERAL "." INTEGER_LITERAL ("." INTEGER_LITERAL)?
+standard_ref: STRING_LITERAL
+jurisdiction_literal: STRING_LITERAL
+import_decl: identifier "FROM" STRING_LITERAL ("AS" identifier)?
+anchor_mode_val: "NETWORK" | "LOCAL"
+
+// --- 3. Subject Block -------------------------------------------------------
+
+subject_block: "SUBJECTS" "{" subject_decl ("," subject_decl)* "}"
+subject_decl: identifier ":" role_type ("DID" did_literal)?
+role_type: "PARTY" | "ORACLE" | "REGULATOR" | "SYSTEM"
+did_literal: STRING_LITERAL
+
+// --- 4. Terms Block -----------------------------------------------------
+
+term_element: named_term_decl | term_stmt
+terms_block: "TERMS" "{" term_element (";" term_element)* "}"
+named_term_decl: identifier ":=" term_stmt
+term_stmt: choice_expr
+
+choice_expr: parallel_expr ("OR" parallel_expr)*
+parallel_expr: sequence_expr ("AND" sequence_expr)*
+sequence_expr: unless_expr ("THEN" unless_expr)*
+unless_expr: timeout_expr ("UNLESS" expr "DO" timeout_expr)?
+timeout_expr: base_term ("WITHIN" deadline_expr ("ELSE" base_term)?)?
+
+base_term: matched_term | unmatched_term
+
+matched_term: matched_condition
+            | obligation_stmt
+            | permission_stmt
+            | prohibition_stmt
+            | trigger_stmt
+            | breach_handler_stmt
+            | contract_ref_stmt
+            | "(" term_stmt ")"
+
+unmatched_term: unmatched_condition
+
+condition_stmt: matched_condition | unmatched_condition
+
+matched_condition: "IF" expr "THEN" matched_term \
+                    ("ELIF" expr "THEN" matched_term)* \
+                    "ELSE" matched_term
+                  | "WHEN" expr "THEN" matched_term
+
+unmatched_condition: "IF" expr "THEN" term_stmt
+                    | "IF" expr "THEN" matched_term \
+                      ("ELIF" expr "THEN" matched_term)* \
+                      "ELIF" expr "THEN" unmatched_term
+                    | "IF" expr "THEN" matched_term \
+                      ("ELIF" expr "THEN" matched_term)* \
+                      "ELSE" unmatched_term
+
+obligation_stmt: identifier "MUST" action_expr \
+                 ("BY" deadline_expr)? \
+                 ("FROM" datetime_expr)? \
+                 ("UNTIL" datetime_expr)?
+
+permission_stmt: identifier "MAY" action_expr \
+                  ("WHEN" expr)? \
+                  ("WITHIN" deadline_expr)?
+
+prohibition_stmt: identifier "MUST_NOT" action_expr ("WHEN" expr)?
+
+trigger_stmt: "ON" event_expr "DO" term_stmt
+
+breach_handler_stmt: identifier "ON_BREACH" breach_action ("," breach_action)*
+
+breach_action: "PENALTY" expr
+             | "NOTIFY" identifier
+             | "TERMINATE"
+             | "CURE_BY" deadline_expr
+             | "ESCALATE_TO" identifier
+
+contract_ref_stmt: "EXECUTE" identifier ("WITH" "{" binding ("," binding)* "}")?
+
+binding: identifier ":=" expr
+
+// --- 5. Factors Block --------------------------------------------------
+
+factors_block: "FACTORS" "{" factor_decl ("," factor_decl)* "}"
+
+factor_decl: identifier ":" type_expr \
+             ("POLARITY" polarity_val | "METADATA") \
+             ("THRESHOLD" numeric_literal)? \
+             ("SOURCE" factor_source)? \
+             ("MAX_AGE" duration_literal)? \
+             ("CAUSED_BY" "{" caused_by_entry ("," caused_by_entry)* "}")? \
+             ("SENSITIVITY_BOUND" numeric_literal)?
+
+polarity_val: FLOAT_LITERAL
+factor_source: identifier
+
+// --- 6. Type Expressions -----------------------------------------------
+
+type_expr: type_base ("CONSTRAINT" "(" expr ")")*
+
+type_base: primitive_type
+         | zk_type
+         | enum_ref
+         | composite_type
+         | "Optional" "<" type_expr ">"
+
+primitive_type: "Float" | "Decimal" | "Integer" | "Boolean"
+              | "String" | "DateTime" | "Duration"
+              | "Address" | "Hash"
+
+composite_type: "Record" "{" field_decl ("," field_decl)* "}"
+              | "List" "<" type_expr ">"
+              | "Map" "<" type_expr "," type_expr ">"
+              | "Progress" "<" enum_ref ">"
+
+field_decl: identifier ":" type_expr ("DEFAULT" literal)?
+
+enum_ref: identifier
+
+zk_type: "ZK" "<" primitive_type ">" zk_constraints
+
+zk_constraints: "PROVES" "(" zk_constraint ("," zk_constraint)* ")" \
+                ("WITHOUT" "REVEALING" zk_visibility)? \
+                ("PUBLIC_WITNESS" "(" identifier ("," identifier)* ")")?
+
+zk_constraint: "self" comparison_op literal
+             | "self" "IN" "RANGE" "[" literal "," literal "]"
+             | "self" "IN" "SET" "{" literal ("," literal)* "}"
+             | "HASH" "(" "self" ")" comparison_op literal
+
+zk_visibility: "self" | "ALL"
+
+// --- 7. Cross-Modal Block ------------------------------------------------
+
+cross_modal_block: "CROSS_MODAL" "{" cross_modal_decl ("," cross_modal_decl)* "}"
+
+cross_modal_decl: identifier ":" \
+                   "{" factor_ref "IN" modality_id "," \
+                       factor_ref "IN" modality_id "}" \
+                   ("TOLERANCE" numeric_literal)? \
+                   ("SEVERITY" ("CRITICAL" | "WARNING"))?
+
+modality_id: identifier
+
+// --- 8. Invariants Block -------------------------------------------------
+
+invariants_block: "INVARIANTS" "{" invariant_decl (";" invariant_decl)* "}"
+
+invariant_decl: identifier (":" invariant_type)? ":" temporal_expr
+
+invariant_type: "SAFETY" | "LIVENESS" | "FAIRNESS"
+
+temporal_expr: causal_expr
+             | ltl_expr
+             | ctl_expr
+             | state_invariant
+             | cross_modal_invariant
+
+causal_expr: "FORALL" identifier "IN" event_class ":" \
+             "EXISTS" identifier "IN" event_class ":" \
+             identifier "HAPPENS_BEFORE" identifier
+
+ltl_expr: ltl_implication
+ltl_implication: ltl_until ("->" ltl_until)*
+ltl_until: ltl_or (LTL_UNTIL_OP ltl_or)*
+LTL_UNTIL_OP: "U" | "R" | "W"
+ltl_or: ltl_and ("||" ltl_and)*
+ltl_and: ltl_unary ("&&" ltl_unary)*
+ltl_unary: "!" ltl_unary
+         | "G" ltl_unary
+         | "F" ltl_unary
+         | "X" ltl_unary
+         | ltl_atom
+ltl_atom: state_expr | "(" ltl_expr ")"
+
+ctl_expr: ctl_or
+ctl_or: ctl_and ("||" ctl_and)*
+ctl_and: ctl_path_formula ("&&" ctl_path_formula)*
+ctl_path_formula: CTL_PATH_QUANT ctl_temporal_op "(" ctl_expr ")"
+                 | ctl_atom
+CTL_PATH_QUANT: "A" | "E"
+ctl_temporal_op: "X" | "F" | "G" | "U" | "R"
+ctl_atom: state_expr | "(" ctl_expr ")"
+
+state_invariant: "ALWAYS" "(" expr ")"
+               | "EVENTUALLY" "(" expr ")" ("WITHIN" deadline_expr)?
+               | "NEXT" "(" expr ")"
+               | "DAG" "(" identifier ")"
+
+cross_modal_invariant: "CROSS_MODAL_CONSISTENT" "(" identifier ("," identifier)* ")"
+
+event_class: identifier ("(" param_decl ("," param_decl)* ")")?
+param_decl: identifier ":" type_expr
+
+// --- 9. Modalities Block ---------------------------------------------------
+
+modalities_block: "MODALITIES" "{" modality_conf ("," modality_conf)* "}"
+modality_conf: modality_id ":" "{" modality_param ("," modality_param)* "}"
+modality_param: identifier ":" literal
+
+// --- 10. Expressions ------------------------------------------------------
+
+expr: implication_expr
+implication_expr: disjunction_expr ("IMPLIES" disjunction_expr)*
+disjunction_expr: conjunction_expr ("OR" conjunction_expr)*
+conjunction_expr: negation_expr ("AND" negation_expr)*
+negation_expr: "NOT" negation_expr | comparison_expr
+comparison_expr: arithmetic_expr (comparison_op arithmetic_expr)?
+arithmetic_expr: mul_expr (ADD_OP mul_expr)*
+ADD_OP: "+" | "-"
+mul_expr: unary_expr (MUL_OP unary_expr)*
+MUL_OP: "*" | "/" | "%"
+unary_expr: "-" unary_expr | primary
+
+primary: literal
+       | factor_ref
+       | function_call
+       | "(" expr ")"
+       | if_expr
+       | let_expr
+
+if_expr: "IF" expr "THEN" expr ("ELIF" expr "THEN" expr)* "ELSE" expr
+let_expr: "LET" identifier ":" type_expr "=" expr "IN" expr
+function_call: identifier "(" (expr ("," expr)*)? ")"
+comparison_op: "<=" | ">=" | "==" | "!=" | "<" | ">"
+action_expr: identifier ("(" (expr ("," expr)*)? ")")?
+event_expr: identifier ("(" (expr ("," expr)*)? ")")?
+factor_ref: identifier ("." identifier)*
+
+deadline_expr: datetime_expr ADD_OP duration_literal
+             | datetime_literal
+             | duration_literal
+             | factor_ref
+
+datetime_expr: datetime_literal | factor_ref
+state_expr: expr
+
+// --- 11. Literals and Identifiers ------------------------------------------
+
+literal: numeric_literal
+       | STRING_LITERAL
+       | boolean_literal
+       | datetime_literal
+       | duration_literal
+
+numeric_literal: FLOAT_LITERAL | INTEGER_LITERAL
+boolean_literal: "true" | "false"
+datetime_literal: "DATETIME" "(" STRING_LITERAL ")"
+duration_literal: INTEGER_LITERAL time_unit
+
+time_unit: "SECOND" | "SECONDS" | "MINUTE" | "MINUTES"
+         | "HOUR" | "HOURS" | "DAY" | "DAYS"
+         | "BUSINESS_DAY" | "BUSINESS_DAYS"
+         | "MONTH" | "MONTHS" | "YEAR" | "YEARS"
+
+caused_by_entry: identifier "WEIGHT" numeric_literal
+
+identifier: IDENTIFIER
+
+// --- 12. Lexical Tokens -----------------------------------------------------
+
+IDENTIFIER: /(?!(?:A|ALL|ALWAYS|ANCHOR_MODE|AND|AS|Address|BUSINESS_DAY|BUSINESS_DAYS|BY|Boolean|CAUSED_BY|CONSTRAINT|CRITICAL|CROSS_MODAL|CROSS_MODAL_CONSISTENT|CURE_BY|DAG|DATETIME|DAY|DAYS|DEFAULT|DID|DO|DateTime|Decimal|Duration|E|ELIF|ELSE|ESCALATE_TO|EVENTUALLY|EXECUTE|EXISTS|F|FACTORS|FAIRNESS|FORALL|FROM|Float|G|HAPPENS_BEFORE|HASH|HOUR|HOURS|Hash|IF|IMPLIES|IMPORT|IN|INVARIANTS|Integer|JURISDICTION|LET|LIVENESS|LOCAL|List|MAX_AGE|MAY|METADATA|MINUTE|MINUTES|MODALITIES|MONTH|MONTHS|MUST|MUST_NOT|Map|NETWORK|NEXT|NOT|NOTIFY|ON|ON_BREACH|OR|ORACLE|Optional|PARTY|PENALTY|POLARITY|PROVENANCE_REQUIRED|PROVES|PUBLIC_WITNESS|Progress|QUORUM_THRESHOLD|R|RANGE|REGULATOR|REPLACES|REVEALING|Record|SAFETY|SECOND|SECONDS|SENSITIVITY_BOUND|SET|SEVERITY|SOURCE|SPECIFICATION|STANDARD|SUBJECTS|SYSTEM|String|TERMINATE|TERMS|THEN|THRESHOLD|TOLERANCE|U|UNLESS|UNTIL|VERSION|W|WARNING|WEIGHT|WHEN|WITH|WITHIN|WITHOUT|X|YEAR|YEARS|ZK|false|self|true)\b)[A-Za-z][A-Za-z0-9_]*/
+INTEGER_LITERAL: /[0-9]+/
+FLOAT_LITERAL: /[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?/
+STRING_LITERAL: /"[^"\n]*"/
+
+COMMENT: /--[^\n]*/
+ML_COMMENT: /\{-.*?-\}/s
+
+%ignore COMMENT
+%ignore ML_COMMENT
+%ignore /[ \t\r\n]+/
