@@ -177,7 +177,16 @@ field_decl         ::= identifier ":" type_expr ["DEFAULT" literal]
 
 enum_ref           ::= identifier
 
-zk_type            ::= "ZK" "<" primitive_type ">" zk_constraints
+zk_type            ::= "ZK" "<" zk_primitive_type ">" zk_constraints
+
+(* NOTE: zk_type is restricted to a finite/hashable subset of primitive_type
+   (Integer, Boolean, String, Address, Hash) and excludes Float and Decimal.
+   Proof systems operate over finite fields; representing floating-point
+   values in them is a known soundness and cost hazard (comparisons can
+   lose meaning, and proof size grows sharply). A specification needing to
+   prove something about a decimal quantity should scale it to an Integer
+   at the specification boundary instead. *)
+zk_primitive_type  ::= "Integer" | "Boolean" | "String" | "Address" | "Hash"
 
 zk_constraints     ::= "PROVES" "(" zk_constraint {"," zk_constraint} ")"
                        ["WITHOUT" "REVEALING" zk_visibility]
@@ -189,6 +198,14 @@ zk_constraint      ::= "self" comparison_op literal
                      | "HASH" "(" "self" ")" comparison_op literal
 
 zk_visibility      ::= "self" | "ALL"
+
+(* NOTE: the ["WITHOUT" "REVEALING" zk_visibility] clause is optional in the
+   grammar, but its absence is not "unspecified" at the semantic level: a
+   zk_type factor with no WITHOUT REVEALING clause at all defaults to
+   zk_visibility = "self" (fully hidden). Privacy is the secure default;
+   writing WITHOUT REVEALING ALL is required to opt OUT of it, and the
+   grammar makes that opt-out visible in the source rather than implicit.
+   See TECHNICAL_REPORT.md §2.7 for the enforcement rule this supports. *)
 
 (* -------------------------------------------------------------------------
    7. Cross-Modal Block
@@ -261,7 +278,7 @@ event_class        ::= identifier ["(" param_decl {"," param_decl} ")"]
 param_decl         ::= identifier ":" type_expr
 
 (* -------------------------------------------------------------------------
-   9. Modalities Block
+9. Modalities Block
    ------------------------------------------------------------------------- *)
 
 modalities_block   ::= "MODALITIES" "{" modality_conf {"," modality_conf} "}"
