@@ -11,14 +11,6 @@ SUBJECTS {
   verifier  : PARTY
 }
 
-FACTORS {
-  age                       : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING self
-                              METADATA SOURCE applicant,
-  vision_correction_needed  : Boolean METADATA SOURCE issuer,
-  license_category          : String  METADATA SOURCE issuer,
-  license_valid             : Boolean METADATA SOURCE issuer MAX_AGE 24 HOURS
-}
-
 TERMS {
   applicant MUST submit_proof(age) BY DATETIME("2026-09-01T00:00:00Z");
 
@@ -28,6 +20,14 @@ TERMS {
     issuer MAY issue_unrestricted_category;
 
   verifier MUST_NOT accept_presentation WHEN license_valid == false
+}
+
+FACTORS {
+  age                       : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING self
+                              METADATA SOURCE applicant,
+  vision_correction_needed  : Boolean METADATA SOURCE issuer,
+  license_category          : String  METADATA SOURCE issuer,
+  license_valid             : Boolean METADATA SOURCE issuer MAX_AGE 24 HOURS
 }
 
 INVARIANTS {
