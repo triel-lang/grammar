@@ -11,17 +11,17 @@ SUBJECTS {
   carrier : ORACLE
 }
 
-FACTORS {
-  shipment_status : String  METADATA SOURCE carrier MAX_AGE 1 HOURS,
-  delay_days      : Integer POLARITY 1.0 THRESHOLD 3.0 SOURCE carrier
-}
-
 TERMS {
   seller MUST deliver_goods BY DATETIME("2026-08-01T00:00:00Z");
   seller ON_BREACH
     PENALTY delay_days * 100,
     NOTIFY buyer,
     CURE_BY 5 DAYS
+}
+
+FACTORS {
+  shipment_status : String  METADATA SOURCE carrier MAX_AGE 1 HOURS,
+  delay_days      : Integer POLARITY 1.0 THRESHOLD 3.0 SOURCE carrier
 }
 
 INVARIANTS {
