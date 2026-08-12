@@ -142,11 +142,13 @@ field_decl: identifier ":" type_expr ("DEFAULT" literal)?
 
 enum_ref: identifier
 
-zk_type: "ZK" "<" primitive_type ">" zk_constraints
+zk_type: "ZK" "<" zk_primitive_type ">" zk_constraints
+
+zk_primitive_type: "Integer" | "Boolean" | "String" | "Address" | "Hash"
 
 zk_constraints: "PROVES" "(" zk_constraint ("," zk_constraint)* ")" \
                 ("WITHOUT" "REVEALING" zk_visibility)? \
-                ("PUBLIC_WITNESS" "(" identifier ("," identifier)* ")")?
+("PUBLIC_WITNESS" "(" identifier ("," identifier)* ")")?
 
 zk_constraint: "self" comparison_op literal
              | "self" "IN" "RANGE" "[" literal "," literal "]"
