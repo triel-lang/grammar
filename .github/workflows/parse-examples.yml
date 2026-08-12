@@ -1,0 +1,30 @@
+name: Parse examples against grammar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install parser dependencies
+        run: pip install lark
+
+      - name: Parse every example against TRIEL-grammar-v2_4-core.ebnf
+        run: |
+          python3 parser/triel_parser.py --check-ambiguity examples/*.triel examples/eudi/*.triel
+
+      - name: Fail if any example does not parse
+        if: failure()
+        run: |
+          echo "::error::One or more files under examples/ do not conform to the published EBNF. A grammar change or a new example must keep every file in examples/ parseable — see audit finding A-01."
+          exit 1
