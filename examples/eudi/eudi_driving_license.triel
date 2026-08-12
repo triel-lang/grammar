@@ -25,12 +25,13 @@ TERMS {
 FACTORS {
   age                       : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING self
                               METADATA SOURCE applicant,
+  age_proof_valid           : Boolean METADATA SOURCE applicant,
   vision_correction_needed  : Boolean METADATA SOURCE issuer,
   license_category          : String  METADATA SOURCE issuer,
   license_valid             : Boolean METADATA SOURCE issuer MAX_AGE 24 HOURS
 }
 
 INVARIANTS {
-  license_requires_adult_holder       : SAFETY : ALWAYS(age >= 18);
+  license_requires_adult_holder       : SAFETY : ALWAYS(age_proof_valid == true);
   presentation_requires_valid_license : SAFETY : ALWAYS(license_valid == true)
 }
