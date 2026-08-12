@@ -17,10 +17,11 @@ TERMS {
 }
 
 FACTORS {
-  age : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING self
-        METADATA SOURCE applicant
+  age             : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING self
+                    METADATA SOURCE applicant,
+  age_proof_valid : Boolean METADATA SOURCE applicant
 }
 
 INVARIANTS {
-  age_verified : SAFETY : ALWAYS(age >= 18)
+  age_verified : SAFETY : ALWAYS(age_proof_valid == true)
 }
