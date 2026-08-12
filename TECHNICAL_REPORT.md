@@ -112,6 +112,29 @@ A specification's `INVARIANTS` block is satisfied by a trace `σ` in the ordinar
 
 *(This semantics governs the surface language as published in the v2.4 grammar. It is stated here at the level of detail needed to support the claims of Section 5; a fully worked compilation-soundness proof is future work, tracked openly in the repository.)*
 
+### 2.6 Breach and Deadline Semantics
+
+Section 2.5 gives every `MUST`/`MAY`/`MUST_NOT` term a *generative* semantics: `⟦t⟧` is the set of traces a `TERMS` block admits, and an obligation simply produces the trace in which its action occurs. That model has no notion of an obligation going unmet — the only trace it knows about is the one where everything happened as specified — which left `ON_BREACH` with nothing to attach to. This section extends the semantics with the distinction that was missing: a *specification trace* (what Section 2.5 already defines) versus an *implementation trace* — the sequence of events a running system actually produces, each carrying a timestamp: `(subject, action, polarity, τ)` with `τ` a point in wall-clock time.
+
+**Satisfaction and breach.** Against an implementation trace `σ`:
+
+- `subject MUST action BY d` is *satisfied* if `σ` contains `(subject, action, must, τ)` for some `τ ≤ eval(d)`, and is *breached* at `eval(d)` if no such event has occurred by then. Deadline satisfaction is therefore only decidable once the deadline is reached, not before — an obligation is neither satisfied nor breached while its window is still open.
+- `subject MUST_NOT action WHEN c` is *breached* the instant `σ` contains `(subject, action, must_not, τ)` with `eval(c)` true at `τ`; it carries no deadline, since a prohibition has nothing to wait for.
+- `subject MAY action ...` cannot be breached — a permission has no obligation-bearing party to hold to it.
+
+**Binding `ON_BREACH`.** A `breach_handler_stmt` (`subject ON_BREACH ...`) is bound to the nearest preceding obligation or prohibition for the same `subject` within the same `TERMS` block — the reading every example in this repository already uses. This is a deliberately narrow binding rule, stated explicitly rather than left implicit: a subject with two or more obligations and a single trailing `ON_BREACH` is not yet given a defined meaning by this report, and is tracked as open work rather than silently permitted.
+
+**The five breach actions.** They fall into two classes:
+
+- *Informational* — `NOTIFY subject` and `PENALTY expr` — fire once, at the moment of breach, and do not affect how the trace continues. (`PENALTY`'s `expr` still evaluates to a bare number, not a typed monetary amount; that gap is unchanged by this section and remains tracked separately.)
+- *Continuation-determining* — `TERMINATE`, `CURE_BY d`, `ESCALATE_TO subject` — each answers the question "what happens to the breached obligation now" in a mutually incompatible way: `TERMINATE` closes it with no further window, `CURE_BY d` reopens a new deadline `d` during which the *original* obligation can still be satisfied without a second breach firing, and `ESCALATE_TO subject'` transfers responsibility for it to `subject'`.
+
+A `breach_action` list containing more than one action from the continuation-determining class — e.g. `PENALTY x, NOTIFY y, TERMINATE, CURE_BY 5 DAYS`, the exact combination flagged elsewhere in review of this grammar — has no single defined continuation and is a semantic error, not a silently accepted specification. This is a semantic-analysis rule in the same sense as the `QUORUM_THRESHOLD` bound already noted in the grammar file's SEMANTIC RULES section: it constrains which grammar-conformant parses are meaningful, and is checked at that level, not by the grammar itself.
+
+**Deadlines are not temporal-logic operators.** Section 2.4 lists `ALWAYS`/`EVENTUALLY`/`NEXT` as the qualitative LTL abbreviations `G`/`F`/`X`. Every deadline-bearing construct — `BY`, `WITHIN`, `MAX_AGE`, `CURE_BY`, `FROM ... UNTIL` — is deliberately kept outside that logic rather than folded into it as a metric extension. Each denotes a plain arithmetic comparison against the `τ` component of a trace event, not a subscripted temporal operator: `EVENTUALLY(expr) WITHIN d`, for instance, is satisfied by `σ` if there exists `τ` with `τ₀ ≤ τ ≤ τ₀ + eval(d)` at which `expr` holds, where `τ₀` is the time the enclosing term became active (Section 2.5's existing rule that guards evaluate once, at entry, fixes what `τ₀` means here). This keeps `WITHIN` from being decorative — it now has a truth condition — without claiming the full temporal logic is metric, which is what made the decidability claim in Section 4 false in the first place.
+
+**What this does not yet cover.** A calendar model — the exact meaning of `BUSINESS_DAY`, month and year arithmetic, timezone handling for `DATETIME` literals — is still undefined; two conformant implementations can compute a deadline differently until that model exists. `PENALTY`'s numeric type remains untyped. Multi-obligation `ON_BREACH` scoping, noted above, is open. All three are tracked as future work rather than assumed solved by this section.
+
 ---
 
 ## 3. Related Work
