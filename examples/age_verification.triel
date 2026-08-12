@@ -9,16 +9,16 @@ SUBJECTS {
   verifier  : REGULATOR
 }
 
-FACTORS {
-  age : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING self
-        METADATA SOURCE applicant
-}
-
 TERMS {
   applicant MUST submit_proof(age) BY DATETIME("2026-09-01T00:00:00Z");
   verifier ON_BREACH
     NOTIFY applicant,
     TERMINATE
+}
+
+FACTORS {
+  age : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING self
+        METADATA SOURCE applicant
 }
 
 INVARIANTS {
