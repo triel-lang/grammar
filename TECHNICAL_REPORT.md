@@ -137,6 +137,20 @@ A `breach_action` list containing more than one action from the continuation-det
 
 ---
 
+### 2.7 Zero-Knowledge Information-Flow Typing
+
+Sections 2.3 and 2.6 treat a `ZK<T>` factor as a type annotation and give its deadline-bearing neighbors a real semantics, but neither says what a specification is and is not allowed to *do* with the hidden value itself once it exists as a factor. Without such a rule, a specification can be entirely grammar-conformant and still leak precisely the value it was written to conceal — for example, an `INVARIANTS` clause that reads `ALWAYS(age >= 18)` directly, where `age` is declared `ZK<Integer> ... WITHOUT REVEALING self`. The type says the value is hidden; nothing enforces it.
+
+**The flow rule.** A factor declared with a `zk_type` and no `WITHOUT REVEALING ALL` override (see below) is *restricted*: its value may appear only inside the `zk_constraint` expressions of its own `PROVES(...)` clause. It is illegal — a semantic-analysis error, in the same sense as the `QUORUM_THRESHOLD` bound and the breach-action rule of Section 2.6 — for a restricted factor's identifier to appear anywhere else a value is evaluated: in an `INVARIANTS` predicate, in a `PENALTY` expression, in a `WHEN`/`IF` guard, or as an operand of comparison or arithmetic outside its own constraint. Using the factor's name as a bare argument to an action that operates on *the proof itself* — `submit_proof(age)` in this repository's own examples — is not a value-evaluation position and remains legal: it names which field a proof is being submitted for without extracting its value into another computation.
+
+**What a specification does instead.** Every `ZK<T>` factor's constraint verification produces a result — whether the proof checked out — and that result, not the value, is what the rest of the specification is entitled to reason about. This report's own Section 2.1 example already follows this pattern (`ALWAYS (proceed_granted IMPLIES age >= 18)` reasons about the outcome, not the raw value in isolation); this section makes the pattern a rule rather than a stylistic choice. The two age-gated examples in this repository (`age_verification.triel`, `eudi_driving_license.triel`) previously read the hidden `age` factor directly in `INVARIANTS` — the exact violation this rule forbids, flagged in independent review of this grammar — and have been corrected to declare a public `age_proof_valid : Boolean` factor and reason about that instead.
+
+**Hidden by default.** The `["WITHOUT" "REVEALING" zk_visibility]` clause in the grammar is optional, but its absence is not treated as "unspecified": a `ZK<T>` factor with no `WITHOUT REVEALING` clause at all defaults to `zk_visibility = self` — fully hidden, and subject to the flow rule above. `WITHOUT REVEALING ALL` is the explicit, visible-in-source opt-out; a specification cannot end up disclosing a value by omission.
+
+**What this does not yet cover.** The flow rule as stated is a semantic-analysis rule, not something the grammar's context-free structure can enforce on its own — checking it requires a pass that knows which factors are ZK-typed, the same category of tool this report has been explicit about not yet having (Section 4). It also does not yet define what happens when a restricted factor is passed through a `LET` binding, a `function_call`, or a `Record`/`List` composite that embeds it — those positions are open questions for the same future analysis pass, not silently assumed safe.
+
+---
+
 ## 3. Related Work
 
 TRIEL overlaps, in stated purpose, with several existing languages; the comparisons below are drawn at the level of publicly observable syntax and semantics, not implementation internals.
