@@ -23,7 +23,11 @@ declaration_block: "SPECIFICATION" identifier "VERSION" version_literal \
                     ("IMPORT" import_decl ("," import_decl)*)? \
                     ("PROVENANCE_REQUIRED" ":" boolean_literal)? \
                     ("ANCHOR_MODE" ":" anchor_mode_val)? \
-                    ("QUORUM_THRESHOLD" ":" INTEGER_LITERAL)?
+                    ("QUORUM_THRESHOLD" ":" INTEGER_LITERAL)? \
+                    ("PROOF_SYSTEM" ":" proof_system_val)? \
+                    ("CURVE" ":" STRING_LITERAL)?
+
+proof_system_val: "GROTH16" | "PLONK" | "STARK" | "BULLETPROOFS"
 
 version_literal: INTEGER_LITERAL "." INTEGER_LITERAL ("." INTEGER_LITERAL)?
 standard_ref: STRING_LITERAL
@@ -147,13 +151,16 @@ zk_type: "ZK" "<" zk_primitive_type ">" zk_constraints
 zk_primitive_type: "Integer" | "Boolean" | "String" | "Address" | "Hash"
 
 zk_constraints: "PROVES" "(" zk_constraint ("," zk_constraint)* ")" \
-                ("WITHOUT" "REVEALING" zk_visibility)? \
-("PUBLIC_WITNESS" "(" identifier ("," identifier)* ")")?
+("WITHOUT" "REVEALING" zk_visibility)? \
+                ("PUBLIC_WITNESS" "(" identifier ("," identifier)* ")")? \
+                ("BOUND_TO" "(" identifier "," identifier ")")?
 
 zk_constraint: "self" comparison_op literal
              | "self" "IN" "RANGE" "[" literal "," literal "]"
              | "self" "IN" "SET" "{" literal ("," literal)* "}"
-             | "HASH" "(" "self" ")" comparison_op literal
+             | "HASH" "(" "self" "," salt_ref ")" comparison_op literal
+
+salt_ref: identifier
 
 zk_visibility: "self" | "ALL"
 
