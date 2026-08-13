@@ -151,6 +151,20 @@ Sections 2.3 and 2.6 treat a `ZK<T>` factor as a type annotation and give its de
 
 ---
 
+### 2.8 Cryptographic Parameterization and Binding
+
+Section 2.7 constrains what a specification may *do* with a hidden value; it says nothing about how the proof around that value is produced, or who is allowed to present it. Left unaddressed, three gaps remain even in a specification that follows the flow rule perfectly: a `HASH(self)` predicate over a low-entropy field is brute-forceable by hashing every candidate value; a proof carries no link to the identity or session it was issued for, so it can be replayed by anyone who observed it once; and nothing in a specification says which proof system or curve it targets, so two conformant compilers can emit mutually unverifiable proofs from the same source. This section closes all three.
+
+**Salting (B-10).** `zk_constraint`'s `HASH` form now requires a second argument — `HASH(self, salt_ref)` — where `salt_ref` names a factor holding a value unique to that specification instance. This is enforced by the grammar itself, not by a semantic-analysis rule layered on top: a `HASH(self)` predicate with no salt argument is no longer syntactically valid at all, so there is no way to omit it. A `salt_ref` pointing at a `METADATA` factor with a fixed, specification-wide literal default is not a salt — a compiler is expected to reject that case at semantic analysis, since a constant defeats the purpose as thoroughly as no salt at all.
+
+**Binding to identity and session (B-11).** `zk_constraints` gains an optional `BOUND_TO(subject, nonce)` clause, where `subject` must be a `SUBJECTS`-declared identifier carrying a `DID`, and `nonce` must be a factor holding a single-use value refreshed per presentation. The clause is optional in the grammar — many specifications have no identity-bearing subject at all, and requiring it unconditionally would be meaningless for those — but a semantic-analysis rule requires it whenever the factor's `SOURCE` subject *does* carry a `DID`: a proof about a DID-bearing identity with no `BOUND_TO` clause is a compile error, on the same footing as the `QUORUM_THRESHOLD` bound already enforced this way. The `eudi_driving_license.triel` example, whose scenario is precisely the identity-wallet case this finding targets, now declares `applicant`'s `DID` and binds the `age` proof to it and to a `presentation_nonce` factor sourced from the verifier.
+
+**Declaring the proof system (B-12).** `declaration_block` gains optional `PROOF_SYSTEM` (`GROTH16` | `PLONK` | `STARK` | `BULLETPROOFS`) and `CURVE` fields. As with `BOUND_TO`, these are grammatically optional but semantically required — whenever a specification's `FACTORS` block contains any `ZK<T>` factor, omitting either is a compile error rather than a default: an implicit choice of proof system is exactly the kind of cross-compiler divergence this grammar exists to rule out, so there is no fallback value to pick silently. Both example specifications with `ZK<T>` factors (`age_verification.triel`, `eudi_driving_license.triel`) now declare `PROOF_SYSTEM: GROTH16` and `CURVE: "BN254"`.
+
+**What this does not yet cover.** These three fixes address how a single proof is salted, bound, and parameterized; they do not specify a key-distribution or verification-key-publication mechanism, which remains open. `BOUND_TO`'s nonce factor is declared but its refresh protocol — who generates it, how often, and how staleness is detected — is left to the compiler implementation, the same category of gap already acknowledged for `MAX_AGE`-governed oracle factors (Section 2.6). A full threat model — who is assumed honest, what constitutes a successful attack, and against which of these three mechanisms — is still absent from this report and remains the most consequential open item for the privacy and identity claims this language makes.
+
+---
+
 ## 3. Related Work
 
 TRIEL overlaps, in stated purpose, with several existing languages; the comparisons below are drawn at the level of publicly observable syntax and semantics, not implementation internals.
