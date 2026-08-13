@@ -31,6 +31,18 @@ declaration_block  ::= "SPECIFICATION" identifier "VERSION" version_literal
                        ["PROVENANCE_REQUIRED" ":" boolean_literal]
                        ["ANCHOR_MODE" ":" anchor_mode_val]
                        ["QUORUM_THRESHOLD" ":" integer_literal]
+                       ["PROOF_SYSTEM" ":" proof_system_val]
+                       ["CURVE" ":" string_literal]
+
+proof_system_val   ::= "GROTH16" | "PLONK" | "STARK" | "BULLETPROOFS"
+
+(* NOTE: PROOF_SYSTEM and CURVE are optional in the grammar, but a
+   semantic-analysis rule (see SEMANTIC RULES below) requires both
+   whenever the specification declares any ZK<T> factor: without them,
+   two grammar-conformant compilers can choose different proof systems
+   or curves and produce mutually unverifiable proofs from the same
+   source, which defeats the deterministic-compilation goal this
+   grammar exists to serve. *)
 
 version_literal    ::= integer_literal "." integer_literal ["." integer_literal]
 standard_ref       ::= string_literal
@@ -191,11 +203,24 @@ zk_primitive_type  ::= "Integer" | "Boolean" | "String" | "Address" | "Hash"
 zk_constraints     ::= "PROVES" "(" zk_constraint {"," zk_constraint} ")"
                        ["WITHOUT" "REVEALING" zk_visibility]
                        ["PUBLIC_WITNESS" "(" identifier {"," identifier} ")"]
+                       ["BOUND_TO" "(" identifier "," identifier ")"]
 
 zk_constraint      ::= "self" comparison_op literal
                      | "self" "IN" "RANGE" "[" literal "," literal "]"
                      | "self" "IN" "SET"   "{" literal {"," literal} "}"
-                     | "HASH" "(" "self" ")" comparison_op literal
+| "HASH" "(" "self" "," salt_ref ")" comparison_op literal
+
+salt_ref           ::= identifier
+
+(* NOTE ON HASH SALTING (B-10): a HASH(self) constraint over a
+   low-entropy field (age, category, a small enumerated range) is
+   brute-forceable by hashing every candidate value and comparing —
+   there is no way to add a salt after the fact, so the grammar
+   requires one syntactically. salt_ref MUST name a factor whose value
+   is unique per specification instance and never reused across
+   instances; a compiler MUST reject a HASH constraint whose salt_ref
+   points to a METADATA factor with a fixed, specification-wide
+   literal default, since that is not a salt, just a constant. *)
 
 zk_visibility      ::= "self" | "ALL"
 
@@ -206,6 +231,17 @@ zk_visibility      ::= "self" | "ALL"
    writing WITHOUT REVEALING ALL is required to opt OUT of it, and the
    grammar makes that opt-out visible in the source rather than implicit.
    See TECHNICAL_REPORT.md §2.7 for the enforcement rule this supports. *)
+
+(* NOTE ON BOUND_TO (B-11): a ZK proof with no binding to who presented
+   it or when can be replayed verbatim by anyone who observes it once.
+   ["BOUND_TO" "(" identifier "," identifier ")"] takes two references:
+   the first MUST be a subject_decl carrying a DID (§3); the second
+   MUST be a factor holding a single-use session nonce, refreshed per
+   presentation. A semantic-analysis rule (see SEMANTIC RULES below)
+   requires this clause whenever the proving subject has a declared
+   DID — a proof about a DID-bearing identity with no BOUND_TO clause
+   is a compile error, not a silently accepted specification. See
+   TECHNICAL_REPORT.md §2.8 for the full rule. *)
 
 (* -------------------------------------------------------------------------
    7. Cross-Modal Block
@@ -278,7 +314,7 @@ event_class        ::= identifier ["(" param_decl {"," param_decl} ")"]
 param_decl         ::= identifier ":" type_expr
 
 (* -------------------------------------------------------------------------
-9. Modalities Block
+   9. Modalities Block
    ------------------------------------------------------------------------- *)
 
 modalities_block   ::= "MODALITIES" "{" modality_conf {"," modality_conf} "}"
@@ -382,7 +418,7 @@ identifier         ::= letter (letter | digit | "_")*
    "G", "HAPPENS_BEFORE", "HASH", "HOUR", "HOURS", "Hash", "IF", "IMPLIES",
    "IMPORT", "IN", "INVARIANTS", "Integer", "JURISDICTION", "LET", "LIVENESS", "LOCAL",
    "List", "MAX_AGE", "MAY", "METADATA", "MINUTE", "MINUTES", "MODALITIES", "MONTH",
-   "MONTHS", "MUST", "MUST_NOT", "Map", "NETWORK", "NEXT", "NOT", "NOTIFY",
+"MONTHS", "MUST", "MUST_NOT", "Map", "NETWORK", "NEXT", "NOT", "NOTIFY",
    "ON", "ON_BREACH", "OR", "ORACLE", "Optional", "PARTY", "PENALTY", "POLARITY",
    "PROVENANCE_REQUIRED", "PROVES", "PUBLIC_WITNESS", "Progress", "QUORUM_THRESHOLD", "R", "RANGE", "REGULATOR",
    "REPLACES", "REVEALING", "Record", "SAFETY", "SECOND", "SECONDS", "SENSITIVITY_BOUND", "SET",
@@ -451,6 +487,33 @@ character          ::= ? any-ASCII-character-except-double-quote ?
    verification data before generating modality output; the concrete
    verification mechanism is implemented at compiler level and is not
    specified by this grammar.
+
+   =========================================================================
+
+   ZK CRYPTOGRAPHIC PARAMETERIZATION AND BINDING (v2.4, B-10/B-11/B-12)
+
+   PROOF_SYSTEM and CURVE (declaration_block, §2) are optional in the
+   grammar but REQUIRED at semantic analysis whenever a specification's
+   FACTORS block declares any zk_type factor. A specification with a
+   ZK<T> factor and no PROOF_SYSTEM/CURVE pair is a compile error: two
+   conformant compilers must not be free to pick different proof
+   systems for the same source. There is no default — omission is an
+   error, not a fallback to an implicit choice, since an implicit
+   choice is exactly what breaks cross-compiler determinism.
+
+   BOUND_TO (zk_constraints, §6) is optional in the grammar but
+   REQUIRED at semantic analysis whenever the subject named in the
+   enclosing FACTORS's SOURCE clause has a DID declared in SUBJECTS
+   (§3). A ZK factor sourced from a DID-bearing subject with no
+   BOUND_TO clause is a compile error: without it, a proof captured
+   once can be replayed by anyone who observed it, for any subject,
+   at any later time — the DID declaration implies the specification
+   cares who is presenting, and BOUND_TO is what makes that care
+   enforceable rather than aspirational.
+
+   Salting (zk_constraint's HASH form, §6) is enforced directly by the
+   grammar rather than by a semantic rule, since a HASH constraint
+   syntactically requires a salt_ref and cannot be written without one.
 
    =========================================================================
 
