@@ -4,6 +4,8 @@
 SPECIFICATION late_delivery_agreement VERSION 1.0.0
     STANDARD "INCOTERMS-2020"
     JURISDICTION "EU"
+    PROVENANCE_REQUIRED: true
+    CURRENCY: "USD"
 
 SUBJECTS {
   seller  : PARTY,
@@ -14,13 +16,13 @@ SUBJECTS {
 TERMS {
   seller MUST deliver_goods BY DATETIME("2026-08-01T00:00:00Z");
   seller ON_BREACH
-    PENALTY delay_days * 100,
+    PENALTY delay_days * 100 CAP 10000,
     NOTIFY buyer,
     CURE_BY 5 DAYS
 }
 
 FACTORS {
-  shipment_status : String  METADATA SOURCE carrier MAX_AGE 1 HOURS,
+  shipment_status : String  METADATA SOURCE carrier MAX_AGE 1 HOURS ON_STALE BLOCK,
   delay_days      : Integer POLARITY 1.0 THRESHOLD 3.0 SOURCE carrier
 }
 
