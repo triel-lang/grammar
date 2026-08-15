@@ -238,6 +238,7 @@ zk_constraint      ::= "self" comparison_op literal
                      | "self" "IN" "RANGE" "[" literal "," literal "]"
                      | "self" "IN" "SET"   "{" literal {"," literal} "}"
                      | "HASH" "(" "self" "," salt_ref ")" comparison_op literal
+
 salt_ref           ::= identifier
 
 (* NOTE ON HASH SALTING (B-10): a HASH(self) constraint over a
@@ -473,7 +474,11 @@ identifier         ::= letter (letter | digit | "_")*
    "THRESHOLD", "TOLERANCE", "true", "U", "UNLESS", "UNTIL", "USE_LAST", "VERSION",
    "W", "WARNING", "WEIGHT", "WHEN", "WITH", "WITHIN", "WITHOUT", "X",
    "YEAR", "YEARS", "ZK"
-Section 8 (ltl_unary, ltl_until, ctl_path_formula, ctl_temporal_op).
+
+(* IMPLEMENTATION NOTE — single-letter LTL/CTL operators: eight of the
+   reserved tokens above ("A", "E", "F", "G", "R", "U", "W", "X") are
+   single uppercase letters, used as LTL/CTL temporal operators in
+   Section 8 (ltl_unary, ltl_until, ctl_path_formula, ctl_temporal_op).
    Reserving them is necessary for correctness, but it means no bare
    single uppercase letter may be used as an identifier anywhere in a
    TRIEL specification. This is a known, deliberate trade-off. If this
