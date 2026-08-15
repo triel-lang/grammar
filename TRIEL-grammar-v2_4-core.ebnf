@@ -63,7 +63,7 @@ anchor_mode_val    ::= "NETWORK"
    3. Subject Block
    ------------------------------------------------------------------------- *)
 
-subject_block      ::= "SUBJECTS" "{" subject_decl {"," subject_decl} "}"
+subject_block      ::= "SUBJECTS" "{" subject_decl {"," subject_decl} [","] "}"
 subject_decl       ::= identifier ":" role_type ["DID" did_literal]
 role_type          ::= "PARTY" | "ORACLE" | "REGULATOR" | "SYSTEM"
 did_literal        ::= string_literal
@@ -73,7 +73,7 @@ did_literal        ::= string_literal
    ------------------------------------------------------------------------- *)
 
 term_element       ::= named_term_decl | term_stmt
-terms_block        ::= "TERMS" "{" term_element {";" term_element} "}"
+terms_block        ::= "TERMS" "{" term_element {";" term_element} [";"] "}"
 
 named_term_decl    ::= identifier ":=" term_stmt
 
@@ -98,7 +98,27 @@ matched_term        ::= matched_condition
                       | trigger_stmt
                       | breach_handler_stmt
                       | contract_ref_stmt
+                      | term_ref
                       | "(" term_stmt ")"
+
+term_ref            ::= identifier
+
+(* NOTE ON named_term_decl (D-26): identifier ":=" term_stmt (§4) let a
+   specification name a term, but no production anywhere referenced
+   that name back — the only way to reuse a term was to write it out
+   again, making named_term_decl syntax that could be written but never
+   used. term_ref closes the loop: a bare identifier in matched_term
+   position now refers back to a named_term_decl earlier in the same
+   terms_block. This is a semantic-analysis binding (resolving which
+   named_term_decl a given term_ref points to, and rejecting a
+   reference to an undeclared or forward-declared name), not something
+   the grammar's context-free structure enforces on its own — the same
+   category of deferred check already used for modality_id (§7) and
+   contract_ref_stmt's EXECUTE target. term_ref does not create a new
+   parsing ambiguity: every other matched_term alternative that starts
+   with an identifier is followed immediately by a fixed keyword (MUST,
+   MAY, MUST_NOT, ON_BREACH) or ON, none of which a bare term_ref can
+   be confused with. *)
 
 unmatched_term       ::= unmatched_condition
 
@@ -132,12 +152,32 @@ obligation_stmt    ::= identifier "MUST" action_expr
 
 permission_stmt    ::= identifier "MAY" action_expr
                        ["WHEN" expr]
-                       ["WITHIN" deadline_expr]
+
+(* NOTE ON WITHIN (D-19): permission_stmt previously carried its own
+   optional WITHIN clause, alongside timeout_expr's WITHIN wrapping any
+   base_term (§4) — including a permission_stmt. "alice MAY act WITHIN
+   5 DAYS" had two distinct parses under the pre-fix grammar: the
+   deadline attached to the permission itself, or to the enclosing
+   timeout_expr. Removing permission_stmt's own WITHIN leaves exactly
+   one source of deadline-bounding for any term, permissions included:
+   wrap it in timeout_expr's WITHIN, as every other term type already
+   must. *)
 
 prohibition_stmt   ::= identifier "MUST_NOT" action_expr
                        ["WHEN" expr]
 
-trigger_stmt       ::= "ON" event_expr "DO" term_stmt
+trigger_stmt       ::= "ON" event_expr "DO" base_term
+
+(* NOTE ON DO (D-20): trigger_stmt's body was term_stmt — the loosest
+   production in the term grammar, including THEN/AND/OR — while
+   trigger_stmt itself sits at base_term, the tightest level. That
+   asymmetry made "ON e DO a THEN b" ambiguous: DO's greedy body could
+   absorb "a THEN b" whole, or bind only "a" and let the outer THEN
+   apply afterward. Narrowing DO's body to base_term removes the
+   ambiguity: DO now binds exactly as tightly as any other base_term
+   alternative, so "ON e DO a THEN b" parses only as (ON e DO a) THEN
+   b. A trigger that needs a sequence as its body can still write it
+   parenthesized: ON e DO (a THEN b). *)
 
 breach_handler_stmt ::= identifier "ON_BREACH"
                         breach_action {"," breach_action}
@@ -179,16 +219,16 @@ binding            ::= identifier ":=" expr
    5. Factors Block
    ------------------------------------------------------------------------- *)
 
-factors_block      ::= "FACTORS" "{" factor_decl {"," factor_decl} "}"
+factors_block      ::= "FACTORS" "{" factor_decl {"," factor_decl} [","] "}"
 
 factor_decl        ::= identifier ":" type_expr
                        ("POLARITY" polarity_val | "METADATA")
-                       ["THRESHOLD" numeric_literal]
+                       ["THRESHOLD" signed_numeric_literal]
                        ["SOURCE" factor_source]
                        ["MAX_AGE" duration_literal]
                        ["ON_STALE" stale_action]
                        ["CAUSED_BY" "{" caused_by_entry {"," caused_by_entry} "}"]
-                       ["SENSITIVITY_BOUND" numeric_literal]
+                       ["SENSITIVITY_BOUND" signed_numeric_literal]
 
 stale_action       ::= "BLOCK"
                      | "USE_LAST"
@@ -207,7 +247,7 @@ stale_action       ::= "BLOCK"
    not a silent gap. Source-signing and multi-source quorum for oracle
    data remain open; see TECHNICAL_REPORT.md §2.9. *)
 
-polarity_val       ::= float_literal
+polarity_val       ::= ["-"] float_literal
 
 factor_source      ::= identifier
 
@@ -252,10 +292,25 @@ zk_constraints     ::= "PROVES" "(" zk_constraint {"," zk_constraint} ")"
                        ["PUBLIC_WITNESS" "(" identifier {"," identifier} ")"]
                        ["BOUND_TO" "(" identifier "," identifier ")"]
 
-zk_constraint      ::= "self" comparison_op literal
-                     | "self" "IN" "RANGE" "[" literal "," literal "]"
-                     | "self" "IN" "SET"   "{" literal {"," literal} "}"
-                     | "HASH" "(" "self" "," salt_ref ")" comparison_op literal
+zk_constraint      ::= "self" comparison_op signed_literal
+                     | "self" "IN" "RANGE" "[" signed_literal "," signed_literal "]"
+                     | "self" "IN" "SET"   "{" signed_literal {"," signed_literal} "}"
+                     | "HASH" "(" "self" "," salt_ref ")" comparison_op signed_literal
+
+signed_literal     ::= signed_numeric_literal
+                     | string_literal
+                     | boolean_literal
+                     | datetime_literal
+                     | duration_literal
+
+(* signed_literal exists for the same reason signed_numeric_literal
+   does (D-24, see the note under §11): a zk_constraint's comparisons
+   are bare literal positions, not expr positions, so they need their
+   own signed numeric alternative rather than sharing literal (§11),
+   which stays unsigned to avoid reopening the expr-context ambiguity
+   that note describes. A specification proving something about a
+   negative balance, temperature, or coordinate — self >= -10 — is
+   expressible now; it was not before. *)
 
 salt_ref           ::= identifier
 
@@ -291,16 +346,31 @@ zk_visibility      ::= "self" | "ALL"
    TECHNICAL_REPORT.md §2.8 for the full rule. *)
 
 (* -------------------------------------------------------------------------
+(* -------------------------------------------------------------------------
    7. Cross-Modal Block
    ------------------------------------------------------------------------- *)
 
 cross_modal_block  ::= "CROSS_MODAL"
-                       "{" cross_modal_decl {"," cross_modal_decl} "}"
+                       "{" cross_modal_decl {"," cross_modal_decl} [","] "}"
+
+(* NOTE ON D-31: the comma-delimited blocks above (SUBJECTS, FACTORS,
+   MODALITIES, CROSS_MODAL) and the semicolon-delimited ones (TERMS,
+   INVARIANTS) now each accept one optional trailing separator before
+   their closing brace — adding a member no longer requires touching
+   the line above it just to move a delimiter. What this note does NOT
+   claim to fix: the two delimiter families (comma vs. semicolon)
+   remain genuinely different across block kinds, exactly as the
+   audit's finding described. Unifying them would mean changing which
+   character every existing TRIEL specification uses in two of its six
+   blocks — a breaking change to every file that currently uses this
+   grammar, not just to this repository's four examples — and is left
+   as an open question for a future major version rather than forced
+   through here. *)
 
 cross_modal_decl   ::= identifier ":"
                        "{" factor_ref "IN" modality_id ","
                            factor_ref "IN" modality_id "}"
-                       ["TOLERANCE" numeric_literal]
+                       ["TOLERANCE" signed_numeric_literal]
                        ["SEVERITY" ("CRITICAL" | "WARNING")]
 
 modality_id        ::= identifier
@@ -313,11 +383,23 @@ modality_id        ::= identifier
    8. Invariants Block
    ------------------------------------------------------------------------- *)
 
-invariants_block   ::= "INVARIANTS" "{" invariant_decl {";" invariant_decl} "}"
+invariants_block   ::= "INVARIANTS" "{" invariant_decl {";" invariant_decl} [";"] "}"
 
 invariant_decl     ::= identifier [":" invariant_type] ":" temporal_expr
 
 invariant_type     ::= "SAFETY" | "LIVENESS" | "FAIRNESS"
+
+(* NOTE ON invariant_type (D-30): this label is optional and, at the
+   grammar level, purely declarative — nothing here checks that a
+   formula tagged SAFETY doesn't actually express a liveness property
+   (e.g. EVENTUALLY(p), a textbook liveness shape) or vice versa.
+   Whether a temporal_expr's actual structure matches its stated class
+   is a property of the formula, checkable only by a tool that
+   understands temporal logic well enough to classify formulas — the
+   same category of analysis this grammar has repeatedly deferred to
+   future work (Section 4 of TECHNICAL_REPORT.md). Until such a tool
+   exists, invariant_type should be read as author-asserted, not
+   grammar-verified. *)
 
 temporal_expr      ::= causal_expr
                      | ltl_expr
@@ -330,9 +412,9 @@ causal_expr        ::= "FORALL" identifier "IN" event_class ":"
                        identifier "HAPPENS_BEFORE" identifier
 
 ltl_expr           ::= ltl_implication
-ltl_implication    ::= ltl_until ("->" ltl_until)*
-ltl_until          ::= ltl_or (("U" | "R" | "W") ltl_or)*
-ltl_or             ::= ltl_and ("||" ltl_and)*
+ltl_implication    ::= ltl_or ["->" ltl_implication]
+ltl_or             ::= ltl_until ("||" ltl_until)*
+ltl_until          ::= ltl_and [("U" | "R" | "W") ltl_until]
 ltl_and            ::= ltl_unary ("&&" ltl_unary)*
 ltl_unary          ::= "!" ltl_unary
                      | "G" ltl_unary
@@ -341,18 +423,73 @@ ltl_unary          ::= "!" ltl_unary
                      | ltl_atom
 ltl_atom           ::= state_expr | "(" ltl_expr ")"
 
-ctl_expr           ::= ctl_or
+(* NOTE ON LTL PRECEDENCE AND ASSOCIATIVITY (D-22, D-23): two defects
+   in one restructuring. First (D-22), -> and U were left-associative
+   under repetition ({"->" ltl_until}, similarly for U); both are
+   conventionally right-associative, so "a -> b -> c" and "a U b U c"
+   parsed as (a->b)->c and (a U b) U c instead of the intended
+   a->(b->c) and a U (b U c). Both now recurse on the right (["op"
+   ltl_x] wrapping the same-level production) instead of repeating on
+   the left. Second (D-23), U/R/W bound looser than || (ltl_until
+   wrapped ltl_or), so "a || b U c" parsed as (a||b) U c against the
+   usual convention that until binds tighter than disjunction — a ||
+   (b U c). U/R/W now sit between || and &&, binding tighter than
+   disjunction as intended. *)
+
+ctl_expr           ::= ctl_implication
+ctl_implication    ::= ctl_or ["->" ctl_implication]
 ctl_or             ::= ctl_and ("||" ctl_and)*
-ctl_and            ::= ctl_path_formula ("&&" ctl_path_formula)*
-ctl_path_formula   ::= ("A" | "E") ctl_temporal_op "(" ctl_expr ")"
-                     | ctl_atom
+ctl_and            ::= ctl_negation ("&&" ctl_negation)*
+ctl_negation       ::= "!" ctl_negation | ctl_path_formula
+ctl_path_formula   ::= ("A" | "E") ctl_temporal_op "(" ctl_inner ")"
+                     | "(" ctl_expr ")"
+ctl_inner          ::= ctl_expr | state_expr
 ctl_temporal_op    ::= "X" | "F" | "G" | "U" | "R"
-ctl_atom           ::= state_expr | "(" ctl_expr ")"
+
+(* NOTE ON CTL (D-21, D-32): two defects, one restructuring. D-21:
+   ctl_atom previously admitted a bare state_expr directly — the same
+   base case ltl_atom uses — so a formula with no temporal operator at
+   all, like "age >= 18", derived as both a valid ltl_expr and a valid
+   ctl_expr with nothing in the grammar to say which logic a given
+   temporal_expr (§8) alternative was actually choosing. ctl_expr's
+   only base case is now ctl_path_formula, whose only base case is the
+   ("A"|"E") ctl_temporal_op "(" ctl_inner ")" form — so every valid
+   ctl_expr derivation contains at least one A or E token somewhere,
+   which LTL never uses, making the two logics syntactically
+   distinguishable at any depth, not just by convention. ctl_inner is
+   what makes this practical rather than merely correct: the argument
+   of an A/E-quantified formula can still be a bare state_expr — e.g.
+   EF(bad_state), the audit's own example — or a further nested
+   ctl_expr for formulas like AG(EF(p)); what it cannot be is a bare
+   state_expr with no A/E ANYWHERE in the formula, which is exactly
+   the ambiguous case this finding identified. A state expression with
+   no temporal content at all is now unambiguously LTL (its trivial
+   case) or, more idiomatically, a state_invariant (§8) written
+   with ALWAYS(...). This does cost CTL its ability to express a bare
+   propositional formula outside of any path quantifier — real CTL
+   allows that; this grammar's CTL now requires every formula to
+   involve at least one A/E. That trade-off is what removes the
+   ambiguity, and specifications needing a bare state check should use
+   state_invariant or LTL instead. D-32: ctl_negation and the
+   ctl_implication level add unary negation and binary implication to
+   CTL, neither of which the pre-fix grammar had — "!EF(bad_state)",
+   the audit's own example of an inexpressible but common CTL property,
+   now parses. *)
 
 state_invariant    ::= "ALWAYS"     "(" expr ")"
                      | "EVENTUALLY" "(" expr ")" ["WITHIN" deadline_expr]
                      | "NEXT"       "(" expr ")"
-                     | "DAG"        "(" identifier ")"
+
+(* NOTE ON DAG (D-27): the pre-fix grammar included a fourth
+   state_invariant form, "DAG" "(" identifier ")", with no semantics
+   defined anywhere — not in this grammar, not in the semantic-rules
+   section below, not in TECHNICAL_REPORT.md. A construct that parses
+   but means nothing is worse than one that doesn't parse at all, since
+   it looks like a real, checkable property. It has been removed rather
+   than retroactively defined, since no example or report section ever
+   used it and inventing a meaning for it now would be exactly the kind
+   of unfounded claim this grammar's revision history has been trying
+   to eliminate. *)
 
 cross_modal_invariant ::= "CROSS_MODAL_CONSISTENT"
                           "(" identifier {"," identifier} ")"
@@ -360,15 +497,18 @@ cross_modal_invariant ::= "CROSS_MODAL_CONSISTENT"
 event_class        ::= identifier ["(" param_decl {"," param_decl} ")"]
 param_decl         ::= identifier ":" type_expr
 
+
+(* -------------------------------------------------------------------------
 (* -------------------------------------------------------------------------
    9. Modalities Block
    ------------------------------------------------------------------------- *)
 
-modalities_block   ::= "MODALITIES" "{" modality_conf {"," modality_conf} "}"
+modalities_block   ::= "MODALITIES" "{" modality_conf {"," modality_conf} [","] "}"
 
 modality_conf      ::= modality_id ":" "{" modality_param {"," modality_param} "}"
 
 modality_param     ::= identifier ":" literal
+
 (* -------------------------------------------------------------------------
    10. Expressions
    ------------------------------------------------------------------------- *)
@@ -444,9 +584,35 @@ literal            ::= numeric_literal
                      | duration_literal
 
 numeric_literal    ::= integer_literal | float_literal
+
+signed_numeric_literal ::= ["-"] (integer_literal | float_literal)
+
+(* NOTE ON SIGNED LITERALS (D-24): integer_literal and float_literal
+   were unsigned; the only way to write a negative value anywhere was
+   the general subtractive unary_expr ("-" unary_expr | primary, §10),
+   not available wherever a bare literal (not a full expression) is
+   expected — THRESHOLD/SENSITIVITY_BOUND (§5), TOLERANCE (§7), WEIGHT
+   (§11b), POLARITY (§5, fixed separately via polarity_val below since
+   it wraps float_literal directly), and comparisons inside a
+   zk_constraint (§6). The grammar's own comment on caused_by_entry
+   documents WEIGHT ∈ [-1.0, 1.0], a range that was not writable.
+
+   signed_numeric_literal is deliberately a SEPARATE production from
+   numeric_literal, not numeric_literal itself made optionally signed:
+   numeric_literal also feeds literal → primary → expr (§10), and
+   unary_expr already provides negation there via "-" unary_expr. Had
+   numeric_literal itself become signed, an expression context like
+   PENALTY -50 (§4) would gain two distinct derivations for the same
+   value — one through unary_expr's own minus, one through the literal
+   being pre-signed — a new ambiguity introduced by fixing this one.
+   Keeping numeric_literal unsigned and adding signed_numeric_literal
+   only at the bare, non-expression positions listed above closes the
+   original gap without reopening D-19's kind of problem. *)
+
 integer_literal    ::= digit+
 float_literal      ::= digit+ "." digit+ [("e" | "E") ["+" | "-"] digit+]
 boolean_literal    ::= "true" | "false"
+
 string_literal     ::= '"' {character} '"'
 datetime_literal   ::= "DATETIME" "(" string_literal ")"
 duration_literal   ::= integer_literal time_unit
@@ -465,6 +631,7 @@ identifier         ::= letter (letter | digit | "_")*
                           silently prefer one interpretation over the
                           other. *)
 
+(* -------------------------------------------------------------------------
 (* -------------------------------------------------------------------------
    11a. Reserved Keywords
    ------------------------------------------------------------------------- *)
@@ -509,7 +676,7 @@ identifier         ::= letter (letter | digit | "_")*
    11b. Shared Rules
    ------------------------------------------------------------------------- *)
 
-caused_by_entry    ::= identifier "WEIGHT" numeric_literal
+caused_by_entry    ::= identifier "WEIGHT" signed_numeric_literal
                        (* WEIGHT ∈ [-1.0, 1.0]; ≠ 0.0 *)
 
 (* -------------------------------------------------------------------------
@@ -518,11 +685,34 @@ caused_by_entry    ::= identifier "WEIGHT" numeric_literal
 
 letter             ::= "A".."Z" | "a".."z"
 digit              ::= "0".."9"
-character          ::= ? any-ASCII-character-except-double-quote ?
+character          ::= ? any Unicode code point except unescaped double-quote
+                          or unescaped backslash ?
+                     | escape_sequence
+
+escape_sequence    ::= "\" ( '"' | "\" | "n" | "t" | "u" hex_digit hex_digit hex_digit hex_digit )
+hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
+
+(* NOTE ON STRING CONTENT (D-28): character was restricted to ASCII
+   with no escape mechanism at all — a string_literal (§11) could not
+   contain a literal double-quote, and could not represent any name
+   with diacritics, non-Latin script, or other non-ASCII text. That is
+   disqualifying for a language whose own examples target the EU and
+   eIDAS: a party's legal name in German, French, Greek, or Cyrillic
+   script was simply not writable. character now admits any Unicode
+   code point directly, plus a small, conventional escape set (\",
+   \\, \n, \t, \uXXXX) for the double-quote itself and other
+   non-printable content. identifier (§11) is unchanged and remains
+   ASCII-only — keywords and reserved-word matching (§11a) depend on a
+   fixed ASCII vocabulary, and broadening identifiers is a separate,
+   larger design question left open; the practical need this finding
+   raised (writing a party's display name, a jurisdiction, a standard
+   reference) goes through string_literal contexts, not identifiers. *)
 
 (* Comments:
    Single-line : -- comment to end of line
    Multi-line  : {- comment -}                                               *)
+
+(* =========================================================================
 (* =========================================================================
    SEMANTIC RULES
    =========================================================================
@@ -541,11 +731,29 @@ character          ::= ? any-ASCII-character-except-double-quote ?
      PROVENANCE_REQUIRED ::= boolean_literal       (default: false)
      ANCHOR_MODE          ::= "NETWORK" | "LOCAL"   (default: NETWORK)
      QUORUM_THRESHOLD     ::= integer_literal       (default: 5)
-                               constraint: 1 ≤ QUORUM_THRESHOLD ≤ n,
-                               where n = number of active modalities
-                               declared in the MODALITIES block.
-                               Constraint violation = compile error
-                               at semantic analysis phase.
+                               constraint: applies ONLY when a
+                               MODALITIES block (§9) is present in the
+                               same specification; in that case,
+                               1 ≤ QUORUM_THRESHOLD ≤ n, where n is the
+                               number of modalities declared in that
+                               block. When MODALITIES is absent,
+                               QUORUM_THRESHOLD's value is accepted but
+                               has no effect and is not checked against
+                               any bound — there is no n to check it
+                               against, and the field's presence alone
+                               does not imply a MODALITIES block is
+                               required. Constraint violation (when
+                               MODALITIES is present) is a compile
+                               error at semantic analysis phase.
+
+   (* NOTE ON D-25: the pre-fix text stated a default of 5 alongside an
+      unconditional constraint 1 ≤ QUORUM_THRESHOLD ≤ n where n came
+      from an OPTIONAL MODALITIES block — meaning n was 0 whenever that
+      block was absent, and the stated default of 5 would violate the
+      stated constraint on every specification that omitted MODALITIES,
+      which is most of them (three of this repository's own four
+      examples). The constraint is now explicitly scoped to specifications
+      that declare MODALITIES at all, removing the self-contradiction. *)
 
    If PROVENANCE_REQUIRED is true, the compiler requires provenance
    verification data before generating modality output; the concrete
