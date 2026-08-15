@@ -179,6 +179,18 @@ Section 2.6 gave `MAX_AGE` a place in the trace model but stopped short of sayin
 
 ---
 
+### 2.10 Content-Pinned References
+
+`IMPORT`, `EXECUTE`, and `REPLACES` are the three ways a TRIEL specification can point at another one — pulling in shared terms, calling out to another specification's logic mid-`TERMS`, or declaring itself a successor to a prior version. None of the three previously said what content they expected to find at the other end: a path, an identifier, and a bare version number are all names, and a name can resolve to different content over time or across deployments without the specification itself changing at all. This section makes all three checkable claims rather than assumptions.
+
+**A shared pinning mechanism.** `import_decl`, `contract_ref_stmt`, and the `REPLACES` field of `declaration_block` each gain an optional `HASH hash_literal` clause, where `hash_literal` is fixed to the format `"sha256:"` followed by 64 lowercase hex digits — a compiler rejecting anything else. The clause is grammatically optional, following the same pattern as `PROOF_SYSTEM`/`CURVE`/`BOUND_TO`/`CURRENCY` before it, but a semantic-analysis rule requires it wherever the surrounding construct is present at all: a specification that imports, executes, or replaces something must say what content it expects there, or the reference is a compile error.
+
+**`REPLACES` now says whose version it replaces.** The field previously took only a version number — `REPLACES 1.0.0` — which never answered "1.0.0 of what," a real ambiguity once a specification imports more than one other file. It now requires the identifier of the specification being superseded: `REPLACES project_task_distribution 1.0.0 HASH "sha256:..."`. This is a breaking syntax change from the grammar published before this finding was addressed; no example in this repository used `REPLACES` prior to this revision, so fixing it required no changes to existing `.triel` files, only to the grammar's own illustrative usage example.
+
+**What this does not yet cover.** Pinning says what content a reference expects; it does not say how that content is fetched, cached, or re-verified at compile time, which remains implementation-defined. It also does not address key rotation for a hash that legitimately needs to change — a specification author updating a pinned import still edits the `HASH` value by hand, the same way a lockfile entry would be updated in other ecosystems; no automated re-pinning workflow is specified here.
+
+---
+
 ## 3. Related Work
 
 TRIEL overlaps, in stated purpose, with several existing languages; the comparisons below are drawn at the level of publicly observable syntax and semantics, not implementation internals.
