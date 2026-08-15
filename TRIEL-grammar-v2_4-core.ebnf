@@ -33,6 +33,7 @@ declaration_block  ::= "SPECIFICATION" identifier "VERSION" version_literal
                        ["QUORUM_THRESHOLD" ":" integer_literal]
                        ["PROOF_SYSTEM" ":" proof_system_val]
                        ["CURVE" ":" string_literal]
+                       ["CURRENCY" ":" string_literal]
 
 proof_system_val   ::= "GROTH16" | "PLONK" | "STARK" | "BULLETPROOFS"
 
@@ -135,11 +136,21 @@ trigger_stmt       ::= "ON" event_expr "DO" term_stmt
 breach_handler_stmt ::= identifier "ON_BREACH"
                         breach_action {"," breach_action}
 
-breach_action      ::= "PENALTY" expr
+breach_action      ::= "PENALTY" expr ["CAP" literal]
                      | "NOTIFY" identifier
                      | "TERMINATE"
                      | "CURE_BY" deadline_expr
                      | "ESCALATE_TO" identifier
+
+(* NOTE ON PENALTY (C-16): expr still evaluates to a bare number — there
+   is no dedicated monetary type in v2.4, and fixing that fully (exact
+   decimal arithmetic, currency-typed values) is future work. Two things
+   ARE fixed here: (1) CAP literal sets a hard upper bound on the
+   computed amount, closing the "no upper bound" half of C-16; (2) a
+   semantic-analysis rule (see SEMANTIC RULES below) requires CURRENCY
+   to be declared (§2) whenever any breach_action in the specification
+   is a PENALTY, and requires the computed amount to be non-negative.
+   See TECHNICAL_REPORT.md §2.9. *)
 
 contract_ref_stmt  ::= "EXECUTE" identifier
                        ["WITH" "{" binding {"," binding} "}"]
@@ -157,8 +168,26 @@ factor_decl        ::= identifier ":" type_expr
                        ["THRESHOLD" numeric_literal]
                        ["SOURCE" factor_source]
                        ["MAX_AGE" duration_literal]
+                       ["ON_STALE" stale_action]
                        ["CAUSED_BY" "{" caused_by_entry {"," caused_by_entry} "}"]
                        ["SENSITIVITY_BOUND" numeric_literal]
+
+stale_action       ::= "BLOCK"
+                     | "USE_LAST"
+                     | "ESCALATE_TO" identifier
+
+(* NOTE ON ORACLE TRUST (C-15): a factor's MAX_AGE says how old data is
+   allowed to get before it counts as stale, but v2.4 published no
+   grammar for what happens AT that point — this closes that gap.
+   BLOCK halts evaluation of anything depending on the factor until
+   fresh data arrives; USE_LAST keeps the last known value but flags it
+   stale to the compiler's audit trail; ESCALATE_TO hands the staleness
+   event to another subject, the same pattern breach_action already
+   uses (§4). A semantic-analysis rule (see SEMANTIC RULES below)
+   requires ON_STALE whenever MAX_AGE is present — a factor that can go
+   stale with no declared behavior for that case is a compile error,
+   not a silent gap. Source-signing and multi-source quorum for oracle
+   data remain open; see TECHNICAL_REPORT.md §2.9. *)
 
 polarity_val       ::= float_literal
 
@@ -208,8 +237,7 @@ zk_constraints     ::= "PROVES" "(" zk_constraint {"," zk_constraint} ")"
 zk_constraint      ::= "self" comparison_op literal
                      | "self" "IN" "RANGE" "[" literal "," literal "]"
                      | "self" "IN" "SET"   "{" literal {"," literal} "}"
-| "HASH" "(" "self" "," salt_ref ")" comparison_op literal
-
+                     | "HASH" "(" "self" "," salt_ref ")" comparison_op literal
 salt_ref           ::= identifier
 
 (* NOTE ON HASH SALTING (B-10): a HASH(self) constraint over a
@@ -344,6 +372,23 @@ primary            ::= literal
                      | "(" expr ")"
                      | if_expr
                      | let_expr
+                     | presence_expr
+                     | default_expr
+
+presence_expr      ::= "PRESENT" "(" factor_ref ")"
+default_expr       ::= "DEFAULT" "(" factor_ref "," expr ")"
+
+(* NOTE ON MISSING VALUES (D-29): Optional<T> (§6) had no operators —
+   nothing in v2.4 could ask whether an Optional factor holds a value,
+   or supply a fallback when it doesn't, so an invariant reading one
+   was undefined the moment the factor was empty. PRESENT(f) evaluates
+   to a Boolean: true if factor f currently holds a value, false if it
+   is an empty Optional<T> OR has gone stale under its ON_STALE rule
+   (§5) — staleness is treated as absence for this purpose, since a
+   value the specification no longer trusts is not meaningfully
+   "there." DEFAULT(f, fallback) evaluates to f's value when present
+   and to fallback otherwise, so an invariant can be written total
+   over both cases without a separate IF/THEN guard every time. *)
 
 if_expr            ::= "IF" expr "THEN" expr
                        {"ELIF" expr "THEN" expr}
@@ -406,31 +451,29 @@ identifier         ::= letter (letter | digit | "_")*
    11a. Reserved Keywords
    ------------------------------------------------------------------------- *)
 
-(* The following 126 tokens are reserved by this grammar and MUST NOT be
+(* The following 139 tokens are reserved by this grammar and MUST NOT be
    used as an identifier, in any position where identifier is a valid
    production, in any conforming TRIEL specification: *)
 
-   "A", "ALL", "ALWAYS", "ANCHOR_MODE", "AND", "AS", "Address", "BUSINESS_DAY",
-   "BUSINESS_DAYS", "BY", "Boolean", "CAUSED_BY", "CONSTRAINT", "CRITICAL", "CROSS_MODAL", "CROSS_MODAL_CONSISTENT",
-   "CURE_BY", "DAG", "DATETIME", "DAY", "DAYS", "DEFAULT", "DID", "DO",
-   "DateTime", "Decimal", "Duration", "E", "ELIF", "ELSE", "ESCALATE_TO", "EVENTUALLY",
-   "EXECUTE", "EXISTS", "F", "FACTORS", "FAIRNESS", "FORALL", "FROM", "Float",
-   "G", "HAPPENS_BEFORE", "HASH", "HOUR", "HOURS", "Hash", "IF", "IMPLIES",
-   "IMPORT", "IN", "INVARIANTS", "Integer", "JURISDICTION", "LET", "LIVENESS", "LOCAL",
-   "List", "MAX_AGE", "MAY", "METADATA", "MINUTE", "MINUTES", "MODALITIES", "MONTH",
-"MONTHS", "MUST", "MUST_NOT", "Map", "NETWORK", "NEXT", "NOT", "NOTIFY",
-   "ON", "ON_BREACH", "OR", "ORACLE", "Optional", "PARTY", "PENALTY", "POLARITY",
-   "PROVENANCE_REQUIRED", "PROVES", "PUBLIC_WITNESS", "Progress", "QUORUM_THRESHOLD", "R", "RANGE", "REGULATOR",
-   "REPLACES", "REVEALING", "Record", "SAFETY", "SECOND", "SECONDS", "SENSITIVITY_BOUND", "SET",
-   "SEVERITY", "SOURCE", "SPECIFICATION", "STANDARD", "SUBJECTS", "SYSTEM", "String", "TERMINATE",
-   "TERMS", "THEN", "THRESHOLD", "TOLERANCE", "U", "UNLESS", "UNTIL", "VERSION",
+   "A", "Address", "ALL", "ALWAYS", "ANCHOR_MODE", "AND", "AS", "BLOCK",
+   "Boolean", "BOUND_TO", "BULLETPROOFS", "BUSINESS_DAY", "BUSINESS_DAYS", "BY", "CAP", "CAUSED_BY",
+   "CONSTRAINT", "CRITICAL", "CROSS_MODAL", "CROSS_MODAL_CONSISTENT", "CURE_BY", "CURRENCY", "CURVE", "DAG",
+   "DATETIME", "DateTime", "DAY", "DAYS", "Decimal", "DEFAULT", "DID", "DO",
+   "Duration", "E", "ELIF", "ELSE", "ESCALATE_TO", "EVENTUALLY", "EXECUTE", "EXISTS",
+   "F", "FACTORS", "FAIRNESS", "false", "Float", "FORALL", "FROM", "G",
+   "GROTH16", "HAPPENS_BEFORE", "HASH", "Hash", "HOUR", "HOURS", "IF", "IMPLIES",
+   "IMPORT", "IN", "Integer", "INVARIANTS", "JURISDICTION", "LET", "List", "LIVENESS",
+   "LOCAL", "Map", "MAX_AGE", "MAY", "METADATA", "MINUTE", "MINUTES", "MODALITIES",
+   "MONTH", "MONTHS", "MUST", "MUST_NOT", "NETWORK", "NEXT", "NOT", "NOTIFY",
+   "ON", "ON_BREACH", "ON_STALE", "Optional", "OR", "ORACLE", "PARTY", "PENALTY",
+   "PLONK", "POLARITY", "PRESENT", "Progress", "PROOF_SYSTEM", "PROVENANCE_REQUIRED", "PROVES", "PUBLIC_WITNESS",
+   "QUORUM_THRESHOLD", "R", "RANGE", "Record", "REGULATOR", "REPLACES", "REVEALING", "SAFETY",
+   "SECOND", "SECONDS", "self", "SENSITIVITY_BOUND", "SET", "SEVERITY", "SOURCE", "SPECIFICATION",
+   "STANDARD", "STARK", "String", "SUBJECTS", "SYSTEM", "TERMINATE", "TERMS", "THEN",
+   "THRESHOLD", "TOLERANCE", "true", "U", "UNLESS", "UNTIL", "USE_LAST", "VERSION",
    "W", "WARNING", "WEIGHT", "WHEN", "WITH", "WITHIN", "WITHOUT", "X",
-   "YEAR", "YEARS", "ZK", "false", "self", "true"
-
-(* IMPLEMENTATION NOTE — single-letter LTL/CTL operators: eight of the
-   reserved tokens above ("A", "E", "F", "G", "R", "U", "W", "X") are
-   single uppercase letters, used as LTL/CTL temporal operators in
-   Section 8 (ltl_unary, ltl_until, ctl_path_formula, ctl_temporal_op).
+   "YEAR", "YEARS", "ZK"
+Section 8 (ltl_unary, ltl_until, ctl_path_formula, ctl_temporal_op).
    Reserving them is necessary for correctness, but it means no bare
    single uppercase letter may be used as an identifier anywhere in a
    TRIEL specification. This is a known, deliberate trade-off. If this
@@ -514,6 +557,51 @@ character          ::= ? any-ASCII-character-except-double-quote ?
    Salting (zk_constraint's HASH form, §6) is enforced directly by the
    grammar rather than by a semantic rule, since a HASH constraint
    syntactically requires a salt_ref and cannot be written without one.
+
+   =========================================================================
+
+   ORACLE TRUST, MONETARY VALUES, AND MISSING DATA (v2.4, C-15/C-16/D-29)
+
+   ON_STALE (factor_decl, §5) is optional in the grammar but REQUIRED
+   at semantic analysis whenever the same factor declares MAX_AGE: a
+   factor that can go stale with no declared fallback behavior is a
+   compile error, not an implicit "treat the old value as still good."
+
+   PROVENANCE_REQUIRED (declaration_block, §2) is optional in the
+   grammar but REQUIRED (and must be true) at semantic analysis
+   whenever any factor's SOURCE clause names a subject declared
+   ORACLE in SUBJECTS (§3). This connects two fields the v2.4 grammar
+   already had — PROVENANCE_REQUIRED existed, ORACLE existed — but
+   never formally required together; the concrete signature/attestation
+   mechanism satisfying PROVENANCE_REQUIRED remains compiler-defined,
+   consistent with how that field's semantics were already scoped
+   above. Multi-source quorum for oracle data and a dispute mechanism
+   for a contested value are not addressed by this rule and remain
+   open.
+
+   CURRENCY (declaration_block, §2) is optional in the grammar but
+   REQUIRED at semantic analysis whenever any breach_action in the
+   specification is a PENALTY: an amount with no declared currency is
+   not a monetary value, just a number. The amount a PENALTY expr
+   computes at breach time MUST be non-negative; CAP (breach_action,
+   §4) sets its upper bound where the specification author chooses to
+   declare one. A literal used in a Decimal- or Money-denominated
+   context MUST be interpreted as an exact base-10 decimal, not an
+   IEEE-754 binary float, despite float_literal (§11) being the shared
+   lexical form for both — this grammar has no separate exact-decimal
+   literal syntax yet, so the distinction is enforced at the semantic
+   level, not the lexical one. A first-class monetary type (units,
+   rounding rules, overflow behavior) remains future work.
+
+   PRESENT(f) and DEFAULT(f, fallback) (primary, §10) are ordinary
+   grammar productions, not semantic-rule-gated like the fields above:
+   they are simply new expression forms usable wherever expr is valid.
+   No additional semantic rule makes them mandatory, since not every
+   Optional<T> factor needs a fallback to be well-formed — omitting
+   them is only a problem if the specification's INVARIANTS block goes
+   on to read that factor's value directly without one, which is a
+   type-checking concern for the same future analysis pass already
+   noted for the information-flow rule of TECHNICAL_REPORT.md §2.7.
 
    =========================================================================
 
