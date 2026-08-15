@@ -39,7 +39,7 @@ anchor_mode_val: "NETWORK" | "LOCAL"
 
 // --- 3. Subject Block -------------------------------------------------------
 
-subject_block: "SUBJECTS" "{" subject_decl ("," subject_decl)* "}"
+subject_block: "SUBJECTS" "{" subject_decl ("," subject_decl)* ","? "}"
 subject_decl: identifier ":" role_type ("DID" did_literal)?
 role_type: "PARTY" | "ORACLE" | "REGULATOR" | "SYSTEM"
 did_literal: STRING_LITERAL
@@ -47,7 +47,7 @@ did_literal: STRING_LITERAL
 // --- 4. Terms Block -----------------------------------------------------
 
 term_element: named_term_decl | term_stmt
-terms_block: "TERMS" "{" term_element (";" term_element)* "}"
+terms_block: "TERMS" "{" term_element (";" term_element)* ";"? "}"
 named_term_decl: identifier ":=" term_stmt
 term_stmt: choice_expr
 
@@ -66,7 +66,10 @@ matched_term: matched_condition
             | trigger_stmt
             | breach_handler_stmt
             | contract_ref_stmt
+            | term_ref
             | "(" term_stmt ")"
+
+term_ref: identifier
 
 unmatched_term: unmatched_condition
 
@@ -91,12 +94,11 @@ obligation_stmt: identifier "MUST" action_expr \
                  ("UNTIL" datetime_expr)?
 
 permission_stmt: identifier "MAY" action_expr \
-                  ("WHEN" expr)? \
-                  ("WITHIN" deadline_expr)?
+                  ("WHEN" expr)?
 
 prohibition_stmt: identifier "MUST_NOT" action_expr ("WHEN" expr)?
 
-trigger_stmt: "ON" event_expr "DO" term_stmt
+trigger_stmt: "ON" event_expr "DO" base_term
 
 breach_handler_stmt: identifier "ON_BREACH" breach_action ("," breach_action)*
 
@@ -112,22 +114,22 @@ binding: identifier ":=" expr
 
 // --- 5. Factors Block --------------------------------------------------
 
-factors_block: "FACTORS" "{" factor_decl ("," factor_decl)* "}"
+factors_block: "FACTORS" "{" factor_decl ("," factor_decl)* ","? "}"
 
 factor_decl: identifier ":" type_expr \
              ("POLARITY" polarity_val | "METADATA") \
-             ("THRESHOLD" numeric_literal)? \
+             ("THRESHOLD" signed_numeric_literal)? \
              ("SOURCE" factor_source)? \
              ("MAX_AGE" duration_literal)? \
              ("ON_STALE" stale_action)? \
              ("CAUSED_BY" "{" caused_by_entry ("," caused_by_entry)* "}")? \
-             ("SENSITIVITY_BOUND" numeric_literal)?
+             ("SENSITIVITY_BOUND" signed_numeric_literal)?
 
 stale_action: "BLOCK"
             | "USE_LAST"
             | "ESCALATE_TO" identifier
 
-polarity_val: FLOAT_LITERAL
+polarity_val: ["-"] FLOAT_LITERAL
 factor_source: identifier
 
 // --- 6. Type Expressions -----------------------------------------------
@@ -162,10 +164,16 @@ zk_constraints: "PROVES" "(" zk_constraint ("," zk_constraint)* ")" \
                 ("PUBLIC_WITNESS" "(" identifier ("," identifier)* ")")? \
                 ("BOUND_TO" "(" identifier "," identifier ")")?
 
-zk_constraint: "self" comparison_op literal
-             | "self" "IN" "RANGE" "[" literal "," literal "]"
-             | "self" "IN" "SET" "{" literal ("," literal)* "}"
-             | "HASH" "(" "self" "," salt_ref ")" comparison_op literal
+zk_constraint: "self" comparison_op signed_literal
+             | "self" "IN" "RANGE" "[" signed_literal "," signed_literal "]"
+             | "self" "IN" "SET" "{" signed_literal ("," signed_literal)* "}"
+             | "HASH" "(" "self" "," salt_ref ")" comparison_op signed_literal
+
+signed_literal: signed_numeric_literal
+              | STRING_LITERAL
+              | boolean_literal
+              | datetime_literal
+              | duration_literal
 
 salt_ref: identifier
 
@@ -173,19 +181,19 @@ zk_visibility: "self" | "ALL"
 
 // --- 7. Cross-Modal Block ------------------------------------------------
 
-cross_modal_block: "CROSS_MODAL" "{" cross_modal_decl ("," cross_modal_decl)* "}"
+cross_modal_block: "CROSS_MODAL" "{" cross_modal_decl ("," cross_modal_decl)* ","? "}"
 
 cross_modal_decl: identifier ":" \
                    "{" factor_ref "IN" modality_id "," \
                        factor_ref "IN" modality_id "}" \
-                   ("TOLERANCE" numeric_literal)? \
+                   ("TOLERANCE" signed_numeric_literal)? \
                    ("SEVERITY" ("CRITICAL" | "WARNING"))?
 
 modality_id: identifier
 
 // --- 8. Invariants Block -------------------------------------------------
 
-invariants_block: "INVARIANTS" "{" invariant_decl (";" invariant_decl)* "}"
+invariants_block: "INVARIANTS" "{" invariant_decl (";" invariant_decl)* ";"? "}"
 
 invariant_decl: identifier (":" invariant_type)? ":" temporal_expr
 
@@ -202,10 +210,10 @@ causal_expr: "FORALL" identifier "IN" event_class ":" \
              identifier "HAPPENS_BEFORE" identifier
 
 ltl_expr: ltl_implication
-ltl_implication: ltl_until ("->" ltl_until)*
-ltl_until: ltl_or (LTL_UNTIL_OP ltl_or)*
+ltl_implication: ltl_or ("->" ltl_implication)?
+ltl_or: ltl_until ("||" ltl_until)*
+ltl_until: ltl_and (LTL_UNTIL_OP ltl_until)?
 LTL_UNTIL_OP: "U" | "R" | "W"
-ltl_or: ltl_and ("||" ltl_and)*
 ltl_and: ltl_unary ("&&" ltl_unary)*
 ltl_unary: "!" ltl_unary
          | "G" ltl_unary
@@ -214,19 +222,20 @@ ltl_unary: "!" ltl_unary
          | ltl_atom
 ltl_atom: state_expr | "(" ltl_expr ")"
 
-ctl_expr: ctl_or
+ctl_expr: ctl_implication
+ctl_implication: ctl_or ("->" ctl_implication)?
 ctl_or: ctl_and ("||" ctl_and)*
-ctl_and: ctl_path_formula ("&&" ctl_path_formula)*
-ctl_path_formula: CTL_PATH_QUANT ctl_temporal_op "(" ctl_expr ")"
-                 | ctl_atom
+ctl_and: ctl_negation ("&&" ctl_negation)*
+ctl_negation: "!" ctl_negation | ctl_path_formula
+ctl_path_formula: CTL_PATH_QUANT ctl_temporal_op "(" ctl_inner ")"
+                 | "(" ctl_expr ")"
+ctl_inner: ctl_expr | state_expr
 CTL_PATH_QUANT: "A" | "E"
 ctl_temporal_op: "X" | "F" | "G" | "U" | "R"
-ctl_atom: state_expr | "(" ctl_expr ")"
 
 state_invariant: "ALWAYS" "(" expr ")"
                | "EVENTUALLY" "(" expr ")" ("WITHIN" deadline_expr)?
                | "NEXT" "(" expr ")"
-               | "DAG" "(" identifier ")"
 
 cross_modal_invariant: "CROSS_MODAL_CONSISTENT" "(" identifier ("," identifier)* ")"
 
@@ -235,7 +244,7 @@ param_decl: identifier ":" type_expr
 
 // --- 9. Modalities Block ---------------------------------------------------
 
-modalities_block: "MODALITIES" "{" modality_conf ("," modality_conf)* "}"
+modalities_block: "MODALITIES" "{" modality_conf ("," modality_conf)* ","? "}"
 modality_conf: modality_id ":" "{" modality_param ("," modality_param)* "}"
 modality_param: identifier ":" literal
 
@@ -290,6 +299,7 @@ literal: numeric_literal
        | duration_literal
 
 numeric_literal: FLOAT_LITERAL | INTEGER_LITERAL
+signed_numeric_literal: ["-"] (FLOAT_LITERAL | INTEGER_LITERAL)
 boolean_literal: "true" | "false"
 datetime_literal: "DATETIME" "(" STRING_LITERAL ")"
 duration_literal: INTEGER_LITERAL time_unit
@@ -299,7 +309,7 @@ time_unit: "SECOND" | "SECONDS" | "MINUTE" | "MINUTES"
          | "BUSINESS_DAY" | "BUSINESS_DAYS"
          | "MONTH" | "MONTHS" | "YEAR" | "YEARS"
 
-caused_by_entry: identifier "WEIGHT" numeric_literal
+caused_by_entry: identifier "WEIGHT" signed_numeric_literal
 
 identifier: IDENTIFIER
 
@@ -308,7 +318,7 @@ identifier: IDENTIFIER
 IDENTIFIER: /(?!(?:A|Address|ALL|ALWAYS|ANCHOR_MODE|AND|AS|BLOCK|Boolean|BOUND_TO|BULLETPROOFS|BUSINESS_DAY|BUSINESS_DAYS|BY|CAP|CAUSED_BY|CONSTRAINT|CRITICAL|CROSS_MODAL|CROSS_MODAL_CONSISTENT|CURE_BY|CURRENCY|CURVE|DAG|DATETIME|DateTime|DAY|DAYS|Decimal|DEFAULT|DID|DO|Duration|E|ELIF|ELSE|ESCALATE_TO|EVENTUALLY|EXECUTE|EXISTS|F|FACTORS|FAIRNESS|false|Float|FORALL|FROM|G|GROTH16|HAPPENS_BEFORE|HASH|Hash|HOUR|HOURS|IF|IMPLIES|IMPORT|IN|Integer|INVARIANTS|JURISDICTION|LET|List|LIVENESS|LOCAL|Map|MAX_AGE|MAY|METADATA|MINUTE|MINUTES|MODALITIES|MONTH|MONTHS|MUST|MUST_NOT|NETWORK|NEXT|NOT|NOTIFY|ON|ON_BREACH|ON_STALE|Optional|OR|ORACLE|PARTY|PENALTY|PLONK|POLARITY|PRESENT|Progress|PROOF_SYSTEM|PROVENANCE_REQUIRED|PROVES|PUBLIC_WITNESS|QUORUM_THRESHOLD|R|RANGE|Record|REGULATOR|REPLACES|REVEALING|SAFETY|SECOND|SECONDS|self|SENSITIVITY_BOUND|SET|SEVERITY|SOURCE|SPECIFICATION|STANDARD|STARK|String|SUBJECTS|SYSTEM|TERMINATE|TERMS|THEN|THRESHOLD|TOLERANCE|true|U|UNLESS|UNTIL|USE_LAST|VERSION|W|WARNING|WEIGHT|WHEN|WITH|WITHIN|WITHOUT|X|YEAR|YEARS|ZK)\b)[A-Za-z][A-Za-z0-9_]*/
 INTEGER_LITERAL: /[0-9]+/
 FLOAT_LITERAL: /[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?/
-STRING_LITERAL: /"[^"\n]*"/
+STRING_LITERAL: /"(?:[^"\\\n]|\\["\\ntu])*"/
 
 COMMENT: /--[^\n]*/
 ML_COMMENT: /\{-.*?-\}/s
