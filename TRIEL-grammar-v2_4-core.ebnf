@@ -24,7 +24,7 @@ specification      ::= declaration_block
    ------------------------------------------------------------------------- *)
 
 declaration_block  ::= "SPECIFICATION" identifier "VERSION" version_literal
-                       ["REPLACES" version_literal]
+                       ["REPLACES" identifier version_literal ["HASH" hash_literal]]
                        ["STANDARD" standard_ref {"," standard_ref}]
                        ["JURISDICTION" jurisdiction_literal]
                        ["IMPORT" import_decl {"," import_decl}]
@@ -48,7 +48,13 @@ proof_system_val   ::= "GROTH16" | "PLONK" | "STARK" | "BULLETPROOFS"
 version_literal    ::= integer_literal "." integer_literal ["." integer_literal]
 standard_ref       ::= string_literal
 jurisdiction_literal ::= string_literal
-import_decl        ::= identifier "FROM" string_literal ["AS" identifier]
+import_decl        ::= identifier "FROM" string_literal ["AS" identifier] ["HASH" hash_literal]
+
+hash_literal       ::= string_literal
+                       (* MUST match the pattern "sha256:" followed by 64
+                          lowercase hex digits — the content hash of the
+                          imported specification at the referenced path.
+                          See SEMANTIC RULES below (C-18). *)
 
 anchor_mode_val    ::= "NETWORK"
                      | "LOCAL"
@@ -153,10 +159,22 @@ breach_action      ::= "PENALTY" expr ["CAP" literal]
    See TECHNICAL_REPORT.md §2.9. *)
 
 contract_ref_stmt  ::= "EXECUTE" identifier
+                       ["HASH" hash_literal]
                        ["WITH" "{" binding {"," binding} "}"]
 
-binding            ::= identifier ":=" expr
+(* NOTE ON IMPORT/EXECUTE/REPLACES PINNING (C-18): none of these three
+   references — an IMPORT of another spec's content, an EXECUTE call
+   into one, or a REPLACES chain to a prior version — had a way to
+   pin exactly what they point at; a path or version number alone can
+   resolve to different content over time. All three now carry an
+   optional HASH clause, semantically required (see SEMANTIC RULES
+   below) whenever the reference exists at all: a specification cannot
+   IMPORT, EXECUTE, or REPLACES something without saying what content
+   it expects to find there. REPLACES additionally now names which
+   spec_id's version it replaces — "REPLACES 1.0.0" never answered
+   "1.0.0 of what." *)
 
+binding            ::= identifier ":=" expr
 (* -------------------------------------------------------------------------
    5. Factors Block
    ------------------------------------------------------------------------- *)
@@ -351,7 +369,6 @@ modalities_block   ::= "MODALITIES" "{" modality_conf {"," modality_conf} "}"
 modality_conf      ::= modality_id ":" "{" modality_param {"," modality_param} "}"
 
 modality_param     ::= identifier ":" literal
-
 (* -------------------------------------------------------------------------
    10. Expressions
    ------------------------------------------------------------------------- *)
@@ -506,7 +523,6 @@ character          ::= ? any-ASCII-character-except-double-quote ?
 (* Comments:
    Single-line : -- comment to end of line
    Multi-line  : {- comment -}                                               *)
-
 (* =========================================================================
    SEMANTIC RULES
    =========================================================================
@@ -610,6 +626,32 @@ character          ::= ? any-ASCII-character-except-double-quote ?
 
    =========================================================================
 
+   IMPORT, EXECUTE, AND REPLACES CONTENT PINNING (v2.4, C-18)
+
+   HASH (import_decl §2, contract_ref_stmt §4, and REPLACES §2) is
+   optional in the grammar but REQUIRED at semantic analysis wherever
+   the surrounding construct is present at all: a specification that
+   IMPORTs another file, EXECUTEs another specification, or REPLACES
+   a prior version must state the exact content hash it expects to
+   find there. A path, an identifier, or a bare version number can
+   resolve to different content at different times or in different
+   deployments; the hash is what makes "the same specification" a
+   checkable claim rather than an assumption. hash_literal's format
+   (§2) is fixed at "sha256:" followed by 64 lowercase hex digits; a
+   compiler MUST reject a HASH value in any other format.
+
+   REPLACES additionally now requires an identifier naming which
+   specification's version it replaces, not just a bare version
+   number — "REPLACES 1.0.0" from the pre-C-18 grammar never answered
+   "1.0.0 of what," and a specification importing several others could
+   not tell which one a REPLACES clause was even about. This is a
+   breaking syntax change from the grammar published before this
+   finding was addressed; no example in this repository used REPLACES
+   before this revision, so no existing specification needed updating
+   as a result. See TECHNICAL_REPORT.md §2.10 for the full rationale.
+
+   =========================================================================
+
    NOTE ON WITHIN duration semantics (v2.4):
 
    When deadline_expr in EVENTUALLY(...) WITHIN ... resolves to a
@@ -686,10 +728,11 @@ character          ::= ? any-ASCII-character-except-double-quote ?
    -- Modality names are placeholders here and are resolved by the
    -- compiler. The grammar accepts any identifier in this position.
 
-   Example 6: REPLACES for version chaining (v2.4)
+   Example 6: REPLACES for version chaining (v2.4, syntax updated for C-18)
    -----------------------------------------------------------
    SPECIFICATION project_task_distribution VERSION 2.0.0
-       REPLACES 1.0.0
+       REPLACES project_task_distribution 1.0.0
+           HASH "sha256:4b6f...<64 hex digits>...c1a0"
        JURISDICTION "INTERNAL"
 
    Example 7: EVENTUALLY with WITHIN deadline (v2.4)
