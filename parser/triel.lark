@@ -25,7 +25,8 @@ declaration_block: "SPECIFICATION" identifier "VERSION" version_literal \
                     ("ANCHOR_MODE" ":" anchor_mode_val)? \
                     ("QUORUM_THRESHOLD" ":" INTEGER_LITERAL)? \
                     ("PROOF_SYSTEM" ":" proof_system_val)? \
-                    ("CURVE" ":" STRING_LITERAL)?
+                    ("CURVE" ":" STRING_LITERAL)? \
+                    ("CURRENCY" ":" STRING_LITERAL)?
 
 proof_system_val: "GROTH16" | "PLONK" | "STARK" | "BULLETPROOFS"
 
@@ -98,7 +99,7 @@ trigger_stmt: "ON" event_expr "DO" term_stmt
 
 breach_handler_stmt: identifier "ON_BREACH" breach_action ("," breach_action)*
 
-breach_action: "PENALTY" expr
+breach_action: "PENALTY" expr ("CAP" literal)?
              | "NOTIFY" identifier
              | "TERMINATE"
              | "CURE_BY" deadline_expr
@@ -117,8 +118,13 @@ factor_decl: identifier ":" type_expr \
              ("THRESHOLD" numeric_literal)? \
              ("SOURCE" factor_source)? \
              ("MAX_AGE" duration_literal)? \
+             ("ON_STALE" stale_action)? \
              ("CAUSED_BY" "{" caused_by_entry ("," caused_by_entry)* "}")? \
              ("SENSITIVITY_BOUND" numeric_literal)?
+
+stale_action: "BLOCK"
+            | "USE_LAST"
+            | "ESCALATE_TO" identifier
 
 polarity_val: FLOAT_LITERAL
 factor_source: identifier
@@ -151,7 +157,7 @@ zk_type: "ZK" "<" zk_primitive_type ">" zk_constraints
 zk_primitive_type: "Integer" | "Boolean" | "String" | "Address" | "Hash"
 
 zk_constraints: "PROVES" "(" zk_constraint ("," zk_constraint)* ")" \
-("WITHOUT" "REVEALING" zk_visibility)? \
+                ("WITHOUT" "REVEALING" zk_visibility)? \
                 ("PUBLIC_WITNESS" "(" identifier ("," identifier)* ")")? \
                 ("BOUND_TO" "(" identifier "," identifier ")")?
 
@@ -252,6 +258,11 @@ primary: literal
        | "(" expr ")"
        | if_expr
        | let_expr
+       | presence_expr
+       | default_expr
+
+presence_expr: "PRESENT" "(" factor_ref ")"
+default_expr: "DEFAULT" "(" factor_ref "," expr ")"
 
 if_expr: "IF" expr "THEN" expr ("ELIF" expr "THEN" expr)* "ELSE" expr
 let_expr: "LET" identifier ":" type_expr "=" expr "IN" expr
@@ -293,7 +304,7 @@ identifier: IDENTIFIER
 
 // --- 12. Lexical Tokens -----------------------------------------------------
 
-IDENTIFIER: /(?!(?:A|ALL|ALWAYS|ANCHOR_MODE|AND|AS|Address|BUSINESS_DAY|BUSINESS_DAYS|BY|Boolean|CAUSED_BY|CONSTRAINT|CRITICAL|CROSS_MODAL|CROSS_MODAL_CONSISTENT|CURE_BY|DAG|DATETIME|DAY|DAYS|DEFAULT|DID|DO|DateTime|Decimal|Duration|E|ELIF|ELSE|ESCALATE_TO|EVENTUALLY|EXECUTE|EXISTS|F|FACTORS|FAIRNESS|FORALL|FROM|Float|G|HAPPENS_BEFORE|HASH|HOUR|HOURS|Hash|IF|IMPLIES|IMPORT|IN|INVARIANTS|Integer|JURISDICTION|LET|LIVENESS|LOCAL|List|MAX_AGE|MAY|METADATA|MINUTE|MINUTES|MODALITIES|MONTH|MONTHS|MUST|MUST_NOT|Map|NETWORK|NEXT|NOT|NOTIFY|ON|ON_BREACH|OR|ORACLE|Optional|PARTY|PENALTY|POLARITY|PROVENANCE_REQUIRED|PROVES|PUBLIC_WITNESS|Progress|QUORUM_THRESHOLD|R|RANGE|REGULATOR|REPLACES|REVEALING|Record|SAFETY|SECOND|SECONDS|SENSITIVITY_BOUND|SET|SEVERITY|SOURCE|SPECIFICATION|STANDARD|SUBJECTS|SYSTEM|String|TERMINATE|TERMS|THEN|THRESHOLD|TOLERANCE|U|UNLESS|UNTIL|VERSION|W|WARNING|WEIGHT|WHEN|WITH|WITHIN|WITHOUT|X|YEAR|YEARS|ZK|false|self|true)\b)[A-Za-z][A-Za-z0-9_]*/
+IDENTIFIER: /(?!(?:A|Address|ALL|ALWAYS|ANCHOR_MODE|AND|AS|BLOCK|Boolean|BOUND_TO|BULLETPROOFS|BUSINESS_DAY|BUSINESS_DAYS|BY|CAP|CAUSED_BY|CONSTRAINT|CRITICAL|CROSS_MODAL|CROSS_MODAL_CONSISTENT|CURE_BY|CURRENCY|CURVE|DAG|DATETIME|DateTime|DAY|DAYS|Decimal|DEFAULT|DID|DO|Duration|E|ELIF|ELSE|ESCALATE_TO|EVENTUALLY|EXECUTE|EXISTS|F|FACTORS|FAIRNESS|false|Float|FORALL|FROM|G|GROTH16|HAPPENS_BEFORE|HASH|Hash|HOUR|HOURS|IF|IMPLIES|IMPORT|IN|Integer|INVARIANTS|JURISDICTION|LET|List|LIVENESS|LOCAL|Map|MAX_AGE|MAY|METADATA|MINUTE|MINUTES|MODALITIES|MONTH|MONTHS|MUST|MUST_NOT|NETWORK|NEXT|NOT|NOTIFY|ON|ON_BREACH|ON_STALE|Optional|OR|ORACLE|PARTY|PENALTY|PLONK|POLARITY|PRESENT|Progress|PROOF_SYSTEM|PROVENANCE_REQUIRED|PROVES|PUBLIC_WITNESS|QUORUM_THRESHOLD|R|RANGE|Record|REGULATOR|REPLACES|REVEALING|SAFETY|SECOND|SECONDS|self|SENSITIVITY_BOUND|SET|SEVERITY|SOURCE|SPECIFICATION|STANDARD|STARK|String|SUBJECTS|SYSTEM|TERMINATE|TERMS|THEN|THRESHOLD|TOLERANCE|true|U|UNLESS|UNTIL|USE_LAST|VERSION|W|WARNING|WEIGHT|WHEN|WITH|WITHIN|WITHOUT|X|YEAR|YEARS|ZK)\b)[A-Za-z][A-Za-z0-9_]*/
 INTEGER_LITERAL: /[0-9]+/
 FLOAT_LITERAL: /[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?/
 STRING_LITERAL: /"[^"\n]*"/
