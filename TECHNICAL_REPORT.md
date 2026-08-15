@@ -165,6 +165,20 @@ Section 2.7 constrains what a specification may *do* with a hidden value; it say
 
 ---
 
+### 2.9 Oracle Trust, Monetary Values, and Missing Data
+
+Section 2.6 gave `MAX_AGE` a place in the trace model but stopped short of saying what happens once a factor actually goes stale; nothing in the grammar connected an `ORACLE`-sourced factor to any trust requirement at all; `PENALTY` computed a bare number with no currency, no bound, and no protection against a negative result; and `Optional<T>` (Section 2.3) had no operators, so an invariant reading an absent value was undefined the moment it was empty. This section closes all four.
+
+**Staleness has a defined outcome (C-15, part one).** `factor_decl` gains an optional `ON_STALE` clause — `BLOCK`, `USE_LAST`, or `ESCALATE_TO subject` — using the same escalation vocabulary `breach_action` already established (Section 2.6). It is grammatically optional but semantically required whenever the same factor declares `MAX_AGE`: a value that can expire with no declared behavior for that moment is a compile error now, not a silent "keep using it."
+
+**Oracle data requires provenance (C-15, part two).** `PROVENANCE_REQUIRED` and `ORACLE` both existed in the v2.4 grammar independently, but nothing required them together. A semantic-analysis rule now closes that gap: any specification with a factor sourced from an `ORACLE`-declared subject must set `PROVENANCE_REQUIRED: true`. The concrete attestation mechanism this triggers remains compiler-defined, exactly as `PROVENANCE_REQUIRED`'s semantics were already scoped in the grammar's SEMANTIC RULES section — this rule connects two existing fields rather than inventing new machinery. Multi-source quorum and a dispute mechanism for a contested oracle value are not addressed here and remain open.
+
+**Money has a currency and a ceiling (C-16).** `declaration_block` gains an optional `CURRENCY` field, semantically required whenever any `breach_action` is a `PENALTY` — an amount with no declared currency is a number, not money. `breach_action`'s `PENALTY` form gains an optional `CAP literal`, giving the specification author a hard upper bound where they choose to declare one, and a semantic rule requires the computed amount to be non-negative. This report does not yet introduce a first-class monetary type: `PENALTY`'s `expr` still shares its literal syntax with ordinary `Float`, which is a known precision hazard for currency math. The interim rule is that a literal used in a `Decimal`- or money-denominated context must be read as an exact base-10 decimal by the compiler regardless of that shared lexical form — a semantic requirement standing in for a proper exact-decimal literal syntax, which remains future work. `delivery_agreement.triel` now declares `PROVENANCE_REQUIRED: true` and `CURRENCY: "USD"`, applies `ON_STALE BLOCK` to its `MAX_AGE`-bearing oracle factor, and caps its `PENALTY` at 10000.
+
+**Missing values are reasonable about, not just declarable (D-29).** Two new expression forms make `Optional<T>` usable: `PRESENT(f)` evaluates to a `Boolean` — true if `f` currently holds a value, and false both when `f` is an empty `Optional<T>` and when `f` has gone stale under its own `ON_STALE` rule, since a value the specification no longer trusts is not meaningfully "there" for this purpose. `DEFAULT(f, fallback)` evaluates to `f`'s value when present and to `fallback` otherwise, letting an invariant be written total over both cases without a separate guard every time. Neither form is mandatory by semantic rule — omitting them is only a problem once an invariant goes on to read an `Optional` factor's value directly, which is a type-checking concern left to the same future analysis pass already noted for the information-flow rule of Section 2.7.
+
+---
+
 ## 3. Related Work
 
 TRIEL overlaps, in stated purpose, with several existing languages; the comparisons below are drawn at the level of publicly observable syntax and semantics, not implementation internals.
