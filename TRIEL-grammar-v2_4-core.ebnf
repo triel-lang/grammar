@@ -893,6 +893,19 @@ hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
 
    USAGE EXAMPLES
 
+   NOTE ON SCOPE (D-33): the examples below illustrate field syntax
+   across several domains at once — patient_consent (healthcare,
+   referencing HL7-FHIR), probe_patch and satellite_fw (aerospace) —
+   but exist only as the short inline snippets shown here. Unlike
+   age_verification.triel and eudi_driving_license.triel in this
+   repository's examples/ directory, they have never been run through
+   the reference parser and are not validated end-to-end
+   specifications. They show that certain fields parse in that
+   context, nothing more; they are not a claim that TRIEL has been
+   exercised against healthcare or aerospace compliance requirements.
+   See TECHNICAL_REPORT.md §4 for the fuller scope statement this
+   note is drawn from.
+
    Example 1: Specification requiring provenance verification
    -----------------------------------------------------------
    SPECIFICATION patient_consent VERSION 1.0.0
