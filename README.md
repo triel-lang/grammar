@@ -37,6 +37,8 @@ The `examples/` directory contains sample TRIEL specifications:
 * `age_verification.triel` — privacy-preserving verification using native zero-knowledge constraints
 * `eudi/eudi_driving_license.triel` — EUDI Wallet-style issuance and presentation policy for a driving license credential, combining conditional obligations and a zero-knowledge age predicate
 
+Of these, `age_verification.triel` and `eudi_driving_license.triel` — privacy-preserving identity and credential verification — are the most thoroughly worked through and tested; see `TECHNICAL_REPORT.md` §4 for the fuller scope statement.
+
 ## License
 
 The TRIEL specification is made available under the [Open Web Foundation Agreement 1.0 (OWFa 1.0)](https://github.com/triel-lang/grammar/blob/main/LICENSE.md).
