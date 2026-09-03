@@ -122,8 +122,6 @@ term_ref            ::= identifier
 
 unmatched_term       ::= unmatched_condition
 
-condition_stmt       ::= matched_condition | unmatched_condition
-
 (* Every branch of a matched_condition is itself fully resolved — any
    nested IF inside it must also have an ELSE. This is what makes ELSE
    binding unambiguous: an ELSE can only ever attach to the nearest
@@ -137,13 +135,14 @@ matched_condition    ::= "IF" expr "THEN" matched_term
    outermost level — or one whose last ELSE/ELIF branch is itself still
    unmatched. This is the only place a "dangling" IF can occur, and it
    can only ever occur once per chain. *)
-unmatched_condition  ::= "IF" expr "THEN" term_stmt
+unmatched_condition  ::= "IF" expr "THEN" base_term
                        | "IF" expr "THEN" matched_term
                          {"ELIF" expr "THEN" matched_term}
                          "ELIF" expr "THEN" unmatched_term
                        | "IF" expr "THEN" matched_term
                          {"ELIF" expr "THEN" matched_term}
                          "ELSE" unmatched_term
+                       | "WHEN" expr "THEN" unmatched_term
 
 obligation_stmt    ::= identifier "MUST" action_expr
                        ["BY" deadline_expr]
@@ -441,10 +440,11 @@ ctl_implication    ::= ctl_or ["->" ctl_implication]
 ctl_or             ::= ctl_and ("||" ctl_and)*
 ctl_and            ::= ctl_negation ("&&" ctl_negation)*
 ctl_negation       ::= "!" ctl_negation | ctl_path_formula
-ctl_path_formula   ::= ("A" | "E") ctl_temporal_op "(" ctl_inner ")"
+ctl_path_formula   ::= ctl_op "(" ctl_inner ")"
                      | "(" ctl_expr ")"
 ctl_inner          ::= ctl_expr | state_expr
-ctl_temporal_op    ::= "X" | "F" | "G" | "U" | "R"
+ctl_op             ::= "AX" | "AF" | "AG" | "AU" | "AR"
+                     | "EX" | "EF" | "EG" | "EU" | "ER"
 
 (* NOTE ON CTL (D-21, D-32): two defects, one restructuring. D-21:
    ctl_atom previously admitted a bare state_expr directly — the same
@@ -515,7 +515,7 @@ modality_param     ::= identifier ":" literal
 
 expr               ::= implication_expr
 
-implication_expr   ::= disjunction_expr ("IMPLIES" disjunction_expr)*
+implication_expr   ::= disjunction_expr ["IMPLIES" implication_expr]
 disjunction_expr   ::= conjunction_expr ("OR" conjunction_expr)*
 conjunction_expr   ::= negation_expr ("AND" negation_expr)*
 negation_expr      ::= "NOT" negation_expr | comparison_expr
@@ -636,15 +636,15 @@ identifier         ::= letter (letter | digit | "_")*
    11a. Reserved Keywords
    ------------------------------------------------------------------------- *)
 
-(* The following 139 tokens are reserved by this grammar and MUST NOT be
+(* The following 146 tokens are reserved by this grammar and MUST NOT be
    used as an identifier, in any position where identifier is a valid
    production, in any conforming TRIEL specification: *)
 
-   "A", "Address", "ALL", "ALWAYS", "ANCHOR_MODE", "AND", "AS", "BLOCK",
+   "Address", "AF", "AG", "ALL", "ALWAYS", "ANCHOR_MODE", "AND", "AR", "AS", "AU", "AX", "BLOCK",
    "Boolean", "BOUND_TO", "BULLETPROOFS", "BUSINESS_DAY", "BUSINESS_DAYS", "BY", "CAP", "CAUSED_BY",
-   "CONSTRAINT", "CRITICAL", "CROSS_MODAL", "CROSS_MODAL_CONSISTENT", "CURE_BY", "CURRENCY", "CURVE", "DAG",
+   "CONSTRAINT", "CRITICAL", "CROSS_MODAL", "CROSS_MODAL_CONSISTENT", "CURE_BY", "CURRENCY", "CURVE",
    "DATETIME", "DateTime", "DAY", "DAYS", "Decimal", "DEFAULT", "DID", "DO",
-   "Duration", "E", "ELIF", "ELSE", "ESCALATE_TO", "EVENTUALLY", "EXECUTE", "EXISTS",
+   "Duration", "EF", "EG", "ELIF", "ELSE", "ER", "ESCALATE_TO", "EU", "EVENTUALLY", "EX", "EXECUTE", "EXISTS",
    "F", "FACTORS", "FAIRNESS", "false", "Float", "FORALL", "FROM", "G",
    "GROTH16", "HAPPENS_BEFORE", "HASH", "Hash", "HOUR", "HOURS", "IF", "IMPLIES",
    "IMPORT", "IN", "Integer", "INVARIANTS", "JURISDICTION", "LET", "List", "LIVENESS",
@@ -685,8 +685,8 @@ caused_by_entry    ::= identifier "WEIGHT" signed_numeric_literal
 
 letter             ::= "A".."Z" | "a".."z"
 digit              ::= "0".."9"
-character          ::= ? any Unicode code point except unescaped double-quote
-                          or unescaped backslash ?
+character          ::= ? any Unicode code point except unescaped double-quote,
+                          unescaped backslash, or a raw line break ?
                      | escape_sequence
 
 escape_sequence    ::= "\" ( '"' | "\" | "n" | "t" | "u" hex_digit hex_digit hex_digit hex_digit )
