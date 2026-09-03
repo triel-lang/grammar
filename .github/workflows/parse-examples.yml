@@ -16,15 +16,23 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Pinned: this pipeline is the evidence that the grammar is
+      # unambiguous, so it must not silently change under us when a new
+      # lark release alters Earley or the dynamic lexer.
       - name: Install parser dependencies
-        run: pip install lark
+        run: pip install lark==1.3.1
 
-      - name: Parse every example against TRIEL-grammar-v2_4-core.ebnf
+      # Every example must parse under the reference grammar.
+      # Audit finding A-01.
+      - name: Parse every example under parser/triel.lark
         run: |
-          python3 parser/triel_parser.py --check-ambiguity examples/*.triel examples/eudi/*.triel
+          python3 parser/triel_parser.py --check-ambiguity \
+            examples/*.triel examples/eudi/*.triel
 
-      - name: Fail if any example does not parse
-        if: failure()
-        run: |
-          echo "::error::One or more files under examples/ do not conform to the published EBNF. A grammar change or a new example must keep every file in examples/ parseable — see audit finding A-01."
-          exit 1
+      # The examples corpus cannot detect ambiguity: all four examples
+      # are unambiguous, so --check-ambiguity above never fires on them.
+      # These fragments are chosen to be ambiguous under the pre-fix
+      # grammar and must each have exactly one derivation now.
+      # Guards D-19, D-20, D-21/D-32, F-1, F-2, F-6.
+      - name: Ambiguity regression tests
+        run: python3 parser/test_ambiguity.py
