@@ -197,6 +197,27 @@ Sections 2.1 through 2.10 addressed semantics and cryptography; this section add
 
 **Removing genuine ambiguities (D-19, D-20, D-21).** Three constructs previously admitted more than one valid parse tree for the same input. `permission_stmt` carried its own `WITHIN` clause alongside `timeout_expr`'s general-purpose `WITHIN` (Section 2.6); "alice MAY act WITHIN 5 DAYS" could attach the deadline to either. `permission_stmt`'s own `WITHIN` is removed — every term type now takes its deadline the same way, through `timeout_expr`. `trigger_stmt`'s `DO` body was `term_stmt`, the loosest production in the term grammar (including `THEN`/`AND`/`OR`), while `trigger_stmt` itself sits at the tightest level; "ON e DO a THEN b" could parse as `ON e DO (a THEN b)` or `(ON e DO a) THEN b`. `DO`'s body is narrowed to `base_term`, removing the ambiguity; a trigger needing a sequence as its body writes it parenthesized. `ctl_atom` previously admitted a bare `state_expr` directly — the same base case `ltl_atom` uses — so a formula with no temporal operator at all derived as both valid LTL and valid CTL with nothing to say which. CTL's grammar is restructured so every derivation contains at least one `A`/`E` token, which LTL never uses, while a new `ctl_inner` production still lets the *argument* of an `A`/`E` quantifier be a bare state expression — so `EF(bad_state)` still parses, only a formula with no `A`/`E` *anywhere* no longer qualifies as CTL. All three fixes are independently confirmed: the reference parser's `--check-ambiguity` mode, which previously flagged both the `WITHIN` and `ON...DO` cases live, now reports zero ambiguous nodes for either.
 
+**Revisiting D-21 (F-6).** The `ctl_expr` restructuring above is
+correct and holds, but the claim accompanying it — that CTL and LTL
+became distinguishable because every CTL derivation contains an
+`A`/`E` token LTL never uses — was true of the production rules and
+false of the tokens. `("A"|"E") ctl_temporal_op` was two adjacent
+tokens, while `identifier` admitted `EF` as an ordinary name: only
+`A` and `E` were reserved, not `EF`. `EF(a)` was therefore lexable
+both as a CTL formula and as a call to a function named `EF`, so
+`!EF(bad_state)` — the example used below to demonstrate D-32 — had
+two derivations in the published grammar, and `AG(EF(a))` had three.
+The `--check-ambiguity` confirmation cited above did not cover this,
+because the examples corpus it runs against contains no CTL formula
+at all; the D-19 and D-20 cases it did flag were term-level. Each
+CTL operator is now a single token (`ctl_op`: AX/AF/AG/AU/AR,
+EX/EF/EG/EU/ER), matching standard CTL notation. `A` and `E` are no
+longer reserved, reducing the single-letter identifier restriction
+from eight letters to six. Confirmation is now
+`parser/test_ambiguity.py`, sixteen fragments chosen to stress the
+constructs these fixes touch, six of which had multiple derivations
+before F-6; it runs in CI on every push.
+
 **Correcting precedence and associativity (D-22, D-23).** LTL's `->` and `U`/`R`/`W` operators were left-associative under the grammar's original repetition form; both are conventionally right-associative, so `a -> b -> c` and `a U b U c` parsed as `(a->b)->c` and `(a U b) U c` instead of the intended `a->(b->c)` and `a U (b U c)`. Both now recurse on the right. Separately, `U`/`R`/`W` bound looser than `||` (until wrapped disjunction in the precedence chain), so `a || b U c` parsed as `(a||b) U c` against the usual convention that until binds tighter than disjunction; the levels are reordered so `a || (b U c)` is what that input now means. Both fixes are verified structurally, not just by confirming the input still parses: the resulting parse trees were inspected directly to confirm the right-recursive and reordered shape.
 
 **Adding negation and implication to CTL (D-32).** The pre-fix grammar had no way to write `!EF(bad_state)` — negation of a path formula — despite that being close to the audit's own headline example of an inexpressible-but-common property. `ctl_negation` and a `ctl_implication` level now provide `!` and `->` for CTL, alongside the `A`/`E` restructuring from D-21.
