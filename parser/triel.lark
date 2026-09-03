@@ -1,12 +1,15 @@
 // ============================================================================
-// TRIEL v2.4 — Lark grammar, translated directly from
+// TRIEL v2.4 — Lark grammar, the reference parser for
 // TRIEL-grammar-v2_4-core.ebnf (github.com/triel-lang/grammar).
 //
-// This is a *faithful* translation of the published EBNF, not a corrected
-// one. Where the EBNF is ambiguous (WITHIN, ON...DO, LTL/CTL atoms — see
-// audit findings D-19/D-20/D-21), this grammar reproduces the same
-// ambiguity so the parser's diagnostics reflect the grammar as published,
-// not a silently "fixed" version of it. Those fixes are tracked separately.
+// This file and the normative EBNF are maintained as a pair. Any divergence
+// between them is a defect in this file, not a local variation: the EBNF is
+// normative, this is what actually runs.
+//
+// Every ambiguity fix recorded in TECHNICAL_REPORT.md §2.11 is applied here
+// and in the EBNF together. parser/test_ambiguity.py is what keeps that
+// claim honest — the examples corpus cannot: an example that parses says
+// nothing about whether it parses in more than one way.
 // ============================================================================
 
 start: specification
@@ -73,20 +76,19 @@ term_ref: identifier
 
 unmatched_term: unmatched_condition
 
-condition_stmt: matched_condition | unmatched_condition
-
 matched_condition: "IF" expr "THEN" matched_term \
                     ("ELIF" expr "THEN" matched_term)* \
                     "ELSE" matched_term
                   | "WHEN" expr "THEN" matched_term
 
-unmatched_condition: "IF" expr "THEN" term_stmt
+unmatched_condition: "IF" expr "THEN" base_term
                     | "IF" expr "THEN" matched_term \
                       ("ELIF" expr "THEN" matched_term)* \
                       "ELIF" expr "THEN" unmatched_term
                     | "IF" expr "THEN" matched_term \
                       ("ELIF" expr "THEN" matched_term)* \
                       "ELSE" unmatched_term
+                    | "WHEN" expr "THEN" unmatched_term
 
 obligation_stmt: identifier "MUST" action_expr \
                  ("BY" deadline_expr)? \
@@ -227,11 +229,10 @@ ctl_implication: ctl_or ("->" ctl_implication)?
 ctl_or: ctl_and ("||" ctl_and)*
 ctl_and: ctl_negation ("&&" ctl_negation)*
 ctl_negation: "!" ctl_negation | ctl_path_formula
-ctl_path_formula: CTL_PATH_QUANT ctl_temporal_op "(" ctl_inner ")"
+ctl_path_formula: CTL_OP "(" ctl_inner ")"
                  | "(" ctl_expr ")"
 ctl_inner: ctl_expr | state_expr
-CTL_PATH_QUANT: "A" | "E"
-ctl_temporal_op: "X" | "F" | "G" | "U" | "R"
+CTL_OP: "AX" | "AF" | "AG" | "AU" | "AR" | "EX" | "EF" | "EG" | "EU" | "ER"
 
 state_invariant: "ALWAYS" "(" expr ")"
                | "EVENTUALLY" "(" expr ")" ("WITHIN" deadline_expr)?
@@ -251,7 +252,7 @@ modality_param: identifier ":" literal
 // --- 10. Expressions ------------------------------------------------------
 
 expr: implication_expr
-implication_expr: disjunction_expr ("IMPLIES" disjunction_expr)*
+implication_expr: disjunction_expr ("IMPLIES" implication_expr)?
 disjunction_expr: conjunction_expr ("OR" conjunction_expr)*
 conjunction_expr: negation_expr ("AND" negation_expr)*
 negation_expr: "NOT" negation_expr | comparison_expr
@@ -315,10 +316,10 @@ identifier: IDENTIFIER
 
 // --- 12. Lexical Tokens -----------------------------------------------------
 
-IDENTIFIER: /(?!(?:A|Address|ALL|ALWAYS|ANCHOR_MODE|AND|AS|BLOCK|Boolean|BOUND_TO|BULLETPROOFS|BUSINESS_DAY|BUSINESS_DAYS|BY|CAP|CAUSED_BY|CONSTRAINT|CRITICAL|CROSS_MODAL|CROSS_MODAL_CONSISTENT|CURE_BY|CURRENCY|CURVE|DAG|DATETIME|DateTime|DAY|DAYS|Decimal|DEFAULT|DID|DO|Duration|E|ELIF|ELSE|ESCALATE_TO|EVENTUALLY|EXECUTE|EXISTS|F|FACTORS|FAIRNESS|false|Float|FORALL|FROM|G|GROTH16|HAPPENS_BEFORE|HASH|Hash|HOUR|HOURS|IF|IMPLIES|IMPORT|IN|Integer|INVARIANTS|JURISDICTION|LET|List|LIVENESS|LOCAL|Map|MAX_AGE|MAY|METADATA|MINUTE|MINUTES|MODALITIES|MONTH|MONTHS|MUST|MUST_NOT|NETWORK|NEXT|NOT|NOTIFY|ON|ON_BREACH|ON_STALE|Optional|OR|ORACLE|PARTY|PENALTY|PLONK|POLARITY|PRESENT|Progress|PROOF_SYSTEM|PROVENANCE_REQUIRED|PROVES|PUBLIC_WITNESS|QUORUM_THRESHOLD|R|RANGE|Record|REGULATOR|REPLACES|REVEALING|SAFETY|SECOND|SECONDS|self|SENSITIVITY_BOUND|SET|SEVERITY|SOURCE|SPECIFICATION|STANDARD|STARK|String|SUBJECTS|SYSTEM|TERMINATE|TERMS|THEN|THRESHOLD|TOLERANCE|true|U|UNLESS|UNTIL|USE_LAST|VERSION|W|WARNING|WEIGHT|WHEN|WITH|WITHIN|WITHOUT|X|YEAR|YEARS|ZK)\b)[A-Za-z][A-Za-z0-9_]*/
+IDENTIFIER: /(?!(?:AF|AG|AR|AX|EF|EG|ER|EU|EX|Address|ALL|ALWAYS|ANCHOR_MODE|AND|AS|BLOCK|Boolean|BOUND_TO|BULLETPROOFS|BUSINESS_DAY|BUSINESS_DAYS|BY|CAP|CAUSED_BY|CONSTRAINT|CRITICAL|CROSS_MODAL|CROSS_MODAL_CONSISTENT|CURE_BY|CURRENCY|CURVE|DATETIME|DateTime|DAY|DAYS|Decimal|DEFAULT|DID|DO|Duration|ELIF|ELSE|ESCALATE_TO|EVENTUALLY|EXECUTE|EXISTS|F|FACTORS|FAIRNESS|false|Float|FORALL|FROM|G|GROTH16|HAPPENS_BEFORE|HASH|Hash|HOUR|HOURS|IF|IMPLIES|IMPORT|IN|Integer|INVARIANTS|JURISDICTION|LET|List|LIVENESS|LOCAL|Map|MAX_AGE|MAY|METADATA|MINUTE|MINUTES|MODALITIES|MONTH|MONTHS|MUST|MUST_NOT|NETWORK|NEXT|NOT|NOTIFY|ON|ON_BREACH|ON_STALE|Optional|OR|ORACLE|PARTY|PENALTY|PLONK|POLARITY|PRESENT|Progress|PROOF_SYSTEM|PROVENANCE_REQUIRED|PROVES|PUBLIC_WITNESS|QUORUM_THRESHOLD|R|RANGE|Record|REGULATOR|REPLACES|REVEALING|SAFETY|SECOND|SECONDS|self|SENSITIVITY_BOUND|SET|SEVERITY|SOURCE|SPECIFICATION|STANDARD|STARK|String|SUBJECTS|SYSTEM|TERMINATE|TERMS|THEN|THRESHOLD|TOLERANCE|true|U|UNLESS|UNTIL|USE_LAST|VERSION|W|WARNING|WEIGHT|WHEN|WITH|WITHIN|WITHOUT|X|YEAR|YEARS|ZK)\b)[A-Za-z][A-Za-z0-9_]*/
 INTEGER_LITERAL: /[0-9]+/
 FLOAT_LITERAL: /[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?/
-STRING_LITERAL: /"(?:[^"\\\n]|\\["\\ntu])*"/
+STRING_LITERAL: /"(?:[^"\\\n]|\\(?:["\\nt]|u[0-9a-fA-F]{4}))*"/
 
 COMMENT: /--[^\n]*/
 ML_COMMENT: /\{-.*?-\}/s
