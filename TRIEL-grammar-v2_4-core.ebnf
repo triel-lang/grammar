@@ -446,35 +446,54 @@ ctl_inner          ::= ctl_expr | state_expr
 ctl_op             ::= "AX" | "AF" | "AG" | "AU" | "AR"
                      | "EX" | "EF" | "EG" | "EU" | "ER"
 
-(* NOTE ON CTL (D-21, D-32): two defects, one restructuring. D-21:
-   ctl_atom previously admitted a bare state_expr directly — the same
-   base case ltl_atom uses — so a formula with no temporal operator at
-   all, like "age >= 18", derived as both a valid ltl_expr and a valid
-   ctl_expr with nothing in the grammar to say which logic a given
-   temporal_expr (§8) alternative was actually choosing. ctl_expr's
-   only base case is now ctl_path_formula, whose only base case is the
-   ("A"|"E") ctl_temporal_op "(" ctl_inner ")" form — so every valid
-   ctl_expr derivation contains at least one A or E token somewhere,
-   which LTL never uses, making the two logics syntactically
-   distinguishable at any depth, not just by convention. ctl_inner is
-   what makes this practical rather than merely correct: the argument
-   of an A/E-quantified formula can still be a bare state_expr — e.g.
-   EF(bad_state), the audit's own example — or a further nested
-   ctl_expr for formulas like AG(EF(p)); what it cannot be is a bare
-   state_expr with no A/E ANYWHERE in the formula, which is exactly
-   the ambiguous case this finding identified. A state expression with
-   no temporal content at all is now unambiguously LTL (its trivial
-   case) or, more idiomatically, a state_invariant (§8) written
-   with ALWAYS(...). This does cost CTL its ability to express a bare
-   propositional formula outside of any path quantifier — real CTL
-   allows that; this grammar's CTL now requires every formula to
-   involve at least one A/E. That trade-off is what removes the
-   ambiguity, and specifications needing a bare state check should use
-   state_invariant or LTL instead. D-32: ctl_negation and the
-   ctl_implication level add unary negation and binary implication to
-   CTL, neither of which the pre-fix grammar had — "!EF(bad_state)",
-   the audit's own example of an inexpressible but common CTL property,
-   now parses. *)
+(* NOTE ON CTL (D-21, D-32, F-6): D-21 identified a real defect and
+   fixed half of it. ctl_atom previously admitted a bare state_expr
+   directly — the same base case ltl_atom uses — so a formula with no
+   temporal operator at all, like "age >= 18", derived as both a valid
+   ltl_expr and a valid ctl_expr, with nothing in the grammar to say
+   which logic a given temporal_expr (§8) alternative was choosing.
+   Restructuring ctl_expr so that its only base case is
+   ctl_path_formula removed that: every ctl_expr derivation now
+   contains at least one path quantifier, which LTL never uses.
+
+   What D-21's note claimed, and what was not true until F-6: that
+   this made the two logics "syntactically distinguishable at any
+   depth." It did so at the level of the production rules, but not at
+   the level of the tokens. ("A"|"E") ctl_temporal_op was two adjacent
+   tokens, while identifier (§11) admits "EF" as an ordinary name —
+   only "A" and "E" were reserved, not "EF". So "EF(a)" was lexable
+   two ways: as a CTL formula, and as a call to a function named EF.
+   "!EF(bad_state)" — D-32's own showcase example — had two
+   derivations in the published grammar, and "AG(EF(a))" had three.
+   The rule-level fix could not reach this, because the collision
+   happens before the rules apply.
+
+   ctl_op makes each CTL operator a single token (AX/AF/AG/AU/AR,
+   EX/EF/EG/EU/ER), matching standard CTL notation where AG is one
+   operator rather than two. This closes the lexical half. As a side
+   effect "A" and "E" are no longer needed as tokens and have been
+   removed from the reserved list (§11a).
+
+   ctl_inner is what makes the restructuring practical rather than
+   merely correct: the argument of a quantified formula can still be a
+   bare state_expr — EF(bad_state) — or a further nested ctl_expr, for
+   formulas like AG(EF(p)). What it cannot be is a bare state_expr
+   with no CTL operator anywhere in the formula, which is exactly the
+   ambiguous case D-21 identified. This does cost CTL its ability to
+   express a bare propositional formula outside any path quantifier;
+   real CTL allows that. Specifications needing a bare state check
+   should use state_invariant (§8) or LTL instead. D-32: ctl_negation
+   and ctl_implication add unary negation and binary implication,
+   neither of which the pre-fix grammar had. *)
+
+(* NOTE ON ctl_op TOKENISATION (F-6): a conforming lexer MUST treat
+   each of the ten ctl_op forms as a single token, not as an "A"/"E"
+   token followed by a temporal-operator token. "EF" is therefore a
+   reserved keyword (§11a) and not an identifier, and a specification
+   may not name a factor, function, or subject "EF", "AG", or any
+   other ctl_op form. Whitespace inside an operator — "E F(a)" — is
+   not a valid CTL formula; the two-token spelling has no meaning in
+   this grammar. *)
 
 state_invariant    ::= "ALWAYS"     "(" expr ")"
                      | "EVENTUALLY" "(" expr ")" ["WITHIN" deadline_expr]
@@ -659,16 +678,18 @@ identifier         ::= letter (letter | digit | "_")*
    "W", "WARNING", "WEIGHT", "WHEN", "WITH", "WITHIN", "WITHOUT", "X",
    "YEAR", "YEARS", "ZK"
 
-(* IMPLEMENTATION NOTE — single-letter LTL/CTL operators: eight of the
-   reserved tokens above ("A", "E", "F", "G", "R", "U", "W", "X") are
-   single uppercase letters, used as LTL/CTL temporal operators in
-   Section 8 (ltl_unary, ltl_until, ctl_path_formula, ctl_temporal_op).
-   Reserving them is necessary for correctness, but it means no bare
-   single uppercase letter may be used as an identifier anywhere in a
-   TRIEL specification. This is a known, deliberate trade-off. If this
-   proves too restrictive in practice, the alternative is to require
-   the fully-spelled forms already available for state_invariant
-   (ALWAYS/EVENTUALLY/NEXT) and retire the bare single-letter LTL/CTL
+(* IMPLEMENTATION NOTE — single-letter LTL operators: six of the
+   reserved tokens above ("F", "G", "R", "U", "W", "X") are single
+   uppercase letters, used as LTL temporal operators in Section 8
+   (ltl_unary, ltl_until). Reserving them is necessary for
+   correctness, but it means those six letters may not be used as an
+   identifier anywhere in a TRIEL specification. "A" and "E" were
+   reserved for the same reason until CTL moved to two-letter ctl_op
+   tokens (§8); they are now available as ordinary identifiers. This
+   is a known, deliberate trade-off. If the remaining six prove too
+   restrictive in practice, the alternative is to require the
+   fully-spelled forms already available for state_invariant
+   (ALWAYS/EVENTUALLY/NEXT) and retire the bare single-letter LTL
    operator forms in a future version — that would be a breaking
    syntax change and remains an open design question. *)
 
