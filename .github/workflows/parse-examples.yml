@@ -27,7 +27,7 @@ jobs:
       - name: Parse every example under parser/triel.lark
         run: |
           python3 parser/triel_parser.py --check-ambiguity \
-            examples/*.triel examples/eudi/*.triel
+            examples/*.triel examples/eudi/*.triel examples/semantics/*.triel
 
       # The examples corpus cannot detect ambiguity: all four examples
       # are unambiguous, so --check-ambiguity above never fires on them.
