@@ -1,0 +1,27 @@
+-- TRIEL example: nested structures, naming, and the origin of a value
+-- Semantics question: field access composes partial namings. Of the ways
+-- the result may be undefined, only some are dynamic: an undeclared name
+-- is a static error, a type mismatch is a boundary check on incoming
+-- oracle data, and staleness is a property of the pair (state, time),
+-- not of the state alone — it needs the observation time to be carried
+-- alongside the value.
+
+SPECIFICATION sem_nested_naming VERSION 1.0.0
+    PROVENANCE_REQUIRED: true
+
+SUBJECTS {
+  insurer  : PARTY,
+  oracle_a : ORACLE
+}
+
+TERMS {
+  insurer MUST settle_claim
+}
+
+FACTORS {
+  claim : Record { amount : Integer, claimant : String } METADATA SOURCE oracle_a MAX_AGE 1 HOURS ON_STALE BLOCK
+}
+
+INVARIANTS {
+  claim_usable : SAFETY : ALWAYS(PRESENT(claim.amount) IMPLIES claim.amount >= 0)
+}
