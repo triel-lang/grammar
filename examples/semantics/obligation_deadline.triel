@@ -1,0 +1,27 @@
+-- TRIEL example: obligation with an explicit activation moment and a deadline
+-- Semantics question: the verdict is three-valued (Fulfilled / Violated /
+-- Pending) and must be causal — at time t it may depend only on the prefix
+-- of the trace up to t. FROM fixes the activation moment explicitly; the
+-- language does not fix a default when FROM is omitted.
+
+SPECIFICATION sem_obligation_deadline VERSION 1.0.0
+    CURRENCY: "USD"
+
+SUBJECTS {
+  alice : PARTY,
+  bob   : PARTY
+}
+
+TERMS {
+  alice MUST pay(bob, 100)
+    BY DATETIME("2026-12-31T23:59:59Z")
+    FROM DATETIME("2026-01-01T00:00:00Z")
+}
+
+FACTORS {
+  paid : Boolean METADATA
+}
+
+INVARIANTS {
+  no_double_payment : SAFETY : ALWAYS(paid IMPLIES paid)
+}
