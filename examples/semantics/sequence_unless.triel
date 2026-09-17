@@ -1,0 +1,26 @@
+-- TRIEL example: a whole sequence under a releasing circumstance
+-- Note on precedence: UNLESS binds tighter than THEN, so without the
+-- parentheses below the guard would cover only the second obligation.
+-- Semantics question: TECHNICAL_REPORT 2.5 fixes the guard as evaluated
+-- once on entry; contract practice needs continuous evaluation, which
+-- requires a denotation carrying an outcome (Done / Interrupted / Violated).
+
+SPECIFICATION sem_sequence_unless VERSION 1.0.0
+
+SUBJECTS {
+  seller : PARTY,
+  buyer  : PARTY
+}
+
+TERMS {
+  (seller MUST deliver THEN seller MUST invoice)
+    UNLESS payment_received DO seller MUST escalate
+}
+
+FACTORS {
+  payment_received : Boolean METADATA
+}
+
+INVARIANTS {
+  guard_is_observable : SAFETY : ALWAYS(PRESENT(payment_received))
+}
