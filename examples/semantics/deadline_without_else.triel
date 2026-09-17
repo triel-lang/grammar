@@ -1,0 +1,27 @@
+-- TRIEL example: deadline with no ELSE branch
+-- Known gap, not a demonstration. Reading the term as simply finished
+-- once the deadline passes makes MUST indistinguishable from MAY, which
+-- removes the deontic distinction the language exists for. The remaining
+-- consistent reading is a default verdict of Violated, which in turn is
+-- what should trigger the ON_BREACH handler.
+
+SPECIFICATION sem_deadline_without_else VERSION 1.0.0
+    CURRENCY: "USD"
+
+SUBJECTS {
+  auditor   : PARTY,
+  regulator : REGULATOR
+}
+
+TERMS {
+  auditor MUST submit_report WITHIN 5 DAYS;
+  auditor ON_BREACH NOTIFY regulator
+}
+
+FACTORS {
+  submitted : Boolean METADATA
+}
+
+INVARIANTS {
+  report_observable : SAFETY : ALWAYS(PRESENT(submitted))
+}
