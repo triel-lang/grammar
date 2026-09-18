@@ -236,8 +236,13 @@ stale_action       ::= "BLOCK"
 (* NOTE ON ORACLE TRUST (C-15): a factor's MAX_AGE says how old data is
    allowed to get before it counts as stale, but v2.4 published no
    grammar for what happens AT that point — this closes that gap.
-   BLOCK halts evaluation of anything depending on the factor until
-   fresh data arrives; USE_LAST keeps the last known value but flags it
+   BLOCK treats the factor as absent once it is stale: an expression
+   that cannot be decided without it evaluates to undefined, and the
+   term depending on it waits for fresh data, while an expression
+   decided by fresh data alone (a disjunction with a true, fresh
+   disjunct) proceeds. PRESENT and DEFAULT are exempt from BLOCK; see
+   TECHNICAL_REPORT.md §2.9 for the three-valued evaluation rule and
+   why proceeding on partial data is safe. USE_LAST keeps the last known value but flags it
    stale to the compiler's audit trail; ESCALATE_TO hands the staleness
    event to another subject, the same pattern breach_action already
    uses (§4). A semantic-analysis rule (see SEMANTIC RULES below)

@@ -72,7 +72,7 @@ Obligations, permissions, and prohibitions are the language's three deontic prim
 - `subject MAY action [WHEN condition] [WITHIN deadline]` — a permission.
 - `subject MUST_NOT action [WHEN condition]` — a prohibition.
 
-These compose through `AND` (parallel), `OR` (choice), `THEN` (sequence), and `UNLESS ... DO` (guarded alternative evaluated once at entry), and can be attached to events via `ON event DO term`.
+These compose through `AND` (parallel), `OR` (choice), `THEN` (sequence), and `UNLESS ... DO` (interruption: the guard is watched for as long as the guarded term runs), and can be attached to events via `ON event DO term`.
 
 ### 2.3 Factors and Zero-Knowledge Constraints
 
@@ -92,21 +92,44 @@ An invariant is either a state invariant (`ALWAYS(expr)`, `EVENTUALLY(expr) [WIT
 
 ### 2.5 Trace Semantics
 
-Write `⟦t⟧` for the set of traces — finite sequences of deontic events `(subject, action, polarity)` — that a `TERMS` block `t` admits. The semantics follows the structure of the grammar directly:
+**Traces.** A trace is a finite sequence `π = ⟨(σ₀, τ₀, e₀), …, (σₙ, τₙ, eₙ)⟩`. Each `σᵢ` is a state — a partial map from factor names to values, where a value may itself be such a map (hierarchical nominative data); each `τᵢ` is a timestamp, non-decreasing along the trace; each `eᵢ` is the event that produced `σᵢ` — a deontic event `(subject, action, polarity)`, the arrival of data from a factor's `SOURCE`, or a clock tick. Two traces fuse, `π₁ ⌢ π₂`, when the last entry of `π₁` is the first entry of `π₂`. `π[0..k]` is the prefix of `π` ending at entry `k`, and `|π| − 1` is the index of its last entry.
+
+**Outcomes.** The denotation `⟦t⟧` of a term is a set of pairs `(π, o)`: a trace of one execution of `t`, and the outcome `o ∈ {Done, Interrupted, Violated}` with which that execution ended. A set of traces alone is not enough: sequencing must know whether its left operand finished normally before starting the right one, and after an interruption it must not.
 
 ```
-⟦subject MUST action⟧                = { ⟨(subject, action, must)⟩ }
-⟦subject MAY action WHEN c⟧          = { ⟨(subject, action, may)⟩ }        if eval(c), else ∅
-⟦subject MUST_NOT action WHEN c⟧     = { ⟨(subject, action, must_not)⟩ }   if ¬eval(c), else ∅
+⟦subject MUST action⟧                = { (π, Done) | π ends with (subject, action, must) }
+⟦subject MAY action WHEN c⟧          = { (π, Done) | π ends with (subject, action, may) }       if eval(c, σ₀), else ∅
+⟦subject MUST_NOT action WHEN c⟧     = { (π, Done) | π ends with (subject, action, must_not) }  if ¬eval(c, σ₀), else ∅
 
-⟦t1 THEN t2⟧   = { σ1++σ2 | σ1 ∈ ⟦t1⟧, σ2 ∈ ⟦t2⟧ }
-⟦t1 AND t2⟧    = { interleave(σ1,σ2) | σ1 ∈ ⟦t1⟧, σ2 ∈ ⟦t2⟧ }
+⟦t1 THEN t2⟧   = { (π₁ ⌢ π₂, o₂) | (π₁, Done) ∈ ⟦t1⟧, (π₂, o₂) ∈ ⟦t2⟧ }  ∪  { (π₁, o₁) ∈ ⟦t1⟧ | o₁ ≠ Done }
+⟦t1 AND t2⟧    = { (π, o₁ ⊔ o₂) | π ∈ interleave(π₁, π₂), (π₁, o₁) ∈ ⟦t1⟧, (π₂, o₂) ∈ ⟦t2⟧ }
 ⟦t1 OR t2⟧     = ⟦t1⟧ ∪ ⟦t2⟧
 
-⟦t1 UNLESS c DO t2⟧  = { σ ∈ ⟦t1⟧ | ¬eval(c) } ∪ { σ ∈ ⟦t2⟧ | eval(c) }
+⟦t1 UNLESS c DO t2⟧ =
+      { (π, o) ∈ ⟦t1⟧ | eval(c, σⱼ) ≠ true for every j < |π| − 1 }
+    ∪ { (π[0..k] ⌢ π′, κ(o′)) | (π, o) ∈ ⟦t1⟧,  k = min{ j < |π| − 1 | eval(c, σⱼ) = true },  (π′, o′) ∈ ⟦t2⟧ }
+
+where  Done ⊔ Done = Done,  o ⊔ Violated = Violated,  and otherwise o ⊔ Interrupted = Interrupted;
+       κ(Done) = κ(Interrupted) = Interrupted,  κ(Violated) = Violated.
 ```
 
-In every rule above, `eval(c)` is evaluated once, at the point the enclosing term is reached in the trace — the state available at that point in the specification's execution, not at some later or earlier point. This applies uniformly to `WHEN`-guarded permissions and prohibitions and to `UNLESS`'s guard: none of the language's guard constructs re-evaluate their condition mid-term.
+In the deontic primitives, the guard of `WHEN` is evaluated once, in the state `σ₀` in which the term is reached.
+
+`UNLESS` is different: its guard is an interruption condition, watched for as long as the guarded term runs. Four rules fix what that means.
+
+- *Which states are watched.* Every state of `t1`'s execution except the one in which `t1` completes. If `t1`'s completing step and the guard becoming true coincide, `t1` has completed and no interruption occurs.
+- *What counts as true.* `eval(c, σ)` is three-valued (Section 2.9). Only `true` interrupts; a guard that is undefined — its data absent or stale — does not.
+- *The handler runs outside the guard.* Once `t1` is interrupted, `t2` runs to its own completion; `c` is not watched during `t2`.
+- *The outcome records the interruption.* An interrupted term ends `Interrupted` if its handler completed normally and `Violated` if the handler was violated, never `Done`. A `THEN` that follows therefore does not start.
+
+These rules give `UNLESS` the algebraic laws one expects of it:
+
+- `t UNLESS false DO e = t`.
+- `(t1 OR t2) UNLESS c DO e = (t1 UNLESS c DO e) OR (t2 UNLESS c DO e)`, directly from the union.
+- `(t1 THEN t2) UNLESS c DO e = (t1 UNLESS c DO e) THEN (t2 UNLESS c DO e)`. On the left, the guard is watched at entries `0 … N−1` of the fused trace; on the right, at `0 … m−1` by the first `UNLESS` and at `m … N−1` by the second, where `m` is the entry at which `t1` completes. The first entry at which the guard is true is therefore the same on both sides, the handler starts from the same prefix, and by the outcome rule an interrupted `t1` does not let `t2` start.
+- `(t UNLESS c DO e) UNLESS c DO e = t UNLESS c DO e`. The outer guard watches the same states as the inner one, so it becomes true at the same entry and `e` runs once. That the outer interruption takes priority follows from the definition; it is not a separate rule.
+
+One equation that looks like a law is not one: `(t UNLESS c DO e) UNLESS d DO e` differs from `t UNLESS (c OR d) DO e`, because the outer guard `d` is still watched while the inner handler `e` runs, and can interrupt it.
 
 A specification's `INVARIANTS` block is satisfied by a trace `σ` in the ordinary sense of LTL/CTL satisfaction over `σ`'s sequence of deontic events, with `ALWAYS`/`EVENTUALLY`/`NEXT` as the abbreviations `G`/`F`/`X` restricted to state-formula arguments (Section 2.4).
 
@@ -131,7 +154,7 @@ Section 2.5 gives every `MUST`/`MAY`/`MUST_NOT` term a *generative* semantics: `
 
 A `breach_action` list containing more than one action from the continuation-determining class — e.g. `PENALTY x, NOTIFY y, TERMINATE, CURE_BY 5 DAYS`, the exact combination flagged elsewhere in review of this grammar — has no single defined continuation and is a semantic error, not a silently accepted specification. This is a semantic-analysis rule in the same sense as the `QUORUM_THRESHOLD` bound already noted in the grammar file's SEMANTIC RULES section: it constrains which grammar-conformant parses are meaningful, and is checked at that level, not by the grammar itself.
 
-**Deadlines are not temporal-logic operators.** Section 2.4 lists `ALWAYS`/`EVENTUALLY`/`NEXT` as the qualitative LTL abbreviations `G`/`F`/`X`. Every deadline-bearing construct — `BY`, `WITHIN`, `MAX_AGE`, `CURE_BY`, `FROM ... UNTIL` — is deliberately kept outside that logic rather than folded into it as a metric extension. Each denotes a plain arithmetic comparison against the `τ` component of a trace event, not a subscripted temporal operator: `EVENTUALLY(expr) WITHIN d`, for instance, is satisfied by `σ` if there exists `τ` with `τ₀ ≤ τ ≤ τ₀ + eval(d)` at which `expr` holds, where `τ₀` is the time the enclosing term became active (Section 2.5's existing rule that guards evaluate once, at entry, fixes what `τ₀` means here). This keeps `WITHIN` from being decorative — it now has a truth condition — without claiming the full temporal logic is metric, which is what made the decidability claim in Section 4 false in the first place.
+**Deadlines are not temporal-logic operators.** Section 2.4 lists `ALWAYS`/`EVENTUALLY`/`NEXT` as the qualitative LTL abbreviations `G`/`F`/`X`. Every deadline-bearing construct — `BY`, `WITHIN`, `MAX_AGE`, `CURE_BY`, `FROM ... UNTIL` — is deliberately kept outside that logic rather than folded into it as a metric extension. Each denotes a plain arithmetic comparison against the `τ` component of a trace event, not a subscripted temporal operator: `EVENTUALLY(expr) WITHIN d`, for instance, is satisfied by `σ` if there exists `τ` with `τ₀ ≤ τ ≤ τ₀ + eval(d)` at which `expr` holds, where `τ₀` is the time of the first entry of the enclosing term's trace (Section 2.5). This keeps `WITHIN` from being decorative — it now has a truth condition — without claiming the full temporal logic is metric, which is what made the decidability claim in Section 4 false in the first place.
 
 **What this does not yet cover.** A calendar model — the exact meaning of `BUSINESS_DAY`, month and year arithmetic, timezone handling for `DATETIME` literals — is still undefined; two conformant implementations can compute a deadline differently until that model exists. `PENALTY`'s numeric type remains untyped. Multi-obligation `ON_BREACH` scoping, noted above, is open. All three are tracked as future work rather than assumed solved by this section.
 
@@ -176,6 +199,16 @@ Section 2.6 gave `MAX_AGE` a place in the trace model but stopped short of sayin
 **Money has a currency and a ceiling (C-16).** `declaration_block` gains an optional `CURRENCY` field, semantically required whenever any `breach_action` is a `PENALTY` — an amount with no declared currency is a number, not money. `breach_action`'s `PENALTY` form gains an optional `CAP literal`, giving the specification author a hard upper bound where they choose to declare one, and a semantic rule requires the computed amount to be non-negative. This report does not yet introduce a first-class monetary type: `PENALTY`'s `expr` still shares its literal syntax with ordinary `Float`, which is a known precision hazard for currency math. The interim rule is that a literal used in a `Decimal`- or money-denominated context must be read as an exact base-10 decimal by the compiler regardless of that shared lexical form — a semantic requirement standing in for a proper exact-decimal literal syntax, which remains future work. `delivery_agreement.triel` now declares `PROVENANCE_REQUIRED: true` and `CURRENCY: "USD"`, applies `ON_STALE BLOCK` to its `MAX_AGE`-bearing oracle factor, and caps its `PENALTY` at 10000.
 
 **Missing values are reasonable about, not just declarable (D-29).** Two new expression forms make `Optional<T>` usable: `PRESENT(f)` evaluates to a `Boolean` — true if `f` currently holds a value, and false both when `f` is an empty `Optional<T>` and when `f` has gone stale under its own `ON_STALE` rule, since a value the specification no longer trusts is not meaningfully "there" for this purpose. `DEFAULT(f, fallback)` evaluates to `f`'s value when present and to `fallback` otherwise, letting an invariant be written total over both cases without a separate guard every time. Neither form is mandatory by semantic rule — omitting them is only a problem once an invariant goes on to read an `Optional` factor's value directly, which is a type-checking concern left to the same future analysis pass already noted for the information-flow rule of Section 2.7.
+
+**What `BLOCK` blocks.** Once a factor under `ON_STALE BLOCK` exceeds its `MAX_AGE`, it is treated as absent: its name has no value in the state against which expressions are evaluated. Expressions are evaluated in strong Kleene three-valued logic. `OR` is true if either side is true; `AND` is false if either side is false; `IMPLIES` is true if its left side is false or its right side is true; `NOT` of an undefined value is undefined. A comparison, arithmetic operation, or function call is undefined if any operand is; functions supplied by a compiler must behave the same way.
+
+A term is blocked exactly when an expression it depends on evaluates to undefined. An obligation guarded by it stays pending; an `UNLESS` guard does not fire. In either case a *data-unavailable* event naming the factor's `SOURCE` is recorded in the trace. The contract's clock does not stop, but a breach that falls within a period of unavailability is attributed to that source, not to the obligated party: a party must not end up `Violated` because an oracle went silent.
+
+An expression decided by fresh data alone is not blocked. With `sanctioned` fresh and true and `claim` stale, `sanctioned OR claim.amount > 1000000` is true, and the term it guards proceeds.
+
+**Why proceeding on partial data is safe.** Every expression form other than `PRESENT` and `DEFAULT` is monotone in the information order: if an expression has a value on some data, it has the same value on any data that extends it. The base cases are immediate, the Kleene connectives are monotone, and monotonicity is preserved under composition, so the property holds for every expression built from these forms by induction on its structure. Consequently, a result computed with stale factors treated as absent cannot be overturned by whatever values those factors turn out to have when they are refreshed.
+
+`PRESENT` and `DEFAULT` are the deliberate exception. They test for absence, so their result can change when data arrives: `DEFAULT(bonus, 0)` is `0` without `bonus` and `500` once `bonus = 500` arrives. They are exempt from `BLOCK`: `PRESENT(f)` of a stale `f` is `false`, and `DEFAULT(f, x)` of a stale `f` is `x`. This exemption is what lets `PRESENT(f) IMPLIES …` guard against staleness instead of being blocked by it.
 
 ---
 
