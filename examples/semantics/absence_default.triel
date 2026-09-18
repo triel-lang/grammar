@@ -1,0 +1,30 @@
+-- TRIEL example: absent value, stale value, and a fallback
+-- Semantics question: PRESENT and DEFAULT test whether a name has a value.
+-- Unlike the other expression forms, their result can change when data is
+-- added: DEFAULT(bonus, 0) is 0 on data without bonus and 500 on data with
+-- bonus = 500. A result computed on partial data is therefore not
+-- guaranteed to survive a refresh when the expression uses PRESENT or
+-- DEFAULT, while it is for expressions built only from the other forms.
+-- Here bonus may be absent (Optional) and rate may be stale (MAX_AGE).
+
+SPECIFICATION sem_absence_default VERSION 1.0.0
+    PROVENANCE_REQUIRED: true
+
+SUBJECTS {
+  employer : PARTY,
+  oracle_a : ORACLE
+}
+
+TERMS {
+  employer MUST pay_bonus
+}
+
+FACTORS {
+  bonus : Optional<Integer> METADATA,
+  rate  : Decimal METADATA SOURCE oracle_a MAX_AGE 1 DAYS ON_STALE BLOCK
+}
+
+INVARIANTS {
+  bonus_total    : SAFETY : ALWAYS(DEFAULT(bonus, 0) >= 0);
+  rate_when_used : SAFETY : ALWAYS(PRESENT(bonus) IMPLIES PRESENT(rate))
+}

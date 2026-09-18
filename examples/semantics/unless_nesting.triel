@@ -1,0 +1,26 @@
+-- TRIEL example: nested UNLESS with the same guard
+-- Semantics question: when both guards become true at the same step, which
+-- one fires? If the outer one has priority (strong preemption), the nested
+-- term is equivalent to the flat one and E runs once. If the inner one
+-- fires first, the outer guard is still true while E runs and E may be
+-- preempted and restarted.
+
+SPECIFICATION sem_unless_nesting VERSION 1.0.0
+
+SUBJECTS {
+  seller : PARTY
+}
+
+TERMS {
+  nested := (seller MUST deliver UNLESS force_majeure DO seller MUST notify)
+              UNLESS force_majeure DO seller MUST notify;
+  flat   := seller MUST deliver UNLESS force_majeure DO seller MUST notify
+}
+
+FACTORS {
+  force_majeure : Boolean METADATA
+}
+
+INVARIANTS {
+  guard_observable : SAFETY : ALWAYS(PRESENT(force_majeure))
+}

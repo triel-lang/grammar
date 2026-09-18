@@ -1,0 +1,31 @@
+-- TRIEL example: calling another specification with argument bindings
+-- Semantics question: EXECUTE ... WITH { x := e } reads as a superposition:
+-- each argument expression is evaluated on the caller's data, and the
+-- callee runs on data in which its parameter names are bound to those
+-- values. When every argument is a bare name, this is a renomination.
+-- Open point: does the callee see only the bound names, or the caller's
+-- data overridden by them? The first isolates the callee; the second lets
+-- caller names leak into it.
+-- The HASH value below is a placeholder of the required format; a real
+-- specification must carry the hash of the called specification.
+
+SPECIFICATION sem_execute_renaming VERSION 1.0.0
+
+SUBJECTS {
+  insurer  : PARTY,
+  claimant : PARTY
+}
+
+TERMS {
+  EXECUTE payment_schedule
+    HASH "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    WITH { amount := claim.amount, due := claim.reported_at + 30 DAYS }
+}
+
+FACTORS {
+  claim : Record { amount : Integer, reported_at : DateTime } METADATA
+}
+
+INVARIANTS {
+  amount_non_negative : SAFETY : ALWAYS(DEFAULT(claim.amount, 0) >= 0)
+}

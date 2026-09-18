@@ -1,0 +1,30 @@
+-- TRIEL example: a hierarchical name as a composition of denamings
+-- Semantics question: claim.claimant.country is read as three successive
+-- denamings, country applied to the value of claimant applied to the value
+-- of claim. Each step is a partial function, so the whole path is
+-- undefined as soon as any step is: claim absent, claimant absent inside
+-- claim, or country absent inside claimant. The invariant guards the
+-- comparison with PRESENT on the full path, so it must be read with
+-- strong Kleene IMPLIES: false IMPLIES undefined is true.
+
+SPECIFICATION sem_nominative_path VERSION 1.0.0
+
+SUBJECTS {
+  insurer : PARTY
+}
+
+TERMS {
+  WHEN claim.claimant.country == "UA" THEN insurer MUST apply_local_rules
+}
+
+FACTORS {
+  claim : Record {
+    amount   : Integer,
+    claimant : Record { name : String, country : String }
+  } METADATA
+}
+
+INVARIANTS {
+  country_is_known : SAFETY :
+    ALWAYS(PRESENT(claim.claimant.country) IMPLIES claim.claimant.country != "")
+}
