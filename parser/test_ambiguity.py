@@ -71,11 +71,55 @@ CASES = [
     ("D-22 LTL implication", "inv", "a -> b -> a"),
     ("F-4  IMPLIES chain", "inv", "ALWAYS(a IMPLIES b IMPLIES a)"),
 
+    # UNLESS: precedence against THEN, handler scope, guard expressions.
+    ("U-1  THEN..UNLESS", "term",
+     "alice MUST pay THEN bob MUST ship UNLESS a DO alice MUST notify"),
+    ("U-2  UNLESS handler + THEN", "term",
+     "alice MUST pay UNLESS a DO bob MUST ship THEN alice MUST notify"),
+    ("U-3  ON..DO under UNLESS", "term",
+     "ON e DO alice MUST pay UNLESS a DO bob MUST ship"),
+    ("U-4  guard OR/AND", "term",
+     "alice MUST pay UNLESS a OR b AND a DO bob MUST ship"),
+    ("U-5  nested UNLESS, parenthesised", "term",
+     "(alice MUST pay UNLESS a DO bob MUST ship) UNLESS b DO alice MUST notify"),
+
     # Controls: must remain unambiguous.
     ("ctl  plain obligation", "term", "alice MUST pay"),
     ("ctl  breach handler", "term",
      "alice ON_BREACH PENALTY 100 CAP 1000, TERMINATE"),
 ]
+
+
+# Fragments that MUST be rejected. Each differs from an accepted fragment
+# only in the construct under test, so a rejection cannot come from
+# somewhere else in the specification.
+REJECT_CASES = [
+    ("R-1  chained UNLESS", "term",
+     "alice MUST pay UNLESS a DO bob MUST ship UNLESS b DO alice MUST notify"),
+    ("R-2  MUST..WHEN", "term", "alice MUST pay WHEN a"),
+    ("R-3  PRESENT arity", "inv", "ALWAYS(PRESENT(a, b))"),
+]
+
+# Which parse was chosen, not just that there is one: number of THEN-
+# operands at the top of the TERMS block.
+SHAPE_CASES = [
+    ("S-1  UNLESS binds tighter than THEN",
+     "alice MUST pay THEN bob MUST ship UNLESS a DO alice MUST notify", 2),
+    ("S-2  UNLESS handler stops before THEN",
+     "alice MUST pay UNLESS a DO bob MUST ship THEN alice MUST notify", 2),
+]
+
+
+def top_sequence_len(tree):
+    seq = next(t for t in tree.iter_subtrees_topdown() if t.data == "sequence_expr")
+    return sum(1 for c in seq.children if getattr(c, "data", None) == "unless_expr")
+
+
+def build(slot, fragment):
+    return SKELETON.format(
+        term=fragment if slot == "term" else DEFAULT_TERM,
+        inv=fragment if slot == "inv" else DEFAULT_INV,
+    )
 
 
 def count_ambiguities(tree):
@@ -115,14 +159,32 @@ def main():
         else:
             print(f"  ok    {label:28s}")
 
+    for label, slot, fragment in REJECT_CASES:
+        try:
+            parser.parse(build(slot, fragment))
+        except Exception:
+            print(f"  ok    {label:28s} rejected")
+            continue
+        failures.append(f"{label}: ACCEPTED, must be rejected -- {fragment}")
+        print(f"  FAIL  {label:28s} accepted")
+
+    for label, fragment, expected in SHAPE_CASES:
+        got = top_sequence_len(parser.parse(build("term", fragment)))
+        if got == expected:
+            print(f"  ok    {label:28s}")
+        else:
+            failures.append(f"{label}: {got} THEN-operands, expected {expected} -- {fragment}")
+            print(f"  FAIL  {label:28s} shape {got} != {expected}")
+
+    total = len(CASES) + len(REJECT_CASES) + len(SHAPE_CASES)
     print()
     if failures:
-        print(f"{len(failures)} of {len(CASES)} ambiguity checks failed:")
+        print(f"{len(failures)} of {total} checks failed:")
         for failure in failures:
             print(f"  - {failure}")
         return 1
 
-    print(f"All {len(CASES)} fragments have exactly one derivation.")
+    print(f"All {total} checks passed.")
     return 0
 
 
