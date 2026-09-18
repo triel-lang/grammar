@@ -19,9 +19,9 @@ TERMS {
 }
 
 FACTORS {
-  paid : Boolean METADATA
+  amount_paid : Optional<Integer> METADATA
 }
 
 INVARIANTS {
-  no_double_payment : SAFETY : ALWAYS(paid IMPLIES paid)
+  no_overpayment : SAFETY : ALWAYS(DEFAULT(amount_paid, 0) <= 100)
 }

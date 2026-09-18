@@ -1,12 +1,12 @@
 -- TRIEL example: distributing UNLESS over THEN
--- Semantics question: are these two terms equivalent?
+-- These two terms are equivalent:
 --   (A THEN B) UNLESS c DO E
 --   (A UNLESS c DO E) THEN (B UNLESS c DO E)
--- Under continuous guard evaluation they are, given a fixed tie-break for
--- a guard that becomes true at the step a sub-term completes. Under the
--- entry-only reading of TECHNICAL_REPORT 2.5 they are not: if c turns true
--- during A, the first term completes A THEN B, the second runs E instead
--- of B.
+-- Both sides watch the guard at the same states, so it fires at the same
+-- point, and an interrupted A ends Interrupted, so B does not start after
+-- it (TECHNICAL_REPORT 2.5). If the guard were checked only once on entry,
+-- they would differ: with c turning true during A, the first completes
+-- A THEN B, while the second runs E instead of B.
 
 SPECIFICATION sem_unless_distribution VERSION 1.0.0
 

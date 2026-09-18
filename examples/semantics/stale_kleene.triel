@@ -1,11 +1,12 @@
 -- TRIEL example: a guard over one fresh and one stale factor
--- Semantics question: with sanctioned = true and fresh, and claim stale
--- under ON_STALE BLOCK, is the guard blocked? Read as dependency-based
--- blocking, yes: the guard mentions claim. Read with strong Kleene
--- disjunction over the fresh data only, the guard is true, and no later
--- value of claim can change that verdict. The invariant below raises a
--- second question: PRESENT(claim.amount) must itself be exempt from
--- BLOCK, otherwise the guard written to handle staleness is blocked by it.
+-- With sanctioned fresh and true and claim stale under ON_STALE BLOCK,
+-- the guard is true: a stale factor is treated as absent and the
+-- disjunction is evaluated in strong Kleene logic (TECHNICAL_REPORT 2.9).
+-- No later value of claim can change this verdict. Had sanctioned been
+-- false, the guard would be undefined and the term would wait, recording
+-- that oracle_b's data is unavailable. The invariant relies on PRESENT
+-- being exempt from BLOCK: PRESENT of a stale factor is false, so the
+-- implication holds instead of being blocked.
 
 SPECIFICATION sem_stale_kleene VERSION 1.0.0
     PROVENANCE_REQUIRED: true
