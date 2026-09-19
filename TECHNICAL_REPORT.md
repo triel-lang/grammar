@@ -98,8 +98,9 @@ An invariant is either a state invariant (`ALWAYS(expr)`, `EVENTUALLY(expr) [WIT
 
 ```
 ⟦subject MUST action⟧                = { (π, Done) | π ends with (subject, action, must) }
-⟦subject MAY action WHEN c⟧          = { (π, Done) | π ends with (subject, action, may) }       if eval(c, σ₀), else ∅
-⟦subject MUST_NOT action WHEN c⟧     = { (π, Done) | π ends with (subject, action, must_not) }  if ¬eval(c, σ₀), else ∅
+⟦subject MAY action WHEN c⟧          = { (π, Done) | π ends with (subject, action, may), eval(c, σₙ₋₁) = true, n = |π| − 1 }
+                                       ∪ { (⟨(σ₀, τ₀, e₀)⟩, Done) }
+⟦subject MUST_NOT action WHEN c⟧     = { (⟨(σ₀, τ₀, e₀)⟩, Done) }
 
 ⟦t1 THEN t2⟧   = { (π₁ ⌢ π₂, o₂) | (π₁, Done) ∈ ⟦t1⟧, (π₂, o₂) ∈ ⟦t2⟧ }  ∪  { (π₁, o₁) ∈ ⟦t1⟧ | o₁ ≠ Done }
 ⟦t1 AND t2⟧    = { (π, o₁ ⊔ o₂) | π ∈ interleave(π₁, π₂), (π₁, o₁) ∈ ⟦t1⟧, (π₂, o₂) ∈ ⟦t2⟧ }
@@ -113,7 +114,9 @@ where  Done ⊔ Done = Done,  o ⊔ Violated = Violated,  and otherwise o ⊔ In
        κ(Done) = κ(Interrupted) = Interrupted,  κ(Violated) = Violated.
 ```
 
-In the deontic primitives, the guard of `WHEN` is evaluated once, in the state `σ₀` in which the term is reached.
+A permission may be exercised or not: its denotation contains both the trace in which the action is taken, in a state where `c` holds, and the one-entry trace in which it is not. A prohibition produces no events of its own; it constrains the implementation trace as Section 2.6 states, being breached if the action is taken at a moment when `c` is true. In both, the `WHEN` condition is evaluated at the moment of the action, not when the term is reached: a prohibition "when a blackout is in effect" concerns a blackout at the time of the trade.
+
+The conditional terms `IF c THEN t` and `WHEN c THEN t` evaluate `c` once, in the state in which they are reached. Whether `WHEN c THEN t` should instead wait for `c` to become true, activating `t` at that moment, is an open question.
 
 `UNLESS` is different: its guard is an interruption condition, watched for as long as the guarded term runs. Four rules fix what that means.
 
