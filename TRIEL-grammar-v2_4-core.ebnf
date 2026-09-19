@@ -85,7 +85,7 @@ sequence_expr      ::= unless_expr ("THEN" unless_expr)*
 unless_expr        ::= timeout_expr ("UNLESS" expr "DO" timeout_expr)?
 timeout_expr       ::= base_term ("WITHIN" deadline_expr ["ELSE" base_term])?
 
-(* --- Disambiguation fix (see PATCH log): base_term now routes through
+(* --- Disambiguation fix: base_term now routes through
    matched_term / unmatched_term instead of condition_stmt directly, so
    that ELSE-binding in nested IF chains is deterministic. --- *)
 
@@ -101,24 +101,22 @@ matched_term        ::= matched_condition
                       | term_ref
                       | "(" term_stmt ")"
 
-term_ref            ::= identifier
+term_ref            ::= "REF" identifier
 
-(* NOTE ON named_term_decl (D-26): identifier ":=" term_stmt (§4) let a
-   specification name a term, but no production anywhere referenced
-   that name back — the only way to reuse a term was to write it out
-   again, making named_term_decl syntax that could be written but never
-   used. term_ref closes the loop: a bare identifier in matched_term
-   position now refers back to a named_term_decl earlier in the same
-   terms_block. This is a semantic-analysis binding (resolving which
-   named_term_decl a given term_ref points to, and rejecting a
-   reference to an undeclared or forward-declared name), not something
-   the grammar's context-free structure enforces on its own — the same
-   category of deferred check already used for modality_id (§7) and
-   contract_ref_stmt's EXECUTE target. term_ref does not create a new
-   parsing ambiguity: every other matched_term alternative that starts
-   with an identifier is followed immediately by a fixed keyword (MUST,
-   MAY, MUST_NOT, ON_BREACH) or ON, none of which a bare term_ref can
-   be confused with. *)
+(* NOTE ON named_term_decl AND term_ref (D-26): identifier ":=" term_stmt
+   names a term, and REF identifier refers back to it from any
+   matched_term position. Which named_term_decl a given REF points to
+   is a semantic-analysis binding, not something the grammar's
+   context-free structure enforces: a reference to an undeclared or
+   forward-declared name is rejected at that stage, the same category
+   of deferred check already used for modality_id (§7) and
+   contract_ref_stmt's EXECUTE target. The REF keyword is required. A
+   bare identifier in this position would be ambiguous wherever an
+   expression ends a term: in "alice MAY pay WHEN a OR b", b could be a
+   factor inside the guard or a reference to a term named b, and
+   "alice ON_BREACH PENALTY a OR b" has the same two readings. With
+   REF, the first is a guard over a OR b, and a reference is written
+   "alice MAY pay WHEN a OR REF b". *)
 
 unmatched_term       ::= unmatched_condition
 
@@ -350,7 +348,6 @@ zk_visibility      ::= "self" | "ALL"
    TECHNICAL_REPORT.md §2.8 for the full rule. *)
 
 (* -------------------------------------------------------------------------
-(* -------------------------------------------------------------------------
    7. Cross-Modal Block
    ------------------------------------------------------------------------- *)
 
@@ -367,7 +364,7 @@ cross_modal_block  ::= "CROSS_MODAL"
    audit's finding described. Unifying them would mean changing which
    character every existing TRIEL specification uses in two of its six
    blocks — a breaking change to every file that currently uses this
-   grammar, not just to this repository's four examples — and is left
+   grammar, not just to this repository's examples — and is left
    as an open question for a future major version rather than forced
    through here. *)
 
@@ -523,7 +520,6 @@ param_decl         ::= identifier ":" type_expr
 
 
 (* -------------------------------------------------------------------------
-(* -------------------------------------------------------------------------
    9. Modalities Block
    ------------------------------------------------------------------------- *)
 
@@ -656,11 +652,10 @@ identifier         ::= letter (letter | digit | "_")*
                           other. *)
 
 (* -------------------------------------------------------------------------
-(* -------------------------------------------------------------------------
    11a. Reserved Keywords
    ------------------------------------------------------------------------- *)
 
-(* The following 146 tokens are reserved by this grammar and MUST NOT be
+(* The following 147 tokens are reserved by this grammar and MUST NOT be
    used as an identifier, in any position where identifier is a valid
    production, in any conforming TRIEL specification: *)
 
@@ -676,7 +671,7 @@ identifier         ::= letter (letter | digit | "_")*
    "MONTH", "MONTHS", "MUST", "MUST_NOT", "NETWORK", "NEXT", "NOT", "NOTIFY",
    "ON", "ON_BREACH", "ON_STALE", "Optional", "OR", "ORACLE", "PARTY", "PENALTY",
    "PLONK", "POLARITY", "PRESENT", "Progress", "PROOF_SYSTEM", "PROVENANCE_REQUIRED", "PROVES", "PUBLIC_WITNESS",
-   "QUORUM_THRESHOLD", "R", "RANGE", "Record", "REGULATOR", "REPLACES", "REVEALING", "SAFETY",
+   "QUORUM_THRESHOLD", "R", "RANGE", "Record", "REF", "REGULATOR", "REPLACES", "REVEALING", "SAFETY",
    "SECOND", "SECONDS", "self", "SENSITIVITY_BOUND", "SET", "SEVERITY", "SOURCE", "SPECIFICATION",
    "STANDARD", "STARK", "String", "SUBJECTS", "SYSTEM", "TERMINATE", "TERMS", "THEN",
    "THRESHOLD", "TOLERANCE", "true", "U", "UNLESS", "UNTIL", "USE_LAST", "VERSION",
@@ -739,7 +734,6 @@ hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
    Multi-line  : {- comment -}                                               *)
 
 (* =========================================================================
-(* =========================================================================
    SEMANTIC RULES
    =========================================================================
 
@@ -777,8 +771,7 @@ hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
       from an OPTIONAL MODALITIES block — meaning n was 0 whenever that
       block was absent, and the stated default of 5 would violate the
       stated constraint on every specification that omitted MODALITIES,
-      which is most of them (three of this repository's own four
-      examples). The constraint is now explicitly scoped to specifications
+      which is most of them. The constraint is now explicitly scoped to specifications
       that declare MODALITIES at all, removing the self-contradiction. *)
 
    If PROVENANCE_REQUIRED is true, the compiler requires provenance
