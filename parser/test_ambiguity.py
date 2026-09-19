@@ -83,6 +83,18 @@ CASES = [
     ("U-5  nested UNLESS, parenthesised", "term",
      "(alice MUST pay UNLESS a DO bob MUST ship) UNLESS b DO alice MUST notify"),
 
+    # A term reference needs REF; without it, an expression ending a term
+    # could swallow a neighbouring term name.
+    ("T-1  MAY..WHEN a OR b", "term", "alice MAY pay WHEN a OR b"),
+    ("T-2  MAY..WHEN a AND b", "term", "alice MAY pay WHEN a AND b"),
+    ("T-3  MUST_NOT..WHEN a OR b", "term", "alice MUST_NOT pay WHEN a OR b"),
+    ("T-4  PENALTY a OR b", "term", "alice ON_BREACH PENALTY a OR b"),
+    ("T-5  REF in a choice", "term", "alice MAY pay WHEN a OR REF b"),
+
+    # Every CTL operator is one reserved token, AU included.
+    ("C-1  AU(a)", "inv", "AU(a)"),
+    ("C-2  AG(AU(a))", "inv", "AG(AU(a))"),
+
     # Controls: must remain unambiguous.
     ("ctl  plain obligation", "term", "alice MUST pay"),
     ("ctl  breach handler", "term",
@@ -98,6 +110,8 @@ REJECT_CASES = [
      "alice MUST pay UNLESS a DO bob MUST ship UNLESS b DO alice MUST notify"),
     ("R-2  MUST..WHEN", "term", "alice MUST pay WHEN a"),
     ("R-3  PRESENT arity", "inv", "ALWAYS(PRESENT(a, b))"),
+    ("R-4  bare term reference", "term", "alice MUST pay THEN b"),
+    ("R-5  REF is reserved", "term", "REF MUST pay"),
 ]
 
 # Which parse was chosen, not just that there is one: number of THEN-
@@ -108,6 +122,18 @@ SHAPE_CASES = [
     ("S-2  UNLESS handler stops before THEN",
      "alice MUST pay UNLESS a DO bob MUST ship THEN alice MUST notify", 2),
 ]
+
+# Number of OR-operands at the top of the TERMS block: a guard's OR stays
+# inside the guard, and only REF introduces a term-level choice.
+CHOICE_CASES = [
+    ("S-3  guard OR stays in the guard", "alice MAY pay WHEN a OR b", 1),
+    ("S-4  REF makes a term choice", "alice MAY pay WHEN a OR REF b", 2),
+]
+
+
+def top_choice_len(tree):
+    ch = next(t for t in tree.iter_subtrees_topdown() if t.data == "choice_expr")
+    return sum(1 for c in ch.children if getattr(c, "data", None) == "parallel_expr")
 
 
 def top_sequence_len(tree):
@@ -169,14 +195,32 @@ def main():
         print(f"  FAIL  {label:28s} accepted")
 
     for label, fragment, expected in SHAPE_CASES:
-        got = top_sequence_len(parser.parse(build("term", fragment)))
+        try:
+            got = top_sequence_len(parser.parse(build("term", fragment)))
+        except Exception as exc:
+            failures.append(f"{label}: did not parse ({type(exc).__name__}) -- {fragment}")
+            print(f"  FAIL  {label:28s} did not parse")
+            continue
         if got == expected:
             print(f"  ok    {label:28s}")
         else:
             failures.append(f"{label}: {got} THEN-operands, expected {expected} -- {fragment}")
             print(f"  FAIL  {label:28s} shape {got} != {expected}")
 
-    total = len(CASES) + len(REJECT_CASES) + len(SHAPE_CASES)
+    for label, fragment, expected in CHOICE_CASES:
+        try:
+            got = top_choice_len(parser.parse(build("term", fragment)))
+        except Exception as exc:
+            failures.append(f"{label}: did not parse ({type(exc).__name__}) -- {fragment}")
+            print(f"  FAIL  {label:28s} did not parse")
+            continue
+        if got == expected:
+            print(f"  ok    {label:28s}")
+        else:
+            failures.append(f"{label}: {got} OR-operands, expected {expected} -- {fragment}")
+            print(f"  FAIL  {label:28s} shape {got} != {expected}")
+
+    total = len(CASES) + len(REJECT_CASES) + len(SHAPE_CASES) + len(CHOICE_CASES)
     print()
     if failures:
         print(f"{len(failures)} of {total} checks failed:")
