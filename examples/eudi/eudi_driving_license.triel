@@ -21,21 +21,25 @@ TERMS {
   ELSE
     issuer MAY issue_unrestricted_category;
 
-  verifier MUST_NOT accept_presentation WHEN license_valid == false
+  verifier MUST_NOT accept_presentation
+    WHEN NOT PRESENT(license_valid) OR license_valid == false
 }
 
 FACTORS {
   age                       : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING self
                               BOUND_TO(applicant, presentation_nonce)
                               METADATA SOURCE applicant,
-  age_proof_valid           : Boolean METADATA SOURCE applicant,
+  age_proof_valid           : Boolean METADATA SOURCE verifier,
+  presentation_accepted     : Boolean METADATA SOURCE verifier,
   presentation_nonce        : Hash    METADATA SOURCE verifier,
   vision_correction_needed  : Boolean METADATA SOURCE issuer,
   license_category          : String  METADATA SOURCE issuer,
-  license_valid             : Boolean METADATA SOURCE issuer MAX_AGE 24 HOURS
+  license_valid             : Boolean METADATA SOURCE issuer MAX_AGE 24 HOURS ON_STALE BLOCK
 }
 
 INVARIANTS {
-  license_requires_adult_holder       : SAFETY : ALWAYS(age_proof_valid == true);
-  presentation_requires_valid_license : SAFETY : ALWAYS(license_valid == true)
+  license_requires_adult_holder       : SAFETY :
+    ALWAYS(presentation_accepted IMPLIES age_proof_valid == true);
+  presentation_requires_valid_license : SAFETY :
+    ALWAYS(presentation_accepted IMPLIES (PRESENT(license_valid) AND license_valid == true))
 }
