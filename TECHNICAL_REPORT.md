@@ -6,7 +6,7 @@
 
 ## Abstract
 
-TRIEL is an open, declarative specification language in which a single, human-readable source expresses subjects, obligations, factors, and temporal invariants over a system's behavior. Unlike specifications expressed in natural language, a TRIEL specification's invariants are written in linear and branching-time temporal logic (LTL/CTL), and its data fields may carry zero-knowledge constraints — provable predicates that do not require revealing the underlying value. The grammar as currently defined admits unbounded integer arithmetic and uninterpreted function calls inside temporal formulas, so satisfiability over the full language is not decidable in general; a decidable subset (bounded domains, no free function calls) is achievable but is not yet carved out or enforced by the grammar, and doing so is tracked as future work (Section 4). This report describes the language's syntax and semantics (Section 2), motivates the specification-implementation gap it addresses (Section 3), positions it relative to existing specification and policy languages (Section 4), and states plainly what the language does and does not claim to guarantee (Section 5).
+TRIEL is an open, declarative specification language in which a single, human-readable source expresses subjects, obligations, factors, and temporal invariants over a system's behavior. Unlike specifications expressed in natural language, a TRIEL specification's invariants are written in linear and branching-time temporal logic (LTL/CTL), and its data fields may carry zero-knowledge constraints — provable predicates that do not require revealing the underlying value. The grammar as currently defined admits unbounded integer arithmetic and uninterpreted function calls inside temporal formulas, so satisfiability over the full language is not decidable in general; a decidable subset (bounded domains, no free function calls) is achievable but is not yet carved out or enforced by the grammar, and doing so is tracked as future work (Section 4). This report describes the language's syntax and semantics (Section 2), motivates the specification-implementation gap it addresses (Section 1), positions it relative to existing specification and policy languages (Section 3), and states plainly what the language does and does not claim to guarantee (Section 4).
 
 The grammar described here (v2.4) is published under the Open Web Foundation Agreement 1.0 at `github.com/triel-lang/grammar`; every example in this report is drawn from that repository and can be independently checked against the published EBNF.
 
@@ -45,22 +45,31 @@ A TRIEL specification consists of a declaration header, a set of typed subjects,
 ```triel
 SPECIFICATION age_verification VERSION 1.0.0
     JURISDICTION "EU"
+    PROOF_SYSTEM: GROTH16
+    CURVE: "BN254"
 
 SUBJECTS {
-    Applicant : PARTY
-}
-
-FACTORS {
-    age : ZK<Integer> PROVES (self >= 18) WITHOUT REVEALING self
+  applicant : PARTY,
+  verifier  : REGULATOR
 }
 
 TERMS {
-    ON verification_requested(applicant) DO
-        Applicant MAY proceed WHEN age >= 18
+  applicant MUST submit_proof(age) BY DATETIME("2026-09-01T00:00:00Z");
+  applicant ON_BREACH
+    NOTIFY verifier,
+    TERMINATE
+}
+
+FACTORS {
+  age             : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING self
+                    METADATA SOURCE applicant,
+  age_proof_valid : Boolean METADATA SOURCE verifier,
+  access_granted  : Boolean METADATA SOURCE verifier
 }
 
 INVARIANTS {
-    age_gate_enforced : SAFETY : ALWAYS (proceed_granted IMPLIES age >= 18)
+  access_requires_valid_proof : SAFETY :
+    ALWAYS(access_granted IMPLIES age_proof_valid == true)
 }
 ```
 
@@ -69,10 +78,10 @@ INVARIANTS {
 Obligations, permissions, and prohibitions are the language's three deontic primitives, each binding a subject to an action under an optional condition or deadline:
 
 - `subject MUST action [BY deadline] [FROM start] [UNTIL end]` — an obligation.
-- `subject MAY action [WHEN condition] [WITHIN deadline]` — a permission.
+- `subject MAY action [WHEN condition]` — a permission.
 - `subject MUST_NOT action [WHEN condition]` — a prohibition.
 
-These compose through `AND` (parallel), `OR` (choice), `THEN` (sequence), and `UNLESS ... DO` (interruption: the guard is watched for as long as the guarded term runs), and can be attached to events via `ON event DO term`.
+Any term can be bounded by a deadline, `term WITHIN deadline [ELSE term]`. These compose through `AND` (parallel), `OR` (choice), `THEN` (sequence), and `UNLESS ... DO` (interruption: the guard is watched for as long as the guarded term runs), and can be attached to events via `ON event DO term`.
 
 ### 2.3 Factors and Zero-Knowledge Constraints
 
@@ -84,7 +93,7 @@ zk_constraints ::= "PROVES" "(" zk_constraint {"," zk_constraint} ")"
                    ["WITHOUT" "REVEALING" zk_visibility]
 ```
 
-A `zk_constraint` is restricted, by design, to comparisons against a literal, a range, a set, or a hash — not to an arbitrary expression over other factors. This is a deliberate simplification relative to general-purpose zero-knowledge circuit languages (Section 4.2): TRIEL's zero-knowledge constraints express *what must be provable about a single field*, not the full circuit logic a dedicated ZK-DSL would compile. Where a specification needs to relate a zero-knowledge-constrained factor to another factor (e.g., "assets exceed liabilities," where liabilities are also specification-level state), that relationship is expressed as an ordinary invariant over both factors, keeping the ZK-constraint syntax itself simple and the cross-factor relationship visible in the same `INVARIANTS` block as every other temporal property.
+A `zk_constraint` is restricted, by design, to comparisons against a literal, a range, a set, or a hash — not to an arbitrary expression over other factors. This is a deliberate simplification relative to general-purpose zero-knowledge circuit languages (Section 3): TRIEL's zero-knowledge constraints express *what must be provable about a single field*, not the full circuit logic a dedicated ZK-DSL would compile. Where a specification needs to relate a zero-knowledge-constrained factor to another factor (e.g., "assets exceed liabilities," where liabilities are also specification-level state), that relationship is expressed as an ordinary invariant over both factors, keeping the ZK-constraint syntax itself simple and the cross-factor relationship visible in the same `INVARIANTS` block as every other temporal property.
 
 ### 2.4 Temporal Invariants
 
@@ -134,9 +143,9 @@ These rules give `UNLESS` the algebraic laws one expects of it:
 
 One equation that looks like a law is not one: `(t UNLESS c DO e) UNLESS d DO e` differs from `t UNLESS (c OR d) DO e`, because the outer guard `d` is still watched while the inner handler `e` runs, and can interrupt it.
 
-A specification's `INVARIANTS` block is satisfied by a trace `σ` in the ordinary sense of LTL/CTL satisfaction over `σ`'s sequence of deontic events, with `ALWAYS`/`EVENTUALLY`/`NEXT` as the abbreviations `G`/`F`/`X` restricted to state-formula arguments (Section 2.4).
+A specification's `INVARIANTS` block is satisfied by a trace `π` in the ordinary sense of LTL/CTL satisfaction over `π`'s sequence of states `σ₀, …, σₙ`, with `ALWAYS`/`EVENTUALLY`/`NEXT` as the abbreviations `G`/`F`/`X` restricted to state-formula arguments (Section 2.4).
 
-*(This semantics governs the surface language as published in the v2.4 grammar. It is stated here at the level of detail needed to support the claims of Section 5; a fully worked compilation-soundness proof is future work, tracked openly in the repository.)*
+*(This semantics governs the surface language as published in the v2.4 grammar. It is stated here at the level of detail needed to support the claims of Section 4; a fully worked compilation-soundness proof is future work, tracked openly in the repository.)*
 
 ### 2.6 Breach and Deadline Semantics
 
@@ -157,7 +166,7 @@ Section 2.5 gives every `MUST`/`MAY`/`MUST_NOT` term a *generative* semantics: `
 
 A `breach_action` list containing more than one action from the continuation-determining class — e.g. `PENALTY x, NOTIFY y, TERMINATE, CURE_BY 5 DAYS`, the exact combination flagged elsewhere in review of this grammar — has no single defined continuation and is a semantic error, not a silently accepted specification. This is a semantic-analysis rule in the same sense as the `QUORUM_THRESHOLD` bound already noted in the grammar file's SEMANTIC RULES section: it constrains which grammar-conformant parses are meaningful, and is checked at that level, not by the grammar itself.
 
-**Deadlines are not temporal-logic operators.** Section 2.4 lists `ALWAYS`/`EVENTUALLY`/`NEXT` as the qualitative LTL abbreviations `G`/`F`/`X`. Every deadline-bearing construct — `BY`, `WITHIN`, `MAX_AGE`, `CURE_BY`, `FROM ... UNTIL` — is deliberately kept outside that logic rather than folded into it as a metric extension. Each denotes a plain arithmetic comparison against the `τ` component of a trace event, not a subscripted temporal operator: `EVENTUALLY(expr) WITHIN d`, for instance, is satisfied by `σ` if there exists `τ` with `τ₀ ≤ τ ≤ τ₀ + eval(d)` at which `expr` holds, where `τ₀` is the specification's activation time: the deadline is fixed once and does not move when the invariant is re-evaluated, as the grammar's semantic rules for `WITHIN` also state. This keeps `WITHIN` from being decorative — it now has a truth condition — without claiming the full temporal logic is metric, which is what made the decidability claim in Section 4 false in the first place.
+**Deadlines are not temporal-logic operators.** Section 2.4 lists `ALWAYS`/`EVENTUALLY`/`NEXT` as the qualitative LTL abbreviations `G`/`F`/`X`. Every deadline-bearing construct — `BY`, `WITHIN`, `MAX_AGE`, `CURE_BY`, `FROM ... UNTIL` — is deliberately kept outside that logic rather than folded into it as a metric extension. Each denotes a plain arithmetic comparison against the `τ` component of a trace event, not a subscripted temporal operator: `EVENTUALLY(expr) WITHIN d`, for instance, is satisfied by `σ` if there exists `τ` with `τ₀ ≤ τ ≤ τ₀ + eval(d)` at which `expr` holds, where `τ₀` is the specification's activation time: the deadline is fixed once and does not move when the invariant is re-evaluated, as the grammar's semantic rules for `WITHIN` also state. This keeps `WITHIN` from being decorative — it now has a truth condition — without claiming the full temporal logic is metric.
 
 **What this does not yet cover.** A calendar model — the exact meaning of `BUSINESS_DAY`, month and year arithmetic, timezone handling for `DATETIME` literals — is still undefined; two conformant implementations can compute a deadline differently until that model exists. `PENALTY`'s numeric type remains untyped. Multi-obligation `ON_BREACH` scoping, noted above, is open. All three are tracked as future work rather than assumed solved by this section.
 
@@ -169,7 +178,7 @@ Sections 2.3 and 2.6 treat a `ZK<T>` factor as a type annotation and give its de
 
 **The flow rule.** A factor declared with a `zk_type` and no `WITHOUT REVEALING ALL` override (see below) is *restricted*: its value may appear only inside the `zk_constraint` expressions of its own `PROVES(...)` clause. It is illegal — a semantic-analysis error, in the same sense as the `QUORUM_THRESHOLD` bound and the breach-action rule of Section 2.6 — for a restricted factor's identifier to appear anywhere else a value is evaluated: in an `INVARIANTS` predicate, in a `PENALTY` expression, in a `WHEN`/`IF` guard, or as an operand of comparison or arithmetic outside its own constraint. Using the factor's name as a bare argument to an action that operates on *the proof itself* — `submit_proof(age)` in this repository's own examples — is not a value-evaluation position and remains legal: it names which field a proof is being submitted for without extracting its value into another computation.
 
-**What a specification does instead.** Every `ZK<T>` factor's constraint verification produces a result — whether the proof checked out — and that result, not the value, is what the rest of the specification is entitled to reason about. This report's own Section 2.1 example already follows this pattern (`ALWAYS (proceed_granted IMPLIES age >= 18)` reasons about the outcome, not the raw value in isolation); this section makes the pattern a rule rather than a stylistic choice. The two age-gated examples in this repository (`age_verification.triel`, `eudi_driving_license.triel`) previously read the hidden `age` factor directly in `INVARIANTS` — the exact violation this rule forbids, flagged in independent review of this grammar — and have been corrected to declare a public `age_proof_valid : Boolean` factor and reason about that instead.
+**What a specification does instead.** Every `ZK<T>` factor's constraint verification produces a result — whether the proof checked out — and that result, not the value, is what the rest of the specification is entitled to reason about. The example in Section 2.1 follows this pattern: its invariant `ALWAYS(access_granted IMPLIES age_proof_valid == true)` reasons about whether the proof checked out, never about `age` itself. This section makes the pattern a rule rather than a stylistic choice. The two age-gated examples in this repository (`age_verification.triel`, `eudi_driving_license.triel`) previously read the hidden `age` factor directly in `INVARIANTS` — the exact violation this rule forbids, flagged in independent review of this grammar — and have been corrected to declare a public `age_proof_valid : Boolean` factor and reason about that instead.
 
 **Hidden by default.** The `["WITHOUT" "REVEALING" zk_visibility]` clause in the grammar is optional, but its absence is not treated as "unspecified": a `ZK<T>` factor with no `WITHOUT REVEALING` clause at all defaults to `zk_visibility = self` — fully hidden, and subject to the flow rule above. `WITHOUT REVEALING ALL` is the explicit, visible-in-source opt-out; a specification cannot end up disclosing a value by omission.
 
@@ -187,7 +196,7 @@ Section 2.7 constrains what a specification may *do* with a hidden value; it say
 
 **Declaring the proof system (B-12).** `declaration_block` gains optional `PROOF_SYSTEM` (`GROTH16` | `PLONK` | `STARK` | `BULLETPROOFS`) and `CURVE` fields. As with `BOUND_TO`, these are grammatically optional but semantically required — whenever a specification's `FACTORS` block contains any `ZK<T>` factor, omitting either is a compile error rather than a default: an implicit choice of proof system is exactly the kind of cross-compiler divergence this grammar exists to rule out, so there is no fallback value to pick silently. Both example specifications with `ZK<T>` factors (`age_verification.triel`, `eudi_driving_license.triel`) now declare `PROOF_SYSTEM: GROTH16` and `CURVE: "BN254"`.
 
-**What this does not yet cover.** These three fixes address how a single proof is salted, bound, and parameterized; they do not specify a key-distribution or verification-key-publication mechanism, which remains open. `BOUND_TO`'s nonce factor is declared but its refresh protocol — who generates it, how often, and how staleness is detected — is left to the compiler implementation, the same category of gap already acknowledged for `MAX_AGE`-governed oracle factors (Section 2.6). A full threat model — who is assumed honest, what constitutes a successful attack, and against which of these three mechanisms — is still absent from this report and remains the most consequential open item for the privacy and identity claims this language makes.
+**What this does not yet cover.** These three fixes address how a single proof is salted, bound, and parameterized; they do not specify a key-distribution or verification-key-publication mechanism, which remains open. `BOUND_TO`'s nonce factor is declared but its refresh protocol — who generates it, how often, and how staleness is detected — is left to the compiler implementation, the same category of gap already acknowledged for `MAX_AGE`-governed oracle factors (Section 2.9). A full threat model — who is assumed honest, what constitutes a successful attack, and against which of these three mechanisms — is still absent from this report and remains the most consequential open item for the privacy and identity claims this language makes.
 
 ---
 
@@ -296,7 +305,7 @@ Consistent with the discipline this report holds itself to: TRIEL's grammar and 
 
 What is mechanically checkable today, and what is not, can be stated precisely rather than left as a general disclaimer. A grammar-conformant parser can check a TRIEL specification's *syntactic well-formedness* — that it conforms to the published EBNF, including type-correctness of its factor declarations. It cannot check *structural non-contradiction* of a specification's deontic terms (Section 1.1): two terms such as `X MUST pay` and `X MUST_NOT pay` are both individually well-formed, and detecting that they conflict requires reasoning about the terms' meaning, not just their shape — this is a satisfiability question that needs a SAT solver or model-checker operating over the semantics of Section 2.5, neither of which exists yet in this project. Whether a given implementation's execution trace satisfies a specification's temporal invariants is *defined* by the semantics of Section 2.5, but no tool — parser, SAT solver, or model-checker — currently verifies either non-contradiction or trace satisfaction; both are stated explicitly as future work, tracked openly in the repository, rather than implied to already exist.
 
-**Intended domain and non-goals (D-33).** This grammar's usage examples (Section 12 of `TRIEL-grammar-v2_4-core.ebnf`) illustrate field syntax across several domains at once — logistics (`late_delivery_agreement`), digital identity (`age_verification`, `eudi_driving_license`), and, in the grammar file's own inline examples only, healthcare consent (`patient_consent`, referencing HL7-FHIR) and aerospace telemetry (`probe_patch`, `satellite_fw`). Only the first two are working, parser-verified `.triel` files in this repository's `examples/` directory; `patient_consent`, `probe_patch`, and `satellite_fw` exist solely as short inline snippets inside the grammar file's comments, demonstrating that certain fields parse in that context — they are not validated end-to-end specifications, have never been run through the reference parser, and should not be read as a claim that TRIEL has been exercised against healthcare or aerospace compliance requirements. The repository's genuinely worked-through, tested line runs from `age_verification.triel` through `eudi_driving_license.triel`: privacy-preserving identity and credential verification, the domain every fix in Sections 2.6 through 2.11 was written against and checked in. Readers evaluating TRIEL for a specific domain should weight that track record accordingly, rather than the breadth of vocabulary the grammar happens to make expressible.
+**Intended domain and non-goals (D-33).** This grammar's usage examples (the USAGE EXAMPLES block at the end of `TRIEL-grammar-v2_4-core.ebnf`) illustrate field syntax across several domains at once — logistics (`late_delivery_agreement`), digital identity (`age_verification`, `eudi_driving_license`), and, in the grammar file's own inline examples only, healthcare consent (`patient_consent`, referencing HL7-FHIR) and aerospace telemetry (`probe_patch`, `satellite_fw`). Only the first two are working, parser-verified `.triel` files in this repository's `examples/` directory; `patient_consent`, `probe_patch`, and `satellite_fw` exist solely as short inline snippets inside the grammar file's comments, demonstrating that certain fields parse in that context — they are not validated end-to-end specifications, have never been run through the reference parser, and should not be read as a claim that TRIEL has been exercised against healthcare or aerospace compliance requirements. The repository's genuinely worked-through, tested line runs from `age_verification.triel` through `eudi_driving_license.triel`: privacy-preserving identity and credential verification, the domain every fix in Sections 2.6 through 2.11 was written against and checked in. Readers evaluating TRIEL for a specific domain should weight that track record accordingly, rather than the breadth of vocabulary the grammar happens to make expressible.
 
 A second scope distinction, orthogonal to domain: `CROSS_MODAL`, `POLARITY`, `WEIGHT`, `THRESHOLD`, and `SENSITIVITY_BOUND` (Sections 5 and 7) form a heuristic scoring layer with no formal semantics defined anywhere in this document or the grammar's SEMANTIC RULES section — unlike the deontic, temporal, and zero-knowledge core this report gives a trace semantics to (Sections 2.5 through 2.9). These fields parse and type-check, but what a specification's author is actually asserting when they write `POLARITY 1.0` or `CROSS_MODAL { ... } TOLERANCE 0.01` is not defined the way `MUST`, `ALWAYS(...)`, or `ZK<T>` are. Treat this layer as a separate, less mature design surface bundled into the same grammar rather than as verifiable on the same footing as the rest of the language.
 
