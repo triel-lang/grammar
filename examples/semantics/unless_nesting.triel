@@ -3,6 +3,10 @@
 -- the same states as the inner one, so it becomes true at the same point
 -- and E runs once (TECHNICAL_REPORT 2.5). That the outer interruption
 -- takes priority follows from the definition; it is not a separate rule.
+-- The names nested and flat only label the two sides of the equation.
+-- This file illustrates a law; it is not a contract in which both terms
+-- are in force at once. The semantics of named terms (:= and REF) is not
+-- yet defined in TECHNICAL_REPORT.
 
 SPECIFICATION sem_unless_nesting VERSION 1.0.0
 
