@@ -13,17 +13,19 @@ SUBJECTS {
 
 TERMS {
   applicant MUST submit_proof(age) BY DATETIME("2026-09-01T00:00:00Z");
-  verifier ON_BREACH
-    NOTIFY applicant,
+  applicant ON_BREACH
+    NOTIFY verifier,
     TERMINATE
 }
 
 FACTORS {
   age             : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING self
                     METADATA SOURCE applicant,
-  age_proof_valid : Boolean METADATA SOURCE applicant
+  age_proof_valid : Boolean METADATA SOURCE verifier,
+  access_granted  : Boolean METADATA SOURCE verifier
 }
 
 INVARIANTS {
-  age_verified : SAFETY : ALWAYS(age_proof_valid == true)
+  access_requires_valid_proof : SAFETY :
+    ALWAYS(access_granted IMPLIES age_proof_valid == true)
 }
