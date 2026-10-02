@@ -46,4 +46,12 @@ Of these, `age_verification.triel` and `eudi_driving_license.triel` — privacy-
 
 ## Foundations
 
-TRIEL's semantics builds on the composition-nominative approach to program logics developed at Taras Shevchenko National University of Kyiv. `FOUNDATIONS.md` states, for each construct, which results it rests on and which questions
+TRIEL's semantics builds on the composition-nominative approach to program logics developed by M. Nikitchenko, S. Shkilniak and colleagues at Taras Shevchenko National University of Kyiv, in particular *Applied Logic* (2013), *Algebras and logics of partial quasiary predicates* (2017) and *Composition-Nominative Methods and Models in Program Development* (2022). `FOUNDATIONS.md` gives the full references and states, for each construct, which results it rests on and which questions remain open.
+
+## License
+
+The TRIEL specification is made available under the [Open Web Foundation Agreement 1.0 (OWFa 1.0)](https://github.com/triel-lang/grammar/blob/main/LICENSE.md).
+
+## Contact
+
+Dmitri Chistyakov
