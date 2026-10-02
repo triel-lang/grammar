@@ -288,6 +288,8 @@ on every push.
 
 TRIEL overlaps, in stated purpose, with several existing languages; the comparisons below are drawn at the level of publicly observable syntax and semantics, not implementation internals.
 
+The semantic foundations of the language — the composition-nominative approach to program logics, and which TRIEL constructs are adopted from it, defined here, or still open — are set out separately in `FOUNDATIONS.md`.
+
 **OPA/Rego.** Rego is a mature declarative policy language evaluating rules against a snapshot of input data — a stateless, single-query evaluation model. TRIEL shares the goal of separating policy from the systems it governs, but adds trace semantics with native LTL/CTL operators and zero-knowledge field constraints, neither of which Rego's evaluation model addresses. This is a difference in scope, not a claim of superiority: Rego's runtime maturity and integration ecosystem for real-time authorization decisions is not something TRIEL, as a specification language without a released runtime, currently offers.
 
 **Wysteria/Wys\*.** Wysteria and Wys\* are programming languages for mixed-mode secure multi-party computation among several principals, compiled to MPC protocols; Wys\* is embedded in F\* and verified there. They have no deontic layer: obligations, permissions, and prohibitions are not part of their vocabulary. TRIEL is a specification language without a compilation target into any specific MPC protocol; its zero-knowledge constraints annotate individual fields rather than compiling an entire computation into a provable circuit.
