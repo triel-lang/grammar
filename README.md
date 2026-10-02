@@ -44,10 +44,6 @@ Every example is parsed against the grammar, with an ambiguity check, on every p
 
 Of these, `age_verification.triel` and `eudi_driving_license.triel` — privacy-preserving identity and credential verification — are the most thoroughly worked through and tested; see `TECHNICAL_REPORT.md` §4 for the fuller scope statement.
 
-## License
+## Foundations
 
-The TRIEL specification is made available under the [Open Web Foundation Agreement 1.0 (OWFa 1.0)](https://github.com/triel-lang/grammar/blob/main/LICENSE.md).
-
-## Contact
-
-Dmitri Chistyakov
+TRIEL's semantics builds on the composition-nominative approach to program logics developed at Taras Shevchenko National University of Kyiv. `FOUNDATIONS.md` states, for each construct, which results it rests on and which questions
