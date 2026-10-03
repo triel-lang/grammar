@@ -1,4 +1,4 @@
-Started at Sat Oct 3 22:29:42 GMT+3 2026 (polyml-5.9.2_x86_64_32-windows)
+Started at Sat Oct 3 22:39:28 GMT+3 2026 (polyml-5.9.2_x86_64_32-windows)
 ISABELLE_TOOL_JAVA_OPTIONS="-Djava.awt.headless=true -Xms512m -Xmx4g -Xss16m"
 ISABELLE_BUILD_OPTIONS=""
 
@@ -14,10 +14,10 @@ Cleaned TRIEL_Core
 Running TRIEL_Core ...
 TRIEL_Core: theory TRIEL_Core.TRIEL_Core
 TRIEL_Core: theory TRIEL_Core.TRIEL_Trace
-TRIEL_Core: theory TRIEL_Core.TRIEL_Core 100% (8.664s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Trace 100% (12.082s cumulated time)
-Timing TRIEL_Core (2 threads, 17.530s elapsed time, 19.734s cpu time, 2.094s GC time, factor 1.13)
-Finished TRIEL_Core (0:00:21 elapsed time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Core 100% (10.342s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Trace 100% (27.416s cumulated time)
+Timing TRIEL_Core (2 threads, 29.997s elapsed time, 20.453s cpu time, 2.000s GC time, factor 0.68)
+Finished TRIEL_Core (0:00:35 elapsed time)
 
-Finished at Sat Oct 3 22:30:13 GMT+3 2026
-0:00:31 elapsed time
+Finished at Sat Oct 3 22:40:15 GMT+3 2026
+0:00:47 elapsed time
