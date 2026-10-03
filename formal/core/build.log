@@ -1,0 +1,21 @@
+Started at Sat Oct 3 19:29:56 GMT+3 2026 (polyml-5.9.2_x86_64_32-windows)
+ISABELLE_TOOL_JAVA_OPTIONS="-Djava.awt.headless=true -Xms512m -Xmx4g -Xss16m"
+ISABELLE_BUILD_OPTIONS=""
+
+ML_PLATFORM="x86_64_32-windows"
+ML_SYSTEM="polyml-5.9.2"
+ML_OPTIONS="--minheap 500"
+
+Session Pure/Pure
+Session Misc/Tools
+Session HOL/HOL (main)
+Session Unsorted/TRIEL_Core
+Cleaned TRIEL_Core
+Running TRIEL_Core ...
+TRIEL_Core: theory TRIEL_Core.TRIEL_Core
+TRIEL_Core: theory TRIEL_Core.TRIEL_Core 100% (10.529s cumulated time)
+Timing TRIEL_Core (2 threads, 9.516s elapsed time, 10.406s cpu time, 1.047s GC time, factor 1.09)
+Finished TRIEL_Core (0:00:12 elapsed time)
+
+Finished at Sat Oct 3 19:30:19 GMT+3 2026
+0:00:22 elapsed time

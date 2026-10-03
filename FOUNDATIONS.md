@@ -67,3 +67,5 @@ Defined by TRIEL itself, with no external source: fail-closed evaluation of proh
 ## Method
 
 Formal work on TRIEL follows the practice of the approach: it starts from a small, precisely stated core fragment of the language, for which an axiomatic system and the corresponding soundness and completeness results can be established, with proofs mechanised in a proof assistant such as Isabelle. Further constructs are added to the core one at a time.
+
+A first core fragment is mechanised in Isabelle/HOL in [`formal/core`](formal/core/CORE.md): strong Kleene evaluation over partial named data, the monotonicity claim of `TECHNICAL_REPORT.md` §2.9, the non-monotonicity of `PRESENT`, and agreement with two-valued logic on fully defined states.

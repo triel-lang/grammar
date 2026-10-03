@@ -1,0 +1,4 @@
+session TRIEL_Core = HOL +
+  options [document = false]
+  theories
+    TRIEL_Core
