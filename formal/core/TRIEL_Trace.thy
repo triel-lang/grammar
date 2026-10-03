@@ -645,4 +645,644 @@ next
   qed
 qed
 
+
+section \<open>Totality\<close>
+
+text \<open>A denotation is total when every entry is the first entry of one of its traces:
+  the term can start from any entry.\<close>
+
+lemma totalI: "(\<And>x. \<exists>\<pi> r. (\<pi>, r) \<in> T \<and> \<pi> \<noteq> [] \<and> hd \<pi> = x) \<Longrightarrow> total T"
+  by (simp add: total_def)
+
+lemma totalE:
+  assumes "total T"
+  obtains \<pi> r where "(\<pi>, r) \<in> T" "\<pi> \<noteq> []" "hd \<pi> = x"
+  using assms unfolding total_def by blast
+
+lemma total_must: "total (must_d s a :: ('n, 'v, 't :: linorder, 's, 'a) den)"
+proof (rule totalI)
+  fix x :: "('n, 'v, 't, 's, 'a) entry"
+  obtain \<sigma> \<tau> e where x: "x = (\<sigma>, \<tau>, e)" by (cases x) blast
+  let ?\<pi> = "[x, (\<sigma>, \<tau>, Deontic s a Must)]"
+  have "is_trace ?\<pi>" by (simp add: is_trace_def x)
+  then have "(?\<pi>, Done) \<in> must_d s a" by (simp add: must_d_def)
+  then show "\<exists>\<pi> r. (\<pi>, r) \<in> must_d s a \<and> \<pi> \<noteq> [] \<and> hd \<pi> = x" by fastforce
+qed
+
+lemma total_may: "total (may_d s a c)"
+proof (rule totalI)
+  fix x
+  have "([x], Done) \<in> may_d s a c" unfolding may_d_def by blast
+  then show "\<exists>\<pi> r. (\<pi>, r) \<in> may_d s a c \<and> \<pi> \<noteq> [] \<and> hd \<pi> = x" by fastforce
+qed
+
+lemma total_mustnot: "total (mustnot_d s a c)"
+proof (rule totalI)
+  fix x
+  have "([x], Done) \<in> mustnot_d s a c" unfolding mustnot_d_def by blast
+  then show "\<exists>\<pi> r. (\<pi>, r) \<in> mustnot_d s a c \<and> \<pi> \<noteq> [] \<and> hd \<pi> = x" by fastforce
+qed
+
+lemma total_then:
+  assumes "total T\<^sub>1" and "total T\<^sub>2"
+  shows "total (then_d T\<^sub>1 T\<^sub>2)"
+proof (rule totalI)
+  fix x
+  from assms(1) obtain \<pi>\<^sub>1 r\<^sub>1 where m1: "(\<pi>\<^sub>1, r\<^sub>1) \<in> T\<^sub>1" "\<pi>\<^sub>1 \<noteq> []" "hd \<pi>\<^sub>1 = x"
+    by (rule totalE)
+  show "\<exists>\<pi> r. (\<pi>, r) \<in> then_d T\<^sub>1 T\<^sub>2 \<and> \<pi> \<noteq> [] \<and> hd \<pi> = x"
+  proof (cases "r\<^sub>1 = Done")
+    case False
+    with m1 have "(\<pi>\<^sub>1, r\<^sub>1) \<in> then_d T\<^sub>1 T\<^sub>2" by (simp add: then_d_iff)
+    with m1 show ?thesis by blast
+  next
+    case True
+    from assms(2) obtain \<pi>\<^sub>2 r\<^sub>2 where m2: "(\<pi>\<^sub>2, r\<^sub>2) \<in> T\<^sub>2" "\<pi>\<^sub>2 \<noteq> []" "hd \<pi>\<^sub>2 = last \<pi>\<^sub>1"
+      by (rule totalE)
+    with m1 have fus: "fusable \<pi>\<^sub>1 \<pi>\<^sub>2" by (simp add: fusable_def)
+    have "(fuse \<pi>\<^sub>1 \<pi>\<^sub>2, r\<^sub>2) \<in> then_d T\<^sub>1 T\<^sub>2"
+      unfolding then_d_iff using m1(1) True m2(1) fus by blast
+    moreover have "fuse \<pi>\<^sub>1 \<pi>\<^sub>2 \<noteq> []" "hd (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) = x"
+      using m1 by (simp_all add: fuse_nonempty hd_fuse)
+    ultimately show ?thesis by blast
+  qed
+qed
+
+lemma total_or:
+  assumes "total T\<^sub>1" and "total T\<^sub>2"
+  shows "total (or_d T\<^sub>1 T\<^sub>2)"
+proof (rule totalI)
+  fix x
+  from assms(1) obtain \<pi> r where "(\<pi>, r) \<in> T\<^sub>1" "\<pi> \<noteq> []" "hd \<pi> = x" by (rule totalE)
+  then show "\<exists>\<pi> r. (\<pi>, r) \<in> or_d T\<^sub>1 T\<^sub>2 \<and> \<pi> \<noteq> [] \<and> hd \<pi> = x"
+    unfolding or_d_def by blast
+qed
+
+lemma total_unless:
+  assumes "total T" and "total E"
+  shows "total (unless_d T c E)"
+proof (rule totalI)
+  fix x
+  from assms(1) obtain \<pi> r where m: "(\<pi>, r) \<in> T" "\<pi> \<noteq> []" "hd \<pi> = x" by (rule totalE)
+  show "\<exists>\<pi> r. (\<pi>, r) \<in> unless_d T c E \<and> \<pi> \<noteq> [] \<and> hd \<pi> = x"
+  proof (cases "\<exists>j. fires c \<pi> j")
+    case False
+    then have "(\<pi>, r) \<in> unless_d T c E"
+      unfolding unless_d_iff using m(1) by blast
+    with m show ?thesis by blast
+  next
+    case True
+    then obtain j where j: "fires c \<pi> j" ..
+    define k where "k = first_fire c \<pi>"
+    have kl: "k < length \<pi>"
+      using fires_less[OF first_fire_fires[OF j]] unfolding k_def by simp
+    from assms(2) obtain \<pi>' r' where e: "(\<pi>', r') \<in> E" "\<pi>' \<noteq> []" "hd \<pi>' = \<pi> ! k"
+      by (rule totalE)
+    have fus: "fusable (pre \<pi> (first_fire c \<pi>)) \<pi>'"
+      using kl e unfolding k_def by (simp add: fusable_pre)
+    have "(fuse (pre \<pi> (first_fire c \<pi>)) \<pi>', kappa r') \<in> unless_d T c E"
+      unfolding unless_d_iff using m(1) True e(1) fus by blast
+    moreover have "fuse (pre \<pi> (first_fire c \<pi>)) \<pi>' \<noteq> []"
+      using m(2) by (simp add: fuse_nonempty pre_nonempty)
+    moreover have "hd (fuse (pre \<pi> (first_fire c \<pi>)) \<pi>') = x"
+      using m(2,3) by (simp add: hd_fuse pre_nonempty hd_pre)
+    ultimately show ?thesis by blast
+  qed
+qed
+
+context interleaving
+begin
+
+lemma total_and:
+  assumes "total T\<^sub>1" and "total T\<^sub>2"
+  shows "total (and_d T\<^sub>1 T\<^sub>2)"
+proof (rule totalI)
+  fix x
+  from interleave_from_start[OF assms, of x] obtain \<pi>\<^sub>1 o\<^sub>1 \<pi>\<^sub>2 o\<^sub>2 \<pi> where
+    m: "(\<pi>\<^sub>1, o\<^sub>1) \<in> T\<^sub>1" "(\<pi>\<^sub>2, o\<^sub>2) \<in> T\<^sub>2" "\<pi> \<in> interleave \<pi>\<^sub>1 \<pi>\<^sub>2" "\<pi> \<noteq> []" "hd \<pi> = x"
+    by blast
+  then have "(\<pi>, ojoin o\<^sub>1 o\<^sub>2) \<in> and_d T\<^sub>1 T\<^sub>2"
+    unfolding and_d_def by blast
+  with m(4,5) show "\<exists>\<pi> r. (\<pi>, r) \<in> and_d T\<^sub>1 T\<^sub>2 \<and> \<pi> \<noteq> [] \<and> hd \<pi> = x" by blast
+qed
+
+end
+
+text \<open>The assumption on \<open>interleave\<close> is satisfiable (so the locale is not vacuous):
+  for instance by the function that returns its first argument. This is only a
+  consistency witness, not a proposed meaning of AND.\<close>
+
+lemma interleaving_satisfiable:
+  "interleaving ((\<lambda>\<pi>\<^sub>1 \<pi>\<^sub>2. {\<pi>\<^sub>1}) ::
+     ('n, 'v, 't, 's, 'a) trace \<Rightarrow> ('n, 'v, 't, 's, 'a) trace \<Rightarrow> ('n, 'v, 't, 's, 'a) trace set)"
+proof
+  fix T\<^sub>1 T\<^sub>2 :: "('n, 'v, 't, 's, 'a) den" and x :: "('n, 'v, 't, 's, 'a) entry"
+  assume "total T\<^sub>1" "total T\<^sub>2"
+  then obtain \<pi>\<^sub>1 o\<^sub>1 \<pi>\<^sub>2 o\<^sub>2 where
+    "(\<pi>\<^sub>1, o\<^sub>1) \<in> T\<^sub>1" "\<pi>\<^sub>1 \<noteq> []" "hd \<pi>\<^sub>1 = x" "(\<pi>\<^sub>2, o\<^sub>2) \<in> T\<^sub>2" "\<pi>\<^sub>2 \<noteq> []" "hd \<pi>\<^sub>2 = x"
+    by (meson totalE)
+  then show "\<exists>\<pi>\<^sub>1 o\<^sub>1 \<pi>\<^sub>2 o\<^sub>2 \<pi>. (\<pi>\<^sub>1, o\<^sub>1) \<in> T\<^sub>1 \<and> (\<pi>\<^sub>2, o\<^sub>2) \<in> T\<^sub>2 \<and> \<pi>\<^sub>1 \<noteq> [] \<and> \<pi>\<^sub>2 \<noteq> []
+      \<and> hd \<pi>\<^sub>1 = x \<and> hd \<pi>\<^sub>2 = x \<and> \<pi> \<in> {\<pi>\<^sub>1} \<and> \<pi> \<noteq> [] \<and> hd \<pi> = x"
+    by blast
+qed
+
+
+section \<open>Distributivity of UNLESS over THEN\<close>
+
+text \<open>The fused trace \<open>\<pi>\<^sub>1 \<frown> \<pi>\<^sub>2\<close> is watched at entries \<open>0 \<dots> m-1\<close> as \<open>\<pi>\<^sub>1\<close> and from
+  \<open>m\<close> on as \<open>\<pi>\<^sub>2\<close>, where \<open>m = |\<pi>\<^sub>1| - 1\<close> is the junction (lemmas \<open>fires_fuse_left\<close>,
+  \<open>fires_fuse_right\<close>). If the guard first holds inside \<open>t\<^sub>1\<close>, both sides interrupt at
+  the same entry with the same prefix (\<open>first_fire_fuse_left\<close>, \<open>pre_fuse_left\<close>). If it
+  first holds at the junction or later, \<open>t\<^sub>1\<close> has completed and the second UNLESS
+  interrupts \<open>t\<^sub>2\<close> at the corresponding entry (\<open>first_fire_fuse_right\<close>,
+  \<open>pre_fuse_right\<close>, \<open>fuse_assoc\<close>). An interrupted \<open>t\<^sub>1\<close> never ends Done, so THEN passes it
+  through unchanged.
+
+  Section 2.5 states the law without side conditions. It needs one: on the left, the
+  interrupted traces of \<open>t\<^sub>1\<close> come from \<open>t\<^sub>1 THEN t\<^sub>2\<close>, which contains a Done trace of \<open>t\<^sub>1\<close>
+  only if some trace of \<open>t\<^sub>2\<close> can follow it. Totality of \<open>t\<^sub>2\<close> guarantees that; without it
+  the law fails (\<open>unless_then_counterexample\<close> below).\<close>
+
+(* §2.5, law 3 *)
+theorem unless_then:
+  assumes tot: "total T\<^sub>2"
+  shows "unless_d (then_d T\<^sub>1 T\<^sub>2) c E = then_d (unless_d T\<^sub>1 c E) (unless_d T\<^sub>2 c E)"
+proof (rule subset_antisym; rule subrelI)
+  fix \<pi> r assume "(\<pi>, r) \<in> unless_d (then_d T\<^sub>1 T\<^sub>2) c E"
+  then consider
+      (keep) "(\<pi>, r) \<in> then_d T\<^sub>1 T\<^sub>2" "\<forall>j. \<not> fires c \<pi> j"
+    | (int) \<pi>\<^sub>0 r\<^sub>0 \<pi>' r' where "(\<pi>\<^sub>0, r\<^sub>0) \<in> then_d T\<^sub>1 T\<^sub>2" "\<exists>j. fires c \<pi>\<^sub>0 j" "(\<pi>', r') \<in> E"
+        "fusable (pre \<pi>\<^sub>0 (first_fire c \<pi>\<^sub>0)) \<pi>'"
+        "\<pi> = fuse (pre \<pi>\<^sub>0 (first_fire c \<pi>\<^sub>0)) \<pi>'" "r = kappa r'"
+    unfolding unless_d_iff[where T = "then_d T\<^sub>1 T\<^sub>2"] by blast
+  then show "(\<pi>, r) \<in> then_d (unless_d T\<^sub>1 c E) (unless_d T\<^sub>2 c E)"
+  proof cases
+    case keep
+    from keep(1) consider
+        (seq) \<pi>\<^sub>1 \<pi>\<^sub>2 where "(\<pi>\<^sub>1, Done) \<in> T\<^sub>1" "(\<pi>\<^sub>2, r) \<in> T\<^sub>2" "fusable \<pi>\<^sub>1 \<pi>\<^sub>2" "\<pi> = fuse \<pi>\<^sub>1 \<pi>\<^sub>2"
+      | (left) "(\<pi>, r) \<in> T\<^sub>1" "r \<noteq> Done"
+      unfolding then_d_iff by blast
+    then show ?thesis
+    proof cases
+      case seq
+      have "\<not> (\<exists>j. fires c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) j)" using keep(2) unfolding seq(4) by blast
+      then have nf: "\<not> (\<exists>j. fires c \<pi>\<^sub>1 j)" "\<not> (\<exists>i. fires c \<pi>\<^sub>2 i)"
+        unfolding fires_fuse_ex[OF seq(3)] by blast+
+      have u1: "(\<pi>\<^sub>1, Done) \<in> unless_d T\<^sub>1 c E"
+        unfolding unless_d_iff using seq(1) nf(1) by blast
+      have u2: "(\<pi>\<^sub>2, r) \<in> unless_d T\<^sub>2 c E"
+        unfolding unless_d_iff using seq(2) nf(2) by blast
+      show ?thesis
+        unfolding then_d_iff using u1 u2 seq(3,4) by blast
+    next
+      case left
+      have "(\<pi>, r) \<in> unless_d T\<^sub>1 c E"
+        unfolding unless_d_iff using left(1) keep(2) by blast
+      with left(2) show ?thesis by (simp add: then_d_iff)
+    qed
+  next
+    case int
+    from int(1) consider
+        (seq) \<pi>\<^sub>1 \<pi>\<^sub>2 where "(\<pi>\<^sub>1, Done) \<in> T\<^sub>1" "(\<pi>\<^sub>2, r\<^sub>0) \<in> T\<^sub>2" "fusable \<pi>\<^sub>1 \<pi>\<^sub>2" "\<pi>\<^sub>0 = fuse \<pi>\<^sub>1 \<pi>\<^sub>2"
+      | (left) "(\<pi>\<^sub>0, r\<^sub>0) \<in> T\<^sub>1" "r\<^sub>0 \<noteq> Done"
+      unfolding then_d_iff by blast
+    then show ?thesis
+    proof cases
+      case left
+      text \<open>\<open>t\<^sub>1\<close> did not complete normally: this is an interruption of the first UNLESS.\<close>
+      have "(\<pi>, r) \<in> unless_d T\<^sub>1 c E"
+        unfolding unless_d_iff using left(1) int(2-6) by blast
+      with int(6) show ?thesis by (simp add: then_d_iff)
+    next
+      case seq
+      note fus12 = seq(3)
+      show ?thesis
+      proof (cases "\<exists>j. fires c \<pi>\<^sub>1 j")
+        case True
+        text \<open>The guard first holds inside \<open>t\<^sub>1\<close>, before its completing entry.\<close>
+        then obtain j where j: "fires c \<pi>\<^sub>1 j" ..
+        have ff: "first_fire c \<pi>\<^sub>0 = first_fire c \<pi>\<^sub>1"
+          unfolding seq(4) by (rule first_fire_fuse_left[OF fus12 j])
+        have kl: "first_fire c \<pi>\<^sub>1 < length \<pi>\<^sub>1"
+          using fires_less[OF first_fire_fires[OF j]] by simp
+        have pp: "pre \<pi>\<^sub>0 (first_fire c \<pi>\<^sub>1) = pre \<pi>\<^sub>1 (first_fire c \<pi>\<^sub>1)"
+          unfolding seq(4) by (rule pre_fuse_left[OF kl])
+        have fusA: "fusable (pre \<pi>\<^sub>1 (first_fire c \<pi>\<^sub>1)) \<pi>'"
+          using int(4) unfolding ff pp .
+        have eqA: "\<pi> = fuse (pre \<pi>\<^sub>1 (first_fire c \<pi>\<^sub>1)) \<pi>'"
+          using int(5) unfolding ff pp .
+        have "(\<pi>, r) \<in> unless_d T\<^sub>1 c E"
+          unfolding unless_d_iff using seq(1) True int(3) fusA eqA int(6) by blast
+        with int(6) show ?thesis by (simp add: then_d_iff)
+      next
+        case False
+        text \<open>\<open>t\<^sub>1\<close> completes uninterrupted; the guard first holds at the junction or
+          later, inside \<open>t\<^sub>2\<close>.\<close>
+        have "\<exists>j. fires c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) j" using int(2) unfolding seq(4) .
+        with False obtain i where i: "fires c \<pi>\<^sub>2 i"
+          unfolding fires_fuse_ex[OF fus12] by blast
+        have nf1: "\<forall>j. \<not> fires c \<pi>\<^sub>1 j" using False by blast
+        have ff: "first_fire c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) = length \<pi>\<^sub>1 - 1 + first_fire c \<pi>\<^sub>2"
+          by (rule first_fire_fuse_right[OF fus12 nf1 i])
+        have il: "first_fire c \<pi>\<^sub>2 < length \<pi>\<^sub>2"
+          using fires_less[OF first_fire_fires[OF i]] by simp
+        have pp: "pre (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) (first_fire c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2))
+            = fuse \<pi>\<^sub>1 (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2))"
+          unfolding ff by (rule pre_fuse_right[OF fus12 il])
+        have ne: "pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2) \<noteq> []"
+          using il by (intro pre_nonempty) auto
+        have fus1p: "fusable \<pi>\<^sub>1 (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2))"
+          using fus12 il by (auto simp: fusable_def hd_pre pre_nonempty)
+        have fus0: "fusable (fuse \<pi>\<^sub>1 (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2))) \<pi>'"
+          using int(4) unfolding seq(4) pp .
+        have fus2: "fusable (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2)) \<pi>'"
+          using fus0 unfolding fusable_fuse_left[OF fus1p] .
+        have u2: "(fuse (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2)) \<pi>', kappa r') \<in> unless_d T\<^sub>2 c E"
+          unfolding unless_d_iff using seq(2) i int(3) fus2 by blast
+        have u1: "(\<pi>\<^sub>1, Done) \<in> unless_d T\<^sub>1 c E"
+          unfolding unless_d_iff using seq(1) nf1 by blast
+        have fusX: "fusable \<pi>\<^sub>1 (fuse (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2)) \<pi>')"
+          using fus1p unfolding fusable_fuse_right[OF ne] .
+        have eq0: "\<pi> = fuse (fuse \<pi>\<^sub>1 (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2))) \<pi>'"
+          using int(5) unfolding seq(4) pp .
+        have eq: "\<pi> = fuse \<pi>\<^sub>1 (fuse (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2)) \<pi>')"
+          using eq0 unfolding fuse_assoc[OF ne] .
+        have u2': "(fuse (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2)) \<pi>', r) \<in> unless_d T\<^sub>2 c E"
+          using u2 int(6) by simp
+        show ?thesis
+          unfolding then_d_iff using u1 u2' fusX eq by blast
+      qed
+    qed
+  qed
+next
+  fix \<pi> r assume "(\<pi>, r) \<in> then_d (unless_d T\<^sub>1 c E) (unless_d T\<^sub>2 c E)"
+  then consider
+      (seq) \<pi>\<^sub>1 \<pi>\<^sub>2' where "(\<pi>\<^sub>1, Done) \<in> unless_d T\<^sub>1 c E" "(\<pi>\<^sub>2', r) \<in> unless_d T\<^sub>2 c E"
+        "fusable \<pi>\<^sub>1 \<pi>\<^sub>2'" "\<pi> = fuse \<pi>\<^sub>1 \<pi>\<^sub>2'"
+    | (left) "(\<pi>, r) \<in> unless_d T\<^sub>1 c E" "r \<noteq> Done"
+    unfolding then_d_iff by blast
+  then show "(\<pi>, r) \<in> unless_d (then_d T\<^sub>1 T\<^sub>2) c E"
+  proof cases
+    case seq
+    text \<open>A Done trace of the first UNLESS is an uninterrupted trace of \<open>t\<^sub>1\<close>.\<close>
+    from seq(1) have t1: "(\<pi>\<^sub>1, Done) \<in> T\<^sub>1" and nf1: "\<forall>j. \<not> fires c \<pi>\<^sub>1 j"
+      unfolding unless_d_iff by auto
+    from seq(2) consider
+        (keep2) "(\<pi>\<^sub>2', r) \<in> T\<^sub>2" "\<forall>j. \<not> fires c \<pi>\<^sub>2' j"
+      | (int2) \<pi>\<^sub>2 r\<^sub>2 \<pi>' r' where "(\<pi>\<^sub>2, r\<^sub>2) \<in> T\<^sub>2" "\<exists>j. fires c \<pi>\<^sub>2 j" "(\<pi>', r') \<in> E"
+          "fusable (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2)) \<pi>'"
+          "\<pi>\<^sub>2' = fuse (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2)) \<pi>'" "r = kappa r'"
+      unfolding unless_d_iff by blast
+    then show ?thesis
+    proof cases
+      case keep2
+      have th: "(\<pi>, r) \<in> then_d T\<^sub>1 T\<^sub>2"
+        unfolding then_d_iff using t1 keep2(1) seq(3,4) by blast
+      have "\<not> (\<exists>j. fires c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2') j)"
+        unfolding fires_fuse_ex[OF seq(3)] using nf1 keep2(2) by blast
+      then have "\<forall>j. \<not> fires c \<pi> j" unfolding seq(4) by blast
+      with th show ?thesis
+        unfolding unless_d_iff[where T = "then_d T\<^sub>1 T\<^sub>2"] by blast
+    next
+      case int2
+      from int2(2) obtain i where i: "fires c \<pi>\<^sub>2 i" ..
+      have il: "first_fire c \<pi>\<^sub>2 < length \<pi>\<^sub>2"
+        using fires_less[OF first_fire_fires[OF i]] by simp
+      have ne: "pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2) \<noteq> []"
+        using il by (intro pre_nonempty) auto
+      have fus1p: "fusable \<pi>\<^sub>1 (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2))"
+        using seq(3) unfolding int2(5) fusable_fuse_right[OF ne] .
+      have ne2: "\<pi>\<^sub>2 \<noteq> []" using il by auto
+      have fus12: "fusable \<pi>\<^sub>1 \<pi>\<^sub>2"
+        using fus1p ne2 by (auto simp: fusable_def hd_pre)
+      have th: "(fuse \<pi>\<^sub>1 \<pi>\<^sub>2, r\<^sub>2) \<in> then_d T\<^sub>1 T\<^sub>2"
+        unfolding then_d_iff using t1 int2(1) fus12 by blast
+      have fi: "\<exists>j. fires c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) j"
+        unfolding fires_fuse_ex[OF fus12] using i by blast
+      have ff: "first_fire c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) = length \<pi>\<^sub>1 - 1 + first_fire c \<pi>\<^sub>2"
+        by (rule first_fire_fuse_right[OF fus12 nf1 i])
+      have pp: "pre (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) (first_fire c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2))
+          = fuse \<pi>\<^sub>1 (pre \<pi>\<^sub>2 (first_fire c \<pi>\<^sub>2))"
+        unfolding ff by (rule pre_fuse_right[OF fus12 il])
+      have fusA: "fusable (pre (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) (first_fire c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2))) \<pi>'"
+        unfolding pp fusable_fuse_left[OF fus1p] by (rule int2(4))
+      have eqA: "\<pi> = fuse (pre (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) (first_fire c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2))) \<pi>'"
+        unfolding pp fuse_assoc[OF ne] using seq(4) int2(5) by simp
+      show ?thesis
+        unfolding unless_d_iff[where T = "then_d T\<^sub>1 T\<^sub>2"]
+        using th fi int2(3) fusA eqA int2(6) by blast
+    qed
+  next
+    case left
+    from left(1) consider
+        (keep1) "(\<pi>, r) \<in> T\<^sub>1" "\<forall>j. \<not> fires c \<pi> j"
+      | (int1) \<pi>\<^sub>1 r\<^sub>1 \<pi>' r' where "(\<pi>\<^sub>1, r\<^sub>1) \<in> T\<^sub>1" "\<exists>j. fires c \<pi>\<^sub>1 j" "(\<pi>', r') \<in> E"
+          "fusable (pre \<pi>\<^sub>1 (first_fire c \<pi>\<^sub>1)) \<pi>'"
+          "\<pi> = fuse (pre \<pi>\<^sub>1 (first_fire c \<pi>\<^sub>1)) \<pi>'" "r = kappa r'"
+      unfolding unless_d_iff by blast
+    then show ?thesis
+    proof cases
+      case keep1
+      have "(\<pi>, r) \<in> then_d T\<^sub>1 T\<^sub>2"
+        unfolding then_d_iff using keep1(1) left(2) by blast
+      with keep1(2) show ?thesis
+        unfolding unless_d_iff[where T = "then_d T\<^sub>1 T\<^sub>2"] by blast
+    next
+      case int1
+      from int1(2) obtain j where j: "fires c \<pi>\<^sub>1 j" ..
+      have kl: "first_fire c \<pi>\<^sub>1 < length \<pi>\<^sub>1"
+        using fires_less[OF first_fire_fires[OF j]] by simp
+      show ?thesis
+      proof (cases "r\<^sub>1 = Done")
+        case False
+        then have "(\<pi>\<^sub>1, r\<^sub>1) \<in> then_d T\<^sub>1 T\<^sub>2"
+          unfolding then_d_iff using int1(1) by blast
+        then show ?thesis
+          unfolding unless_d_iff[where T = "then_d T\<^sub>1 T\<^sub>2"] using int1(2-6) by blast
+      next
+        case True
+        text \<open>Here totality of \<open>t\<^sub>2\<close> is used: some trace of \<open>t\<^sub>2\<close> starts where \<open>\<pi>\<^sub>1\<close> ends,
+          so \<open>\<pi>\<^sub>1\<close> extends to a trace of \<open>t\<^sub>1 THEN t\<^sub>2\<close> with the same interruption.\<close>
+        have ne1: "\<pi>\<^sub>1 \<noteq> []" using kl by auto
+        from tot obtain \<pi>\<^sub>2 r\<^sub>2 where m2: "(\<pi>\<^sub>2, r\<^sub>2) \<in> T\<^sub>2" "\<pi>\<^sub>2 \<noteq> []" "hd \<pi>\<^sub>2 = last \<pi>\<^sub>1"
+          by (rule totalE)
+        have fus12: "fusable \<pi>\<^sub>1 \<pi>\<^sub>2" using ne1 m2 by (simp add: fusable_def)
+        have th: "(fuse \<pi>\<^sub>1 \<pi>\<^sub>2, r\<^sub>2) \<in> then_d T\<^sub>1 T\<^sub>2"
+          unfolding then_d_iff using int1(1) True m2(1) fus12 by blast
+        have fi: "\<exists>j. fires c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) j"
+          unfolding fires_fuse_ex[OF fus12] using j by blast
+        have ff: "first_fire c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) = first_fire c \<pi>\<^sub>1"
+          by (rule first_fire_fuse_left[OF fus12 j])
+        have pp: "pre (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) (first_fire c \<pi>\<^sub>1) = pre \<pi>\<^sub>1 (first_fire c \<pi>\<^sub>1)"
+          by (rule pre_fuse_left[OF kl])
+        have fusA: "fusable (pre (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) (first_fire c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2))) \<pi>'"
+          unfolding ff pp by (rule int1(4))
+        have eqA: "\<pi> = fuse (pre (fuse \<pi>\<^sub>1 \<pi>\<^sub>2) (first_fire c (fuse \<pi>\<^sub>1 \<pi>\<^sub>2))) \<pi>'"
+          unfolding ff pp by (rule int1(5))
+        show ?thesis
+          unfolding unless_d_iff[where T = "then_d T\<^sub>1 T\<^sub>2"]
+          using th fi int1(3) fusA eqA int1(6) by blast
+      qed
+    qed
+  qed
+qed
+
+text \<open>Without totality of \<open>t\<^sub>2\<close> the law fails. Take \<open>\<lbrakk>t\<^sub>1\<rbrakk> = {(\<langle>x, x\<rangle>, Done)}\<close>,
+  \<open>\<lbrakk>t\<^sub>2\<rbrakk> = \<emptyset>\<close> (not total), \<open>\<lbrakk>e\<rbrakk> = {(\<langle>x\<rangle>, Done)}\<close> and the guard \<open>true\<close>: the left side
+  is empty, while the right side contains \<open>(\<langle>x\<rangle>, Interrupted)\<close>.\<close>
+
+theorem unless_then_counterexample:
+  fixes x :: "('n, 'v, 't, 's, 'a) entry"
+  defines "T\<^sub>1 \<equiv> {([x, x], Done)}" and "E \<equiv> {([x], Done)}"
+  shows "\<not> total ({} :: ('n, 'v, 't, 's, 'a) den)"
+    and "unless_d (then_d T\<^sub>1 {}) ETrue E = {}"
+    and "([x], Interrupted) \<in> then_d (unless_d T\<^sub>1 ETrue E) (unless_d {} ETrue E)"
+proof -
+  show "\<not> total ({} :: ('n, 'v, 't, 's, 'a) den)"
+    by (simp add: total_def)
+  have "then_d T\<^sub>1 {} = {}"
+    by (auto simp: then_d_def T\<^sub>1_def)
+  then show "unless_d (then_d T\<^sub>1 {}) ETrue E = {}"
+    by (simp add: unless_d_def)
+  have f0: "fires ETrue [x, x] 0" by (simp add: fires_def)
+  have ff: "first_fire ETrue [x, x] = 0"
+    by (rule first_fire_eqI[OF f0]) simp
+  have pre0: "pre [x, x] 0 = [x]" by (simp add: pre_def)
+  have "([x], Interrupted) \<in> unless_d T\<^sub>1 ETrue E"
+  proof -
+    have "([x, x], Done) \<in> T\<^sub>1" "([x], Done) \<in> E" by (simp_all add: T\<^sub>1_def E_def)
+    moreover have "fusable (pre [x, x] (first_fire ETrue [x, x])) [x]"
+      by (simp add: ff pre0 fusable_def)
+    moreover have "[x] = fuse (pre [x, x] (first_fire ETrue [x, x])) [x]"
+      by (simp add: ff pre0 fuse_def)
+    moreover have "Interrupted = kappa Done" by simp
+    ultimately show ?thesis
+      unfolding unless_d_iff using f0 by blast
+  qed
+  then show "([x], Interrupted) \<in> then_d (unless_d T\<^sub>1 ETrue E) (unless_d {} ETrue E)"
+    by (simp add: then_d_iff)
+qed
+
+corollary unless_then_not_unconditional:
+  "\<exists>(T\<^sub>1 :: ('n, 'v, 't, 's, 'a) den) T\<^sub>2 c E.
+     unless_d (then_d T\<^sub>1 T\<^sub>2) c E \<noteq> then_d (unless_d T\<^sub>1 c E) (unless_d T\<^sub>2 c E)"
+proof -
+  fix x :: "('n, 'v, 't, 's, 'a) entry"
+  from unless_then_counterexample(2,3)[of x] show ?thesis by blast
+qed
+
+
+section \<open>A non-law\<close>
+
+text \<open>\<open>(t UNLESS c DO e) UNLESS d DO e\<close> differs from \<open>t UNLESS (c OR d) DO e\<close>: the outer
+  guard \<open>d\<close> is still watched while the inner handler \<open>e\<close> runs, and can interrupt it.
+  Example: \<open>a\<close> and \<open>b\<close> are entries whose states differ only in whether name \<open>n\<close> is
+  present; \<open>\<lbrakk>t\<rbrakk> = {(\<langle>a, a\<rangle>, Done)}\<close>, \<open>\<lbrakk>e\<rbrakk> = {(\<langle>a, b, b\<rangle>, Done), (\<langle>b\<rangle>, Done)}\<close>, \<open>c = true\<close>,
+  \<open>d = PRESENT(n)\<close>. The handler trace \<open>\<langle>a, b, b\<rangle>\<close> is cut by \<open>d\<close> at \<open>b\<close> on the left only.\<close>
+
+(* §2.5, non-law *)
+theorem unless_nested_ne_or:
+  fixes n :: 'n and v :: 'v and t :: 't and ev :: "('n, 's, 'a) event"
+  defines "a \<equiv> (Map.empty :: ('n, 'v) state, t, ev)" and "b \<equiv> ([n \<mapsto> v], t, ev)"
+  defines "T \<equiv> {([a, a], Done)}" and "E \<equiv> {([a, b, b], Done), ([b], Done)}"
+  shows "unless_d (unless_d T ETrue E) (EPresent n) E \<noteq> unless_d T (EOr ETrue (EPresent n)) E"
+proof
+  assume eq: "unless_d (unless_d T ETrue E) (EPresent n) E = unless_d T (EOr ETrue (EPresent n)) E"
+  have ab: "a \<noteq> b"
+  proof
+    assume "a = b"
+    then have "(Map.empty :: ('n, 'v) state) n = [n \<mapsto> v] n" by (simp add: a_def b_def)
+    then show False by simp
+  qed
+  text \<open>Inner UNLESS: \<open>true\<close> fires at entry 0 of \<open>\<langle>a, a\<rangle>\<close>; the handler starts at \<open>a\<close>.\<close>
+  have f0: "fires ETrue [a, a] 0" by (simp add: fires_def)
+  have ff0: "first_fire ETrue [a, a] = 0" by (rule first_fire_eqI[OF f0]) simp
+  have pre0: "pre [a, a] 0 = [a]" by (simp add: pre_def)
+  have inner: "([a, b, b], Interrupted) \<in> unless_d T ETrue E"
+  proof -
+    have "([a, a], Done) \<in> T" "([a, b, b], Done) \<in> E" by (simp_all add: T_def E_def)
+    moreover have "fusable (pre [a, a] (first_fire ETrue [a, a])) [a, b, b]"
+      by (simp add: ff0 pre0 fusable_def)
+    moreover have "[a, b, b] = fuse (pre [a, a] (first_fire ETrue [a, a])) [a, b, b]"
+      by (simp add: ff0 pre0 fuse_def)
+    moreover have "Interrupted = kappa Done" by simp
+    ultimately show ?thesis unfolding unless_d_iff using f0 by blast
+  qed
+  text \<open>Outer UNLESS: \<open>PRESENT(n)\<close> is false at \<open>a\<close> and true at \<open>b\<close>, so it fires at entry 1.\<close>
+  have g1: "fires (EPresent n) [a, b, b] 1" by (simp add: fires_def st_def b_def)
+  have g0: "\<not> fires (EPresent n) [a, b, b] 0" by (simp add: fires_def st_def a_def)
+  have ff1: "first_fire (EPresent n) [a, b, b] = 1"
+    by (rule first_fire_eqI[OF g1]) (use g0 in \<open>auto simp: less_Suc_eq\<close>)
+  have pre1: "pre [a, b, b] 1 = [a, b]" by (simp add: pre_def)
+  have lhs: "([a, b], Interrupted) \<in> unless_d (unless_d T ETrue E) (EPresent n) E"
+  proof -
+    have "([b], Done) \<in> E" by (simp add: E_def)
+    moreover have "fusable (pre [a, b, b] (first_fire (EPresent n) [a, b, b])) [b]"
+      by (simp add: ff1 pre_def fusable_def)
+    moreover have "[a, b] = fuse (pre [a, b, b] (first_fire (EPresent n) [a, b, b])) [b]"
+      by (simp add: ff1 pre_def fuse_def)
+    moreover have "Interrupted = kappa Done" by simp
+    ultimately show ?thesis
+      unfolding unless_d_iff[where T = "unless_d T ETrue E"] using inner g1 by blast
+  qed
+  text \<open>With the combined guard, \<open>t\<close> is interrupted at entry 0 and the only handler
+    trace starting at \<open>a\<close> is \<open>\<langle>a, b, b\<rangle>\<close>, so \<open>(\<langle>a, b\<rangle>, Interrupted)\<close> is not on the right.\<close>
+  have h0: "fires (EOr ETrue (EPresent n)) [a, a] 0" by (simp add: fires_def kor_def)
+  have hff: "first_fire (EOr ETrue (EPresent n)) [a, a] = 0"
+    by (rule first_fire_eqI[OF h0]) simp
+  have rhs: "([a, b], Interrupted) \<notin> unless_d T (EOr ETrue (EPresent n)) E"
+  proof
+    assume "([a, b], Interrupted) \<in> unless_d T (EOr ETrue (EPresent n)) E"
+    then consider
+        (keep) "([a, b], Interrupted) \<in> T"
+      | (int) \<pi>\<^sub>0 r\<^sub>0 \<pi>' r' where "(\<pi>\<^sub>0, r\<^sub>0) \<in> T" "(\<pi>', r') \<in> E"
+          "fusable (pre \<pi>\<^sub>0 (first_fire (EOr ETrue (EPresent n)) \<pi>\<^sub>0)) \<pi>'"
+          "[a, b] = fuse (pre \<pi>\<^sub>0 (first_fire (EOr ETrue (EPresent n)) \<pi>\<^sub>0)) \<pi>'"
+      unfolding unless_d_iff by blast
+    then show False
+    proof cases
+      case keep
+      then show False by (simp add: T_def)
+    next
+      case int
+      from int(1) have p0: "\<pi>\<^sub>0 = [a, a]" by (simp add: T_def)
+      have fus: "fusable [a] \<pi>'" using int(3) by (simp add: p0 hff pre0)
+      have eqf: "[a, b] = fuse [a] \<pi>'" using int(4) by (simp add: p0 hff pre0)
+      from int(2) have "\<pi>' = [a, b, b] \<or> \<pi>' = [b]" by (auto simp: E_def)
+      then show False
+      proof
+        assume "\<pi>' = [a, b, b]"
+        with eqf show False by (simp add: fuse_def)
+      next
+        assume "\<pi>' = [b]"
+        with fus ab show False by (simp add: fusable_def)
+      qed
+    qed
+  qed
+  from lhs rhs eq show False by simp
+qed
+
+
+section \<open>Traces stay well formed\<close>
+
+text \<open>The operations preserve the trace invariant (non-empty, non-decreasing timestamps).\<close>
+
+definition wf_den :: "('n, 'v, 't :: linorder, 's, 'a) den \<Rightarrow> bool" where
+  "wf_den T \<longleftrightarrow> (\<forall>(\<pi>, r) \<in> T. is_trace \<pi>)"
+
+lemma wf_denI: "(\<And>\<pi> r. (\<pi>, r) \<in> T \<Longrightarrow> is_trace \<pi>) \<Longrightarrow> wf_den T"
+  by (auto simp: wf_den_def)
+
+lemma wf_denD: "wf_den T \<Longrightarrow> (\<pi>, r) \<in> T \<Longrightarrow> is_trace \<pi>"
+  by (auto simp: wf_den_def)
+
+lemma sorted_le_last: "sorted xs \<Longrightarrow> y \<in> set xs \<Longrightarrow> y \<le> last xs"
+proof (induction xs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons z zs)
+  show ?case
+  proof (cases "zs = []")
+    case True
+    with Cons.prems show ?thesis by simp
+  next
+    case False
+    have "z \<le> last zs" using Cons.prems(1) False by (simp add: last_in_set)
+    with Cons False show ?thesis by auto
+  qed
+qed
+
+lemma is_trace_fuse:
+  assumes "is_trace p" and "is_trace q" and "fusable p q"
+  shows "is_trace (fuse p q)"
+proof -
+  have sp: "sorted (map tstamp p)" and sq: "sorted (map tstamp q)"
+    using assms(1,2) by (simp_all add: is_trace_def)
+  from assms(3) obtain y ys where q: "q = y # ys" by (cases q) (auto simp: fusable_def)
+  from assms(3) have pne: "p \<noteq> []" and lp: "last p = y" by (simp_all add: fusable_def q)
+  have left: "tstamp z \<le> tstamp y" if "z \<in> set p" for z
+  proof -
+    have "tstamp z \<le> last (map tstamp p)"
+      using sorted_le_last[OF sp] that by simp
+    then show ?thesis using pne lp by (simp add: last_map)
+  qed
+  have right: "tstamp y \<le> tstamp w" if "w \<in> set ys" for w
+    using sq that by (simp add: q)
+  have sys: "sorted (map tstamp ys)" using sq by (simp add: q)
+  have "\<forall>z \<in> set p. \<forall>w \<in> set ys. tstamp z \<le> tstamp w"
+    using left right order_trans by blast
+  with sp sys have "sorted (map tstamp p @ map tstamp ys)"
+    by (simp add: sorted_append)
+  then show ?thesis
+    using pne by (simp add: is_trace_def fuse_def q)
+qed
+
+lemma sorted_take_prefix: "sorted xs \<Longrightarrow> sorted (take n xs)"
+proof -
+  assume "sorted xs"
+  then have "sorted (take n xs @ drop n xs)" by simp
+  then show ?thesis unfolding sorted_append by blast
+qed
+
+lemma is_trace_pre: "is_trace \<pi> \<Longrightarrow> is_trace (pre \<pi> k)"
+  using sorted_take_prefix[of "map tstamp \<pi>" "Suc k"]
+  by (simp add: is_trace_def pre_def take_map)
+
+lemma wf_must: "wf_den (must_d s a)"
+  by (auto simp: wf_den_def must_d_def)
+
+lemma wf_may: "wf_den (may_d s a c)"
+  by (auto simp: wf_den_def may_d_def is_trace_def)
+
+lemma wf_mustnot: "wf_den (mustnot_d s a c)"
+  by (auto simp: wf_den_def mustnot_d_def is_trace_def)
+
+lemma wf_or: "wf_den T\<^sub>1 \<Longrightarrow> wf_den T\<^sub>2 \<Longrightarrow> wf_den (or_d T\<^sub>1 T\<^sub>2)"
+  by (auto simp: wf_den_def or_d_def)
+
+lemma wf_then:
+  assumes "wf_den T\<^sub>1" and "wf_den T\<^sub>2"
+  shows "wf_den (then_d T\<^sub>1 T\<^sub>2)"
+proof (rule wf_denI)
+  fix \<pi> r assume "(\<pi>, r) \<in> then_d T\<^sub>1 T\<^sub>2"
+  then consider
+      (seq) \<pi>\<^sub>1 \<pi>\<^sub>2 where "(\<pi>\<^sub>1, Done) \<in> T\<^sub>1" "(\<pi>\<^sub>2, r) \<in> T\<^sub>2" "fusable \<pi>\<^sub>1 \<pi>\<^sub>2" "\<pi> = fuse \<pi>\<^sub>1 \<pi>\<^sub>2"
+    | (left) "(\<pi>, r) \<in> T\<^sub>1"
+    unfolding then_d_iff by blast
+  then show "is_trace \<pi>"
+  proof cases
+    case seq
+    show ?thesis
+      unfolding seq(4)
+      by (rule is_trace_fuse[OF wf_denD[OF assms(1) seq(1)] wf_denD[OF assms(2) seq(2)] seq(3)])
+  next
+    case left
+    show ?thesis by (rule wf_denD[OF assms(1) left])
+  qed
+qed
+
+lemma wf_unless:
+  assumes "wf_den T" and "wf_den E"
+  shows "wf_den (unless_d T c E)"
+proof (rule wf_denI)
+  fix \<pi> r assume "(\<pi>, r) \<in> unless_d T c E"
+  then consider
+      (keep) "(\<pi>, r) \<in> T"
+    | (int) \<pi>\<^sub>0 r\<^sub>0 \<pi>' r' where "(\<pi>\<^sub>0, r\<^sub>0) \<in> T" "(\<pi>', r') \<in> E"
+        "fusable (pre \<pi>\<^sub>0 (first_fire c \<pi>\<^sub>0)) \<pi>'" "\<pi> = fuse (pre \<pi>\<^sub>0 (first_fire c \<pi>\<^sub>0)) \<pi>'"
+    unfolding unless_d_iff by blast
+  then show "is_trace \<pi>"
+  proof cases
+    case keep
+    show ?thesis by (rule wf_denD[OF assms(1) keep])
+  next
+    case int
+    have "is_trace (pre \<pi>\<^sub>0 (first_fire c \<pi>\<^sub>0))"
+      by (rule is_trace_pre[OF wf_denD[OF assms(1) int(1)]])
+    then show ?thesis
+      unfolding int(4) by (rule is_trace_fuse[OF _ wf_denD[OF assms(2) int(2)] int(3)])
+  qed
+qed
+
 end
