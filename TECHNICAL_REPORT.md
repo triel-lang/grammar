@@ -101,13 +101,13 @@ An invariant is either a state invariant (`ALWAYS(expr)`, `EVENTUALLY(expr) [WIT
 
 ### 2.5 Trace Semantics
 
-**Traces.** A trace is a finite sequence `π = ⟨(σ₀, τ₀, e₀), …, (σₙ, τₙ, eₙ)⟩`. Each `σᵢ` is a state — a partial map from factor names to values, where a value may itself be such a map (hierarchical nominative data); each `τᵢ` is a timestamp, non-decreasing along the trace; each `eᵢ` is the event that produced `σᵢ` — a deontic event `(subject, action, polarity)`, the arrival of data from a factor's `SOURCE`, or a clock tick. Two traces fuse, `π₁ ⌢ π₂`, when the last entry of `π₁` is the first entry of `π₂`. `π[0..k]` is the prefix of `π` ending at entry `k`, and `|π| − 1` is the index of its last entry.
+**Traces.** A trace is a finite sequence `π = ⟨(σ₀, τ₀, e₀), …, (σₙ, τₙ, eₙ)⟩`. Each `σᵢ` is a state — a partial map from factor names to values, where a value may itself be such a map (hierarchical nominative data); each `τᵢ` is a timestamp, non-decreasing along the trace; each `eᵢ` is the event that produced `σᵢ` — a deontic event `(subject, action, polarity)`, the arrival of data from a factor's `SOURCE`, or a clock tick. Two traces fuse, `π₁ ⌢ π₂`, when the last entry of `π₁` is the first entry of `π₂`; the fused trace is `π₁` followed by `π₂` without its first entry, so the shared entry occurs once. `π[0..k]` is the prefix of `π` ending at entry `k`, and `|π| − 1` is the index of its last entry.
 
 **Outcomes.** The denotation `⟦t⟧` of a term is a set of pairs `(π, o)`: a trace of one execution of `t`, and the outcome `o ∈ {Done, Interrupted, Violated}` with which that execution ended. A set of traces alone is not enough: sequencing must know whether its left operand finished normally before starting the right one, and after an interruption it must not.
 
 ```
 ⟦subject MUST action⟧                = { (π, Done) | π ends with (subject, action, must) }
-⟦subject MAY action WHEN c⟧          = { (π, Done) | π ends with (subject, action, may), eval(c, σₙ₋₁) = true, n = |π| − 1 }
+⟦subject MAY action WHEN c⟧          = { (π, Done) | π ends with (subject, action, may), n = |π| − 1 ≥ 1, eval(c, σₙ₋₁) = true }
                                        ∪ { (⟨(σ₀, τ₀, e₀)⟩, Done) }
 ⟦subject MUST_NOT action WHEN c⟧     = { (⟨(σ₀, τ₀, e₀)⟩, Done) }
 
@@ -119,11 +119,15 @@ An invariant is either a state invariant (`ALWAYS(expr)`, `EVENTUALLY(expr) [WIT
       { (π, o) ∈ ⟦t1⟧ | eval(c, σⱼ) ≠ true for every j < |π| − 1 }
     ∪ { (π[0..k] ⌢ π′, κ(o′)) | (π, o) ∈ ⟦t1⟧,  k = min{ j < |π| − 1 | eval(c, σⱼ) = true },  (π′, o′) ∈ ⟦t2⟧ }
 
-where  Done ⊔ Done = Done,  o ⊔ Violated = Violated,  and otherwise o ⊔ Interrupted = Interrupted;
+where  ⊔ is the maximum in the order Done < Interrupted < Violated:
+         Done ⊔ Done = Done,  o ⊔ Violated = Violated ⊔ o = Violated,
+         and otherwise o ⊔ Interrupted = Interrupted ⊔ o = Interrupted;
        κ(Done) = κ(Interrupted) = Interrupted,  κ(Violated) = Violated.
 ```
 
-A permission may be exercised or not: its denotation contains both the trace in which the action is taken, in a state where `c` holds, and the one-entry trace in which it is not. A prohibition produces no events of its own; it constrains the implementation trace as Section 2.6 states, being breached if the action is taken at a moment when `c` is true. In both, the `WHEN` condition is evaluated at the moment of the action, not when the term is reached: a prohibition "when a blackout is in effect" concerns a blackout at the time of the trade.
+`interleave(π₁, π₂)` is the set of interleavings of `π₁` and `π₂`. Its exact definition is left open. The only property assumed of it is the following. If `t1` and `t2` are total, then for every entry `x` there are traces of `t1` and of `t2` that start at `x` and have at least one interleaving starting at `x`.
+
+A permission may be exercised or not: its denotation contains both the trace in which the action is taken, in a state where `c` holds, and the one-entry trace in which it is not. A trace in which the action is taken has at least two entries: `c` is evaluated in the state `σₙ₋₁` before the action, and the action produces the last entry. A prohibition produces no events of its own; it constrains the implementation trace as Section 2.6 states, being breached if the action is taken at a moment when `c` is true. In both, the `WHEN` condition is evaluated at the moment of the action, not when the term is reached: a prohibition "when a blackout is in effect" concerns a blackout at the time of the trade.
 
 The conditional terms `IF c THEN t` and `WHEN c THEN t` evaluate `c` once, in the state in which they are reached. Whether `WHEN c THEN t` should instead wait for `c` to become true, activating `t` at that moment, is an open question.
 
@@ -134,11 +138,13 @@ The conditional terms `IF c THEN t` and `WHEN c THEN t` evaluate `c` once, in th
 - *The handler runs outside the guard.* Once `t1` is interrupted, `t2` runs to its own completion; `c` is not watched during `t2`.
 - *The outcome records the interruption.* An interrupted term ends `Interrupted` if its handler completed normally and `Violated` if the handler was violated, never `Done`. A `THEN` that follows therefore does not start.
 
+A term `t` is *total* when every entry is the first entry of some trace in `⟦t⟧`, that is, `t` can start from any entry. `MUST`, `MAY` and `MUST_NOT` are total. `THEN`, `OR` and `UNLESS` preserve totality, and so does `AND`, given the property of `interleave` above.
+
 These rules give `UNLESS` the algebraic laws one expects of it:
 
 - `t UNLESS false DO e = t`.
 - `(t1 OR t2) UNLESS c DO e = (t1 UNLESS c DO e) OR (t2 UNLESS c DO e)`, directly from the union.
-- `(t1 THEN t2) UNLESS c DO e = (t1 UNLESS c DO e) THEN (t2 UNLESS c DO e)`. On the left, the guard is watched at entries `0 … N−1` of the fused trace; on the right, at `0 … m−1` by the first `UNLESS` and at `m … N−1` by the second, where `m` is the entry at which `t1` completes. The first entry at which the guard is true is therefore the same on both sides, the handler starts from the same prefix, and by the outcome rule an interrupted `t1` does not let `t2` start.
+- `(t1 THEN t2) UNLESS c DO e = (t1 UNLESS c DO e) THEN (t2 UNLESS c DO e)`, provided `t2` is total. On the left, the guard is watched at entries `0 … N−1` of the fused trace; on the right, at `0 … m−1` by the first `UNLESS` and at `m … N−1` by the second, where `m` is the entry at which `t1` completes. The first entry at which the guard is true is therefore the same on both sides, the handler starts from the same prefix, and by the outcome rule an interrupted `t1` does not let `t2` start. The proviso is needed: the left side contains an interruption of `t1` only if some trace of `t2` could have followed `t1`, while the right side contains it regardless. For example, with `⟦t1⟧ = {(⟨x, x⟩, Done)}`, `⟦t2⟧ = ∅`, `⟦e⟧ = {(⟨x⟩, Done)}` and `c = true`, the left side is empty and the right side contains `(⟨x⟩, Interrupted)`. Every term form given a denotation in this section is total (`AND` given the property of `interleave` above), so the proviso holds for all of them.
 - `(t UNLESS c DO e) UNLESS c DO e = t UNLESS c DO e`. The outer guard watches the same states as the inner one, so it becomes true at the same entry and `e` runs once. That the outer interruption takes priority follows from the definition; it is not a separate rule.
 
 One equation that looks like a law is not one: `(t UNLESS c DO e) UNLESS d DO e` differs from `t UNLESS (c OR d) DO e`, because the outer guard `d` is still watched while the inner handler `e` runs, and can interrupt it.
