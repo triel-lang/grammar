@@ -106,6 +106,6 @@ Explanation: PRESENT(x) is true exactly when x has a value in the state. Since i
 
 ## 3. Modelling choices
 
-- **Two-sorted syntax.** Value expressions and boolean expressions are separate sorts. Evaluation of an expression returns a truth value in 𝔹⊥, while names and value constants denote values in V. Value expressions therefore occur only as the operands of `=`.
+- **Two-sorted syntax.** Value expressions and boolean expressions are separate sorts. Evaluation of a boolean expression returns a truth value in 𝔹⊥, while names and value constants denote values in V. In this core, value expressions occur only as the operands of `=`, which corresponds to `==` in the TRIEL grammar.
 - **Stale values.** Following FOUNDATIONS.md, a stale value is outside dom σ, so PRESENT(x) is F for a stale x. The `ON_STALE`/`BLOCK` machinery from §2.9 is not modelled.
 - **Out of scope.** `DEFAULT`, arithmetic, function calls, and every construct listed as "Open" in FOUNDATIONS.md are outside this core.
