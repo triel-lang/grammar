@@ -125,7 +125,7 @@ where  ⊔ is the maximum in the order Done < Interrupted < Violated:
        κ(Done) = κ(Interrupted) = Interrupted,  κ(Violated) = Violated.
 ```
 
-`interleave(π₁, π₂)` is the set of interleavings of `π₁` and `π₂`. Its exact definition is left open. The only property assumed of it is the following. If `t1` and `t2` are total, then for every entry `x` there are traces of `t1` and of `t2` that start at `x` and have at least one interleaving starting at `x`.
+`interleave(π₁, π₂)` is the set of interleavings of `π₁` and `π₂`. Its exact definition is left open. The only property assumed of it is the following. If `t1` and `t2` are total (defined below), then for every entry `x` there are traces of `t1` and of `t2` that start at `x` and have at least one interleaving starting at `x`.
 
 A permission may be exercised or not: its denotation contains both the trace in which the action is taken, in a state where `c` holds, and the one-entry trace in which it is not. A trace in which the action is taken has at least two entries: `c` is evaluated in the state `σₙ₋₁` before the action, and the action produces the last entry. A prohibition produces no events of its own; it constrains the implementation trace as Section 2.6 states, being breached if the action is taken at a moment when `c` is true. In both, the `WHEN` condition is evaluated at the moment of the action, not when the term is reached: a prohibition "when a blackout is in effect" concerns a blackout at the time of the trade.
 
