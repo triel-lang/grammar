@@ -1,8 +1,8 @@
 # TRIEL core: definitions and theorems
 
-This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theory is [`TRIEL_Core.thy`](TRIEL_Core.thy), and [`ROOT`](ROOT) defines the session `TRIEL_Core`.
+This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3) and [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), and [`ROOT`](ROOT) defines the session `TRIEL_Core`.
 
-It is based only on the public material at <https://github.com/triel-lang/grammar>: TECHNICAL_REPORT.md §2.9 and FOUNDATIONS.md. It makes no assumptions about any non-public implementation.
+It is based only on the public material at <https://github.com/triel-lang/grammar>: TECHNICAL_REPORT.md §2.5 and §2.9, and FOUNDATIONS.md. It makes no assumptions about any non-public implementation.
 
 To build it, open `Isabelle2025-2\Cygwin-Terminal.bat` on Windows (or any shell on Linux/macOS), go to this folder, and run:
 
@@ -109,3 +109,82 @@ Explanation: PRESENT(x) is true exactly when x has a value in the state. Since i
 - **Two-sorted syntax.** Value expressions and boolean expressions are separate sorts. Evaluation of a boolean expression returns a truth value in 𝔹⊥, while names and value constants denote values in V. In this core, value expressions occur only as the operands of `=`, which corresponds to `==` in the TRIEL grammar.
 - **Stale values.** Following FOUNDATIONS.md, a stale value is outside dom σ, so PRESENT(x) is F for a stale x. The `ON_STALE`/`BLOCK` machinery from §2.9 is not modelled.
 - **Out of scope.** `DEFAULT`, arithmetic, function calls, and every construct listed as "Open" in FOUNDATIONS.md are outside this core.
+
+## 4. Trace semantics (TECHNICAL_REPORT.md §2.5)
+
+The theory `TRIEL_Trace.thy` imports `TRIEL_Core.thy`. Guards are the expressions of section 1, and "eval(c, σ) = true" means ⟦c⟧σ = T. So an undefined guard (⊥) never interrupts.
+
+### 4.1 Definitions
+
+**Entries and traces.** An entry is a triple (σ, τ, e):
+
+- σ is a state as in section 1. Values have an arbitrary type, so they may themselves be maps.
+- τ is a timestamp in a linear order.
+- e is the event that produced σ: a deontic event (s, a, p) with p ∈ {must, may, must_not}, the arrival of data from a factor, or a clock tick.
+
+A trace π is a non-empty list of entries whose timestamps do not decrease (`is_trace`). Its last entry has index |π| − 1.
+
+**Fusion and prefixes.**
+
+- π₁ ⌢ π₂ is defined when the last entry of π₁ is the first entry of π₂ (`fusable`). It is π₁ followed by π₂ without its first entry, so the shared entry appears once (`fuse`).
+- π[0..k] is the prefix of π that ends at entry k (`pre`).
+
+**Outcomes.**
+
+- o ∈ {Done, Interrupted, Violated}.
+- o₁ ⊔ o₂ is the maximum in the order Done < Interrupted < Violated (`ojoin`).
+- κ(Done) = κ(Interrupted) = Interrupted and κ(Violated) = Violated (`kappa`).
+
+**Denotations.** ⟦t⟧ is a set of pairs (π, o).
+
+- ⟦s MUST a⟧ = { (π, Done) | the last event of π is (s, a, must) }.
+- ⟦s MAY a WHEN c⟧ = { (π, Done) | the last event of π is (s, a, may), |π| ≥ 2, ⟦c⟧σₙ₋₁ = T with n = |π| − 1 } ∪ { (⟨x⟩, Done) | x any entry }.
+- ⟦s MUST_NOT a WHEN c⟧ = { (⟨x⟩, Done) | x any entry }.
+- ⟦t₁ THEN t₂⟧ = { (π₁ ⌢ π₂, o₂) | (π₁, Done) ∈ ⟦t₁⟧, (π₂, o₂) ∈ ⟦t₂⟧ } ∪ { (π₁, o₁) ∈ ⟦t₁⟧ | o₁ ≠ Done }.
+- ⟦t₁ OR t₂⟧ = ⟦t₁⟧ ∪ ⟦t₂⟧.
+- ⟦t₁ AND t₂⟧ = { (π, o₁ ⊔ o₂) | π ∈ interleave(π₁, π₂), (π₁, o₁) ∈ ⟦t₁⟧, (π₂, o₂) ∈ ⟦t₂⟧ }. This is defined in the locale `interleaving`, where `interleave` is a parameter.
+- **UNLESS.** The guard c *fires* at entry j of π if j < |π| − 1 and ⟦c⟧σⱼ = T (`fires`). Let k be the first entry at which it fires (`first_fire`).
+  - If c never fires on π, then ⟦t₁ UNLESS c DO t₂⟧ contains (π, o) ∈ ⟦t₁⟧ unchanged.
+  - If it does, it contains (π[0..k] ⌢ π′, κ(o′)) for each (π′, o′) ∈ ⟦t₂⟧.
+
+**Totality.** ⟦t⟧ is *total* if every entry is the first entry of some trace in ⟦t⟧, that is, t can start from any entry (`total`).
+
+### 4.2 Theorems
+
+All of the following are proved in `TRIEL_Trace.thy`, with no `sorry` and no `oops`. The laws of UNLESS are numbered in the order §2.5 lists them.
+
+- **⊔** is commutative, associative and idempotent (`ojoin_commute`, `ojoin_assoc`, `ojoin_idem`). It also satisfies every equation §2.5 states for it (`ojoin_stated_cases`).
+- **Law 1** (`unless_false`): t UNLESS false DO e = t.
+  — The guard `false` never fires.
+- **Law 2** (`unless_or`): (t₁ OR t₂) UNLESS c DO e = (t₁ UNLESS c DO e) OR (t₂ UNLESS c DO e).
+  — This follows directly from the union.
+- **Law 3** (`unless_then`): if ⟦t₂⟧ is total, then (t₁ THEN t₂) UNLESS c DO e = (t₁ UNLESS c DO e) THEN (t₂ UNLESS c DO e).
+  — Both sides watch the guard at the same entries.
+  - The entry at which t₁ completes is watched only as the first entry of t₂. So when c first holds exactly at that junction, both sides let t₁ complete and interrupt t₂ at its first entry.
+  - The proof goes through lemmas about indices and prefixes of fused traces: `fires_fuse_left`/`_right`, `first_fire_fuse_left`/`_right`, `pre_fuse_left`/`_right` and `fuse_assoc`.
+- **Law 3 needs totality** (`unless_then_counterexample`, `unless_then_not_unconditional`).
+  — Without totality the equation fails. Take ⟦t₁⟧ = {(⟨x, x⟩, Done)}, ⟦t₂⟧ = ∅, ⟦e⟧ = {(⟨x⟩, Done)} and c = true. The left side is ∅, but the right side contains (⟨x⟩, Interrupted).
+- **Law 4** (`unless_idem`): (t UNLESS c DO e) UNLESS c DO e = t UNLESS c DO e.
+  — The outer guard first fires at the same entry as the inner one, so e runs once (`refire`).
+- **Non-law** (`unless_nested_ne_or`): (t UNLESS c DO e) UNLESS d DO e ≠ t UNLESS (c OR d) DO e for some t, c, d and e.
+  — The outer guard d is still watched while the handler e runs, so it can cut e short. The witness uses c = true and d = PRESENT(n).
+- **Totality.**
+  - MUST, MAY and MUST_NOT are total (`total_must`, `total_may`, `total_mustnot`).
+  - THEN, OR and UNLESS preserve totality (`total_then`, `total_or`, `total_unless`).
+  - AND preserves totality under the locale assumption (`interleaving.total_and`), and that assumption is satisfiable (`interleaving_satisfiable`).
+  - So law 3 holds whenever t₂ is built from these forms.
+- **Well-formed traces.** The denotations of MUST, MAY and MUST_NOT contain only traces. THEN, OR and UNLESS preserve this (`wf_must`, `wf_may`, `wf_mustnot`, `wf_then`, `wf_or`, `wf_unless`).
+
+### 4.3 Clarifications of §2.5
+
+In five places the text of §2.5 is incomplete, and this formalisation adopts the following readings.
+
+1. **Fusion.** §2.5 says when π₁ ⌢ π₂ is defined but not what it is. Its explanation of the THEN law ("at m … N−1 by the second", where m is the entry at which t₁ completes) fixes the reading: π₁ followed by π₂ without its first entry.
+2. **Combining outcomes.** The equations for ⊔ leave Interrupted ⊔ Done and Violated ⊔ Done undefined. Read literally, they also give Violated ⊔ Interrupted = Interrupted but Interrupted ⊔ Violated = Violated. ⊔ is taken to be the maximum in Done < Interrupted < Violated, which agrees with every stated equation.
+3. **Interleaving.** `interleave` is not defined. It is a parameter, constrained only by one assumption: if both denotations are total, then from every common first entry they have traces with at least one interleaving that starts at that entry.
+4. **Law 3.** §2.5 states it without a side condition, but it needs ⟦t₂⟧ to be total (see the counterexample above). Every term form with a denotation in §2.5 gives a total denotation (AND under the interleaving assumption of item 3).
+5. **MAY.** eval(c, σₙ₋₁) with n = |π| − 1 has no state to refer to when π has a single entry. So a taken action gives a trace of at least two entries, and c is evaluated in the state before the action.
+
+### 4.4 Not formalised
+
+These term forms have no denotation in §2.5 and are outside this theory: `IF c THEN t`, `WHEN c THEN t`, `ON … DO`, `WITHIN … ELSE`, `REF`, `EXECUTE` and `ON_BREACH`. The breach and deadline semantics of §2.6 and the satisfaction of `INVARIANTS` are not formalised either.
