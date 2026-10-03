@@ -38,6 +38,32 @@ The table states, for each TRIEL construct, which part of these works it rests o
 
 The open rows correspond to the open items of `TECHNICAL_REPORT.md`. The denotations of `IF`, `WHEN` and `ON_BREACH` and of named terms are also open, and are not tied to a specific section of these works.
 
+## Standard results and their authors
+
+Beyond the composition-nominative approach, TRIEL rests on standard results of logic, semantics and cryptography. The table names the original source of each. **Adopted** means the result is used as is; **Background** means it informs the construct, but TRIEL gives its own definition in `TECHNICAL_REPORT.md`.
+
+| TRIEL construct | Result | Original source | Relation |
+|---|---|---|---|
+| `Boolean`; `AND`, `OR`, `NOT` on defined values | Algebra of logic | G. Boole. *The Mathematical Analysis of Logic*. Cambridge: Macmillan, Barclay & Macmillan, 1847; *An Investigation of the Laws of Thought*. London: Walton and Maberly, 1854 | Adopted |
+| ⊥ and the connectives on undefined data | Strong three-valued logic | S. C. Kleene. On notation for ordinal numbers. *Journal of Symbolic Logic*, 3(4), 1938, 150–155 | Adopted |
+| Monotonicity of expressions under the information order (§2.9) | Information ordering of partial values | D. S. Scott. *Outline of a Mathematical Theory of Computation*. Technical Monograph PRG-2, Oxford University Computing Laboratory, 1970; Data types as lattices. *SIAM Journal on Computing*, 5(3), 1976, 522–587 | Adopted |
+| `PRESENT(x)` | Existence predicate of free logic | H. S. Leonard. The logic of existence. *Philosophical Studies*, 7(4), 1956, 49–64; K. Lambert. Existential import revisited. *Notre Dame Journal of Formal Logic*, 4(4), 1963, 288–292 | Background (TRIEL uses *Ex* as in [4], [5]) |
+| `ALWAYS`, `EVENTUALLY`, `NEXT`; LTL operators | Linear temporal logic | A. Pnueli. The temporal logic of programs. *18th Annual Symposium on Foundations of Computer Science*, IEEE, 1977, 46–57 | Adopted |
+| CTL operators (`AX` … `ER`) | Computation tree logic | E. M. Clarke, E. A. Emerson. Design and synthesis of synchronization skeletons using branching time temporal logic. *Logics of Programs* (1981), LNCS 131, Springer, 1982, 52–71 | Adopted |
+| `MUST`, `MAY`, `MUST_NOT` | Deontic logic | G. H. von Wright. Deontic logic. *Mind*, 60(237), 1951, 1–15 | Background |
+| `ON_BREACH`, `CURE_BY` | Contrary-to-duty obligations | R. M. Chisholm. Contrary-to-duty imperatives and deontic logic. *Analysis*, 24(2), 1963, 33–36 | Background |
+| `THEN`, `AND`, `OR`, `UNLESS` | Process and program logics | C. A. R. Hoare. Communicating sequential processes. *Communications of the ACM*, 21(8), 1978, 666–677; D. Harel. *First-Order Dynamic Logic*. LNCS 68, Springer, 1979 | Background (trace semantics defined in §2.5) |
+| Interruption (open item) | Continuation semantics | C. Strachey, C. P. Wadsworth. *Continuations: A Mathematical Semantics for Handling Full Jumps*. Technical Monograph PRG-11, Oxford University Computing Laboratory, 1974; J. C. Reynolds. Definitional interpreters for higher-order programming languages. *Proceedings of the ACM Annual Conference*, vol. 2, 1972, 717–740 | Background |
+| `HASH` | SHA-256 | NIST. *Secure Hash Standard (SHS)*. FIPS PUB 180-4, August 2015 | Adopted (salting rule defined in §2.8) |
+| `PROOF_SYSTEM: GROTH16` | Pairing-based SNARK | J. Groth. On the size of pairing-based non-interactive arguments. *EUROCRYPT 2016*, Part II, LNCS 9666, Springer, 2016, 305–326 | Adopted |
+| `PROOF_SYSTEM: PLONK` | PLONK | A. Gabizon, Z. J. Williamson, O. Ciobotaru. PLONK: Permutations over Lagrange-bases for oecumenical noninteractive arguments of knowledge. Cryptology ePrint Archive, 2019/953, 2019 | Adopted |
+| `PROOF_SYSTEM: STARK` | Transparent arguments of knowledge | E. Ben-Sasson, I. Bentov, Y. Horesh, M. Riabzev. Scalable, transparent, and post-quantum secure computational integrity. Cryptology ePrint Archive, 2018/046, 2018 | Adopted |
+| `PROOF_SYSTEM: BULLETPROOFS` | Bulletproofs | B. Bünz, J. Bootle, D. Boneh, A. Poelstra, P. Wuille, G. Maxwell. Bulletproofs: Short proofs for confidential transactions and more. *IEEE Symposium on Security and Privacy*, 2018, 315–334 | Adopted |
+| `CURVE: "BN254"` | Barreto–Naehrig curves | P. S. L. M. Barreto, M. Naehrig. Pairing-friendly elliptic curves of prime order. *Selected Areas in Cryptography – SAC 2005*, LNCS 3897, Springer, 2006, 319–331 | Adopted |
+| The grammar notation | Extended Backus–Naur Form | N. Wirth. What can we do about the unnecessary diversity of notation for syntactic definitions? *Communications of the ACM*, 20(11), 1977, 822–823; ISO/IEC 14977:1996 | Adopted |
+
+Defined by TRIEL itself, with no external source: fail-closed evaluation of prohibitions, the treatment of stale values by `PRESENT` and `DEFAULT`, `ON_STALE`, `BOUND_TO`, `PROVENANCE_REQUIRED`, `CURRENCY` and the `PENALTY` cap, and the trace semantics of `TECHNICAL_REPORT.md` §2.5.
+
 ## Method
 
 Formal work on TRIEL follows the practice of the approach: it starts from a small, precisely stated core fragment of the language, for which an axiomatic system and the corresponding soundness and completeness results can be established, with proofs mechanised in a proof assistant such as Isabelle. Further constructs are added to the core one at a time.
