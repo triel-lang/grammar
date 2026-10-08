@@ -8,5 +8,6 @@ session TRIEL_Core = HOL +
     TRIEL_Ex
     TRIEL_Terms
     TRIEL_ND
+    TRIEL_Breach
   document_files
     "root.tex"
