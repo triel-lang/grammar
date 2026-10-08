@@ -339,6 +339,66 @@ theorem T5_nd_present: "eval_nd (EPresent p) d = Some True \<longleftrightarrow>
   by simp
 
 
+section \<open>Why comparisons see only atoms\<close>
+
+text \<open>An inner node is below another inner node when every child is below the child of
+  the same name (the converse of \<open>nd_le_NomD\<close>).\<close>
+
+lemma nd_le_NomI:
+  assumes "\<And>x y. fmlookup m x = Some y \<Longrightarrow> \<exists>y'. fmlookup m' x = Some y' \<and> nd_le y y'"
+  shows "nd_le (Nom m) (Nom m')"
+  unfolding nd_le_def
+proof (intro conjI allI impI)
+  fix p b assume "den_path p (Nom m) = Some (Atom b)"
+  then obtain x q y where p: "p = x # q" and y: "fmlookup m x = Some y" and q: "den_path q y = Some (Atom b)"
+    by (cases p) (auto split: option.splits)
+  from assms[OF y] obtain y' where y': "fmlookup m' x = Some y'" "nd_le y y'" by blast
+  with q have "den_path q y' = Some (Atom b)" unfolding nd_le_def by blast
+  with p y' show "den_path p (Nom m') = Some (Atom b)" by simp
+next
+  fix p n assume "den_path p (Nom m) = Some (Nom n)"
+  show "\<exists>n'. den_path p (Nom m') = Some (Nom n')"
+  proof (cases p)
+    case Nil
+    then show ?thesis by simp
+  next
+    case (Cons x q)
+    with \<open>den_path p (Nom m) = Some (Nom n)\<close> obtain y where y: "fmlookup m x = Some y"
+      and q: "den_path q y = Some (Nom n)"
+      by (auto split: option.splits)
+    from assms[OF y] obtain y' where y': "fmlookup m' x = Some y'" "nd_le y y'" by blast
+    with q obtain n' where "den_path q y' = Some (Nom n')" unfolding nd_le_def by blast
+    with Cons y' show ?thesis by simp
+  qed
+qed
+
+text \<open>Equality of whole data is not monotone under the information order: two equal
+  records stop being equal when one of them is extended. This is why a complex name that
+  leads to a record is undefined in comparisons, and comparisons see only atoms.\<close>
+
+theorem whole_data_equality_not_monotone:
+  assumes "x \<noteq> y"
+  shows "\<exists>(d :: ('n, 'b) nd) d'. nd_le d d'
+           \<and> den_path [x] d \<noteq> None \<and> den_path [x] d = den_path [y] d
+           \<and> den_path [x] d' \<noteq> den_path [y] d'"
+proof -
+  fix b :: 'b
+  let ?e = "Nom fmempty :: ('n, 'b) nd"
+  let ?d = "Nom (fmupd x ?e (fmupd y ?e fmempty))"
+  let ?d' = "Nom (fmupd x (naming x (Atom b)) (fmupd y ?e fmempty))"
+  have "nd_le ?d ?d'"
+  proof (rule nd_le_NomI)
+    fix z v assume "fmlookup (fmupd x ?e (fmupd y ?e fmempty)) z = Some v"
+    then show "\<exists>v'. fmlookup (fmupd x (naming x (Atom b)) (fmupd y ?e fmempty)) z = Some v' \<and> nd_le v v'"
+      using nd_le_empty_naming[of x b] nd_le_refl[of ?e] by (auto split: if_splits)
+  qed
+  moreover have "naming x (Atom b) \<noteq> ?e"
+    by (metis denaming.simps(1) denaming_naming fmempty_lookup option.distinct(1))
+  ultimately show ?thesis
+    using assms by (intro exI[of _ ?d] exI[of _ ?d']) simp
+qed
+
+
 section \<open>Types: Record and Optional\<close>
 
 text \<open>Types of TRIEL data, without List and Map: primitive types (interpreted by a
