@@ -21,8 +21,9 @@ A reference parser for TRIEL v2.4, built from the published grammar
   (e.g. `QUORUM_THRESHOLD` bounds, `Progress<T>` completion constraints),
   and it does not implement or check anything about the temporal-logic or
   zero-knowledge *semantics* of a specification — those are defined
-  separately in `TECHNICAL_REPORT.md` §2.5, and no tool in this repository
-  verifies trace satisfaction or ZK-constraint soundness against them.
+  separately in `TECHNICAL_REPORT.md` §2.5. Trace satisfaction for the
+  fragment inside the formal core is computed by the evaluator exported from
+  `formal/core` (see below); nothing here checks ZK-constraint soundness.
 - **Not a validator of well-formedness beyond syntax.** A file can parse
   successfully and still, for example, read a `WITHOUT REVEALING`-marked
   field directly in an invariant (see audit finding B-08) — the grammar as
@@ -44,3 +45,21 @@ python3 parser/triel_parser.py --check-ambiguity examples/hello_triel.triel
 
 Exit code is non-zero if any file fails to parse. This is what
 `.github/workflows/parse-examples.yml` runs on every push and pull request.
+
+## Translation to the formal core and the evaluator
+
+`triel_to_core.py` translates a specification into the core of
+[`formal/core`](../formal/core/CORE.md) (section 10). Every construct is
+translated, printed as metadata, or rejected by name; only the outermost
+unsupported construct is reported.
+
+```bash
+python3 parser/triel_to_core.py examples/core/core_deadline_cure.triel   # core AST
+python3 parser/triel_to_core.py --classify examples                      # ACCEPTED / REJECTED
+python3 parser/triel_eval.py examples/core/scenarios/deadline_cure_ok.scn
+python3 -m pytest parser/test_triel_to_core.py
+```
+
+`triel_eval.py` runs a scenario through the evaluator built from
+[`evaluator/`](../evaluator/README.md). Exit codes: 0 accepted or evaluated,
+2 rejected, 1 parse or input error.

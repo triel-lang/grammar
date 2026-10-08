@@ -2,6 +2,7 @@
 
 [![Parse examples against grammar](https://github.com/triel-lang/grammar/actions/workflows/parse-examples.yml/badge.svg)](https://github.com/triel-lang/grammar/actions/workflows/parse-examples.yml)
 [![Isabelle build of formal/core](https://github.com/triel-lang/grammar/actions/workflows/isabelle.yml/badge.svg)](https://github.com/triel-lang/grammar/actions/workflows/isabelle.yml)
+[![Evaluator exported from formal/core](https://github.com/triel-lang/grammar/actions/workflows/evaluator.yml/badge.svg)](https://github.com/triel-lang/grammar/actions/workflows/evaluator.yml)
 
 An open specification language for deterministic, verifiable compilation.
 

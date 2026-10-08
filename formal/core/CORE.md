@@ -1,6 +1,6 @@
 # TRIEL core: definitions and theorems
 
-This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) and [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
+This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8), [`TRIEL_Invariants.thy`](TRIEL_Invariants.thy) (invariants, section 10) and [`TRIEL_Exec.thy`](TRIEL_Exec.thy) (the evaluator exported to Haskell, section 10). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
 
 It is based only on the public material at <https://github.com/triel-lang/grammar>: TECHNICAL_REPORT.md §2.5, §2.6 and §2.9, and FOUNDATIONS.md. It makes no assumptions about any non-public implementation.
 
@@ -9,6 +9,8 @@ To build it, open `Isabelle2025-2\Cygwin-Terminal.bat` on Windows (or any shell 
 ```
 isabelle build -D .
 ```
+
+`isabelle build -e -D .` also writes the exported evaluator to `evaluator/generated/`.
 
 The build was checked with Isabelle2025-2. The output of a clean build (`isabelle build -c -v -D .`) is saved in [`build.log`](build.log).
 
@@ -413,3 +415,62 @@ Each decision below was made because of a theorem: either one that proves the de
    - With at most one handler per obligation (`wf_one_handler`) the status of a norm is determined.
 10. **A stale factor under BLOCK is absent.**
     - Treating stale values as absent, rather than as old values, is what makes a result computed on stale data safe against refresh (`stale_safe`). This is T2 applied to the blocked state, which is below every refreshed state (`blocked_le`).
+
+## 10. Invariants and the evaluator (`TRIEL_Invariants.thy`, `TRIEL_Exec.thy`)
+
+### 10.1 Invariants on finite prefixes
+
+`ALWAYS φ`, `EVENTUALLY φ` and `NEXT φ` are evaluated on the observed prefix of an implementation trace, with the three verdicts of LTL3 (A. Bauer, M. Leucker, C. Schallhart. Runtime verification for LTL and TLTL. *ACM TOSEM* 20(4), 2011). A verdict T or F is given only when every continuation of the prefix would give the same answer; otherwise the verdict is ⊥ (inconclusive).
+
+- `ALWAYS φ` is F from the first entry where φ is F, and ⊥ otherwise; it is never T (`always_never_true`).
+- `EVENTUALLY φ` is T from the first entry where φ is T, and ⊥ otherwise; it is never F (`eventually_never_false`).
+- `NEXT φ` is the value of φ at entry 1, and ⊥ while the prefix has only the activation entry.
+- A definite verdict does not change when the trace is extended (`inv_final`).
+- An entry where φ is ⊥ because data is missing neither violates `ALWAYS` nor fulfils `EVENTUALLY` (`always_undefined_data`, `eventually_undefined_data`). For a `PRESENT`-free φ, a definite verdict survives more data at every entry (`inv_data_mono`, from T2).
+
+### 10.2 Executable equations
+
+`TRIEL_Exec.thy` restates every definition that uses unbounded quantifiers, `LEAST` or `GREATEST` with bounded quantifiers, `find` and `filter`, and proves each restatement equal to the definition: `acted_code`, `passed_code`, `ob_verdict_code`, `may_verdict_code`, `pr_verdict_code`, `bound_to_code`, `wf_block_code`, `fresh_code`, `inv_eval_code`, `eval_code`, `first_at_code`. Typing is a recursive function proved equal to the inductive judgement (`wt_fun_iff`). The code generator uses only these equations and the definitions themselves.
+
+### 10.3 Membership of a composite term
+
+Whether a trace with an outcome belongs to the denotation of a composite term is decided by a three-valued function `mem3` (yes, no, unknown). A companion function `ext3` decides whether a prefix can be continued to a trace of a term. An interrupted trace of `t UNLESS c DO u` needs a continuation of the prefix by `t`. `ext3` decides this for `MUST` and for `THEN` chains, and answers unknown where the answer would depend on the satisfiability of a guard (`MAY` with a condition that is not true, `UNLESS` inside the interrupted term).
+
+- Soundness: a definite answer is the truth, for every term without `AND` (`mem3_ext3_sound`, `mem3_sound`, in the locale `term_semantics`).
+- Completeness: for terms without `UNLESS` and `AND` the answer is always definite (`mem3_complete`).
+- `AND` is answered unknown, and the translator rejects it: its denotation depends on the parameter `interleave` (section 6).
+
+### 10.4 The evaluator
+
+`run` takes a specification (factor declarations, the `TERMS` block, invariants) and a list of observations (data, time, event), and returns the report described in [`examples/core/README.md`](../../examples/core/README.md).
+
+- Data are nominative data (section 7). The state of an entry is its data flattened to complex names. Basic values are Booleans, integers, strings and times.
+- A factor under `MAX_AGE m` and `ON_STALE BLOCK` is absent, with every complex name that starts with it, at an entry where it has not arrived in the last m seconds (`blockp`). The safety claim of §2.9 holds for this blocking by factor (`blockp_stale_safe`, with `blockp_le` and `blockp_stale_absent`), as it does for `blocked` (section 8).
+- Activation is checked first, in the blocked state of entry 0. Then the block is checked with `wf_block`, and then the types of the data as given (`ill_typed`, `ill_typed_None`). Verdicts, invariants and composite terms are computed on the blocked trace (`btrace`, which keeps the times and events: `btrace_is_trace`).
+- A top-level obligation gets `handle_breach` with the handler bound to it, a prohibition `pr_verdict`, a permission `may_verdict`, a handler the element it is bound to, a composite term `mem3` for each outcome, and an invariant `inv_eval`.
+
+`export_code` writes `run` to Haskell. `isabelle build -e -D .` exports the module to [`evaluator/generated/TRIEL.hs`](../../evaluator/generated/TRIEL.hs).
+
+### 10.5 Time
+
+- `DATETIME("YYYY-MM-DDThh:mm:ssZ")` is the number of seconds since 1970-01-01T00:00:00Z. Only this ISO-8601 form, in UTC, is accepted.
+- `SECOND`, `MINUTE`, `HOUR` and `DAY` durations are converted to seconds. Calendar units (`BUSINESS_DAY`, `MONTH`, `YEAR`) are rejected: their length depends on a calendar, which the core does not model.
+
+### 10.6 The translator and the trusted base
+
+[`parser/triel_to_core.py`](../../parser/triel_to_core.py) parses a specification with the reference grammar and translates it into the input of `run`. Every construct is translated, printed as metadata, or rejected by name. Only the outermost unsupported construct is reported. The translator's table of grammar rules is checked against the grammar by [`parser/test_triel_to_core.py`](../../parser/test_triel_to_core.py).
+
+- Metadata: `JURISDICTION`, `STANDARD`, `CURRENCY`, `PROVENANCE_REQUIRED`, and the `SOURCE` of each factor. The class of an invariant (`SAFETY`, `LIVENESS`, `FAIRNESS`) is a label.
+- The `PENALTY` amount must be a literal and is kept as an opaque value, since informational actions do not affect the status (`informational_irrelevant`). Arithmetic in `PENALTY` is rejected.
+- A Boolean factor used as a condition, `x`, is translated to `x == true`, and `a != b` to `NOT (a == b)`. Both translations are visible in the printed core AST.
+- `PRESENT` is accepted only on a complex name of primitive type.
+- A deadline inside a composite term is rejected: the trace semantics of §2.5 has no time, so the deadline would be ignored.
+- `MAX_AGE` without `ON_STALE`, and `ON_STALE` without `MAX_AGE`, are rejected.
+
+Beyond Isabelle/HOL, the following are trusted:
+- Isabelle's code generator and GHC;
+- the translator;
+- the reading of the input and the printing of the report in [`evaluator/Main.hs`](../../evaluator/Main.hs);
+- the conversion of scenarios in [`parser/triel_eval.py`](../../parser/triel_eval.py).
+
+Every verdict is computed by the exported code.

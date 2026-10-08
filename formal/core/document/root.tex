@@ -81,10 +81,30 @@ continuation-determining action is allowed; a cure in time prevents a second bre
 failed cure is final; a result computed with stale factors treated as absent is not
 overturned when they are refreshed.
 
+\paragraph{Invariants (theory \texttt{TRIEL\_Invariants}).}
+\texttt{ALWAYS}, \texttt{EVENTUALLY} and \texttt{NEXT} are evaluated on finite prefixes of
+implementation traces with the three verdicts of LTL3 (Bauer, Leucker and Schallhart).
+Proved: on a prefix \texttt{ALWAYS} is never true and \texttt{EVENTUALLY} never false; a
+definite verdict is final under extension; an entry where the formula is undefined for
+lack of data neither violates \texttt{ALWAYS} nor fulfils \texttt{EVENTUALLY}; definite
+verdicts survive more data.
+
+\paragraph{The evaluator (theory \texttt{TRIEL\_Exec}).}
+Executable equations, each proved equal to a definition of the other theories, replace
+unbounded quantifiers, \texttt{LEAST} and \texttt{GREATEST}. Membership of a trace in the
+denotation of a composite term is decided three-valued: definite answers are proved
+sound for terms without \texttt{AND}, and are always given for terms without
+\texttt{UNLESS} and \texttt{AND}. Stale factors are blocked by factor, and the safety
+claim of Section~2.9 is proved again for this blocking. The function \texttt{run}
+computes the report of a specification on an implementation trace and is exported to
+Haskell.
+
 \paragraph{Not formalised.}
 Arithmetic, further comparisons, \texttt{List} and \texttt{Map} types, the calendar,
-\texttt{WITHIN \dots\ ELSE} and \texttt{FROM \dots\ UNTIL}, verdicts inside composite
-terms, the conditional and event-triggered terms, and the satisfaction of invariants.
+\texttt{WITHIN \dots\ ELSE} and \texttt{FROM \dots\ UNTIL}, deadlines inside composite
+terms, the conditional and event-triggered terms, LTL and CTL formulas beyond
+\texttt{ALWAYS}, \texttt{EVENTUALLY} and \texttt{NEXT}, and the translator from TRIEL to
+the core, which is checked by tests.
 
 \newpage
 \tableofcontents
