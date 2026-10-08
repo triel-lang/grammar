@@ -4,3 +4,4 @@ session TRIEL_Core = HOL +
     TRIEL_Core
     TRIEL_Trace
     TRIEL_Ex
+    TRIEL_Terms
