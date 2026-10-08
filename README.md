@@ -1,5 +1,8 @@
 # TRIEL
 
+[![Parse examples against grammar](https://github.com/triel-lang/grammar/actions/workflows/parse-examples.yml/badge.svg)](https://github.com/triel-lang/grammar/actions/workflows/parse-examples.yml)
+[![Isabelle build of formal/core](https://github.com/triel-lang/grammar/actions/workflows/isabelle.yml/badge.svg)](https://github.com/triel-lang/grammar/actions/workflows/isabelle.yml)
+
 An open specification language for deterministic, verifiable compilation.
 
 Website: https://triel.dev

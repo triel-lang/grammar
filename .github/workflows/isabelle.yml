@@ -1,0 +1,64 @@
+name: Isabelle build of formal/core
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  ISABELLE_VERSION: Isabelle2025-2
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The theories may contain no unproved or assumed results, and the
+      # session may not switch proof checking off.
+      - name: Check for sorry, oops and axiomatization
+        run: |
+          if grep -nwE 'sorry|oops|axiomatization' formal/core/*.thy; then
+            echo "::error::formal/core contains sorry, oops or axiomatization"
+            exit 1
+          fi
+          if grep -nE 'quick_and_dirty|skip_proofs' formal/core/ROOT; then
+            echo "::error::formal/core/ROOT switches proof checking off"
+            exit 1
+          fi
+
+      # Same Isabelle release as the local build; the unpacked distribution
+      # (about 1.2 GB compressed) is cached between runs.
+      - name: Cache the Isabelle distribution
+        id: cache-isabelle
+        uses: actions/cache@v4
+        with:
+          path: ~/isabelle/${{ env.ISABELLE_VERSION }}
+          key: ${{ env.ISABELLE_VERSION }}-linux-x86_64
+
+      - name: Download Isabelle
+        if: steps.cache-isabelle.outputs.cache-hit != 'true'
+        run: |
+          archive="${ISABELLE_VERSION}_linux.tar.gz"
+          for base in https://isabelle.in.tum.de/dist https://www.cl.cam.ac.uk/research/hvg/Isabelle/dist; do
+            if curl -fL --retry 3 -o "/tmp/$archive" "$base/$archive"; then
+              break
+            fi
+          done
+          test -s "/tmp/$archive"
+          mkdir -p ~/isabelle
+          tar -xzf "/tmp/$archive" -C ~/isabelle
+          rm "/tmp/$archive"
+
+      # The PDF document needs LaTeX, which is not installed here. The document
+      # options in ROOT take precedence over "-o document=false", so they are
+      # switched off in the runner's copy of ROOT only.
+      - name: Switch off the PDF document for this build
+        run: |
+          sed -i -E 's/options \[document = pdf, document_output = "output"\]/options [document = false]/' formal/core/ROOT
+          grep -q 'options \[document = false\]' formal/core/ROOT
+          cat formal/core/ROOT
+
+      - name: Build session TRIEL_Core
+        run: ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -v -D formal/core
