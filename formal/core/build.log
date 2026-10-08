@@ -1,4 +1,4 @@
-Started at Thu Oct 8 18:05:14 GMT+3 2026 (polyml-5.9.2_x86_64_32-windows)
+Started at Thu Oct 8 18:16:50 GMT+3 2026 (polyml-5.9.2_x86_64_32-windows)
 ISABELLE_TOOL_JAVA_OPTIONS="-Djava.awt.headless=true -Xms512m -Xmx4g -Xss16m"
 ISABELLE_BUILD_OPTIONS=""
 
@@ -15,13 +15,16 @@ Running TRIEL_Core ...
 TRIEL_Core: theory TRIEL_Core.TRIEL_Core
 TRIEL_Core: theory TRIEL_Core.TRIEL_Ex
 TRIEL_Core: theory TRIEL_Core.TRIEL_Trace
-TRIEL_Core: theory TRIEL_Core.TRIEL_Core 100% (8.698s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Ex 100% (1.323s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Core 100% (7.042s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Ex 100% (0.311s cumulated time)
 TRIEL_Core: theory TRIEL_Core.TRIEL_Terms
-TRIEL_Core: theory TRIEL_Core.TRIEL_Trace 100% (13.833s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Terms 100% (8.330s cumulated time)
-Timing TRIEL_Core (2 threads, 26.395s elapsed time, 28.406s cpu time, 3.281s GC time, factor 1.08)
-Finished TRIEL_Core (0:00:29 elapsed time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Trace 100% (15.238s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Terms 100% (10.663s cumulated time)
+Preparing TRIEL_Core/document ...
+Finished TRIEL_Core/document (0:00:09 elapsed time)
+Document at "output/document.pdf"
+Timing TRIEL_Core (2 threads, 25.257s elapsed time, 28.969s cpu time, 3.875s GC time, factor 1.15)
+Finished TRIEL_Core (0:00:27 elapsed time)
 
-Finished at Thu Oct 8 18:05:53 GMT+3 2026
-0:00:39 elapsed time
+Finished at Thu Oct 8 18:17:35 GMT+3 2026
+0:00:45 elapsed time
