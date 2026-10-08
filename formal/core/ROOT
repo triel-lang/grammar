@@ -3,3 +3,4 @@ session TRIEL_Core = HOL +
   theories
     TRIEL_Core
     TRIEL_Trace
+    TRIEL_Ex
