@@ -69,10 +69,22 @@ data; the counterparts of T1--T5; \texttt{PRESENT(p)} is $E_p$; typing of open r
 monotone for types without \texttt{Optional}, and a counterexample shows that it is not
 monotone with \texttt{Optional}.
 
+\paragraph{Deadlines and breach (theory \texttt{TRIEL\_Breach}).}
+Following Section~2.6, implementation traces with integer timestamps are given verdicts:
+an obligation \texttt{BY} or \texttt{WITHIN} a deadline is fulfilled, breached or pending;
+a prohibition is breached when its condition is true before the action; a permission is
+never breached. Deadlines are fixed at activation. Proved: a missed deadline is a breach;
+verdicts are final once reached; fail-closed enforcement of prohibitions blocks every
+breach and also undefined conditions, which the verdict does not count as breaches; breach
+handlers bind to the nearest preceding obligation or prohibition of the same subject; at most one
+continuation-determining action is allowed; a cure in time prevents a second breach, and a
+failed cure is final; a result computed with stale factors treated as absent is not
+overturned when they are refreshed.
+
 \paragraph{Not formalised.}
-Arithmetic, further comparisons, \texttt{List} and \texttt{Map} types, staleness,
-deadlines, breach handling, the conditional and event-triggered terms, and the
-satisfaction of invariants.
+Arithmetic, further comparisons, \texttt{List} and \texttt{Map} types, the calendar,
+\texttt{WITHIN \dots\ ELSE} and \texttt{FROM \dots\ UNTIL}, verdicts inside composite
+terms, the conditional and event-triggered terms, and the satisfaction of invariants.
 
 \newpage
 \tableofcontents

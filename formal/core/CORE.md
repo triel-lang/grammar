@@ -1,8 +1,8 @@
 # TRIEL core: definitions and theorems
 
-This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5) [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6) and [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
+This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) and [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
 
-It is based only on the public material at <https://github.com/triel-lang/grammar>: TECHNICAL_REPORT.md §2.5 and §2.9, and FOUNDATIONS.md. It makes no assumptions about any non-public implementation.
+It is based only on the public material at <https://github.com/triel-lang/grammar>: TECHNICAL_REPORT.md §2.5, §2.6 and §2.9, and FOUNDATIONS.md. It makes no assumptions about any non-public implementation.
 
 To build it, open `Isabelle2025-2\Cygwin-Terminal.bat` on Windows (or any shell on Linux/macOS), go to this folder, and run:
 
@@ -298,7 +298,88 @@ By their definitions in [2] and [5], ε_x = ¬E_x. E_x is total and not equitone
 
 Telling the two cases apart would need a third status for a name, such as an explicit marker for "known to be absent" in the value carrier. That would change the semantics of Optional, so the question is left open, and the meaning of Optional here is unchanged.
 
-## 8. Design decisions forced by the theory
+## 8. Deadlines and breach (`TRIEL_Breach.thy`, TECHNICAL_REPORT.md §2.6)
+
+Section 2.6 distinguishes the specification trace of §2.5 from the *implementation trace*: the events a running system produces, each with a timestamp. This section adds a layer of *verdicts* over implementation traces. The trace semantics of sections 4 and 6 is unchanged, so `den`, `den_total` and the laws of UNLESS are not affected.
+
+### 8.1 Definitions
+
+- **Implementation traces and time.** Implementation traces are the traces of section 4 with integer timestamps (`itrace`).
+  - Entry 0 is the activation entry: its timestamp is the activation time τ₀, and its state is the activation state. Actions are the events of the later entries.
+  - An event is matched to a norm by subject and action (`does`).
+- **Deadlines.** A deadline is an absolute time, a duration, or a factor plus an offset (`deadline`). It is resolved once, at activation (`resolve`, `activates`).
+  - A duration counts from τ₀.
+  - A factor is read in the activation state.
+  - A deadline that does not resolve rejects the activation.
+- **Verdicts.** Fulfilled, Breached τ or Pending (`verdict`).
+  - **Obligation.** s MUST a BY d, or WITHIN d, has the window (−∞, d] (`window`, `ob_verdict`). It is Fulfilled by an action of s in the window, Breached d once the trace has an entry strictly after d with no such action, and Pending otherwise.
+  - **Prohibition.** s MUST_NOT a WHEN c is Breached at the first action a of s before which ⟦c⟧ = T, where c is evaluated in the state before the action (`pr_verdict`).
+  - **Permission.** s MAY a WHEN c is never breached (`may_verdict`).
+- **Enforcement and verdict: two roles.** A monitor *enforces* a prohibition fail-closed: it blocks the action unless c is known to be false, so it also blocks on ⊥ (`blocks`). The *verdict* records a breach only when c = T. The fail-closed rule listed in `FOUNDATIONS.md` belongs to enforcement, not to the verdict.
+- **Breach actions.** NOTIFY and PENALTY are informational. TERMINATE, CURE_BY and ESCALATE_TO determine the continuation (`baction`, `is_cont`). A handler is well formed if it has at least one action and at most one continuation-determining action (`wf_actions`).
+- **Status after a breach** (`handle_breach`):
+  - with no continuation-determining action, or with TERMINATE, the obligation stays breached and is closed;
+  - CURE_BY k opens the window (τ_b, τ_b + k] from the moment of breach τ_b;
+  - ESCALATE_TO s′ gives s′ a new obligation for the same action, with a window of the same length counted from the moment of transfer.
+- **TERMS blocks and binding.** A TERMS block is a list of surface terms (`sterm`). A handler is bound to the nearest preceding obligation or prohibition of the same subject at the top level (`bound_to`). The well-formedness predicate `wf_block` requires three things:
+  - handlers only at the top level;
+  - every handler well formed and bound;
+  - at most one handler per obligation or prohibition.
+- **MAX_AGE and ON_STALE BLOCK.** A factor with MAX_AGE m is fresh at an entry if its value arrived at most m time units earlier (`fresh`). Under BLOCK, a stale factor is absent from the state (`blocked`).
+
+### 8.2 Theorems
+
+- **`deadline_missed_breach`, `within_missed_breach`:** a deadline passed with no action means Breached, at τ₀ + k for WITHIN k.
+- **`fulfilled_at_deadline`:** an action exactly at the deadline fulfils.
+- **`pending_open`:** Pending means that no entry is past the deadline yet.
+- **`window_final`, `ob_verdict_final`, `pr_verdict_final`:** once reached, a verdict does not change when the trace is extended. For a breach this uses non-decreasing timestamps.
+  — Breach is monotone in time.
+- **`breach_blocked`:** every breach of a prohibition is an action the monitor would have blocked.
+- **`enforced_no_breach`:** if no action was taken in a blocking state, there is no breach.
+- **`undefined_guard_blocks_not_breach`:** if c = ⊥, the monitor blocks, but the verdict is not a breach.
+  — Enforcement is strictly stronger than the verdict.
+- **`may_never_breached`:** a permission is never breached.
+- **`cont_unique`, `cont_of_some`, `two_continuations_rejected`, `section_2_6_example_rejected`:** continuation-determining actions are mutually exclusive.
+  — A handler with two of them is rejected, including the list PENALTY, NOTIFY, TERMINATE, CURE_BY given in §2.6.
+- **`informational_irrelevant`:** the status depends only on the continuation-determining actions.
+- **`cure_restores`:** an action in the cure window cures the breach, and no second breach fires.
+- **`cure_failed`:** a failed cure is a second breach, and it is final.
+- **`escalation_keeps_breach`:** after ESCALATE_TO the original obligation stays breached.
+- **`handle_breach_final`:** the status after a breach is final once its windows are decided.
+- **`bound_to_nearest`, `bound_to_None`:** binding goes to the nearest preceding obligation or prohibition of the same subject, or to nothing if there is none.
+- **`nested_handler_rejected`, `wf_handler_bound`, `wf_one_handler`:** a nested handler is rejected; in a well-formed block every handler is bound, and every obligation has at most one handler.
+- **`activation_rejected`:** a deadline from an absent factor rejects the activation.
+- **`fresh_at_max_age`:** an age equal to MAX_AGE is still fresh.
+- **`stale_absent`:** under BLOCK a stale factor is absent, so PRESENT is F.
+- **`stale_safe`:** a result computed with stale factors treated as absent is not overturned by whatever values those factors have when refreshed.
+  — This is the safety claim of §2.9, derived from T2.
+
+### 8.3 Clarifications of §2.6
+
+Points 1–14 are the points where §2.6 is ambiguous or contradictory. Points 15–20 are further readings needed to formalise it.
+
+1. **Binding.** §2.6 binds a handler to the nearest preceding obligation and also says that two obligations with one trailing handler have no defined meaning. The binding rule is adopted: the handler binds to the nearest one, and the others have no handler.
+2. **Handlers are top-level.** Syntactically a handler is a term, but it has no denotation as one. It is allowed only at the top level of a TERMS block; a nested handler is rejected (`nested_handler_rejected`).
+3. **Polarity.** An implementation event is matched by subject and action; the polarity belongs to the norm.
+4. **Prohibitions.** The condition c of MUST_NOT WHEN c is evaluated in the state before the action. The verdict is Breached only when c = T. Fail-closed handling of ⊥ belongs to enforcement (see 8.1).
+5. **Origin of durations.** Durations in BY and in a term-level WITHIN count from the activation time τ₀. CURE_BY counts from the moment of breach.
+6. **Boundary.** An action at the deadline fulfils. A breach is established only when the trace has an entry strictly after the deadline, and the time of breach is the deadline.
+7. **Deadline from a factor.** It is fixed at activation; if the factor is absent there, the activation is rejected.
+8. **WITHIN without ELSE.** A missed deadline is a breach (`within_missed_breach`). WITHIN … ELSE is not formalised.
+9. **Failed cure.** A failed cure is a second breach and is final: no handler applies to it, so there is no loop.
+10. **ESCALATE_TO s′.** The original obligation stays breached. s′ gets a new obligation for the same action, with a window of the same length (d − τ₀) counted from the moment of transfer.
+11. **TERMINATE** closes the obligation, not the whole specification.
+12. **Only informational actions.** The obligation stays breached and is closed.
+13. **FROM … UNTIL** is not formalised.
+14. **MAX_AGE.** An age equal to MAX_AGE is still fresh. Under USE_LAST the last value is kept and is present.
+15. **Binding target.** A handler binds to an obligation *or a prohibition* of the same subject, as §2.6 states.
+16. **One handler per norm.** At most one handler per obligation or prohibition (`wf_one_handler`).
+17. **No deadline.** An obligation without a deadline is never breached.
+18. **CURE_BY** takes a duration.
+19. **Activation entry.** Entry 0 of an implementation trace is the activation entry; actions are the events of later entries.
+20. **Scope of verdicts.** Verdicts are given to the top-level elements of a TERMS block. Deadlines inside composite terms are resolved at activation (and can reject it), but have no verdict of their own.
+
+## 9. Design decisions forced by the theory
 
 Each decision below was made because of a theorem: either one that proves the decision necessary, or one that shows what goes wrong without it.
 
@@ -318,3 +399,17 @@ Each decision below was made because of a theorem: either one that proves the de
 5. **Typing and the information order disagree on Optional.**
    - For types with Optional, typing is not monotone (`wt_not_mono_optional`). It is monotone only for types without Optional (`wt_mono`).
    - The semantics of Optional is left unchanged, and the conflict is recorded as an open question in section 7.2: is an absence final, or is the value not yet known?
+6. **Fail-closed is enforcement, not the verdict.**
+   - If an undefined condition counted as a breach, a prohibition would be breached on data that does not yet decide it. The verdict records a breach only when c = T.
+   - The monitor blocks on ⊥ (`blocks`). Every breach is an action the monitor would have blocked (`breach_blocked`), enforcement prevents breach (`enforced_no_breach`), and on ⊥ the two roles differ (`undefined_guard_blocks_not_breach`).
+7. **A breach is established strictly after the deadline, and deadlines are fixed at activation.**
+   - Timestamps only need to be non-decreasing, so an action can still arrive with a timestamp equal to the deadline. A breach is final (`window_final`) only because it waits for an entry strictly past the deadline, and only because the deadline cannot move once resolved (`resolve`, `activates`).
+   - An action exactly at the deadline fulfils (`fulfilled_at_deadline`).
+8. **One continuation per breach, and no handler for a failed cure.**
+   - Mutually exclusive continuation-determining actions give each breach a single status (`cont_unique`, `two_continuations_rejected`), which informational actions do not affect (`informational_irrelevant`).
+   - A failed cure is final (`cure_failed`, `handle_breach_final`), so there is no cure–breach loop.
+9. **Handlers only at the top level of a TERMS block, one per norm.**
+   - Binding is defined on the list of top-level elements (`bound_to_nearest`). A handler nested in a composite term has nothing to bind to and no denotation, so it is rejected (`nested_handler_rejected`).
+   - With at most one handler per obligation (`wf_one_handler`) the status of a norm is determined.
+10. **A stale factor under BLOCK is absent.**
+    - Treating stale values as absent, rather than as old values, is what makes a result computed on stale data safe against refresh (`stale_safe`). This is T2 applied to the blocked state, which is below every refreshed state (`blocked_le`).
