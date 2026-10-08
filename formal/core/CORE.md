@@ -262,7 +262,9 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 
 ### 7.2 Theorems
 
-- **`nd_le_refl`, `nd_le_trans`, `nd_le_antisym`:** ≤ is a partial order.
+- **`nd_le_refl`, `nd_le_trans`, `nd_le_antisym`:** ≤ is a partial order. `nd_le_NomD` and `nd_le_NomI` describe it node by node.
+- **`whole_data_equality_not_monotone`:** for distinct names x and y there are d ≤ d′ with d(x) = d(y) ≠ ⊥ but d′(x) ≠ d′(y).
+  — Equality of whole records is not monotone, which is why comparisons see only atoms.
 - **`flat_mono`:** d ≤ d′ ⟹ flat d ⊑ flat d′.
 - **`eval_nd_flat`:** for PRESENT-free e, evaluation over d equals the evaluation of section 1 over flat d.
   — This is how the theorems of sections 2 and 5 carry over.
@@ -295,3 +297,24 @@ The logics of quasiary predicates do not resolve this either. They have a predic
 By their definitions in [2] and [5], ε_x = ¬E_x. E_x is total and not equitone (`Ex_ind_total`, `Ex_ind_not_equitone`, `Ex_nd_not_equitone`), so ε_x is total and not equitone too. Both describe the datum at hand and cannot say whether an absence is final.
 
 Telling the two cases apart would need a third status for a name, such as an explicit marker for "known to be absent" in the value carrier. That would change the semantics of Optional, so the question is left open, and the meaning of Optional here is unchanged.
+
+## 8. Design decisions forced by the theory
+
+Each decision below was made because of a theorem: either one that proves the decision necessary, or one that shows what goes wrong without it.
+
+1. **PRESENT is the total indicator E_x, not the partial indicator =xx.**
+   - The partial indicator, the comparison x = x, has the truth domain of E_x but an empty falsity domain (`partial_indicator`). It can confirm presence but can never report absence. That is not enough for `PRESENT`, which §2.9 requires to be false for an empty or stale value.
+   - So `PRESENT(x)` is defined as E_x (`present_is_Ex`, `present_nd_is_Ex`), which is total (`Ex_ind_total`).
+   - The price is that E_x is not equitone (`Ex_ind_not_equitone`, `Ex_nd_not_equitone`). That is why `PRESENT` is the exception to monotonicity (`T3_present_not_monotone`, `T3_nd_present_not_monotone`), while =xx is equitone.
+2. **Comparisons see only atoms; a complex name that leads to a record is ⊥ in a comparison.**
+   - Equality of whole data is not monotone under the information order. Two equal records stop being equal when one of them is extended (`whole_data_equality_not_monotone`).
+   - Restricting comparisons to atoms is what lets the monotonicity claim of §2.9 hold for nested data (`T2_nd_monotone`, through `eval_nd_flat` and `flat_mono`).
+3. **Records are open: data may carry names the record type does not declare.**
+   - With open records, typing survives the addition of names at any depth for every type without Optional (`wt_mono`). The record step of the proof uses only the declared fields.
+   - A closed record type would reject any datum with an extra name, so adding a name could break typing. There is no separate theorem for closed records; the point is that `wt_mono` needs openness.
+4. **Distributivity of UNLESS over THEN (law 3) rests on totality.**
+   - As stated in §2.5, the law fails for arbitrary denotations (`unless_then_counterexample`, `unless_then_not_unconditional`).
+   - It holds when the right operand of THEN is total (`unless_then`). Every term of the language is total (`den_total`), so the law holds for all terms with no side condition (`term_unless_then`).
+5. **Typing and the information order disagree on Optional.**
+   - For types with Optional, typing is not monotone (`wt_not_mono_optional`). It is monotone only for types without Optional (`wt_mono`).
+   - The semantics of Optional is left unchanged, and the conflict is recorded as an open question in section 7.2: is an absence final, or is the value not yet known?
