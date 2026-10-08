@@ -374,7 +374,7 @@ Points 1–14 are the points where §2.6 is ambiguous or contradictory. Points 1
 14. **MAX_AGE.** An age equal to MAX_AGE is still fresh. Under USE_LAST the last value is kept and is present.
 15. **Binding target.** A handler binds to an obligation *or a prohibition* of the same subject, as §2.6 states.
 16. **One handler per norm.** At most one handler per obligation or prohibition (`wf_one_handler`).
-17. **No deadline.** An obligation without a deadline is never breached.
+17. **No deadline.** An obligation without a deadline is never breached. This is semantically sound, but a future analyser of specifications should warn about it: no verdict can hold such an obligation to account.
 18. **CURE_BY** takes a duration.
 19. **Activation entry.** Entry 0 of an implementation trace is the activation entry; actions are the events of later entries.
 20. **Scope of verdicts.** Verdicts are given to the top-level elements of a TERMS block. Deadlines inside composite terms are resolved at activation (and can reject it), but have no verdict of their own.
