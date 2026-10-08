@@ -1,7 +1,9 @@
 session TRIEL_Core = HOL +
-  options [document = false]
+  options [document = pdf, document_output = "output"]
   theories
     TRIEL_Core
     TRIEL_Trace
     TRIEL_Ex
     TRIEL_Terms
+  document_files
+    "root.tex"

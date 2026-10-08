@@ -12,6 +12,8 @@ isabelle build -D .
 
 The build was checked with Isabelle2025-2. The output of a clean build (`isabelle build -c -v -D .`) is saved in [`build.log`](build.log).
 
+The build also typesets the theories, with a short introduction ([`document/root.tex`](document/root.tex)), into `output/document.pdf`. This step needs a LaTeX installation that provides `lualatex`, for example MiKTeX or TeX Live.
+
 ## 1. Definitions
 
 **Names, values, states.** *N* and *V* are arbitrary types (the type variables `'n` and `'v` in Isabelle). A state is a partial map

@@ -1,0 +1,72 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage{isabelle,isabellesym}
+\usepackage{amssymb}
+\usepackage{underscore}
+\usepackage{pdfsetup}
+
+\urlstyle{rm}
+\isabellestyle{it}
+
+\begin{document}
+
+\title{A Mechanised Core of the TRIEL Specification Language}
+\author{Dmitri Chistyakov}
+\maketitle
+
+\begin{abstract}
+This document is a core of the semantics of the TRIEL specification language,
+formalised and checked in Isabelle/HOL. It is based only on the public description of
+the language (\texttt{TECHNICAL\_REPORT.md}, Sections 2.5 and 2.9, and
+\texttt{FOUNDATIONS.md}). All proofs are complete: there are no unproved lemmas and no
+axioms beyond those of Isabelle/HOL.
+\end{abstract}
+
+\section*{What is formalised}
+
+\paragraph{Expressions (theory \texttt{TRIEL\_Core}).}
+States are partial maps from names to values, ordered by information (extension).
+Boolean expressions are evaluated in strong Kleene three-valued logic; the value-presence
+predicate \texttt{PRESENT(x)} is always defined. Proved: commutativity and associativity
+of \texttt{AND} and \texttt{OR}, De Morgan's laws and double negation (T1); monotonicity of
+every \texttt{PRESENT}-free expression under extension of the state, the claim of
+Section~2.9 (T2); non-monotonicity of \texttt{PRESENT} (T3); agreement with two-valued
+logic when every name read is defined (T4); the meaning of \texttt{PRESENT} (T5).
+
+\paragraph{The indicator predicate (theory \texttt{TRIEL\_Ex}).}
+Following the logics of quasiary predicates of Nikitchenko and Shkilniak, a predicate is
+given by its truth and falsity domains, and the total indicator predicate $E_x$ is true
+where $x$ has a value and false where it has none. Proved: \texttt{PRESENT(x)} is $E_x$
+(\texttt{present\_is\_Ex}); $E_x$ is total and not equitone; $E_x$ holds exactly when the
+value of $x$ equals some value, as for the existence predicate of free logic; every
+\texttt{PRESENT}-free expression is equitone; the comparison $x = x$ is the partial
+indicator predicate.
+
+\paragraph{Trace semantics (theory \texttt{TRIEL\_Trace}).}
+Traces are non-empty sequences of (state, timestamp, event) entries with non-decreasing
+timestamps; executions end \texttt{Done}, \texttt{Interrupted} or \texttt{Violated}. The
+denotations of \texttt{MUST}, \texttt{MAY}, \texttt{MUST\_NOT}, \texttt{THEN},
+\texttt{AND}, \texttt{OR} and \texttt{UNLESS} follow Section~2.5. Proved: the laws of
+\texttt{UNLESS} --- \texttt{t UNLESS false DO e = t}, distributivity over \texttt{OR},
+distributivity over \texttt{THEN} for a total right operand, and idempotence; a
+counterexample showing that distributivity over \texttt{THEN} fails without totality; the
+inequality of nested \texttt{UNLESS} and \texttt{UNLESS} with a disjunctive guard.
+
+\paragraph{Terms (theory \texttt{TRIEL\_Terms}).}
+Terms form an inductive type with a compositional denotation. Proved: every term is total
+(\texttt{den\_total}), and therefore all four laws of \texttt{UNLESS}, including
+distributivity over \texttt{THEN}, hold for every term without side conditions.
+
+\paragraph{Not formalised.}
+Arithmetic, further comparisons, the type system, staleness, deadlines, breach handling,
+the conditional and event-triggered terms, and the satisfaction of invariants.
+
+\newpage
+\tableofcontents
+\newpage
+
+\parindent 0pt\parskip 0.5ex
+
+\input{session}
+
+\end{document}
