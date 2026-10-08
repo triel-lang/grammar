@@ -10,5 +10,7 @@ session TRIEL_Core = HOL +
     TRIEL_ND
     TRIEL_Breach
     TRIEL_Invariants
+    TRIEL_Exec
   document_files
     "root.tex"
+  export_files (in "../../evaluator/generated") [3] "*:code/**"
