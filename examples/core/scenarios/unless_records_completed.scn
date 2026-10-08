@@ -1,0 +1,9 @@
+; The order is never cancelled: delivery, then invoice.
+(scenario unless_records_completed
+  (spec "examples/core/core_unless_records.triel")
+  (entry "2026-05-01T09:00:00Z" (activate)
+    (data (order (record (id (str "O-7"))))))
+  (entry "2026-05-02T09:00:00Z" (act seller deliver must)
+    (data (order (record (id (str "O-7"))))))
+  (entry "2026-05-03T09:00:00Z" (act seller invoice must)
+    (data (order (record (id (str "O-7")))))))

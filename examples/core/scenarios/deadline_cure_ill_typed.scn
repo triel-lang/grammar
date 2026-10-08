@@ -1,0 +1,5 @@
+; The seal is recorded as checked with a string instead of a Boolean.
+(scenario deadline_cure_ill_typed
+  (spec "examples/core/core_deadline_cure.triel")
+  (entry "2026-07-01T00:00:00Z" (activate)
+    (data (seal (record (id (str "S-1")) (checked (str "yes")))))))

@@ -1,0 +1,28 @@
+-- TRIEL example inside the formal core: a deadline, its breach and a cure.
+-- Every construct in this file is translated into the Isabelle/HOL core
+-- (formal/core) and evaluated by the exported evaluator (evaluator/).
+
+SPECIFICATION core_deadline_cure VERSION 1.0.0
+    CURRENCY: "USD"
+
+SUBJECTS {
+  seller : PARTY,
+  buyer  : PARTY
+}
+
+TERMS {
+  seller MUST deliver_goods BY DATETIME("2026-08-01T00:00:00Z");
+  seller ON_BREACH
+    PENALTY 500,
+    NOTIFY buyer,
+    CURE_BY 5 DAYS;
+  seller MUST_NOT ship_unsealed WHEN NOT PRESENT(seal.id)
+}
+
+FACTORS {
+  seal : Record { id : Optional<String>, checked : Boolean } METADATA SOURCE seller
+}
+
+INVARIANTS {
+  seal_checked : SAFETY : ALWAYS(PRESENT(seal.id) IMPLIES seal.checked == true)
+}

@@ -1,0 +1,12 @@
+; The order is cancelled after delivery: the invoice does not follow, the
+; refund handler runs instead.
+(scenario unless_records_cancelled
+  (spec "examples/core/core_unless_records.triel")
+  (entry "2026-05-01T09:00:00Z" (activate)
+    (data (order (record (id (str "O-7"))))))
+  (entry "2026-05-02T09:00:00Z" (act seller deliver must)
+    (data (order (record (id (str "O-7"))))))
+  (entry "2026-05-02T18:00:00Z" (tick)
+    (data (order (record (id (str "O-7")) (cancelled (bool true))))))
+  (entry "2026-05-03T09:00:00Z" (act seller refund must)
+    (data (order (record (id (str "O-7")) (cancelled (bool true)))))))

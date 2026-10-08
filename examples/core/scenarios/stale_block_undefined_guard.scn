@@ -1,0 +1,15 @@
+; The sanction flag goes stale before the payment, so the prohibition's
+; condition is undefined and is not a breach; the review deadline passes and
+; the auditor takes over.
+(scenario stale_block_undefined_guard
+  (spec "examples/core/core_stale_block.triel")
+  (entry "2026-03-01T00:00:00Z" (activate)
+    (data (claim (record (amount (int 100))))))
+  (entry "2026-03-01T01:00:00Z" (arrive sanctioned)
+    (data (sanctioned (bool false)) (claim (record (amount (int 100))))))
+  (entry "2026-03-03T00:00:00Z" (tick)
+    (data (sanctioned (bool false)) (claim (record (amount (int 100))))))
+  (entry "2026-03-03T01:00:00Z" (act insurer pay_claim must_not)
+    (data (sanctioned (bool false)) (claim (record (amount (int 100))))))
+  (entry "2026-03-04T00:00:00Z" (act auditor review_claim must)
+    (data (sanctioned (bool false)) (claim (record (amount (int 100)))))))

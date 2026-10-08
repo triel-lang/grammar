@@ -1,0 +1,12 @@
+; The cure window passes without delivery; the seal id disappears and the
+; seller ships unsealed; the seal stops being checked while its id is known.
+(scenario deadline_cure_failed
+  (spec "examples/core/core_deadline_cure.triel")
+  (entry "2026-07-01T00:00:00Z" (activate)
+    (data (seal (record (id (str "S-1")) (checked (bool true))))))
+  (entry "2026-08-07T00:00:00Z" (tick)
+    (data (seal (record (id (str "S-1")) (checked (bool false))))))
+  (entry "2026-08-08T00:00:00Z" (tick)
+    (data (seal (record (checked (bool false))))))
+  (entry "2026-08-09T00:00:00Z" (act seller ship_unsealed must_not)
+    (data (seal (record (checked (bool false)))))))

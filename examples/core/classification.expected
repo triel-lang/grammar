@@ -1,0 +1,17 @@
+examples/age_verification.triel: REJECTED: CURVE; PROOF_SYSTEM; ZK type; action arguments
+examples/core/core_deadline_cure.triel: ACCEPTED
+examples/core/core_stale_block.triel: ACCEPTED
+examples/core/core_unless_records.triel: ACCEPTED
+examples/delivery_agreement.triel: REJECTED: CAP; PENALTY expression; POLARITY; THRESHOLD; ordering comparison; type Decimal
+examples/eudi/eudi_driving_license.triel: REJECTED: CURVE; DID; IF ... THEN (term); PROOF_SYSTEM; ZK type; action arguments; type Hash
+examples/hello_triel.triel: ACCEPTED
+examples/semantics/absence_default.triel: REJECTED: ordering comparison; type Decimal
+examples/semantics/deadline_without_else.triel: ACCEPTED
+examples/semantics/execute_renaming.triel: REJECTED: EXECUTE; ordering comparison
+examples/semantics/nested_naming.triel: REJECTED: ordering comparison
+examples/semantics/nominative_path.triel: REJECTED: WHEN ... THEN (term)
+examples/semantics/obligation_deadline.triel: REJECTED: FROM; action arguments; ordering comparison
+examples/semantics/sequence_unless.triel: ACCEPTED
+examples/semantics/stale_kleene.triel: REJECTED: WHEN ... THEN (term); ordering comparison
+examples/semantics/unless_distribution.triel: REJECTED: named term (:=)
+examples/semantics/unless_nesting.triel: REJECTED: named term (:=)

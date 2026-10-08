@@ -1,0 +1,24 @@
+-- TRIEL example inside the formal core: a sequence under a releasing
+-- circumstance read from a nested record. Every construct in this file is
+-- translated into the Isabelle/HOL core (formal/core) and evaluated by the
+-- exported evaluator (evaluator/).
+
+SPECIFICATION core_unless_records VERSION 1.0.0
+
+SUBJECTS {
+  seller : PARTY,
+  buyer  : PARTY
+}
+
+TERMS {
+  (seller MUST deliver THEN seller MUST invoice)
+    UNLESS order.cancelled == true DO seller MUST refund
+}
+
+FACTORS {
+  order : Record { id : String, cancelled : Optional<Boolean> } METADATA SOURCE buyer
+}
+
+INVARIANTS {
+  order_known : LIVENESS : EVENTUALLY(PRESENT(order.id))
+}

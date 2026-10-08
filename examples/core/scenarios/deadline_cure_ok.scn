@@ -1,0 +1,11 @@
+; The delivery deadline passes, and the seller delivers inside the cure window.
+(scenario deadline_cure_ok
+  (spec "examples/core/core_deadline_cure.triel")
+  (entry "2026-07-01T00:00:00Z" (activate)
+    (data (seal (record (id (str "S-1")) (checked (bool true))))))
+  (entry "2026-08-02T12:00:00Z" (tick)
+    (data (seal (record (id (str "S-1")) (checked (bool true))))))
+  (entry "2026-08-04T00:00:00Z" (act seller deliver_goods must)
+    (data (seal (record (id (str "S-1")) (checked (bool true))))))
+  (entry "2026-08-05T00:00:00Z" (act seller ship_unsealed must_not)
+    (data (seal (record (id (str "S-1")) (checked (bool true)))))))
