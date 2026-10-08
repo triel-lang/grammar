@@ -10,6 +10,7 @@ TRIEL's semantics builds on the composition-nominative approach (CNA) to program
 4. M. Nikitchenko, O. Shkilniak, S. Shkilniak. Pure first-order logics of quasiary predicates. *Problems in Programming*, No. 2–3, 2016, 73–86 (in Ukrainian).
 5. O. Shkilniak, S. Shkilniak. Transitional modal logics of quasiary predicates with equality and sequent calculi for these logics. UkrPROG'2024, *CEUR Workshop Proceedings*, Vol. 3806, 2024. https://ceur-ws.org/Vol-3806/S_49_Shkilniak.pdf
 6. I. Ivanov, M. Nikitchenko, U. Abraham. Event-based proof of the mutual exclusion property of Peterson's algorithm. *Formalized Mathematics*, 2015.
+7. I. Ivanov, M. Nikitchenko, A. Kryvolap, A. Korniłowicz. Simple-named complex-valued nominative data – definition and basic operations. *Formalized Mathematics*, 25(3), 2017, 205–216.
 
 Section numbers (§) refer to the textbook [1]. Page numbers are omitted because the available edition is a preliminary version with approximate pagination.
 
@@ -25,7 +26,7 @@ The table states, for each TRIEL construct, which part of these works it rests o
 |---|---|---|
 | Partial truth values (⊥) and the connectives `AND`, `OR`, `NOT` | §5.1 (propositional compositions of partial predicates, Kleene algebras); §6.2.1 (three-valued logics) | Adopted |
 | Rule states as named data | §4.1 (nominative data) | Adopted |
-| Nested records in rule states | §4.2 (logics over hierarchical data); [3] | Adopted |
+| Nested records in rule states | §4.2 (logics over hierarchical data); [3]; [7] (the definition followed in `formal/core/TRIEL_ND.thy`) | Adopted |
 | Invariants stable under extension of the state | §1.1.2 and §2.5 (equitone functions and predicates) | Defined here: satisfiability of invariants over states |
 | `PRESENT(x)` (value-presence predicate) | Chapter 3, conclusions (indicator predicates); the total indicator predicate *Ex*, true where `x` has a value and false where it has none [4], [5]; the related composition εx [2] | Adopted: on a value that is not stale, `PRESENT(x)` is *Ex* (theorem `present_is_Ex` in [`formal/core/TRIEL_Ex.thy`](formal/core/TRIEL_Ex.thy)). As in [5], *Ex* is total and not monotone, which agrees with `PRESENT` being the deliberate non-monotone exception in `TECHNICAL_REPORT.md` §2.9. Defined here: a stale value is treated as absent, so `PRESENT(x)` is false for a stale `x` (see Staleness) |
 | Fail-closed evaluation of prohibitions when a condition is ⊥ | none | Open: TRIEL-specific rule |

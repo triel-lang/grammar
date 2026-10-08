@@ -57,9 +57,22 @@ Terms form an inductive type with a compositional denotation. Proved: every term
 (\texttt{den\_total}), and therefore all four laws of \texttt{UNLESS}, including
 distributivity over \texttt{THEN}, hold for every term without side conditions.
 
+\paragraph{Nominative data (theory \texttt{TRIEL\_ND}).}
+Following the Mizar formalisation of simple-named complex-valued nominative data by
+Ivanov, Nikitchenko, Kryvolap and Kornilowicz, a datum is a basic value or a finite partial
+map from names to data; records and nested structures are such data, and an optional
+value is a name that may be absent. Expressions use complex names (paths), and
+\texttt{PRESENT(p)} is the total indicator predicate for a complex name. The information
+order allows names to be added at any depth. Proved: it is a partial order; flattening to a
+state over complex names is monotone, so the monotonicity of Section~2.9 holds for nested
+data; the counterparts of T1--T5; \texttt{PRESENT(p)} is $E_p$; typing of open records is
+monotone for types without \texttt{Optional}, and a counterexample shows that it is not
+monotone with \texttt{Optional}.
+
 \paragraph{Not formalised.}
-Arithmetic, further comparisons, the type system, staleness, deadlines, breach handling,
-the conditional and event-triggered terms, and the satisfaction of invariants.
+Arithmetic, further comparisons, \texttt{List} and \texttt{Map} types, staleness,
+deadlines, breach handling, the conditional and event-triggered terms, and the
+satisfaction of invariants.
 
 \newpage
 \tableofcontents

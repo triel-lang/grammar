@@ -1,6 +1,6 @@
 # TRIEL core: definitions and theorems
 
-This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5) and [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6). [`ROOT`](ROOT) defines the session `TRIEL_Core`.
+This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5) [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6) and [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
 
 It is based only on the public material at <https://github.com/triel-lang/grammar>: TECHNICAL_REPORT.md §2.5 and §2.9, and FOUNDATIONS.md. It makes no assumptions about any non-public implementation.
 
@@ -232,3 +232,50 @@ This section follows the logics of quasiary predicates of Nikitchenko and Shkiln
 - **`term_unless_false`, `term_unless_or`, `term_unless_idem`:** laws 1, 2 and 4 of §2.5, stated for terms.
 - **`term_unless_then`:** ⟦(t₁ THEN t₂) UNLESS c DO e⟧ = ⟦(t₁ UNLESS c DO e) THEN (t₂ UNLESS c DO e)⟧ for all terms t₁, t₂, e and every guard c.
   — Law 3 holds for the term language with no side condition, because every term is total.
+
+## 7. Nominative data (`TRIEL_ND.thy`)
+
+The values in sections 1–6 have an arbitrary type. This section gives TRIEL data (records, optional values, nesting) the structure of multi-level nominative data. The definition follows the Mizar formalisation of simple-named complex-valued nominative data by Ivanov, Nikitchenko, Kryvolap and Korniłowicz ([7] in `FOUNDATIONS.md`).
+
+### 7.1 Definitions
+
+- **Nominative data.** A datum is an atom (a basic value) or a finite partial map from names to data (`nd`):
+
+    d ::= Atom b | Nom [x₁ ↦ d₁, …, xₖ ↦ dₖ]
+
+  The finite maps are the `fmap` of `HOL-Library`. Data have finite depth, which corresponds to the rank sequences of [7].
+- **Operations of [7].**
+  - *denaming* x⇒ takes the value of x (`denaming`);
+  - *naming* ⇒x builds [x ↦ d] (`naming`);
+  - *global overlapping* d₁ ∇ d₂ = d₂ ∪ d₁|(dom d₁ ∖ dom d₂), so d₂ wins (`global_overlapping`);
+  - *local overlapping* replaces the value of one name (`local_overlapping`).
+- **Complex names.** A complex name p = x₁.x₂.….xₖ, as in TRIEL's `factor_ref`, is a list of names. Its value d(p) is obtained by successive denaming (`den_path`).
+- **Information order.** d ≤ d′ (`nd_le`) means two things: every atom of d is an atom of d′ at the same complex name, and every inner node of d is an inner node of d′. So d′ may add names at any depth, but changes or removes nothing.
+- **Flattening.** `flat d` is the state over complex names that maps each complex name leading to an atom to that atom (`flat`). This is the bridge to sections 1–5.
+- **Expressions.** Expressions are those of section 1 with complex names (`eval_nd`).
+  - A complex name denotes a value only when it leads to an atom. If it leads to a record or to nothing, comparisons with it are ⊥.
+  - PRESENT(p) is true when p leads to anything, an atom or a record.
+- **Indicator predicate.** The total indicator predicate for a complex name is E_p with T(E_p) = { d | d(p)↓ } and F(E_p) = { d | d(p)↑ } (`Ex_nd`).
+- **Types.** Types are primitive types (interpreted by a predicate I on atoms), Optional⟨T⟩ and Record {f: T, …} (`ty`). List and Map are not covered.
+  - Records are open: a datum may have names the type does not declare, and only declared fields are checked.
+  - Optional⟨T⟩ is permitted absence, not a value. The typing judgement `wt I T v` is on v ∈ nd ∪ {absent}.
+
+### 7.2 Theorems
+
+- **`nd_le_refl`, `nd_le_trans`, `nd_le_antisym`:** ≤ is a partial order.
+- **`flat_mono`:** d ≤ d′ ⟹ flat d ⊑ flat d′.
+- **`eval_nd_flat`:** for PRESENT-free e, evaluation over d equals the evaluation of section 1 over flat d.
+  — This is how the theorems of sections 2 and 5 carry over.
+- **`T1_nd`:** the algebraic laws T1 over nominative data.
+- **`T2_nd_monotone`, `present_free_equitone_nd`:** if e is PRESENT-free, d ≤ d′ and ⟦e⟧d = b ≠ ⊥, then ⟦e⟧d′ = b.
+  — This is the monotonicity claim of §2.9 for nested data, derived from T2 through `flat_mono`.
+- **`T3_nd_present_not_monotone`:** PRESENT is not monotone under ≤.
+- **`T4_nd`:** agreement with two-valued logic, with PRESENT read as presence of a node.
+- **`T5_nd_present`:** ⟦PRESENT(p)⟧d = T ⟺ d(p)↓.
+- **`present_nd_is_Ex`, `Ex_nd_total`, `Ex_nd_not_equitone`:** PRESENT(p) is E_p, and E_p is total and not equitone.
+- **`denaming_naming`, `denaming_local_overlapping_same`, `denaming_local_overlapping_other`:** the basic equations of the operations of [7].
+- **`wt_required_field_present`:** a declared field whose type contains no Optional is present in every well-typed record.
+- **`wt_mono`:** if T contains no Optional (`opt_free`), wt I T d and d ≤ d′, then wt I T d′.
+  — Typing is monotone under the information order for such types, because records are open.
+- **`wt_not_mono_optional`:** for types with Optional, monotonicity fails.
+  — An absent Optional field may be filled, by an extension, with a value of the wrong type. Example: Record {f: Optional⟨T⟩} with an empty datum, extended by [f ↦ a] where a is not of type T.
