@@ -1,6 +1,6 @@
 # TRIEL core: definitions and theorems
 
-This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3) and [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), and [`ROOT`](ROOT) defines the session `TRIEL_Core`.
+This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5) and [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6). [`ROOT`](ROOT) defines the session `TRIEL_Core`.
 
 It is based only on the public material at <https://github.com/triel-lang/grammar>: TECHNICAL_REPORT.md §2.5 and §2.9, and FOUNDATIONS.md. It makes no assumptions about any non-public implementation.
 
@@ -182,9 +182,51 @@ In five places the text of §2.5 is incomplete, and this formalisation adopts th
 1. **Fusion.** §2.5 says when π₁ ⌢ π₂ is defined but not what it is. Its explanation of the THEN law ("at m … N−1 by the second", where m is the entry at which t₁ completes) fixes the reading: π₁ followed by π₂ without its first entry.
 2. **Combining outcomes.** The equations for ⊔ leave Interrupted ⊔ Done and Violated ⊔ Done undefined. Read literally, they also give Violated ⊔ Interrupted = Interrupted but Interrupted ⊔ Violated = Violated. ⊔ is taken to be the maximum in Done < Interrupted < Violated, which agrees with every stated equation when "otherwise" is read as "when o ≠ Violated".
 3. **Interleaving.** `interleave` is not defined. It is a parameter, constrained only by one assumption: If t1 and t2 are total, then for every entry x there are traces of t1 and of t2 that start at x and have at least one interleaving starting at x.
-4. **Law 3.** §2.5 states it without a side condition, but it needs ⟦t₂⟧ to be total (see the counterexample above). Every term form with a denotation in §2.5 gives a total denotation (AND under the interleaving assumption of item 3).
+4. **Law 3.** §2.5 states it without a side condition, but it needs ⟦t₂⟧ to be total (see the counterexample above). Every term form with a denotation in §2.5 gives a total denotation (AND under the interleaving assumption of item 3). For the term language of section 6 this is proved for every term (`den_total`), so law 3 holds there with no side condition (`term_unless_then`).
 5. **MAY.** eval(c, σₙ₋₁) with n = |π| − 1 has no state to refer to when π has a single entry. So a taken action gives a trace of at least two entries, and c is evaluated in the state before the action.
 
 ### 4.4 Not formalised
 
 These term forms have no denotation in §2.5 and are outside this theory: `IF c THEN t`, `WHEN c THEN t`, `ON … DO`, `WITHIN … ELSE`, `REF`, `EXECUTE` and `ON_BREACH`. The breach and deadline semantics of §2.6 and the satisfaction of `INVARIANTS` are not formalised either.
+
+## 5. The indicator predicate *Ex* (`TRIEL_Ex.thy`)
+
+This section follows the logics of quasiary predicates of Nikitchenko and Shkilniak, in the form given in [5] of `FOUNDATIONS.md` (section 2 there).
+
+### 5.1 Definitions
+
+- **Quasiary predicate.** A quasiary predicate is a map Q from states (nominative data) to 𝔹⊥ (`qpred`). It is determined by its truth domain T(Q) = { d | Q(d) = T } and its falsity domain F(Q) = { d | Q(d) = F } (`truth_dom`, `false_dom`). Since Q has values in 𝔹⊥, these two sets are disjoint (`single_valued`).
+- **Total and equitone.** Q is *total* if it is defined everywhere (`total_pred`). Q is *equitone* if Q(d) defined and d ⊑ d′ imply Q(d′) = Q(d) (`equitone`).
+- **Total indicator predicate.** E_z has T(E_z) = { d | z ∈ dom d } and F(E_z) = { d | z ∉ dom d } (`Ex_ind`). In Isabelle it is called `Ex_ind`, because `Ex` is HOL's existential quantifier. These two domains determine it uniquely (`Ex_ind_domains`, `Ex_ind_unique`).
+- **Weak equality.** =xy has T(=xy) = { d | d(x), d(y) defined and equal } and F(=xy) = { d | d(x), d(y) defined and different } (`weq`). TRIEL's comparison of two names is exactly this predicate (`eval_eq_names`).
+
+### 5.2 Theorems
+
+- **`present_is_Ex`:** ⟦PRESENT(x)⟧ = E_x, as predicates on states.
+  — The value-presence predicate of TRIEL is the total indicator predicate.
+- **`Ex_ind_total`, `Ex_ind_not_equitone`, `present_total_not_equitone`:** E_x, and so PRESENT(x), is total and not equitone.
+  — This is why §2.9 makes PRESENT the exception to monotonicity.
+- **`Ex_ind_exists`:** E_x(d) = T ⟺ ∃v. ⟦x = v⟧d = T.
+  — This is the free-logic reading E!x ≡ ∃y. y = x.
+- **`present_free_equitone`:** every PRESENT-free expression denotes an equitone predicate.
+  — This is theorem T2 restated in the terminology of quasiary predicates.
+- **`partial_indicator`:** T(=xx) = T(E_x), F(=xx) = ∅, and =xx is equitone.
+  — The comparison x = x is the partial indicator predicate. It detects presence but never says "absent".
+
+## 6. Terms (`TRIEL_Terms.thy`)
+
+### 6.1 Definitions
+
+- **Terms.** Terms form an inductive type (`tm`):
+
+    t ::= s MUST a | s MAY a WHEN c | s MUST_NOT a WHEN c | t₁ THEN t₂ | t₁ OR t₂ | t₁ UNLESS c DO t₂ | t₁ AND t₂
+
+- **Denotation.** The denotation `den` maps each term, structurally, to the denotation of section 4. It is defined in the locale `term_semantics`, which extends `interleaving` with timestamps in a linear order, because AND needs `interleave`.
+
+### 6.2 Theorems
+
+- **`den_total`:** ⟦t⟧ is total for every term t.
+  — Every term can start from any entry.
+- **`term_unless_false`, `term_unless_or`, `term_unless_idem`:** laws 1, 2 and 4 of §2.5, stated for terms.
+- **`term_unless_then`:** ⟦(t₁ THEN t₂) UNLESS c DO e⟧ = ⟦(t₁ UNLESS c DO e) THEN (t₂ UNLESS c DO e)⟧ for all terms t₁, t₂, e and every guard c.
+  — Law 3 holds for the term language with no side condition, because every term is total.
