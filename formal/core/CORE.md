@@ -279,3 +279,19 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
   — Typing is monotone under the information order for such types, because records are open.
 - **`wt_not_mono_optional`:** for types with Optional, monotonicity fails.
   — An absent Optional field may be filled, by an extension, with a value of the wrong type. Example: Record {f: Optional⟨T⟩} with an empty datum, extended by [f ↦ a] where a is not of type T.
+
+**Open question: absent for good, or not yet known.** With incomplete data, a name that is absent from a datum can mean two different things.
+
+- *The field is absent for good.* This is how typing reads it: Optional⟨T⟩ permits absence, so the datum is well typed.
+- *The value is not yet known.* This is how the information order reads it: an extension may add the name later.
+
+`wt_not_mono_optional` shows that the two readings cannot both hold for Optional. A typing judgement made on the first reading is overturned when an extension supplies the field under the second.
+
+The logics of quasiary predicates do not resolve this either. They have a predicate for each side:
+
+- ε_x, the variable-unassignment predicate of [2] in `FOUNDATIONS.md`, is oriented to absence: T(ε_x) = { d | x ∉ dom d };
+- E_x of [5] is oriented to presence: T(E_x) = { d | x ∈ dom d }.
+
+By their definitions in [2] and [5], ε_x = ¬E_x. E_x is total and not equitone (`Ex_ind_total`, `Ex_ind_not_equitone`, `Ex_nd_not_equitone`), so ε_x is total and not equitone too. Both describe the datum at hand and cannot say whether an absence is final.
+
+Telling the two cases apart would need a third status for a name, such as an explicit marker for "known to be absent" in the value carrier. That would change the semantics of Optional, so the question is left open, and the meaning of Optional here is unchanged.
