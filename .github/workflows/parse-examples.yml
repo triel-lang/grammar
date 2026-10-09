@@ -2,7 +2,7 @@ name: Parse examples against grammar
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'stage*']
   pull_request:
     branches: [main]
 
