@@ -245,6 +245,21 @@ status (T.SBreached t c) = "BREACHED " ++ tm t ++ " " ++ continuation c
     continuation (T.Cure v) = "CURE " ++ verdict v
     continuation (T.Escalated s v) = "ESCALATED " ++ s ++ " " ++ verdict v
 
+atom :: T.Atom -> String
+atom (T.ABool b) = if b then "true" else "false"
+atom (T.AInt n) = tm n
+atom (T.AStr s) = show s
+atom (T.ATime t) = tm t
+
+-- A prohibition is reported with the informational actions of its handler;
+-- the other actions cannot occur there (run rejects them).
+baction :: T.Baction String T.Atom -> String
+baction (T.Notify s) = "NOTIFY " ++ s
+baction (T.Penalty v) = "PENALTY " ++ atom v
+baction T.Terminate = "TERMINATE"
+baction (T.CureBy k) = "CURE_BY " ++ tm k
+baction (T.EscalateTo s) = "ESCALATE_TO " ++ s
+
 answer :: Maybe Bool -> String
 answer (Just True) = "YES"
 answer (Just False) = "NO"
@@ -263,7 +278,9 @@ line (T.LTypes (Just (j, f))) = "TYPES ILL-TYPED ENTRY " ++ nat j ++ " FACTOR " 
 line (T.LMust i s a d st) =
   "TERM " ++ nat i ++ " MUST " ++ s ++ " " ++ a ++ " DEADLINE "
     ++ maybe "NONE" tm d ++ " : " ++ status st
-line (T.LMustNot i s a v) = "TERM " ++ nat i ++ " MUST_NOT " ++ s ++ " " ++ a ++ " : " ++ verdict v
+line (T.LMustNot i s a v acts) =
+  "TERM " ++ nat i ++ " MUST_NOT " ++ s ++ " " ++ a ++ " : " ++ verdict v
+    ++ concatMap ((' ' :) . baction) acts
 line (T.LMay i s a v) = "TERM " ++ nat i ++ " MAY " ++ s ++ " " ++ a ++ " : " ++ verdict v
 line (T.LOnBreach i s j) =
   "TERM " ++ nat i ++ " ON_BREACH " ++ s ++ " : " ++ maybe "UNBOUND" (("BOUND " ++) . nat) j

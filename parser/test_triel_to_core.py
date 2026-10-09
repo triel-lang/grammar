@@ -51,7 +51,7 @@ def test_classification_of_the_examples(monkeypatch):
     monkeypatch.chdir(REPO)
     out, ok = classify(["examples"])
     assert ok
-    expected = (REPO / "examples/core/classification.expected").read_text().splitlines()
+    expected = (REPO / "examples/core/classification.expected").read_text(encoding="utf-8").splitlines()
     assert out == expected
 
 
@@ -90,6 +90,34 @@ def test_durations_are_seconds():
 def test_penalty_literal_is_opaque():
     c = core(spec(terms='a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY 500, NOTIFY b2'))
     assert '(on_breach "a" (penalty (int 500)) (notify "b2"))' in c
+
+
+CONT = "§2.6 defines continuations only for obligations"
+
+
+@pytest.mark.parametrize("act", ["TERMINATE", "CURE_BY 1 DAYS", "ESCALATE_TO b2"])
+def test_continuation_bound_to_a_prohibition_is_rejected(act):
+    assert rejected(spec(terms=f"a MUST_NOT b; a ON_BREACH NOTIFY b2, {act}")) == [CONT]
+    assert rejected(spec(terms=f"(a MUST_NOT b); a ON_BREACH {act}")) == [CONT]
+
+
+def test_informational_actions_bound_to_a_prohibition():
+    c = core(spec(terms="a MUST_NOT b; a ON_BREACH NOTIFY b2, PENALTY 5"))
+    assert '(on_breach "a" (notify "b2") (penalty (int 5)))' in c
+
+
+@pytest.mark.parametrize("terms", [
+    "a MUST_NOT b; a MUST c WITHIN 1 DAYS; a ON_BREACH TERMINATE",
+    "a MUST c WITHIN 1 DAYS; b2 MUST_NOT b; a ON_BREACH TERMINATE",
+    "a MUST c WITHIN 1 DAYS; a MAY d; a ON_BREACH TERMINATE",
+    "a MUST c WITHIN 1 DAYS; a MUST_NOT b THEN a MUST d; a ON_BREACH TERMINATE",
+])
+def test_continuation_binds_to_the_nearest_obligation(terms):
+    assert not translate(spec(terms=terms)).rejected
+
+
+def test_continuation_after_the_nearest_prohibition_is_rejected():
+    assert rejected(spec(terms="a MUST c WITHIN 1 DAYS; a MUST_NOT b; a ON_BREACH CURE_BY 1 DAYS"))         == [CONT]
 
 
 def test_penalty_expression_is_rejected():
@@ -169,4 +197,4 @@ def test_scenario_input_is_well_formed(scn):
 def test_scenario_matches_the_expected_output(scn):
     r = run([str(PARSER / "triel_eval.py"), str(scn)], cwd=REPO)
     assert r.returncode == 0, r.stderr
-    assert r.stdout.splitlines() == scn.with_suffix(".expected").read_text().splitlines()
+    assert r.stdout.splitlines() == scn.with_suffix(".expected").read_text(encoding="utf-8").splitlines()

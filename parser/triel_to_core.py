@@ -22,6 +22,10 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
   * A Boolean factor used as a condition, `x`, is `x == true`; `a != b` is
     `NOT (a == b)`. Both are visible in the printed core AST.
   * The PENALTY amount must be a literal; it is kept as an opaque value.
+  * A handler binds to the nearest preceding obligation or prohibition of its
+    subject at the top level (bound_to in TRIEL_Breach.thy). Section 2.6
+    defines continuations only for obligations, so TERMINATE, CURE_BY and
+    ESCALATE_TO in a handler bound to a prohibition are rejected.
   * JURISDICTION, STANDARD, CURRENCY, PROVENANCE_REQUIRED and the SOURCE of
     each factor are metadata: they are printed and have no semantics in the core.
   * The class of an invariant (SAFETY, LIVENESS, FAIRNESS) is a label; the
@@ -97,6 +101,8 @@ RULES = {
 
 UNIT_SECONDS = {"SECOND": 1, "SECONDS": 1, "MINUTE": 60, "MINUTES": 60,
                 "HOUR": 3600, "HOURS": 3600, "DAY": 86400, "DAYS": 86400}
+CONTINUATIONS = {"TERMINATE", "CURE_BY", "ESCALATE_TO"}
+PROHIBITION_CONTINUATION = "§2.6 defines continuations only for obligations"
 CALENDAR_UNITS = {"BUSINESS_DAY", "BUSINESS_DAYS", "MONTH", "MONTHS", "YEAR", "YEARS"}
 PRIMITIVES = {"Integer": "int", "Boolean": "bool", "String": "string", "DateTime": "datetime"}
 ISO_UTC = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
@@ -171,6 +177,7 @@ class Translation:
         self.rejected = set()
         self.factors = {}       # factor name -> type (None if rejected)
         self.core = None        # the core AST, if accepted
+        self.top = None         # the norm or handler at the top level being translated
 
     def reject(self, what: str):
         self.rejected.add(what)
@@ -503,6 +510,8 @@ class Translation:
 
     def timeout(self, t: Tree, top: bool):
         p = subtrees(t)
+        if top:
+            self.note_top(p[0])
         if "WITHIN" not in tokens(t):
             return self.base(p[0], top, None)
         if "ELSE" in tokens(t):
@@ -537,6 +546,33 @@ class Translation:
         if m.data == "breach_handler_stmt":
             return self.handler(m)
         return self.reject(RULES[m.data])
+
+    def note_top(self, t: Tree):
+        """Record what the top-level element is, for binding handlers: an
+        obligation or prohibition with its subject, or a handler with its
+        subject and whether it has a continuation-determining action. A
+        parenthesised element is recorded again when its inside is reached."""
+        c = subtrees(t)[0]
+        m = subtrees(c)[0] if subtrees(c) else None
+        if m is None or "(" in tokens(c):
+            return
+        if m.data in ("obligation_stmt", "prohibition_stmt"):
+            self.top = (m.data, ident(subtrees(m)[0]))
+        elif m.data == "breach_handler_stmt":
+            cont = any(tokens(b)[0] in CONTINUATIONS for b in subtrees(m)[1:])
+            self.top = (m.data, ident(subtrees(m)[0]), cont)
+        else:
+            self.top = None
+
+    def check_binding(self, tops):
+        """Reject a continuation in a handler bound to a prohibition."""
+        for i, x in enumerate(tops):
+            if x is None or x[0] != "breach_handler_stmt" or not x[2]:
+                continue
+            bound = [y for y in tops[:i] if y is not None and y[0] != "breach_handler_stmt"
+                     and y[1] == x[1]]
+            if bound and bound[-1][0] == "prohibition_stmt":
+                self.reject(PROHIBITION_CONTINUATION)
 
     def action(self, t: Tree):
         if "(" in tokens(t):
@@ -635,12 +671,16 @@ class Translation:
         for f in subtrees(blocks["factors_block"]):
             factors += self.factor(f)
         terms = []
+        tops = []
         for el in subtrees(blocks["terms_block"]):
             x = subtrees(el)[0]
             if x.data == "named_term_decl":
                 self.reject("named term (:=)")
                 continue
+            self.top = None
             terms.append(self.term_stmt(x, True))
+            tops.append(self.top)
+        self.check_binding(tops)
         invs = [self.invariant(i) for i in subtrees(blocks["invariants_block"])]
         self.metadata += self.metadata_sources
         if not self.rejected:
@@ -692,6 +732,7 @@ def classify(paths):
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--classify", action="store_true",
