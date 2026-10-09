@@ -89,6 +89,20 @@ definite verdict is final under extension; an entry where the formula is undefin
 lack of data neither violates \texttt{ALWAYS} nor fulfils \texttt{EVENTUALLY}; definite
 verdicts survive more data.
 
+\paragraph{Indicator predicates (theory \texttt{TRIEL\_Indicators}).}
+Following Shkilniak (2024), an R-predicate is given by a truth domain and a falsity domain,
+and a P-predicate is one whose two domains are disjoint. Besides the total indicator $E_z$
+(true where $z$ has a value, false where it has none) there is the partial indicator
+$\downarrow z$, true where $z$ has a value and never false. Proved: $E_z$ and
+$\downarrow z$ have the same truth domain; $\downarrow z$ is an equitone, irrefutable
+P-predicate, and in TRIEL it is the comparison $z = z$; $E_z$ is total and single-valued
+but not monotone, with an explicit counterexample; partial presence of a complex name is
+monotone under extension of nominative data. A condition built from equitone atoms,
+such as $\downarrow z$, by \texttt{NOT}, \texttt{AND} and \texttt{OR} keeps every
+definite verdict when the data is extended; with the atom $E_z$ this fails, on the data of
+the counterexample for typing with \texttt{Optional}. The equitone P-predicates are
+closed under negation and disjunction.
+
 \paragraph{The evaluator (theory \texttt{TRIEL\_Exec}).}
 Executable equations, each proved equal to a definition of the other theories, replace
 unbounded quantifiers, \texttt{LEAST} and \texttt{GREATEST}. Membership of a trace in the

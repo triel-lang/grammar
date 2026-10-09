@@ -1,6 +1,6 @@
 # TRIEL core: definitions and theorems
 
-This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8), [`TRIEL_Invariants.thy`](TRIEL_Invariants.thy) (invariants, section 10) and [`TRIEL_Exec.thy`](TRIEL_Exec.thy) (the evaluator exported to Haskell, section 10). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
+This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8), [`TRIEL_Invariants.thy`](TRIEL_Invariants.thy) (invariants, section 10), [`TRIEL_Indicators.thy`](TRIEL_Indicators.thy) (the indicators E_z and ↓z and the stability of verdicts, section 7.2) and [`TRIEL_Exec.thy`](TRIEL_Exec.thy) (the evaluator exported to Haskell, section 10). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
 
 It is based only on the public material at <https://github.com/triel-lang/grammar>: TECHNICAL_REPORT.md §2.5, §2.6 and §2.9, and FOUNDATIONS.md. It makes no assumptions about any non-public implementation.
 
@@ -215,7 +215,7 @@ This section follows the logics of quasiary predicates of Nikitchenko and Shkiln
 - **`present_free_equitone`:** every PRESENT-free expression denotes an equitone predicate.
   — This is theorem T2 restated in the terminology of quasiary predicates.
 - **`partial_indicator`:** T(=xx) = T(E_x), F(=xx) = ∅, and =xx is equitone.
-  — The comparison x = x is the partial indicator predicate. It detects presence but never says "absent".
+  — The comparison x = x is the partial indicator predicate. It detects presence but never says "absent". Section 7.2 treats it as the indicator ↓x.
 
 ## 6. Terms (`TRIEL_Terms.thy`)
 
@@ -284,21 +284,49 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 - **`wt_not_mono_optional`:** for types with Optional, monotonicity fails.
   — An absent Optional field may be filled, by an extension, with a value of the wrong type. Example: Record {f: Optional⟨T⟩} with an empty datum, extended by [f ↦ a] where a is not of type T.
 
-**Open question: absent for good, or not yet known.** With incomplete data, a name that is absent from a datum can mean two different things.
+**Three indicators: absent for good, or not yet known** (`TRIEL_Indicators.thy`). With incomplete data, a name that is absent from a datum can mean two different things.
 
 - *The field is absent for good.* This is how typing reads it: Optional⟨T⟩ permits absence, so the datum is well typed.
 - *The value is not yet known.* This is how the information order reads it: an extension may add the name later.
 
-`wt_not_mono_optional` shows that the two readings cannot both hold for Optional. A typing judgement made on the first reading is overturned when an extension supplies the field under the second.
+`wt_not_mono_optional` shows that the two readings cannot both hold for Optional. The logics of quasiary predicates have three indicators, and each takes one side. The third one comes from S. S. Shkilniak, 2024 ([8] in `FOUNDATIONS.md`).
 
-The logics of quasiary predicates do not resolve this either. They have a predicate for each side:
+| Indicator | Truth domain | Falsity domain | Properties | Source |
+|---|---|---|---|---|
+| ε_x, oriented to absence (free logic) | { d \| x ∉ dom d } | { d \| x ∈ dom d } | total, not equitone | [2] |
+| E_x, total | { d \| d(x)↓ } | { d \| d(x)↑ } | total, single-valued, not monotone | [5], [8] |
+| ↓x, partial | { d \| d(x)↓ } | ∅ | P-predicate, irrefutable, equitone | [8] |
 
-- ε_x, the variable-unassignment predicate of [2] in `FOUNDATIONS.md`, is oriented to absence: T(ε_x) = { d | x ∉ dom d };
-- E_x of [5] is oriented to presence: T(E_x) = { d | x ∈ dom d }.
+ε_x is the variable-unassignment predicate of [2]. By their definitions in [2] and [5], ε_x = ¬E_x. E_x is total and not equitone (`Ex_ind_total`, `Ex_ind_not_equitone`, `Ex_nd_not_equitone`), so ε_x is total and not equitone too. ε_x is not formalised separately.
 
-By their definitions in [2] and [5], ε_x = ¬E_x. E_x is total and not equitone (`Ex_ind_total`, `Ex_ind_not_equitone`, `Ex_nd_not_equitone`), so ε_x is total and not equitone too. Both describe the datum at hand and cannot say whether an absence is final.
+*Definitions*, as in [8]:
 
-Telling the two cases apart would need a third status for a name, such as an explicit marker for "known to be absent" in the value carrier. That would change the semantics of Optional, so the question is left open, and the meaning of Optional here is unchanged.
+- An R-predicate Q is a pair (T(Q), F(Q)) of a truth domain and a falsity domain (`rpred`, `R_T`, `R_F`). Q[d] is the set of truth values Q takes on d (`rval`). Q is a P-predicate if T(Q) ∩ F(Q) = ∅ (`P_pred`). The value Q(d) ∈ 𝔹⊥ of a P-predicate is `pval`, and `of_qpred` turns a quasiary predicate of section 5 into an R-predicate (`pval_of_qpred`, `of_qpred_pval`).
+- d ⊆ d′, the extension of a named set (inclusion of graphs), is the information order ⊑ of section 1. The definitions take the order as a parameter, so they also apply to ≤ on nominative data.
+- Q is *monotone* if d₁ ⊆ d₂ ⇒ Q[d₁] ⊆ Q[d₂] (`rmono`), that is, if T(Q) and F(Q) are closed upwards (`rmono_iff`). A P-predicate Q is *equitone* if Q(d) defined and d ⊆ d′ imply Q(d′) = Q(d) (`equitone_R`, `equitone_on`). For P-predicates the two notions coincide (`P_pred_rmono_iff_equitone`).
+- E_z (`Ex_R`) has T(E_z) = { d | d(z)↓ } and F(E_z) = { d | d(z)↑ }. ↓z (`DownInd`) has T(↓z) = { d | d(z)↓ } and F(↓z) = ∅.
+- In logics with weak equality, ↓z is =zz. As in [8], only the diagonal is used: T(=zz) = { d | d(z)↓ } and F(=zz) = ∅. No general definition of =xy is added; the diagonal is that of TRIEL's comparison `weq` (section 5).
+- *Partial presence* of a complex name p (`present_partial`, as an R-predicate `DownInd_nd`) is ↓p on nominative data: T where p leads to an atom or a record, undefined elsewhere.
+- A *condition* (`cond`) is built from atoms by NOT, AND and OR, and evaluated with the strong Kleene connectives of section 1 (`cond_eval`). Its verdict is T, F or ⊥. Over nominative data the atoms are E_p (`AEx`), ↓p (`ADown`), and "p is an atom of primitive type q" (`AIs`, `is_prim`), which is ⊥ when p leads to nothing and F when it leads to a record.
+
+*Theorems* (all in `TRIEL_Indicators.thy`):
+
+- **`T_DownInd_eq_T_Ex`:** T(↓z) = T(E_z).
+- **`DownInd_P_pred`, `DownInd_irrefutable`, `DownInd_mono`, `DownInd_equitone`, `DownInd_equitone_R`:** ↓z is a P-predicate, F(↓z) = ∅, and ↓z is monotone and equitone.
+- **`DownInd_is_eq_zz`, `self_eq_is_DownInd`:** ↓z is =zz, so in TRIEL expressions ↓z is the comparison `z == z`.
+- **`Ex_R_P_pred`, `Ex_R_total`, `pval_Ex_R_present`:** E_z is single-valued and total, and it is PRESENT(z).
+- **`Ex_R_counterexample`, `Ex_R_not_mono`, `Ex_R_not_equitone_R`:** ∅ ⊑ [z ↦ v], with E_z(∅) = F and E_z([z ↦ v]) = T. So E_z[∅] = {F} is not a subset of E_z[[z ↦ v]] = {T}, and E_z is not monotone.
+- **`present_partial_domains`, `present_partial_below_present`, `present_partial_mono`, `present_partial_equitone`, `DownInd_nd_equitone_R`:** partial presence has the truth domain of E_p and an empty falsity domain. Wherever it is defined it agrees with PRESENT(p), and it is monotone under the extension ≤ of nominative data.
+  — `self_eq_below_present_partial`: the comparison p == p is below ↓p. It is ⊥ when p leads to a record, because comparisons see only atoms.
+- **`cond_equitone`, `verdict_stable`, `verdict_stable_nd`:** if every atom of a condition is equitone, the condition is equitone: a definite verdict T or F stays the same under every extension of the data. Over nominative data this holds for every condition whose atoms are ↓p and type checks, without E_p.
+- **`opt_cond_Ex_wt`, `Ex_breaks_stability`, `Ex_cond_not_equitone`:** with the atom E_p the property fails. The condition "NOT E_f OR f has type q" is the typing judgement of Record {f: Optional⟨q⟩} (`opt_cond_Ex_wt`). On the data of `wt_not_mono_optional` (the empty record, extended by [f ↦ b] where b is not of type q) its verdict changes from T to F.
+- **`opt_cond_Down_wt`, `Down_cond_equitone`:** the same condition with ↓f agrees with typing when f is present and is ⊥ when f is absent. On the same data its verdict changes from ⊥ to F, so no definite verdict is overturned.
+- **`inv_data_mono_equitone`:** the LTL3 verdicts of invariants (section 10.1) survive more data for every state formula whose predicate is equitone. `inv_data_mono` is the case of PRESENT-free formulas.
+- **`equitone_R_not`, `equitone_R_or`, `equitone_closure_equitone`:** the equitone P-predicates are closed under the negation and the disjunction of R-predicates (`R_not`, `R_or`; on P-predicates these are the Kleene ¬ and ∨, `pval_R_not`, `pval_R_or`), and ↓z is one of them. So every predicate built from ↓z and equitone P-predicates by ¬ and ∨ is an equitone P-predicate.
+
+*Reading.* "The field is absent for good" corresponds to E_x on a closed record: E_x(d) = F is a definite answer, and it is right only if no extension can add the field. "The value is not yet known" corresponds to the undefinedness of ↓x: ↓x(d) = ⊥, and an extension can only make it T. A condition written with ↓ never gives a verdict that more data would overturn (`verdict_stable_nd`). A condition written with E_x can (`Ex_breaks_stability`). The meanings of `PRESENT` and of Optional are unchanged: `PRESENT` is E_x (section 9, decision 1), and typing with Optional is still not monotone.
+
+**Open question.** Does this reading match the intent of the composition-nominative approach for data that arrive over time? That is: should an absence in data that may still arrive be read as ↓ (not yet known), and an absence in a closed record as E_x (absent for good)?
 
 ## 8. Deadlines and breach (`TRIEL_Breach.thy`, TECHNICAL_REPORT.md §2.6)
 
@@ -401,7 +429,7 @@ Each decision below was made because of a theorem: either one that proves the de
    - It holds when the right operand of THEN is total (`unless_then`). Every term of the language is total (`den_total`), so the law holds for all terms with no side condition (`term_unless_then`).
 5. **Typing and the information order disagree on Optional.**
    - For types with Optional, typing is not monotone (`wt_not_mono_optional`). It is monotone only for types without Optional (`wt_mono`).
-   - The semantics of Optional is left unchanged, and the conflict is recorded as an open question in section 7.2: is an absence final, or is the value not yet known?
+   - The semantics of Optional is left unchanged. Section 7.2 relates the two readings of an absence, final or not yet known, to the indicators E_x and ↓x, and leaves one question open.
 6. **Fail-closed is enforcement, not the verdict.**
    - If an undefined condition counted as a breach, a prohibition would be breached on data that does not yet decide it. The verdict records a breach only when c = T.
    - The monitor blocks on ⊥ (`blocks`). Every breach is an action the monitor would have blocked (`breach_blocked`), enforcement prevents breach (`enforced_no_breach`), and on ⊥ the two roles differ (`undefined_guard_blocks_not_breach`).
@@ -416,6 +444,10 @@ Each decision below was made because of a theorem: either one that proves the de
    - With at most one handler per obligation (`wf_one_handler`) the status of a norm is determined.
 10. **A stale factor under BLOCK is absent.**
     - Treating stale values as absent, rather than as old values, is what makes a result computed on stale data safe against refresh (`stale_safe`). This is T2 applied to the blocked state, which is below every refreshed state (`blocked_le`).
+11. **"Not yet known" is the partial indicator ↓x, and a verdict that must survive more data uses only equitone atoms.**
+    - ↓x has the truth domain of E_x but an empty falsity domain (`T_DownInd_eq_T_Ex`, `DownInd_irrefutable`). It is equitone (`DownInd_equitone`), and partial presence is monotone on nominative data (`present_partial_mono`).
+    - A condition built from equitone atoms by NOT, AND and OR keeps every definite verdict when data is added (`verdict_stable`, `verdict_stable_nd`), and so do the LTL3 verdicts of invariants with an equitone formula (`inv_data_mono_equitone`). With E_x as an atom this fails, on the data of `wt_not_mono_optional` (`Ex_breaks_stability`).
+    - No new construct is added for ↓x: in TRIEL it is the comparison `x == x` (`self_eq_is_DownInd`), which is PRESENT-free, so T2 already covers it. `PRESENT` keeps its meaning E_x (decision 1). A condition whose verdict must not be overturned by later data uses `x == x`, not `PRESENT(x)`.
 
 ## 10. Invariants and the evaluator (`TRIEL_Invariants.thy`, `TRIEL_Exec.thy`)
 
