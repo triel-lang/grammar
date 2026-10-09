@@ -97,7 +97,9 @@ sound for terms without \texttt{AND}, and are always given for terms without
 \texttt{UNLESS} and \texttt{AND}. Stale factors are blocked by factor, and the safety
 claim of Section~2.9 is proved again for this blocking. The function \texttt{run}
 computes the report of a specification on an implementation trace and is exported to
-Haskell.
+Haskell. A breached prohibition is reported with the informational actions of the handler
+bound to it; a continuation in such a handler is rejected, since Section~2.6 defines
+continuations only for obligations.
 
 \paragraph{Not formalised.}
 Arithmetic, further comparisons, \texttt{List} and \texttt{Map} types, the calendar,

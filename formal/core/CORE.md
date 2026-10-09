@@ -358,7 +358,7 @@ Section 2.6 distinguishes the specification trace of §2.5 from the *implementat
 
 ### 8.3 Clarifications of §2.6
 
-Points 1–14 are the points where §2.6 is ambiguous or contradictory. Points 15–20 are further readings needed to formalise it.
+Points 1–14 are the points where §2.6 is ambiguous or contradictory. Points 15–21 are further readings needed to formalise it.
 
 1. **Binding.** §2.6 binds a handler to the nearest preceding obligation and also says that two obligations with one trailing handler have no defined meaning. The binding rule is adopted: the handler binds to the nearest one, and the others have no handler.
 2. **Handlers are top-level.** Syntactically a handler is a term, but it has no denotation as one. It is allowed only at the top level of a TERMS block; a nested handler is rejected (`nested_handler_rejected`).
@@ -380,6 +380,7 @@ Points 1–14 are the points where §2.6 is ambiguous or contradictory. Points 1
 18. **CURE_BY** takes a duration.
 19. **Activation entry.** Entry 0 of an implementation trace is the activation entry; actions are the events of later entries.
 20. **Scope of verdicts.** Verdicts are given to the top-level elements of a TERMS block. Deadlines inside composite terms are resolved at activation (and can reject it), but have no verdict of their own.
+21. **Handlers of prohibitions.** §2.6 defines continuations only for obligations. A handler bound to a prohibition may have only informational actions; the evaluator and the translator reject a continuation there (section 10.6, rule 4).
 
 ## 9. Design decisions forced by the theory
 
@@ -446,8 +447,8 @@ Whether a trace with an outcome belongs to the denotation of a composite term is
 
 - Data are nominative data (section 7). The state of an entry is its data flattened to complex names. Basic values are Booleans, integers, strings and times.
 - A factor under `MAX_AGE m` and `ON_STALE BLOCK` is absent, with every complex name that starts with it, at an entry where it has not arrived in the last m seconds (`blockp`). The safety claim of §2.9 holds for this blocking by factor (`blockp_stale_safe`, with `blockp_le` and `blockp_stale_absent`), as it does for `blocked` (section 8).
-- Activation is checked first, in the blocked state of entry 0. Then the block is checked with `wf_block`, and then the types of the data as given (`ill_typed`, `ill_typed_None`). Verdicts, invariants and composite terms are computed on the blocked trace (`btrace`, which keeps the times and events: `btrace_is_trace`).
-- A top-level obligation gets `handle_breach` with the handler bound to it, a prohibition `pr_verdict`, a permission `may_verdict`, a handler the element it is bound to, a composite term `mem3` for each outcome, and an invariant `inv_eval`.
+- Activation is checked first, in the blocked state of entry 0. Then the block is checked with `wf_block` and `cont_free_prohibitions` (section 10.6, rule 4), and then the types of the data as given (`ill_typed`, `ill_typed_None`). Verdicts, invariants and composite terms are computed on the blocked trace (`btrace`, which keeps the times and events: `btrace_is_trace`).
+- A top-level obligation gets `handle_breach` with the handler bound to it, a prohibition `pr_verdict` with the informational actions of its handler after a breach (`pr_actions`), a permission `may_verdict`, a handler the element it is bound to, a composite term `mem3` for each outcome, and an invariant `inv_eval`.
 
 `export_code` writes `run` to Haskell. `isabelle build -e -D .` exports the module to [`evaluator/generated/TRIEL.hs`](../../evaluator/generated/TRIEL.hs).
 
@@ -460,10 +461,20 @@ Whether a trace with an outcome belongs to the denotation of a composite term is
 
 [`parser/triel_to_core.py`](../../parser/triel_to_core.py) parses a specification with the reference grammar and translates it into the input of `run`. Every construct is translated, printed as metadata, or rejected by name. Only the outermost unsupported construct is reported. The translator's table of grammar rules is checked against the grammar by [`parser/test_triel_to_core.py`](../../parser/test_triel_to_core.py).
 
-- Metadata: `JURISDICTION`, `STANDARD`, `CURRENCY`, `PROVENANCE_REQUIRED`, and the `SOURCE` of each factor. The class of an invariant (`SAFETY`, `LIVENESS`, `FAIRNESS`) is a label.
-- The `PENALTY` amount must be a literal and is kept as an opaque value, since informational actions do not affect the status (`informational_irrelevant`). Arithmetic in `PENALTY` is rejected.
-- A Boolean factor used as a condition, `x`, is translated to `x == true`, and `a != b` to `NOT (a == b)`. Both translations are visible in the printed core AST.
-- `PRESENT` is accepted only on a complex name of primitive type.
+Metadata: `JURISDICTION`, `STANDARD`, `CURRENCY`, `PROVENANCE_REQUIRED`, and the `SOURCE` of each factor. The class of an invariant (`SAFETY`, `LIVENESS`, `FAIRNESS`) is a label.
+
+Translation rules:
+
+1. **`PENALTY`.** The amount must be a literal and is kept as an opaque value, since informational actions do not affect the status (`informational_irrelevant`). Arithmetic in `PENALTY` is rejected.
+2. **Boolean conditions.** A Boolean factor used as a condition, `x`, is translated to `x == true`, and `a != b` to `NOT (a == b)`. Both translations are visible in the printed core AST.
+3. **`PRESENT`.** `PRESENT` is accepted only on a complex name of primitive type.
+   - This is a restriction of the translator, not of the semantics. On nominative data, `PRESENT(p)` is the total indicator E_p for every complex name p, including one that leads to a record (`T5_nd_present`, `present_nd_is_Ex`, `Ex_nd_total`, section 7).
+   - The evaluator works on the flattened state (section 10.4), where a record has no complex name of its own, so `PRESENT` of a record would be F there. The translator rejects it instead of giving a wrong answer.
+4. **Handlers of prohibitions.** A handler binds as `bound_to` does: to the nearest preceding obligation or prohibition of its subject at the top level.
+   - For a prohibition with a handler, the report shows the verdict and, after a breach, the informational actions of the handler, `NOTIFY` and `PENALTY`, in source order (`pr_actions`, `pr_actions_informational`, `pr_actions_breached`).
+   - §2.6 defines continuations only for obligations. A continuation-determining action (`TERMINATE`, `CURE_BY`, `ESCALATE_TO`) in a handler bound to a prohibition is rejected with the message "§2.6 defines continuations only for obligations". The evaluator checks the same condition (`cont_free_prohibitions`) and otherwise reports `BLOCK REJECTED`, so after a breach every action of such a handler is reported (`pr_actions_cont_free`).
+
+Further rejections:
 - A deadline inside a composite term is rejected: the trace semantics of §2.5 has no time, so the deadline would be ignored.
 - `MAX_AGE` without `ON_STALE`, and `ON_STALE` without `MAX_AGE`, are rejected.
 
