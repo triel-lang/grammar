@@ -1,0 +1,30 @@
+-- TRIEL example inside the formal core: a breach handler bound to a
+-- prohibition. Such a handler has only informational actions (NOTIFY,
+-- PENALTY): section 2.6 defines continuations only for obligations. Each
+-- handler binds to the nearest preceding obligation or prohibition of its
+-- subject. Every construct in this file is translated into the Isabelle/HOL
+-- core (formal/core) and evaluated by the exported evaluator (evaluator/).
+
+SPECIFICATION core_prohibition_handler VERSION 1.0.0
+    JURISDICTION "EU"
+
+SUBJECTS {
+  lender    : PARTY,
+  oracle_a  : ORACLE,
+  regulator : REGULATOR
+}
+
+TERMS {
+  lender MUST verify_identity WITHIN 1 DAYS;
+  lender ON_BREACH CURE_BY 12 HOURS;
+  lender MUST_NOT disburse_loan WHEN sanctioned;
+  lender ON_BREACH NOTIFY regulator, PENALTY 1000
+}
+
+FACTORS {
+  sanctioned : Boolean METADATA SOURCE oracle_a
+}
+
+INVARIANTS {
+  not_sanctioned : SAFETY : ALWAYS(sanctioned == false)
+}

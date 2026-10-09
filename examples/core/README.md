@@ -1,10 +1,11 @@
 # Examples inside the formal core
 
-The three specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
+The four specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
 
 - `core_deadline_cure.triel`: a deadline, its breach, and a cure;
 - `core_unless_records.triel`: a sequence under UNLESS, with the guard read from a nested record;
-- `core_stale_block.triel`: a stale factor under `ON_STALE BLOCK`, a prohibition with an undefined condition, and an escalation.
+- `core_stale_block.triel`: a stale factor under `ON_STALE BLOCK`, a prohibition with an undefined condition, and an escalation;
+- `core_prohibition_handler.triel`: a breach handler bound to a prohibition, with informational actions only.
 
 The evaluator exported from Isabelle runs them on the scenarios in `scenarios/`.
 
@@ -52,7 +53,7 @@ ACTIVATION OK | ACTIVATION REJECTED
 BLOCK OK | BLOCK REJECTED
 TYPES OK | TYPES ILL-TYPED ENTRY J FACTOR F
 TERM I MUST S A DEADLINE (T | NONE) : STATUS
-TERM I MUST_NOT S A : PENDING | BREACHED T
+TERM I MUST_NOT S A : PENDING | BREACHED T ACTION*
 TERM I MAY S A : FULFILLED | PENDING
 TERM I ON_BREACH S : BOUND J
 TERM I COMPOSITE : DONE X INTERRUPTED X VIOLATED X        -- X is YES, NO or UNKNOWN
@@ -68,6 +69,8 @@ INVARIANT NAME : T | F | U
   - `TERMINATED`
   - `CURE FULFILLED`, `CURE PENDING` or `CURE BREACHED T`
   - `ESCALATED S FULFILLED`, `ESCALATED S PENDING` or `ESCALATED S BREACHED T`
+
+After `BREACHED T`, a prohibition lists the actions of the handler bound to it, in source order: `NOTIFY S` or `PENALTY VALUE`. Only these informational actions can occur there: the translator rejects a continuation-determining action (`TERMINATE`, `CURE_BY`, `ESCALATE_TO`) in a handler bound to a prohibition, since §2.6 defines continuations only for obligations. A `PENALTY` value is printed as an integer, a string literal, `true` or `false`, or a time in seconds.
 
 `U` is the inconclusive verdict ⊥ of an invariant.
 

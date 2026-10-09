@@ -1,0 +1,27 @@
+-- TRIEL example: a continuation after the breach of a prohibition
+-- Section 2.6 defines continuations (TERMINATE, CURE_BY, ESCALATE_TO) only
+-- for obligations: a cure or an escalation needs an action that is still
+-- owed. The handler below binds to the prohibition, so the translator to the
+-- formal core rejects it. A handler bound to a prohibition may have only
+-- informational actions (NOTIFY, PENALTY).
+
+SPECIFICATION sem_prohibition_continuation VERSION 1.0.0
+    JURISDICTION "EU"
+
+SUBJECTS {
+  lender    : PARTY,
+  regulator : REGULATOR
+}
+
+TERMS {
+  lender MUST_NOT disburse_loan WHEN sanctioned;
+  lender ON_BREACH NOTIFY regulator, TERMINATE
+}
+
+FACTORS {
+  sanctioned : Boolean METADATA
+}
+
+INVARIANTS {
+  not_sanctioned : SAFETY : ALWAYS(sanctioned == false)
+}

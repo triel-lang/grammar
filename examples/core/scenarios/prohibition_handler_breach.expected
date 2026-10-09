@@ -1,0 +1,11 @@
+SPEC core_prohibition_handler
+METADATA JURISDICTION "EU"
+METADATA SOURCE sanctioned oracle_a
+ACTIVATION OK
+BLOCK OK
+TYPES OK
+TERM 1 MUST lender verify_identity DEADLINE 1772409600 : FULFILLED
+TERM 2 ON_BREACH lender : BOUND 1
+TERM 3 MUST_NOT lender disburse_loan : BREACHED 1772355600 NOTIFY regulator PENALTY 1000
+TERM 4 ON_BREACH lender : BOUND 3
+INVARIANT not_sanctioned : F

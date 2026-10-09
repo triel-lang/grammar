@@ -1,0 +1,13 @@
+; The identity is verified in time; the loan is disbursed after the borrower
+; has been sanctioned, so the prohibition is breached and the report lists the
+; informational actions of its handler.
+(scenario prohibition_handler_breach
+  (spec "examples/core/core_prohibition_handler.triel")
+  (entry "2026-03-01T00:00:00Z" (activate)
+    (data (sanctioned (bool false))))
+  (entry "2026-03-01T06:00:00Z" (act lender verify_identity must)
+    (data (sanctioned (bool false))))
+  (entry "2026-03-01T08:00:00Z" (arrive sanctioned)
+    (data (sanctioned (bool true))))
+  (entry "2026-03-01T09:00:00Z" (act lender disburse_loan must_not)
+    (data (sanctioned (bool true)))))
