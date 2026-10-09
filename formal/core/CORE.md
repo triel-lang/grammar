@@ -447,7 +447,7 @@ Each decision below was made because of a theorem: either one that proves the de
 11. **"Not yet known" is the partial indicator ↓x, and a verdict that must survive more data uses only equitone atoms.**
     - ↓x has the truth domain of E_x but an empty falsity domain (`T_DownInd_eq_T_Ex`, `DownInd_irrefutable`). It is equitone (`DownInd_equitone`), and partial presence is monotone on nominative data (`present_partial_mono`).
     - A condition built from equitone atoms by NOT, AND and OR keeps every definite verdict when data is added (`verdict_stable`, `verdict_stable_nd`), and so do the LTL3 verdicts of invariants with an equitone formula (`inv_data_mono_equitone`). With E_x as an atom this fails, on the data of `wt_not_mono_optional` (`Ex_breaks_stability`).
-    - No new construct is added for ↓x: in TRIEL it is the comparison `x == x` (`self_eq_is_DownInd`), which is PRESENT-free, so T2 already covers it. `PRESENT` keeps its meaning E_x (decision 1). A condition whose verdict must not be overturned by later data uses `x == x`, not `PRESENT(x)`.
+    - No new construct is added for ↓x: on the flat named sets of section 1 it is the comparison `x == x` (`self_eq_is_DownInd`), which is PRESENT-free, so T2 already covers it. On nominative data `p == p` is below ↓p (`self_eq_below_present_partial`): it is ⊥ when p leads to a record. `PRESENT` keeps its meaning E_x (decision 1). A condition whose verdict must not be overturned by later data uses `x == x`, not `PRESENT(x)`.
 
 ## 10. Invariants and the evaluator (`TRIEL_Invariants.thy`, `TRIEL_Exec.thy`)
 
