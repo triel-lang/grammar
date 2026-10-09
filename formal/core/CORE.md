@@ -293,11 +293,11 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 
 | Indicator | Truth domain | Falsity domain | Properties | Source |
 |---|---|---|---|---|
-| ε_x, oriented to absence (free logic) | { d \| x ∉ dom d } | { d \| x ∈ dom d } | total, not equitone | [2] |
+| ε_x, oriented to absence (free logic) | { d \| x ∉ dom d } | { d \| x ∈ dom d } | total, not equitone | [2], pp. 265–267 |
 | E_x, total | { d \| d(x)↓ } | { d \| d(x)↑ } | total, single-valued, not monotone | [5], [8] |
 | ↓x, partial | { d \| d(x)↓ } | ∅ | P-predicate, irrefutable, equitone | [8] |
 
-ε_x is the variable-unassignment predicate of [2]. By their definitions in [2] and [5], ε_x = ¬E_x. E_x is total and not equitone (`Ex_ind_total`, `Ex_ind_not_equitone`, `Ex_nd_not_equitone`), so ε_x is total and not equitone too. ε_x is not formalised separately.
+ε_x is the variable-unassignment predicate of [2] (p. 265). Its truth and falsity domains are defined in [2], p. 266: T(εz) = { d | z ∉ asn(d) } and F(εz) = { d | z ∈ asn(d) }, where asn(d) is the set of names assigned in d. [2] also states that εz is total (p. 267), and that E!z of free logic corresponds to the negation of εz (p. 268). With the negation of [2] (T(¬p) = F(p), F(¬p) = T(p), p. 266) and the definition of E_x in [5], ε_x = ¬E_x. E_x is total and not equitone (`Ex_ind_total`, `Ex_ind_not_equitone`, `Ex_nd_not_equitone`), so ε_x is total and not equitone too. ε_x is not formalised separately.
 
 *Definitions*, as in [8]:
 
@@ -313,7 +313,7 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 
 - **`T_DownInd_eq_T_Ex`:** T(↓z) = T(E_z).
 - **`DownInd_P_pred`, `DownInd_irrefutable`, `DownInd_mono`, `DownInd_equitone`, `DownInd_equitone_R`:** ↓z is a P-predicate, F(↓z) = ∅, and ↓z is monotone and equitone.
-- **`DownInd_is_eq_zz`, `self_eq_is_DownInd`:** ↓z is =zz, so in TRIEL expressions ↓z is the comparison `z == z`.
+- **`DownInd_is_eq_zz`, `self_eq_is_DownInd`:** ↓z is =zz, so on the flat named sets of section 1 ↓z is the comparison `z == z`. On nominative data `p == p` is below ↓p (`self_eq_below_present_partial`): it is ⊥ when p leads to a record.
 - **`Ex_R_P_pred`, `Ex_R_total`, `pval_Ex_R_present`:** E_z is single-valued and total, and it is PRESENT(z).
 - **`Ex_R_counterexample`, `Ex_R_not_mono`, `Ex_R_not_equitone_R`:** ∅ ⊑ [z ↦ v], with E_z(∅) = F and E_z([z ↦ v]) = T. So E_z[∅] = {F} is not a subset of E_z[[z ↦ v]] = {T}, and E_z is not monotone.
 - **`present_partial_domains`, `present_partial_below_present`, `present_partial_mono`, `present_partial_equitone`, `DownInd_nd_equitone_R`:** partial presence has the truth domain of E_p and an empty falsity domain. Wherever it is defined it agrees with PRESENT(p), and it is monotone under the extension ≤ of nominative data.
