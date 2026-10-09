@@ -1,4 +1,4 @@
-Started at Fri Oct 9 10:48:42 GMT+3 2026 (polyml-5.9.2_x86_64_32-windows)
+Started at Fri Oct 9 18:54:43 GMT+3 2026 (polyml-5.9.2_x86_64_32-windows)
 ISABELLE_TOOL_JAVA_OPTIONS="-Djava.awt.headless=true -Xms512m -Xmx4g -Xss16m"
 ISABELLE_BUILD_OPTIONS=""
 
@@ -19,7 +19,7 @@ TRIEL_Core: theory HOL-Library.Code_Target_Nat
 TRIEL_Core: theory HOL-Library.Code_Target_Int
 TRIEL_Core: theory HOL-Library.Code_Target_Numeral
 TRIEL_Core: theory HOL-Library.Conditional_Parametricity
-TRIEL_Core: theory HOL-Library.Code_Target_Numeral 100% (0.361s cumulated time)
+TRIEL_Core: theory HOL-Library.Code_Target_Numeral 100% (0.222s cumulated time)
 TRIEL_Core: theory HOL-Library.Nat_Bijection
 TRIEL_Core: theory HOL-Library.Old_Datatype
 TRIEL_Core: theory TRIEL_Core.TRIEL_Core
@@ -29,48 +29,51 @@ TRIEL_Core: theory TRIEL_Core.TRIEL_Ex
 TRIEL_Core: theory TRIEL_Core.TRIEL_Trace
 TRIEL_Core: theory HOL-Library.Finite_Map
 TRIEL_Core: theory TRIEL_Core.TRIEL_Breach
-TRIEL_Core: command "export_code" running for 20.777s (line 1406 of theory "HOL-Library.Finite_Map")
-TRIEL_Core: command "export_code" running for 22.826s (line 1406 of theory "HOL-Library.Finite_Map")
-TRIEL_Core: command "export_code" running for 24.853s (line 1406 of theory "HOL-Library.Finite_Map")
-TRIEL_Core: command "export_code" running for 26.858s (line 1406 of theory "HOL-Library.Finite_Map")
-TRIEL_Core: theory TRIEL_Core.TRIEL_ND
-TRIEL_Core: command "datatype" running for 20.614s (line 424 of theory "TRIEL_Core.TRIEL_Breach")
+TRIEL_Core: command "export_code" running for 20.653s (line 1406 of theory "HOL-Library.Finite_Map")
+TRIEL_Core: command "export_code" running for 23.098s (line 1406 of theory "HOL-Library.Finite_Map")
+TRIEL_Core: command "export_code" running for 25.135s (line 1406 of theory "HOL-Library.Finite_Map")
+TRIEL_Core: command "export_code" running for 27.154s (line 1406 of theory "HOL-Library.Finite_Map")
+TRIEL_Core: command "export_code" running for 29.222s (line 1406 of theory "HOL-Library.Finite_Map")
+TRIEL_Core: command "export_code" running for 31.300s (line 1406 of theory "HOL-Library.Finite_Map")
+TRIEL_Core: command "export_code" running for 33.308s (line 1406 of theory "HOL-Library.Finite_Map")
 TRIEL_Core: theory TRIEL_Core.TRIEL_Invariants
+TRIEL_Core: theory TRIEL_Core.TRIEL_ND
 TRIEL_Core: theory TRIEL_Core.TRIEL_Terms
 TRIEL_Core: theory TRIEL_Core.TRIEL_Indicators
 TRIEL_Core: theory TRIEL_Core.TRIEL_Exec
-TRIEL_Core: theory HOL-Library.Code_Abstract_Nat 100% (0.369s cumulated time)
-TRIEL_Core: theory HOL-Library.Code_Target_Nat 100% (1.327s cumulated time)
-TRIEL_Core: theory HOL-Library.Code_Target_Int 100% (1.786s cumulated time)
-TRIEL_Core: theory HOL-Library.Conditional_Parametricity 100% (2.033s cumulated time)
-TRIEL_Core: theory HOL-Library.AList 100% (16.154s cumulated time)
-TRIEL_Core: theory HOL-Library.Old_Datatype 100% (2.690s cumulated time)
-TRIEL_Core: theory HOL-Library.Nat_Bijection 100% (2.223s cumulated time)
-TRIEL_Core: theory HOL-Library.Countable 100% (5.002s cumulated time)
-TRIEL_Core: command "fun" running for 20.026s (line 696 of theory "TRIEL_Core.TRIEL_Exec")
-TRIEL_Core: theory TRIEL_Core.TRIEL_Core 100% (16.647s cumulated time)
-TRIEL_Core: command "fun" running for 22.043s (line 696 of theory "TRIEL_Core.TRIEL_Exec")
-TRIEL_Core: theory TRIEL_Core.TRIEL_Ex 100% (0.423s cumulated time)
-TRIEL_Core: command "fun" running for 24.060s (line 696 of theory "TRIEL_Core.TRIEL_Exec")
-TRIEL_Core: command "fun" running for 26.087s (line 696 of theory "TRIEL_Core.TRIEL_Exec")
-TRIEL_Core: command "fun" running for 28.253s (line 696 of theory "TRIEL_Core.TRIEL_Exec")
-TRIEL_Core: command "fun" running for 30.271s (line 696 of theory "TRIEL_Core.TRIEL_Exec")
-TRIEL_Core: theory HOL-Library.FSet 100% (36.605s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Trace 100% (17.052s cumulated time)
-TRIEL_Core: theory HOL-Library.Finite_Map 100% (61.734s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Breach 100% (49.191s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_ND 100% (18.106s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Invariants 100% (7.102s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Terms 100% (11.849s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Indicators 100% (17.804s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Exec 100% (95.512s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Compositions
+TRIEL_Core: theory HOL-Library.Code_Abstract_Nat 100% (0.528s cumulated time)
+TRIEL_Core: theory HOL-Library.Code_Target_Nat 100% (1.398s cumulated time)
+TRIEL_Core: theory HOL-Library.Code_Target_Int 100% (0.775s cumulated time)
+TRIEL_Core: theory HOL-Library.Conditional_Parametricity 100% (1.038s cumulated time)
+TRIEL_Core: theory HOL-Library.AList 100% (11.753s cumulated time)
+TRIEL_Core: command "fun" running for 20.882s (line 696 of theory "TRIEL_Core.TRIEL_Exec")
+TRIEL_Core: theory HOL-Library.Nat_Bijection 100% (3.947s cumulated time)
+TRIEL_Core: command "fun" running for 22.917s (line 696 of theory "TRIEL_Core.TRIEL_Exec")
+TRIEL_Core: theory HOL-Library.Old_Datatype 100% (2.556s cumulated time)
+TRIEL_Core: theory HOL-Library.Countable 100% (5.719s cumulated time)
+TRIEL_Core: command "fun" running for 24.944s (line 696 of theory "TRIEL_Core.TRIEL_Exec")
+TRIEL_Core: command "fun" running for 26.982s (line 696 of theory "TRIEL_Core.TRIEL_Exec")
+TRIEL_Core: command "fun" running for 29.051s (line 696 of theory "TRIEL_Core.TRIEL_Exec")
+TRIEL_Core: theory TRIEL_Core.TRIEL_Core 100% (12.007s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Ex 100% (0.324s cumulated time)
+TRIEL_Core: theory HOL-Library.FSet 100% (22.993s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Trace 100% (15.439s cumulated time)
+TRIEL_Core: theory HOL-Library.Finite_Map 100% (54.004s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Breach 100% (42.028s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Invariants 100% (2.815s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_ND 100% (10.629s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Terms 100% (8.493s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Indicators 100% (15.993s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Compositions 100% (12.005s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Exec 100% (85.916s cumulated time)
 Preparing TRIEL_Core/document ...
-Finished TRIEL_Core/document (0:00:15 elapsed time)
+Finished TRIEL_Core/document (0:00:17 elapsed time)
 Document at "output/document.pdf"
-Timing TRIEL_Core (2 threads, 239.440s elapsed time, 204.766s cpu time, 24.953s GC time, factor 0.86)
-Finished TRIEL_Core (0:04:05 elapsed time)
+Timing TRIEL_Core (2 threads, 220.500s elapsed time, 200.406s cpu time, 26.219s GC time, factor 0.91)
+Finished TRIEL_Core (0:03:50 elapsed time)
 Exporting TRIEL_Core ...
 export "../../evaluator/generated/TRIEL.hs"
 
-Finished at Fri Oct 9 10:53:22 GMT+3 2026
-0:04:39 elapsed time
+Finished at Fri Oct 9 18:59:06 GMT+3 2026
+0:04:22 elapsed time
