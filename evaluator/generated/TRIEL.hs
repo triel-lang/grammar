@@ -2,9 +2,9 @@
 
 module
   TRIEL(Int(..), integer_of_int, Nat, integer_of_nat, Atom(..), Fmap(..),
-         Nd(..), Ty(..), Vexp(..), Expr(..), Verdict(..), Continuation(..),
-         Status(..), Line(..), Prim(..), Inv(..), Deadline(..), Baction(..),
-         Sterm(..), Fdecl(..), Spec(..), Polarity(..), Event(..),
+         Nd(..), Ty(..), Vexp(..), Expr(..), Verdict(..), Baction(..),
+         Continuation(..), Status(..), Line(..), Prim(..), Inv(..),
+         Deadline(..), Sterm(..), Fdecl(..), Spec(..), Polarity(..), Event(..),
          nat_of_integer, run)
   where {
 
@@ -121,6 +121,8 @@ data Tm a b c d = TMust c d | TMay c d (Expr a b) | TMustNot c d (Expr a b)
 
 data Verdict = Fulfilled | Breached Int | Pending;
 
+data Baction a b = Notify a | Penalty b | Terminate | CureBy Int | EscalateTo a;
+
 data Continuation a = NoContinuation | Terminated | Cure Verdict
   | Escalated a Verdict;
 
@@ -128,8 +130,8 @@ data Status a = SFulfilled | SPending | SBreached Int (Continuation a);
 
 data Line = LActivation Bool | LBlock Bool | LTypes (Maybe (Nat, String))
   | LMust Nat String String (Maybe Int) (Status String)
-  | LMustNot Nat String String Verdict | LMay Nat String String Verdict
-  | LOnBreach Nat String (Maybe Nat)
+  | LMustNot Nat String String Verdict [Baction String Atom]
+  | LMay Nat String String Verdict | LOnBreach Nat String (Maybe Nat)
   | LComposite Nat (Maybe Bool) (Maybe Bool) (Maybe Bool)
   | LInvariant String (Maybe Bool);
 
@@ -138,8 +140,6 @@ data Prim = PBool | PInt | PStr | PTime;
 data Inv a b = Always (Expr a b) | Eventually (Expr a b) | Next (Expr a b);
 
 data Deadline a = DAt Int | DAfter Int | DFactor a Int;
-
-data Baction a b = Notify a | Penalty b | Terminate | CureBy Int | EscalateTo a;
 
 data Sterm a b c d e = SMust c d (Maybe (Deadline a)) | SMustNot c d (Expr a b)
   | SMay c d (Expr a b) | SThen (Sterm a b c d e) (Sterm a b c d e)
@@ -262,6 +262,72 @@ length_tailrec (x : xs) n = length_tailrec xs (suc n);
 size_list :: forall a. [a] -> Nat;
 size_list xs = length_tailrec xs zero_nat;
 
+binds :: forall a b c d e. (Eq a) => a -> Sterm b c a d e -> Bool;
+binds sa (SMust s a d) = s == sa;
+binds sa (SMustNot s a c) = s == sa;
+binds s (SMay v va vb) = False;
+binds s (SThen v va) = False;
+binds s (SOr v va) = False;
+binds s (SAnd v va) = False;
+binds s (SUnless v va vb) = False;
+binds s (SOnBreach v va) = False;
+
+bound_to ::
+  forall a b c d e. (Eq c) => [Sterm a b c d e] -> Nat -> c -> Maybe Nat;
+bound_to blk i s = let {
+                     js = filter (\ j -> binds s (nth blk j)) (upt zero_nat i);
+                   } in (if null js then Nothing else Just (last js));
+
+handler_of ::
+  forall a b c d e. (Eq c) => [Sterm a b c d e] -> Nat -> [Baction c e];
+handler_of blk i =
+  (case find (\ k -> (case nth blk k of {
+                       SMust _ _ _ -> False;
+                       SMustNot _ _ _ -> False;
+                       SMay _ _ _ -> False;
+                       SThen _ _ -> False;
+                       SOr _ _ -> False;
+                       SAnd _ _ -> False;
+                       SUnless _ _ _ -> False;
+                       SOnBreach s _ -> bound_to blk k s == Just i;
+                     }))
+          (upt zero_nat (size_list blk))
+    of {
+    Nothing -> [];
+    Just k -> (case nth blk k of {
+                SMust _ _ _ -> [];
+                SMustNot _ _ _ -> [];
+                SMay _ _ _ -> [];
+                SThen _ _ -> [];
+                SOr _ _ -> [];
+                SAnd _ _ -> [];
+                SUnless _ _ _ -> [];
+                SOnBreach _ acts -> acts;
+              });
+  });
+
+is_cont :: forall a b. Baction a b -> Bool;
+is_cont Terminate = True;
+is_cont (CureBy k) = True;
+is_cont (EscalateTo s) = True;
+is_cont (Notify s) = False;
+is_cont (Penalty p) = False;
+
+cont_free_prohibitions :: forall a b c d e. (Eq c) => [Sterm a b c d e] -> Bool;
+cont_free_prohibitions blk =
+  all (\ k ->
+        (case nth blk k of {
+          SMust _ _ _ -> True;
+          SMustNot _ _ _ -> all (\ x -> not (is_cont x)) (handler_of blk k);
+          SMay _ _ _ -> True;
+          SThen _ _ -> True;
+          SOr _ _ -> True;
+          SAnd _ _ -> True;
+          SUnless _ _ _ -> True;
+          SOnBreach _ _ -> True;
+        }))
+    (upt zero_nat (size_list blk));
+
 evalV :: forall a b. Vexp a b -> (a -> Maybe b) -> Maybe b;
 evalV (VConst v) sigma = Just v;
 evalV (VName x) sigma = sigma x;
@@ -354,22 +420,6 @@ activates t tau_0 sigma_0 blk =
         all (\ d -> not (is_none (resolve t tau_0 sigma_0 d))) (deadlines ta))
     blk;
 
-binds :: forall a b c d e. (Eq a) => a -> Sterm b c a d e -> Bool;
-binds sa (SMust s a d) = s == sa;
-binds sa (SMustNot s a c) = s == sa;
-binds s (SMay v va vb) = False;
-binds s (SThen v va) = False;
-binds s (SOr v va) = False;
-binds s (SAnd v va) = False;
-binds s (SUnless v va vb) = False;
-binds s (SOnBreach v va) = False;
-
-bound_to ::
-  forall a b c d e. (Eq c) => [Sterm a b c d e] -> Nat -> c -> Maybe Nat;
-bound_to blk i s = let {
-                     js = filter (\ j -> binds s (nth blk j)) (upt zero_nat i);
-                   } in (if null js then Nothing else Just (last js));
-
 handler_bound ::
   forall a b c d e. (Eq c) => [Sterm a b c d e] -> Nat -> Maybe (Maybe Nat);
 handler_bound blk i = (case nth blk i of {
@@ -395,13 +445,6 @@ has_handler (SMay v va vb) = False;
 
 less_eq_nat :: Nat -> Nat -> Bool;
 less_eq_nat m n = integer_of_nat m <= integer_of_nat n;
-
-is_cont :: forall a b. Baction a b -> Bool;
-is_cont Terminate = True;
-is_cont (CureBy k) = True;
-is_cont (EscalateTo s) = True;
-is_cont (Notify s) = False;
-is_cont (Penalty p) = False;
 
 wf_actions :: forall a b. [Baction a b] -> Bool;
 wf_actions acts =
@@ -734,32 +777,14 @@ ob_verdict s a d pi =
     Just da -> window s a Nothing da pi;
   });
 
-handler_of ::
-  forall a b c d e. (Eq c) => [Sterm a b c d e] -> Nat -> [Baction c e];
-handler_of blk i =
-  (case find (\ k -> (case nth blk k of {
-                       SMust _ _ _ -> False;
-                       SMustNot _ _ _ -> False;
-                       SMay _ _ _ -> False;
-                       SThen _ _ -> False;
-                       SOr _ _ -> False;
-                       SAnd _ _ -> False;
-                       SUnless _ _ _ -> False;
-                       SOnBreach s _ -> bound_to blk k s == Just i;
-                     }))
-          (upt zero_nat (size_list blk))
-    of {
-    Nothing -> [];
-    Just k -> (case nth blk k of {
-                SMust _ _ _ -> [];
-                SMustNot _ _ _ -> [];
-                SMay _ _ _ -> [];
-                SThen _ _ -> [];
-                SOr _ _ -> [];
-                SAnd _ _ -> [];
-                SUnless _ _ _ -> [];
-                SOnBreach _ acts -> acts;
-              });
+pr_actions ::
+  forall a b c d e.
+    (Eq c) => [Sterm a b c d e] -> Nat -> Verdict -> [Baction c e];
+pr_actions blk i v =
+  (case v of {
+    Fulfilled -> [];
+    Breached _ -> filter (\ x -> not (is_cont x)) (handler_of blk i);
+    Pending -> [];
   });
 
 time_of :: Atom -> Maybe Int;
@@ -788,7 +813,9 @@ term_line tau_0 sigma_0 blk pi i =
           LMust (suc i) s a (Just da)
             (handle_breach tau_0 s a da (handler_of blk i) pi);
       });
-    SMustNot s a c -> LMustNot (suc i) s a (pr_verdict s a c pi);
+    SMustNot s a c -> let {
+                        v = pr_verdict s a c pi;
+                      } in LMustNot (suc i) s a v (pr_actions blk i v);
     SMay s a c -> LMay (suc i) s a (may_verdict s a c pi);
     SThen _ _ -> composite_line (suc i) (nth blk i) pi;
     SOr _ _ -> composite_line (suc i) (nth blk i) pi;
@@ -920,7 +947,8 @@ run sp obs =
       } in (if null obs || not (activates time_of tau_0 sigma_0 blk)
              then [LActivation False]
              else LActivation True :
-                    (if not (wf_block blk) then [LBlock False]
+                    (if not (wf_block blk) || not (cont_free_prohibitions blk)
+                      then [LBlock False]
                       else LBlock True :
                              (case ill_typed fs obs of {
                                Nothing ->

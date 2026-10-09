@@ -1273,7 +1273,7 @@ datatype line =
   | LBlock bool
   | LTypes "(nat \<times> name) option"
   | LMust nat name name "int option" "name status"
-  | LMustNot nat name name verdict
+  | LMustNot nat name name verdict "(name, atom) baction list"
   | LMay nat name name verdict
   | LOnBreach nat name "nat option"
   | LComposite nat "bool option" "bool option" "bool option"
@@ -1287,6 +1287,41 @@ definition handler_of :: "('n, 'v, 's, 'a, 'p) sterm list \<Rightarrow> nat \<Ri
                 [0..<length blk] of
         Some k \<Rightarrow> (case blk ! k of SOnBreach s acts \<Rightarrow> acts | _ \<Rightarrow> [])
       | None \<Rightarrow> [])"
+
+text \<open>Section 2.6 defines continuations only for obligations. In a handler bound to a
+  prohibition only informational actions are allowed.\<close>
+
+definition cont_free_prohibitions :: "('n, 'v, 's, 'a, 'p) sterm list \<Rightarrow> bool" where
+  "cont_free_prohibitions blk \<longleftrightarrow>
+     list_all (\<lambda>k. case blk ! k of
+                       SMustNot s a c \<Rightarrow> list_all (\<lambda>x. \<not> is_cont x) (handler_of blk k)
+                     | _ \<Rightarrow> True)
+              [0..<length blk]"
+
+text \<open>The actions reported with a breached prohibition: the informational actions of the
+  handler bound to it.\<close>
+
+definition pr_actions ::
+    "('n, 'v, 's, 'a, 'p) sterm list \<Rightarrow> nat \<Rightarrow> verdict \<Rightarrow> ('s, 'p) baction list" where
+  "pr_actions blk i v =
+     (case v of Breached \<tau> \<Rightarrow> filter (\<lambda>x. \<not> is_cont x) (handler_of blk i) | _ \<Rightarrow> [])"
+
+lemma pr_actions_informational: "x \<in> set (pr_actions blk i v) \<Longrightarrow> \<not> is_cont x"
+  by (auto simp: pr_actions_def split: verdict.splits)
+
+lemma pr_actions_breached: "pr_actions blk i v \<noteq> [] \<Longrightarrow> \<exists>\<tau>. v = Breached \<tau>"
+  by (auto simp: pr_actions_def split: verdict.splits)
+
+lemma pr_actions_cont_free:
+  assumes "cont_free_prohibitions blk" and "i < length blk" and "blk ! i = SMustNot s a c"
+  shows "pr_actions blk i (Breached \<tau>) = handler_of blk i"
+proof -
+  have "\<forall>x \<in> set (handler_of blk i). \<not> is_cont x"
+    using bspec[OF assms(1)[unfolded cont_free_prohibitions_def list_all_iff], of i] assms(2,3)
+    by simp
+  then show ?thesis
+    by (simp add: pr_actions_def)
+qed
 
 definition composite_line :: "nat \<Rightarrow> cterm \<Rightarrow> ctrace \<Rightarrow> line" where
   "composite_line n t \<pi> =
@@ -1305,14 +1340,15 @@ definition term_line :: "int \<Rightarrow> (path, atom) state \<Rightarrow> cter
              None \<Rightarrow> LMust (Suc i) s a None
                        (case ob_verdict s a None \<pi> of Fulfilled \<Rightarrow> SFulfilled | _ \<Rightarrow> SPending)
            | Some d \<Rightarrow> LMust (Suc i) s a (Some d) (handle_breach \<tau>\<^sub>0 s a d (handler_of blk i) \<pi>))
-      | SMustNot s a c \<Rightarrow> LMustNot (Suc i) s a (pr_verdict s a c \<pi>)
+      | SMustNot s a c \<Rightarrow>
+          (let v = pr_verdict s a c \<pi> in LMustNot (Suc i) s a v (pr_actions blk i v))
       | SMay s a c \<Rightarrow> LMay (Suc i) s a (may_verdict s a c \<pi>)
       | SOnBreach s acts \<Rightarrow> LOnBreach (Suc i) s (map_option Suc (bound_to blk i s))
       | _ \<Rightarrow> composite_line (Suc i) (blk ! i) \<pi>)"
 
 text \<open>The evaluator. Activation is checked first, in the blocked state of entry 0 at the
-  time of entry 0; then the well-formedness of the block; then the types of the data as
-  given. The verdicts, the invariants and the membership of composite terms are computed
+  time of entry 0; then the well-formedness of the block, with only informational actions
+  in a handler bound to a prohibition; then the types of the data as given. The verdicts, the invariants and the membership of composite terms are computed
   on the blocked trace.\<close>
 
 definition run :: "spec \<Rightarrow> observation list \<Rightarrow> line list" where
@@ -1321,7 +1357,7 @@ definition run :: "spec \<Rightarrow> observation list \<Rightarrow> line list" 
         (let \<pi> = btrace (max_age fs) (raw_trace obs); \<tau>\<^sub>0 = time \<pi> 0; \<sigma>\<^sub>0 = st \<pi> 0 in
          if obs = [] \<or> \<not> activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 blk then [LActivation False]
          else LActivation True #
-           (if \<not> wf_block blk then [LBlock False]
+           (if \<not> wf_block blk \<or> \<not> cont_free_prohibitions blk then [LBlock False]
             else LBlock True #
               (case ill_typed fs obs of
                  Some e \<Rightarrow> [LTypes (Some e)]
