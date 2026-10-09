@@ -103,6 +103,19 @@ definite verdict when the data is extended; with the atom $E_z$ this fails, on t
 the counterexample for typing with \texttt{Optional}. The equitone P-predicates are
 closed under negation and disjunction.
 
+\paragraph{Compositions (theory \texttt{TRIEL\_Compositions}).}
+Following Nikitchenko and Shkilniak (2017) and Shkilniak (2024), the existential
+quantifier and renomination are defined on R-predicates. Renomination is traditional or
+extended; an extended renomination may also delete names. Proved: the renomination
+operation is monotone; the classes of P-predicates, of monotone R-predicates and of
+equitone P-predicates are closed under all base compositions (negation, disjunction,
+renomination, the quantifier and $\downarrow z$), as stated by Shkilniak (2024); $E_z$ is
+the negation of the variable unassignment predicate of Nikitchenko and Shkilniak.
+Formulas of the language are terms of the composition algebra, interpreted by the
+compositions. Every condition of \texttt{TRIEL\_Indicators} translates to such a term,
+with \texttt{AND} expressed by negation and disjunction, and the value of the condition is
+the value of the term. The stability of definite verdicts follows again, from the closure.
+
 \paragraph{The evaluator (theory \texttt{TRIEL\_Exec}).}
 Executable equations, each proved equal to a definition of the other theories, replace
 unbounded quantifiers, \texttt{LEAST} and \texttt{GREATEST}. Membership of a trace in the

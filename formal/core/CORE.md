@@ -1,6 +1,6 @@
 # TRIEL core: definitions and theorems
 
-This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8), [`TRIEL_Invariants.thy`](TRIEL_Invariants.thy) (invariants, section 10), [`TRIEL_Indicators.thy`](TRIEL_Indicators.thy) (the indicators E_z and ↓z and the stability of verdicts, section 7.2) and [`TRIEL_Exec.thy`](TRIEL_Exec.thy) (the evaluator exported to Haskell, section 10). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
+This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8), [`TRIEL_Invariants.thy`](TRIEL_Invariants.thy) (invariants, section 10), [`TRIEL_Indicators.thy`](TRIEL_Indicators.thy) (the indicators E_z and ↓z and the stability of verdicts, section 7.2), [`TRIEL_Compositions.thy`](TRIEL_Compositions.thy) (the quantifier, renomination, closure under the base compositions, and conditions as terms, section 7.3) and [`TRIEL_Exec.thy`](TRIEL_Exec.thy) (the evaluator exported to Haskell, section 10). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
 
 It is based only on the public material at <https://github.com/triel-lang/grammar>: TECHNICAL_REPORT.md §2.5, §2.6 and §2.9, and FOUNDATIONS.md. It makes no assumptions about any non-public implementation.
 
@@ -297,7 +297,7 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 | E_x, total | { d \| d(x)↓ } | { d \| d(x)↑ } | total, single-valued, not monotone | [5], [8] |
 | ↓x, partial | { d \| d(x)↓ } | ∅ | P-predicate, irrefutable, equitone | [8] |
 
-ε_x is the variable-unassignment predicate of [2] (p. 265). Its truth and falsity domains are defined in [2], p. 266: T(εz) = { d | z ∉ asn(d) } and F(εz) = { d | z ∈ asn(d) }, where asn(d) is the set of names assigned in d. [2] also states that εz is total (p. 267), and that E!z of free logic corresponds to the negation of εz (p. 268). With the negation of [2] (T(¬p) = F(p), F(¬p) = T(p), p. 266) and the definition of E_x in [5], ε_x = ¬E_x. E_x is total and not equitone (`Ex_ind_total`, `Ex_ind_not_equitone`, `Ex_nd_not_equitone`), so ε_x is total and not equitone too. ε_x is not formalised separately.
+ε_x is the variable-unassignment predicate of [2] (p. 265). Its truth and falsity domains are defined in [2], p. 266: T(εz) = { d | z ∉ asn(d) } and F(εz) = { d | z ∈ asn(d) }, where asn(d) is the set of names assigned in d. [2] also states that εz is total (p. 267), and that E!z of free logic corresponds to the negation of εz (p. 268). With the negation of [2] (T(¬p) = F(p), F(¬p) = T(p), p. 266) and the definition of E_x in [5], ε_x = ¬E_x. E_x is total and not equitone (`Ex_ind_total`, `Ex_ind_not_equitone`, `Ex_nd_not_equitone`), so ε_x is total and not equitone too. Section 7.3 defines ε_x (`eps_R`) and proves E_x = ¬ε_x (`Ex_R_is_not_eps`).
 
 *Definitions*, as in [8]:
 
@@ -327,6 +327,43 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 *Reading.* "The field is absent for good" corresponds to E_x on a closed record: E_x(d) = F is a definite answer, and it is right only if no extension can add the field. "The value is not yet known" corresponds to the undefinedness of ↓x: ↓x(d) = ⊥, and an extension can only make it T. A condition written with ↓ never gives a verdict that more data would overturn (`verdict_stable_nd`). A condition written with E_x can (`Ex_breaks_stability`). The meanings of `PRESENT` and of Optional are unchanged: `PRESENT` is E_x (section 9, decision 1), and typing with Optional is still not monotone.
 
 **Open question.** Does this reading match the intent of the composition-nominative approach for data that arrive over time? That is: should an absence in data that may still arrive be read as ↓ (not yet known), and an absence in a closed record as E_x (absent for good)?
+
+### 7.3 Compositions (`TRIEL_Compositions.thy`)
+
+[8] states that the class of equitone P-predicates is closed under all base compositions of its algebras (p. 26). Section 7.2 proves this for ¬, ∨ and ↓z. This section adds the quantifier ∃x and renomination, and so checks the claim in full. It also writes the formulas of [8] as terms and shows that every TRIEL condition of section 7.2 is such a term. The definitions are those of [2] and [8], with page numbers.
+
+*Definitions:*
+
+- **Deletion** (`del_names`, [8] p. 24): d‖₋Z = { v ↦ a ∈ d | v ∉ Z }.
+- **Extended renomination** (`ren_ext`, [8] p. 24): for distinct upper names v₁, …, vₙ, u₁, …, uₘ with lower names x₁, …, xₙ, ⊥, …, ⊥,
+  r(d) = [v₁ ↦ d(x₁), …, vₙ ↦ d(xₙ)] ∪ d‖₋{v₁, …, vₙ, u₁, …, uₘ}.
+  The names uⱼ lose their values. The order of the pairs does not matter ([8] p. 24), and [2] (p. 265) reads the parameter as a mapping from the upper names to the lower ones. Here it is a partial map ρ with ρ(vᵢ) = xᵢ and ρ(uⱼ) = ⊥. In the sources the parameter is finite; the definitions and theorems hold for every ρ.
+- **Traditional renomination** (`ren`, [2] p. 265): r(d) = [v ↦ a | v ↦ a ∈ d, v ∉ {v₁, …, vₙ}] ∪ [vᵢ ↦ aᵢ | xᵢ ↦ aᵢ ∈ d]. It is the extended renomination without pairs u/⊥ ([8] p. 25; `ren_is_ren_ext`).
+- **Quantifier** (`R_ex`, [8] p. 25; the same in [2] p. 266): T(∃xP) = ⋃_{a∈A} { d | d‖₋x ∪ x ↦ a ∈ T(P) } and F(∃xP) = ⋂_{a∈A} { d | d‖₋x ∪ x ↦ a ∈ F(P) }. The named set d‖₋x ∪ x ↦ a, written d∇x ↦ a in [2], is d(x ↦ a) (`del_names_upd`, `R_ex_domains`).
+- **Renomination composition** (`R_ren_ext`, `R_ren`; [8] p. 25, [2] p. 266): R(Q)[d] = Q[r(d)] (`rval_R_ren_ext`), that is T(R(Q)) = { d | r(d) ∈ T(Q) } and F(R(Q)) = { d | r(d) ∈ F(Q) }.
+- **Base compositions** ([8] p. 25): C↓⊥Q = {¬, ∨, R with extended renomination, ∃x, ↓z} and C↓Q = {¬, ∨, R with traditional renomination, ∃x, ↓z}. E_z is not among them. Conjunction is not a base composition.
+- **Variable unassignment** (`eps_R`, [2] p. 266): T(εz) = { d | z ∉ asn(d) } and F(εz) = { d | z ∈ asn(d) }, where asn(d) = dom d ([2] p. 265).
+- **Pointwise extension** (`pw_le`): d ≤ d′ if every name that has a value a in d has a value a′ in d′ with a ≤ a′ in a given order on values. With equality on values this is the inclusion d ⊆ d′ of [8], that is ⊑ (`pw_le_eq`). This order is not in the sources. It is used so that one proof covers both flat named sets and nominative data.
+- **Formulas** (`fm`, [8] §2, p. 26): Fa) base predicate symbols; F↓) ↓z; Fp) ¬Φ and ∨ΦΨ; FR⊥) RΦ with extended renomination; F∃) ∃xΦ. One constructor is added here: E_z (`FE`), so that the atom E_p of conditions has a counterpart. A formula without `FE` is a formula of [8].
+- **Interpretation** (`interp`, [8] p. 26, rules Ip, IR⊥, I∃): a map I from base predicate symbols to R-predicates extends to formulas by I(¬Φ) = ¬I(Φ), I(∨ΦΨ) = ∨(I(Φ), I(Ψ)), I(RΦ) = R(I(Φ)) and I(∃xΦ) = ∃x(I(Φ)). The symbols ↓z denote the indicators, and `FE z` denotes E_z.
+- **Conditions as formulas.** A nominative datum d is read as the named set p ↦ d(p) over complex names (`nd_named`). The translation `cond_fm` sends E_p to `FE p`, ↓p to `FDown p`, and "p is an atom of primitive type q" to a base predicate symbol, interpreted by `is_R`. NOT and OR go to ¬ and ∨. AND goes to ¬(¬Φ ∨ ¬Ψ), because conjunction is not a base composition.
+
+*Theorems* (all in `TRIEL_Compositions.thy`):
+
+- **`ren_ext_mono`, `ren_mono`:** d ⊑ d′ ⟹ r(d) ⊑ r(d′), for extended and for traditional renomination. `ren_ext_mono_pw` is the same for every pointwise extension.
+- **`P_pred_R_ex`, `P_pred_R_ren_ext`, `P_pred_R_ren`** (with `P_pred_R_not`, `P_pred_R_or`): ∃x and renomination map P-predicates to P-predicates.
+- **`rmono_R_ex`, `rmono_R_ren_ext`, `rmono_R_ren`** (with `rmono_R_not`, `rmono_R_or`, `DownInd_rmono_pw`): they map monotone R-predicates to monotone R-predicates, for every pointwise extension with a reflexive order on values.
+- **`equitone_R_ex`, `equitone_R_ren_ext`, `equitone_R_ren`** (and `equitone_R_ex_pw`, `equitone_R_ren_ext_pw`): ∃x and renomination preserve equitonicity.
+- **`comp_closure_P`, `comp_closure_rmono`, `comp_closure_equitone`:** a predicate built by the compositions of C↓⊥Q from P-predicates is a P-predicate. Built from monotone R-predicates, it is monotone. Built from equitone P-predicates, it is an equitone P-predicate. `comp_closure_ren` covers C↓Q, and `equitone_closure_sub` contains the closure of section 7.2. This checks the claim of [8] (p. 26) in full, for the P-, RM- and PE-predicates.
+- **`DownInd_not_total`:** ↓z is not total, so the classes of total predicates are not closed ([8] p. 26).
+- **`Ex_R_is_not_eps`:** E_z = ¬εz. So E_z is a term of the algebra of [2], though not a composition of C↓⊥Q.
+- **`pval_R_ex`, `pval_R_ren_ext`:** on P-predicates the quantifier is the strong Kleene ∃, and renomination is precomposition with r.
+- **`interp_comp_closure`, `interp_P_pred`, `interp_equitone`:** a formula without E_z denotes a predicate of the closure. If the base predicates are P-predicates, every formula denotes a P-predicate. If they are equitone P-predicates, every formula without E_z denotes an equitone P-predicate.
+- **`nd_le_pw`:** d ≤ d′ on nominative data if and only if p ↦ d′(p) extends p ↦ d(p) pointwise, where an atom stays the same atom and a record stays a record.
+- **`cond_fm_correct`:** for every condition φ of section 7.2 and every datum d, the interpretation of `cond_fm φ` on p ↦ d(p) has the value of φ on d. So every TRIEL condition is a term of the composition algebra.
+- **`cond_equitone_from_closure`, `verdict_stable_from_closure`:** the stability of verdicts of section 7.2 (`verdict_stable_nd`) follows from the closure. A condition without E_p translates to a formula without E_z, and that formula denotes an equitone P-predicate.
+
+*Not formalised.* Superposition of functions into predicates, and with it the substitution of the value of an expression into a condition, is not formalised here. The sources used in this section, [2], [5] and [8], are pure first-order logics without function symbols.
 
 ## 8. Deadlines and breach (`TRIEL_Breach.thy`, TECHNICAL_REPORT.md §2.6)
 
