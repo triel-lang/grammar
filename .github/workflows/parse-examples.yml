@@ -35,5 +35,9 @@ jobs:
       # These fragments are chosen to be ambiguous under the pre-fix
       # grammar and must each have exactly one derivation now.
       # Guards D-19, D-20, D-21/D-32, F-1, F-2, F-6.
+      # The same script checks the LALR(1) table of the grammar (four
+      # shift/reduce conflicts, none of them an ambiguity, and no
+      # reduce/reduce conflict) and that Earley and LALR(1) build the
+      # same tree. TECHNICAL_REPORT.md §2.12.
       - name: Ambiguity regression tests
         run: python3 parser/test_ambiguity.py
