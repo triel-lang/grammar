@@ -9,7 +9,8 @@
 // Every ambiguity fix recorded in TECHNICAL_REPORT.md §2.11 is applied here
 // and in the EBNF together. parser/test_ambiguity.py is what keeps that
 // claim honest — the examples corpus cannot: an example that parses says
-// nothing about whether it parses in more than one way.
+// nothing about whether it parses in more than one way. The same script
+// checks the LALR(1) table of this grammar (TECHNICAL_REPORT.md §2.12).
 // ============================================================================
 
 start: specification
@@ -75,6 +76,7 @@ matched_term: matched_condition
 term_ref: "REF" identifier
 
 unmatched_term: unmatched_condition
+              | unmatched_trigger
 
 matched_condition: "IF" expr "THEN" matched_term \
                     ("ELIF" expr "THEN" matched_term)* \
@@ -100,7 +102,8 @@ permission_stmt: identifier "MAY" action_expr \
 
 prohibition_stmt: identifier "MUST_NOT" action_expr ("WHEN" expr)?
 
-trigger_stmt: "ON" event_expr "DO" base_term
+trigger_stmt: "ON" event_expr "DO" matched_term
+unmatched_trigger: "ON" event_expr "DO" unmatched_term
 
 breach_handler_stmt: identifier "ON_BREACH" breach_action ("," breach_action)*
 
@@ -222,7 +225,16 @@ ltl_unary: "!" ltl_unary
          | "F" ltl_unary
          | "X" ltl_unary
          | ltl_atom
-ltl_atom: state_expr | "(" ltl_expr ")"
+ltl_atom: state_expr | "(" ltl_op_expr ")"
+ltl_op_expr: ltl_or "->" ltl_implication
+           | ltl_until ("||" ltl_until)+
+           | ltl_and LTL_UNTIL_OP ltl_until
+           | ltl_unary ("&&" ltl_unary)+
+           | "!" ltl_unary
+           | "G" ltl_unary
+           | "F" ltl_unary
+           | "X" ltl_unary
+           | "(" ltl_op_expr ")"
 
 ctl_expr: ctl_implication
 ctl_implication: ctl_or ("->" ctl_implication)?
@@ -251,7 +263,7 @@ modality_param: identifier ":" literal
 
 // --- 10. Expressions ------------------------------------------------------
 
-expr: implication_expr
+expr: implication_expr | if_expr | let_expr
 implication_expr: disjunction_expr ("IMPLIES" implication_expr)?
 disjunction_expr: conjunction_expr ("OR" conjunction_expr)*
 conjunction_expr: negation_expr ("AND" negation_expr)*
@@ -267,8 +279,6 @@ primary: literal
        | factor_ref
        | function_call
        | "(" expr ")"
-       | if_expr
-       | let_expr
        | presence_expr
        | default_expr
 

@@ -119,11 +119,16 @@ term_ref            ::= "REF" identifier
    "alice MAY pay WHEN a OR REF b". *)
 
 unmatched_term       ::= unmatched_condition
+                       | unmatched_trigger
 
-(* Every branch of a matched_condition is itself fully resolved — any
-   nested IF inside it must also have an ELSE. This is what makes ELSE
-   binding unambiguous: an ELSE can only ever attach to the nearest
-   still-open (unmatched) IF. *)
+(* Every branch of a matched_condition is a matched_term: any IF nested
+   in it, directly or as the body of an ON ... DO trigger, has its own
+   ELSE. A term that ends in a still-open IF is an unmatched_term — an
+   unmatched_condition, or an unmatched_trigger when the open IF ends
+   the body of a trigger — and no unmatched_term can stand immediately
+   before ELIF or ELSE. An ELIF or ELSE therefore attaches to the
+   nearest still-open IF, and to nothing else: in "IF a THEN ON e DO IF
+   b THEN x ELSE y" the ELSE belongs to IF b. *)
 matched_condition    ::= "IF" expr "THEN" matched_term
                          {"ELIF" expr "THEN" matched_term}
                          "ELSE" matched_term
@@ -163,7 +168,9 @@ permission_stmt    ::= identifier "MAY" action_expr
 prohibition_stmt   ::= identifier "MUST_NOT" action_expr
                        ["WHEN" expr]
 
-trigger_stmt       ::= "ON" event_expr "DO" base_term
+trigger_stmt       ::= "ON" event_expr "DO" matched_term
+
+unmatched_trigger  ::= "ON" event_expr "DO" unmatched_term
 
 (* NOTE ON DO (D-20): trigger_stmt's body was term_stmt — the loosest
    production in the term grammar, including THEN/AND/OR — while
@@ -174,7 +181,14 @@ trigger_stmt       ::= "ON" event_expr "DO" base_term
    ambiguity: DO now binds exactly as tightly as any other base_term
    alternative, so "ON e DO a THEN b" parses only as (ON e DO a) THEN
    b. A trigger that needs a sequence as its body can still write it
-   parenthesized: ON e DO (a THEN b). *)
+   parenthesized: ON e DO (a THEN b).
+
+   The body is written as two productions: a matched_term in
+   trigger_stmt, an unmatched_term in unmatched_trigger. Together they
+   admit every base_term as a body. The split places a trigger whose
+   body ends in a still-open IF among the unmatched terms, so that it
+   cannot stand before ELIF or ELSE (see the note under
+   unmatched_term). *)
 
 breach_handler_stmt ::= identifier "ON_BREACH"
                         breach_action {"," breach_action}
@@ -422,7 +436,29 @@ ltl_unary          ::= "!" ltl_unary
                      | "F" ltl_unary
                      | "X" ltl_unary
                      | ltl_atom
-ltl_atom           ::= state_expr | "(" ltl_expr ")"
+ltl_atom           ::= state_expr | "(" ltl_op_expr ")"
+
+ltl_op_expr        ::= ltl_or "->" ltl_implication
+                     | ltl_until ("||" ltl_until)+
+                     | ltl_and ("U" | "R" | "W") ltl_until
+                     | ltl_unary ("&&" ltl_unary)+
+                     | "!" ltl_unary
+                     | "G" ltl_unary
+                     | "F" ltl_unary
+                     | "X" ltl_unary
+                     | "(" ltl_op_expr ")"
+
+(* NOTE ON PARENTHESES IN LTL: ltl_op_expr derives exactly the LTL
+   formulas that apply at least one LTL operator (->, ||, U, R, W, &&,
+   !, G, F, X), at their outermost level or inside parentheses. The
+   parentheses of ltl_atom enclose only such a formula. Parentheses
+   around a formula with no LTL operator enclose an expression and
+   belong to state_expr, through primary (§10): "(a)" and "(a OR b)"
+   are state expressions, "(a U b)" and "((a U b))" are parenthesised
+   LTL formulas. No LTL operator occurs in an expr, so every ltl_expr
+   is either a state_expr or an ltl_op_expr and never both: the
+   formulas accepted are the same as with "(" ltl_expr ")" in
+   ltl_atom, and each has one derivation. *)
 
 (* NOTE ON LTL PRECEDENCE AND ASSOCIATIVITY (D-22, D-23): two defects
    in one restructuring. First (D-22), -> and U were left-associative
@@ -534,6 +570,8 @@ modality_param     ::= identifier ":" literal
    ------------------------------------------------------------------------- *)
 
 expr               ::= implication_expr
+                     | if_expr
+                     | let_expr
 
 implication_expr   ::= disjunction_expr ["IMPLIES" implication_expr]
 disjunction_expr   ::= conjunction_expr ("OR" conjunction_expr)*
@@ -548,8 +586,6 @@ primary            ::= literal
                      | factor_ref
                      | function_call
                      | "(" expr ")"
-                     | if_expr
-                     | let_expr
                      | presence_expr
                      | default_expr
 
@@ -573,6 +609,14 @@ if_expr            ::= "IF" expr "THEN" expr
                        "ELSE" expr
 
 let_expr           ::= "LET" identifier ":" type_expr "=" expr "IN" expr
+
+(* NOTE ON IF AND LET EXPRESSIONS: if_expr and let_expr are alternatives
+   of expr, not of primary. The last branch of either is an expr and
+   extends as far to the right as the expression goes: "IF a THEN b
+   ELSE a OR b" is IF a THEN b ELSE (a OR b), and "LET x : Integer = 1
+   IN x + n == 3" binds x in x + n == 3. As an operand of an operator,
+   an IF or LET expression is written in parentheses: "(IF a THEN b
+   ELSE a) OR b". *)
 
 function_call      ::= identifier "(" [expr {"," expr}] ")"
 

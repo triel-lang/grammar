@@ -63,7 +63,8 @@ RULES = {
     "term_ref": "REF",
     "matched_condition": "IF ... THEN (term)", "unmatched_condition": "IF ... THEN (term)",
     "obligation_stmt": "core", "permission_stmt": "core", "prohibition_stmt": "core",
-    "trigger_stmt": "ON ... DO", "breach_handler_stmt": "core", "breach_action": "core",
+    "trigger_stmt": "ON ... DO", "unmatched_trigger": "ON ... DO",
+    "breach_handler_stmt": "core", "breach_action": "core",
     "contract_ref_stmt": "EXECUTE", "binding": "EXECUTE",
     "factors_block": "core", "factor_decl": "core", "stale_action": "core",
     "polarity_val": "POLARITY", "factor_source": "metadata",
@@ -78,7 +79,7 @@ RULES = {
     "temporal_expr": "core", "causal_expr": "causal invariant",
     "ltl_expr": "LTL formula", "ltl_implication": "LTL formula", "ltl_or": "LTL formula",
     "ltl_until": "LTL formula", "ltl_and": "LTL formula", "ltl_unary": "LTL formula",
-    "ltl_atom": "LTL formula",
+    "ltl_atom": "LTL formula", "ltl_op_expr": "LTL formula",
     "ctl_expr": "CTL formula", "ctl_implication": "CTL formula", "ctl_or": "CTL formula",
     "ctl_and": "CTL formula", "ctl_negation": "CTL formula",
     "ctl_path_formula": "CTL formula", "ctl_inner": "CTL formula",
@@ -365,7 +366,10 @@ class Translation:
 
     def cond(self, t: Tree):
         """A condition (an expr of the core) from an expr subtree."""
-        return self.implication(subtrees(t)[0])
+        c = subtrees(t)[0]
+        if c.data != "implication_expr":
+            return self.reject(RULES[c.data])
+        return self.implication(c)
 
     def implication(self, t: Tree):
         p = subtrees(t)
@@ -521,7 +525,10 @@ class Translation:
     def base(self, t: Tree, top: bool, within):
         c = subtrees(t)[0]
         if c.data == "unmatched_term":
-            return self.reject("WHEN ... THEN (term)" if "WHEN" in tokens(subtrees(c)[0])
+            u = subtrees(c)[0]
+            if u.data == "unmatched_trigger":
+                return self.reject(RULES[u.data])
+            return self.reject("WHEN ... THEN (term)" if "WHEN" in tokens(u)
                                else "IF ... THEN (term)")
         m = subtrees(c)[0] if subtrees(c) else None
         if "(" in tokens(c):
