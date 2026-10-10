@@ -290,6 +290,26 @@ on every push.
 
 ---
 
+### 2.12 Unambiguity
+
+**The guarantee.** Every TRIEL rule has exactly one parse tree. A text that the grammar accepts, whether a single term, an invariant or a whole specification, is derived from the grammar in one way only: its structure is determined by the text, not by a choice a parser makes.
+
+**What is checked.** `parser/test_ambiguity.py` runs on every push against the reference grammar `parser/triel.lark`, and makes three checks.
+
+- *Earley with explicit ambiguity.* The Earley parser is run in the mode that keeps every derivation of an input instead of choosing one, and the derivations are counted. There must be exactly one for every specification under `examples/` and for every probe input. The probe inputs are fragments aimed at the places where a grammar of this shape can admit two readings: an operator after the last branch of an `IF` or `LET` expression; `ELSE` and `ELIF` after nested conditionals and `ON ... DO` triggers; parentheses in LTL formulas; CTL operators; `WITHIN`, `UNLESS` and `REF`; and `OR` or `AND` after an expression that ends a term. The lexer in these runs is driven by the parser and tries every terminal the grammar allows at each position, so a second derivation that differed only in how the text is divided into tokens would be counted too. Inputs outside the language belong to the same set and must be rejected; an `IF` expression used as an operand without parentheses is one.
+- *The LALR(1) table.* The LALR(1) parse table of the grammar is built and its conflicts are listed. It has no reduce/reduce conflict and exactly four shift/reduce conflicts, all of the one kind discussed below. The check fails if a conflict is added, removed or replaced.
+- *Agreement of the two parsers.* On the same inputs, the Earley parser and the LALR(1) parser take the same accept/reject decision and build identical trees. The only exceptions are the inputs that exercise the four conflicts: the LALR(1) parser settles a shift/reduce conflict by shifting, on these inputs that is the wrong action, and it fails where Earley finds the one derivation.
+
+**Why the four conflicts are not ambiguities.** A permission or a prohibition may end in `WHEN expr`, and a breach action in `PENALTY expr`. `OR` and `AND` are operators both of expressions and of terms, so when one of them follows such an expression, one token of lookahead does not tell which it is. In `alice MAY pay WHEN a OR b` the `OR` belongs to the guard; in `alice MAY pay WHEN a OR bob MUST ship` it joins two terms. This single decision accounts for all four conflicts: one for `OR` and one for `AND`, each met after the first operand of the expression and after a later one.
+
+The two readings never both succeed. After the operator, one reading needs an operand of the expression and the other needs a term, and the two can begin with the same token only if it is an identifier or an opening parenthesis. After an identifier, a term continues with `MUST`, `MAY`, `MUST_NOT` or `ON_BREACH`; none of these can follow an identifier within an expression, or follow an expression. After an opening parenthesis, both readings take the text up to the matching closing parenthesis, one as an expression and the other as a term; but every term contains at least one of `MUST`, `MAY`, `MUST_NOT`, `ON_BREACH`, `EXECUTE` and `REF`, and no expression contains any of them. The conflicts therefore show that the grammar is not LALR(1) — telling the readings apart can take arbitrarily many tokens, as in `alice MAY pay WHEN a OR ((bob MUST ship))` — and not that any input has two parse trees.
+
+**How the guarantee follows.** Two different parse trees of one input correspond to two runs of the LALR(1) automaton that part at a state where the table offers two actions for the same token, that is, at a conflict. The table has four conflicts, and at each of them at most one action leads to a complete parse. An accepted input therefore has one parse tree and no more.
+
+**What this rests on.** The table and the derivation counts are computed mechanically on every push. The argument about the four conflicts is made by hand; the probe inputs of that kind, each with exactly one derivation, test it but do not prove it. The checks are made on `parser/triel.lark`; that file and the normative EBNF are kept in step by hand, rule for rule.
+
+---
+
 ## 3. Related Work
 
 TRIEL overlaps, in stated purpose, with several existing languages; the comparisons below are drawn at the level of publicly observable syntax and semantics, not implementation internals.

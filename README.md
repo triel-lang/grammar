@@ -44,7 +44,7 @@ The `examples/` directory contains sample TRIEL specifications:
 * `eudi/eudi_driving_license.triel` — EUDI Wallet-style issuance and presentation policy for a driving license credential, combining conditional obligations and a zero-knowledge age predicate
 * `semantics/` — small specifications accompanying the semantics in `TECHNICAL_REPORT.md` §2.5 and §2.9: obligations and deadlines, `UNLESS` and its laws, missing and stale data, hierarchical names, and `EXECUTE` bindings
 
-Every example is parsed against the grammar, with an ambiguity check, on every push (`.github/workflows/parse-examples.yml`).
+Every example is parsed against the grammar, with an ambiguity check, on every push (`.github/workflows/parse-examples.yml`). The same workflow checks that the grammar is unambiguous: one derivation for every example and probe input, and an LALR(1) table whose only conflicts are four that are not ambiguities (`TECHNICAL_REPORT.md` §2.12).
 
 Of these, `age_verification.triel` and `eudi_driving_license.triel` — privacy-preserving identity and credential verification — are the most thoroughly worked through and tested; see `TECHNICAL_REPORT.md` §4 for the fuller scope statement.
 
