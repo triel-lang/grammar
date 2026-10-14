@@ -10,23 +10,25 @@
 --
 --   input  ::= (input (spec (factors F*) (terms T*) (invariants I*)) (trace E*))
 --   F      ::= (factor NAME TY AGE)          AGE ::= (none) | (block INT)
---   TY     ::= (prim bool|int|string|datetime) | (optional TY) | (record (NAME TY)*)
+--   TY     ::= (prim bool|int|decimal|string|datetime) | (optional TY)
+--            | (record (NAME TY)*)
 --   T      ::= (must NAME NAME DL) | (must_not NAME NAME X) | (may NAME NAME X)
 --            | (then T T) | (or T T) | (and T T) | (unless T X T)
 --            | (on_breach NAME A*)
 --   DL     ::= (none) | (at INT) | (after INT) | (factor PATH INT)
 --   A      ::= (notify NAME) | (penalty VAL) | (terminate) | (cure_by INT)
 --            | (escalate_to NAME)
---   X      ::= (true) | (false) | (eq V V) | (not X) | (and X X) | (or X X)
---            | (implies X X) | (present PATH)
+--   X      ::= (true) | (false) | (eq V V) | (lt V V) | (le V V) | (not X)
+--            | (and X X) | (or X X) | (implies X X) | (present PATH)
 --   V      ::= (const VAL) | (name PATH)       PATH ::= (path NAME*)
---   VAL    ::= (bool true|false) | (int INT) | (str NAME) | (time INT)
+--   VAL    ::= (bool true|false) | (int INT) | (dec INT INT) | (str NAME) | (time INT)
 --   I      ::= (invariant NAME (always X)|(eventually X)|(next X))
 --   E      ::= (entry INT EV (data (NAME D)*))
 --   EV     ::= (act NAME NAME must|may|must_not) | (arrive NAME) | (tick)
 --   D      ::= VAL | (record (NAME D)*)
 --
 -- NAME is a string literal; INT is a decimal integer (seconds for times).
+-- (dec M K) is the exact number M / 10^K; (int N) is the number N.
 
 module Main (main) where
 
@@ -105,7 +107,11 @@ path x = bad "a path" x
 value :: Conv T.Atom
 value (List [Sym "bool", Sym "true"]) = Right (T.ABool True)
 value (List [Sym "bool", Sym "false"]) = Right (T.ABool False)
-value (List [Sym "int", n]) = T.AInt <$> int n
+value (List [Sym "int", n]) = T.dec_atom <$> int n <*> pure (T.nat_of_integer 0)
+value (List [Sym "dec", m, k]) = do
+  k' <- integer k
+  if k' < 0 then bad "a number of decimal places" k
+  else T.dec_atom <$> int m <*> pure (T.nat_of_integer k')
 value (List [Sym "str", s]) = T.AStr <$> name s
 value (List [Sym "time", n]) = T.ATime <$> int n
 value x = bad "a value" x
@@ -114,6 +120,7 @@ ty :: Conv (T.Ty String T.Prim)
 ty (List [Sym "prim", Sym p]) = case p of
   "bool" -> Right (T.TPrim T.PBool)
   "int" -> Right (T.TPrim T.PInt)
+  "decimal" -> Right (T.TPrim T.PDec)
   "string" -> Right (T.TPrim T.PStr)
   "datetime" -> Right (T.TPrim T.PTime)
   _ -> bad "a primitive type" (Sym p)
@@ -133,6 +140,8 @@ expr :: Conv (T.Expr [String] T.Atom)
 expr (List [Sym "true"]) = Right T.ETrue
 expr (List [Sym "false"]) = Right T.EFalse
 expr (List [Sym "eq", a, b]) = T.EEq <$> vexp a <*> vexp b
+expr (List [Sym "lt", a, b]) = T.ELt <$> vexp a <*> vexp b
+expr (List [Sym "le", a, b]) = T.ELe <$> vexp a <*> vexp b
 expr (List [Sym "not", e]) = T.ENot <$> expr e
 expr (List [Sym "and", a, b]) = T.EAnd <$> expr a <*> expr b
 expr (List [Sym "or", a, b]) = T.EOr <$> expr a <*> expr b
@@ -245,9 +254,27 @@ status (T.SBreached t c) = "BREACHED " ++ tm t ++ " " ++ continuation c
     continuation (T.Cure v) = "CURE " ++ verdict v
     continuation (T.Escalated s v) = "ESCALATED " ++ s ++ " " ++ verdict v
 
+-- A number in lowest terms a/b is printed exactly: with the fewest decimal places
+-- when b divides a power of 10 (every number written as a literal), and as a
+-- fraction otherwise.
+number :: T.Rat -> String
+number q =
+  let (a, b) = T.quotient_of q
+      n = T.integer_of_int a
+      d = T.integer_of_int b
+      places = [k | k <- [0 .. 4 * length (show d)], (10 ^ k) `mod` d == 0]
+  in case places of
+       k : _ ->
+         let m = abs n * (10 ^ k `div` d)
+             ds = show m
+             padded = replicate (k + 1 - length ds) '0' ++ ds
+             (whole, frac) = splitAt (length padded - k) padded
+         in (if n < 0 then "-" else "") ++ whole ++ (if k == 0 then "" else '.' : frac)
+       [] -> show n ++ "/" ++ show d
+
 atom :: T.Atom -> String
 atom (T.ABool b) = if b then "true" else "false"
-atom (T.AInt n) = tm n
+atom (T.ANum q) = number q
 atom (T.AStr s) = show s
 atom (T.ATime t) = tm t
 

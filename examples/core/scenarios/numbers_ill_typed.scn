@@ -1,0 +1,5 @@
+; A quantity of 2.5 is a Decimal but not an Integer.
+(scenario numbers_ill_typed
+  (spec "examples/core/core_numbers.triel")
+  (entry "2026-05-01T00:00:00Z" (activate)
+    (data (order (record (amount (dec 10.00)) (quantity (dec 2.5)))))))

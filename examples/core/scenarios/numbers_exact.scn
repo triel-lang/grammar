@@ -1,0 +1,15 @@
+; The credit limit 2500.00 equals the literal 2500. The order amount 999.99
+; is below 1000.00, so the cancellation is not permitted, and below the
+; limit, so the shipment is not a breach. The quantity 0 violates the
+; invariant.
+(scenario numbers_exact
+  (spec "examples/core/core_numbers.triel")
+  (entry "2026-05-01T00:00:00Z" (activate)
+    (data (order (record (amount (dec 999.99)) (quantity (int 0))))
+          (credit_limit (dec 2500.00))))
+  (entry "2026-05-01T01:00:00Z" (act buyer cancel may)
+    (data (order (record (amount (dec 999.99)) (quantity (int 0))))
+          (credit_limit (dec 2500.00))))
+  (entry "2026-05-01T02:00:00Z" (act seller ship must_not)
+    (data (order (record (amount (dec 999.99)) (quantity (int 0))))
+          (credit_limit (dec 2500.00)))))

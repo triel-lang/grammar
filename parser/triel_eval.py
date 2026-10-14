@@ -18,6 +18,7 @@ Exit codes: 0 evaluated, 2 the specification is rejected, 1 any other error.
 """
 import argparse
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -105,6 +106,10 @@ def value(x):
             return ["int", int(x[1])]
         except ValueError:
             pass
+    if isinstance(x, list) and len(x) == 2 and x[0] == "dec" and isinstance(x[1], Sym):
+        m = re.fullmatch(r"(-?)([0-9]+)\.([0-9]+)", x[1])
+        if m:
+            return ["dec", int(m.group(1) + m.group(2) + m.group(3)), len(m.group(3))]
     if isinstance(x, list) and len(x) == 2 and x[0] == "str" and isinstance(x[1], Str):
         return ["str", x[1]]
     if isinstance(x, list) and len(x) == 2 and x[0] == "time":

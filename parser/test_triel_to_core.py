@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from lark import UnexpectedInput
 
 sys.path.insert(0, str(Path(__file__).parent))
 from triel_to_core import RULES, classify, sexp, translate  # noqa: E402
@@ -66,6 +67,49 @@ def test_not_equal_is_visible():
     assert '(not (eq (name (path "g")) (const (str "x"))))' in c
 
 
+def test_decimal_literal_is_exact():
+    c = core(spec(invariants="i : ALWAYS(g >= 12.50)", factors="g : Decimal METADATA"))
+    assert '(factor "g" (prim decimal) (none))' in c
+    assert '(always (le (const (dec 1250 2)) (name (path "g"))))' in c
+
+
+@pytest.mark.parametrize("cond, expected", [
+    ("g < 1", '(lt (name (path "g")) (const (int 1)))'),
+    ("g <= 1", '(le (name (path "g")) (const (int 1)))'),
+    ("g > 1", '(lt (const (int 1)) (name (path "g")))'),
+    ("g >= 1", '(le (const (int 1)) (name (path "g")))'),
+    ("g > -0.5", '(lt (const (dec -5 1)) (name (path "g")))'),
+    ("g == 2500.00", '(eq (name (path "g")) (const (dec 250000 2)))'),
+])
+def test_ordering_comparisons(cond, expected):
+    c = core(spec(invariants=f"i : ALWAYS({cond})", factors="g : Decimal METADATA"))
+    assert f"(always {expected})" in c
+
+
+@pytest.mark.parametrize("factors, cond", [
+    ('g : String METADATA', 'g < "x"'),
+    ('g : Boolean METADATA', 'g <= true'),
+    ('g : DateTime METADATA', 'g > DATETIME("2026-01-01T00:00:00Z")'),
+])
+def test_ordering_comparison_of_a_non_number_is_rejected(factors, cond):
+    assert rejected(spec(invariants=f"i : ALWAYS({cond})", factors=factors)) == \
+        ["ordering comparison of a non-number"]
+
+
+def test_integer_and_decimal_factors_compare():
+    c = core(spec(invariants="i : ALWAYS(n <= g)", factors="n : Integer METADATA, g : Decimal METADATA"))
+    assert '(always (le (name (path "n")) (name (path "g"))))' in c
+
+
+@pytest.mark.parametrize("src", [
+    spec(factors="f : Float METADATA"),
+    spec(invariants="i : ALWAYS(g >= 1.5e3)", factors="g : Decimal METADATA"),
+])
+def test_float_and_exponents_do_not_parse(src):
+    with pytest.raises(UnexpectedInput):
+        translate(src)
+
+
 def test_datetime_is_seconds_since_the_epoch():
     c = core(spec(terms='a MUST b BY DATETIME("1970-01-02T00:00:00Z")'))
     assert '(must "a" "b" (at 86400))' in c
@@ -99,6 +143,11 @@ CONT = "§2.6 defines continuations only for obligations"
 def test_continuation_bound_to_a_prohibition_is_rejected(act):
     assert rejected(spec(terms=f"a MUST_NOT b; a ON_BREACH NOTIFY b2, {act}")) == [CONT]
     assert rejected(spec(terms=f"(a MUST_NOT b); a ON_BREACH {act}")) == [CONT]
+
+
+def test_decimal_penalty_is_exact():
+    c = core(spec(terms="a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY 250.50"))
+    assert '(penalty (dec 25050 2))' in c
 
 
 def test_informational_actions_bound_to_a_prohibition():

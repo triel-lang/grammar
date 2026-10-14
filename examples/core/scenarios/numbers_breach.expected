@@ -1,0 +1,12 @@
+SPEC core_numbers
+METADATA CURRENCY "EUR"
+METADATA SOURCE order oracle_a
+ACTIVATION OK
+BLOCK OK
+TYPES OK
+TERM 1 MUST_NOT seller ship : BREACHED 1777604400 NOTIFY buyer PENALTY 250.5
+TERM 2 ON_BREACH seller : BOUND 1
+TERM 3 MAY buyer cancel : FULFILLED
+INVARIANT quantity_positive : U
+INVARIANT amount_bounded : U
+INVARIANT limit_known : U

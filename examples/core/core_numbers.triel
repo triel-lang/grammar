@@ -1,0 +1,32 @@
+-- TRIEL example inside the formal core: exact numbers and comparisons.
+-- Integer and Decimal values are exact rationals, so 2500.00 == 2500 and
+-- 250.50 is 250.5. An ordering comparison with an operand that has no value
+-- is undefined, like every other condition on absent data. Every construct in
+-- this file is translated into the Isabelle/HOL core (formal/core) and
+-- evaluated by the exported evaluator (evaluator/).
+
+SPECIFICATION core_numbers VERSION 1.0.0
+    CURRENCY: "EUR"
+
+SUBJECTS {
+  seller   : PARTY,
+  buyer    : PARTY,
+  oracle_a : ORACLE
+}
+
+TERMS {
+  seller MUST_NOT ship WHEN order.amount > credit_limit;
+  seller ON_BREACH NOTIFY buyer, PENALTY 250.50;
+  buyer MAY cancel WHEN order.amount >= 1000.00
+}
+
+FACTORS {
+  order        : Record { amount : Decimal, quantity : Integer } METADATA SOURCE oracle_a,
+  credit_limit : Decimal METADATA
+}
+
+INVARIANTS {
+  quantity_positive : SAFETY : ALWAYS(order.quantity >= 1);
+  amount_bounded    : SAFETY : ALWAYS(order.amount <= 5000.00);
+  limit_known       : LIVENESS : EVENTUALLY(credit_limit == 2500)
+}

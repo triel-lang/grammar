@@ -1,0 +1,12 @@
+SPEC core_numbers
+METADATA CURRENCY "EUR"
+METADATA SOURCE order oracle_a
+ACTIVATION OK
+BLOCK OK
+TYPES OK
+TERM 1 MUST_NOT seller ship : PENDING
+TERM 2 ON_BREACH seller : BOUND 1
+TERM 3 MAY buyer cancel : PENDING
+INVARIANT quantity_positive : F
+INVARIANT amount_bounded : U
+INVARIANT limit_known : T

@@ -21,6 +21,12 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
     to seconds; calendar units (BUSINESS_DAY, MONTH, YEAR) are rejected.
   * A Boolean factor used as a condition, `x`, is `x == true`; `a != b` is
     `NOT (a == b)`. Both are visible in the printed core AST.
+  * Numbers are exact. An integer literal is (int N); a decimal literal is
+    (dec M K), the rational M / 10^K, so 12.50 is (dec 1250 2). Integer and
+    Decimal factors are both numbers; every Integer is a Decimal.
+  * `a < b` and `a <= b` are (lt a b) and (le a b); `a > b` is (lt b a) and
+    `a >= b` is (le b a). The operands of an ordering comparison must be
+    numbers: an Integer or Decimal factor, or a numeric literal.
   * The PENALTY amount must be a literal; it is kept as an opaque value.
   * A handler binds to the nearest preceding obligation or prohibition of its
     subject at the top level (bound_to in TRIEL_Breach.thy). Section 2.6
@@ -105,7 +111,9 @@ UNIT_SECONDS = {"SECOND": 1, "SECONDS": 1, "MINUTE": 60, "MINUTES": 60,
 CONTINUATIONS = {"TERMINATE", "CURE_BY", "ESCALATE_TO"}
 PROHIBITION_CONTINUATION = "§2.6 defines continuations only for obligations"
 CALENDAR_UNITS = {"BUSINESS_DAY", "BUSINESS_DAYS", "MONTH", "MONTHS", "YEAR", "YEARS"}
-PRIMITIVES = {"Integer": "int", "Boolean": "bool", "String": "string", "DateTime": "datetime"}
+PRIMITIVES = {"Integer": "int", "Decimal": "decimal", "Boolean": "bool", "String": "string",
+              "DateTime": "datetime"}
+NUMERIC = (["prim", "int"], ["prim", "decimal"])
 ISO_UTC = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 
@@ -179,6 +187,7 @@ class Translation:
         self.factors = {}       # factor name -> type (None if rejected)
         self.core = None        # the core AST, if accepted
         self.top = None         # the norm or handler at the top level being translated
+        self.operand_type = None  # the type of the last operand read by value()
 
     def reject(self, what: str):
         self.rejected.add(what)
@@ -319,8 +328,9 @@ class Translation:
             return ["str", Str(unquote(c.value))]
         if c.data == "numeric_literal":
             tok = kids(c)[0]
-            if tok.type == "FLOAT_LITERAL":
-                return self.reject("float literal")
+            if tok.type == "DECIMAL_LITERAL":
+                whole, frac = tok.value.split(".")
+                return ["dec", int(whole + frac), len(frac)]
             return ["int", int(tok.value)]
         if c.data == "boolean_literal":
             return ["bool", tokens(c)[0]]
@@ -395,12 +405,18 @@ class Translation:
         if len(p) == 1:
             return self.bool_operand(p[0])
         op = tokens(p[1])[0]
-        if op not in ("==", "!="):
-            return self.reject("ordering comparison")
-        a, b = self.value(p[0]), self.value(p[2])
+        a = self.value(p[0])
+        ta = self.operand_type
+        b = self.value(p[2])
+        tb = self.operand_type
         if a is None or b is None:
             return None
-        return ["eq", a, b] if op == "==" else ["not", ["eq", a, b]]
+        if op in ("==", "!="):
+            return ["eq", a, b] if op == "==" else ["not", ["eq", a, b]]
+        if any(x != "number" and x not in NUMERIC and x != "unknown" for x in (ta, tb)):
+            return self.reject("ordering comparison of a non-number")
+        return {"<": ["lt", a, b], "<=": ["le", a, b],
+                ">": ["lt", b, a], ">=": ["le", b, a]}[op]
 
     def primary_of(self, t: Tree):
         """The primary below an arithmetic_expr without operators, or the name of
@@ -449,7 +465,10 @@ class Translation:
         return self.reject(RULES[x.data])
 
     def value(self, t: Tree):
-        """An operand of == or !=: a factor name or a literal."""
+        """An operand of a comparison: a factor name or a literal. Its type is left
+        in self.operand_type: the declared type of a name, "number" for a numeric
+        literal, None otherwise."""
+        self.operand_type = None
         p = self.primary_of(t)
         if p == "arithmetic":
             return self.reject("arithmetic")
@@ -460,14 +479,17 @@ class Translation:
                 l2 = subtrees(lit)
                 if l2 and l2[0].data == "literal":
                     v = self.literal_value(l2[0])
-                    if v is not None and v[0] == "int":
-                        return ["const", ["int", -v[1]]]
+                    if v is not None and v[0] in ("int", "dec"):
+                        self.operand_type = "number"
+                        return ["const", [v[0], -v[1]] + v[2:]]
             return self.reject("arithmetic")
         x = subtrees(p)[0] if subtrees(p) else None
         if x is None:
             return self.reject("non-Boolean condition")
         if x.data == "literal":
             v = self.literal_value(x)
+            if v is not None and v[0] in ("int", "dec"):
+                self.operand_type = "number"
             return None if v is None else ["const", v]
         if x.data == "factor_ref":
             ty = self.path_type(x)
@@ -475,6 +497,7 @@ class Translation:
                 return None
             if ty != "unknown" and ty[0] == "record":
                 return self.reject("== on a record")
+            self.operand_type = ty
             return ["name", self.path(x)]
         if x.data == "expr":
             return self.reject("== on a condition")

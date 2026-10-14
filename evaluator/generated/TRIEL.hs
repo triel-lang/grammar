@@ -1,11 +1,11 @@
 {-# LANGUAGE EmptyDataDecls, RankNTypes, ScopedTypeVariables #-}
 
 module
-  TRIEL(Int(..), integer_of_int, Nat, integer_of_nat, Atom(..), Fmap(..),
-         Nd(..), Ty(..), Vexp(..), Expr(..), Verdict(..), Baction(..),
-         Continuation(..), Status(..), Line(..), Prim(..), Inv(..),
+  TRIEL(Int(..), integer_of_int, Nat, integer_of_nat, Num, Rat, quotient_of,
+         Atom(..), Fmap(..), Nd(..), Ty(..), Vexp(..), Expr(..), Verdict(..),
+         Baction(..), Continuation(..), Status(..), Line(..), Prim(..), Inv(..),
          Deadline(..), Sterm(..), Fdecl(..), Spec(..), Polarity(..), Event(..),
-         nat_of_integer, run)
+         nat_of_integer, run, dec_atom)
   where {
 
 import Prelude ((==), (/=), (<), (<=), (>=), (>), (+), (-), (*), (/), (**),
@@ -21,6 +21,13 @@ newtype Int = Int_of_integer Integer;
 
 integer_of_int :: Int -> Integer;
 integer_of_int (Int_of_integer k) = k;
+
+equal_int :: Int -> Int -> Bool;
+equal_int k l = integer_of_int k == integer_of_int l;
+
+instance Eq Int where {
+  a == b = equal_int a b;
+};
 
 less_eq_int :: Int -> Int -> Bool;
 less_eq_int k l = integer_of_int k <= integer_of_int l;
@@ -68,39 +75,483 @@ instance Eq Nat where {
   a == b = equal_nat a b;
 };
 
-equal_int :: Int -> Int -> Bool;
-equal_int k l = integer_of_int k == integer_of_int l;
+times_nat :: Nat -> Nat -> Nat;
+times_nat m n = Nat (integer_of_nat m * integer_of_nat n);
 
-data Atom = ABool Bool | AInt Int | AStr String | ATime Int;
-
-equal_atom :: Atom -> Atom -> Bool;
-equal_atom (AStr x3) (ATime x4) = False;
-equal_atom (ATime x4) (AStr x3) = False;
-equal_atom (AInt x2) (ATime x4) = False;
-equal_atom (ATime x4) (AInt x2) = False;
-equal_atom (AInt x2) (AStr x3) = False;
-equal_atom (AStr x3) (AInt x2) = False;
-equal_atom (ABool x1) (ATime x4) = False;
-equal_atom (ATime x4) (ABool x1) = False;
-equal_atom (ABool x1) (AStr x3) = False;
-equal_atom (AStr x3) (ABool x1) = False;
-equal_atom (ABool x1) (AInt x2) = False;
-equal_atom (AInt x2) (ABool x1) = False;
-equal_atom (ATime x4) (ATime y4) = equal_int x4 y4;
-equal_atom (AStr x3) (AStr y3) = x3 == y3;
-equal_atom (AInt x2) (AInt y2) = equal_int x2 y2;
-equal_atom (ABool x1) (ABool y1) = x1 == y1;
-
-instance Eq Atom where {
-  a == b = equal_atom a b;
+class Times a where {
+  times :: a -> a -> a;
 };
+
+class (Times a) => Dvd a where {
+};
+
+instance Times Nat where {
+  times = times_nat;
+};
+
+instance Dvd Nat where {
+};
+
+data Num = One | Bit0 Num | Bit1 Num;
+
+one_nat :: Nat;
+one_nat = Nat (1 :: Integer);
+
+class One a where {
+  one :: a;
+};
+
+instance One Nat where {
+  one = one_nat;
+};
+
+plus_nat :: Nat -> Nat -> Nat;
+plus_nat m n = Nat (integer_of_nat m + integer_of_nat n);
+
+class Plus a where {
+  plus :: a -> a -> a;
+};
+
+instance Plus Nat where {
+  plus = plus_nat;
+};
+
+zero_nat :: Nat;
+zero_nat = Nat (0 :: Integer);
+
+class Zero a where {
+  zero :: a;
+};
+
+instance Zero Nat where {
+  zero = zero_nat;
+};
+
+class (Plus a) => Semigroup_add a where {
+};
+
+class (One a, Semigroup_add a) => Numeral a where {
+};
+
+instance Semigroup_add Nat where {
+};
+
+instance Numeral Nat where {
+};
+
+class (One a, Times a) => Power a where {
+};
+
+instance Power Nat where {
+};
+
+max :: forall a. (Ord a) => a -> a -> a;
+max a b = (if less_eq a b then b else a);
 
 instance Ord Integer where {
   less_eq = (\ a b -> a <= b);
   less = (\ a b -> a < b);
 };
 
-data Num = One | Bit0 Num | Bit1 Num;
+minus_nat :: Nat -> Nat -> Nat;
+minus_nat m n = Nat (max (0 :: Integer) (integer_of_nat m - integer_of_nat n));
+
+class Minus a where {
+  minus :: a -> a -> a;
+};
+
+instance Minus Nat where {
+  minus = minus_nat;
+};
+
+apsnd :: forall a b c. (a -> b) -> (c, a) -> (c, b);
+apsnd f (x, y) = (x, f y);
+
+divmod_integer :: Integer -> Integer -> (Integer, Integer);
+divmod_integer k l =
+  (if k == (0 :: Integer) then ((0 :: Integer), (0 :: Integer))
+    else (if (0 :: Integer) < l
+           then (if (0 :: Integer) < k then divMod (abs k) (abs l)
+                  else (case divMod (abs k) (abs l) of {
+                         (r, s) ->
+                           (if s == (0 :: Integer)
+                             then (negate r, (0 :: Integer))
+                             else (negate r - (1 :: Integer), l - s));
+                       }))
+           else (if l == (0 :: Integer) then ((0 :: Integer), k)
+                  else apsnd negate
+                         (if k < (0 :: Integer) then divMod (abs k) (abs l)
+                           else (case divMod (abs k) (abs l) of {
+                                  (r, s) ->
+                                    (if s == (0 :: Integer)
+                                      then (negate r, (0 :: Integer))
+                                      else (negate r - (1 :: Integer),
+     negate l - s));
+                                })))));
+
+divide_integer :: Integer -> Integer -> Integer;
+divide_integer k l = fst (divmod_integer k l);
+
+divide_nat :: Nat -> Nat -> Nat;
+divide_nat m n = Nat (divide_integer (integer_of_nat m) (integer_of_nat n));
+
+class Divide a where {
+  divide :: a -> a -> a;
+};
+
+instance Divide Nat where {
+  divide = divide_nat;
+};
+
+modulo_integer :: Integer -> Integer -> Integer;
+modulo_integer k l = snd (divmod_integer k l);
+
+modulo_nat :: Nat -> Nat -> Nat;
+modulo_nat m n = Nat (modulo_integer (integer_of_nat m) (integer_of_nat n));
+
+class (Divide a, Dvd a) => Modulo a where {
+  modulo :: a -> a -> a;
+};
+
+instance Modulo Nat where {
+  modulo = modulo_nat;
+};
+
+class (Semigroup_add a) => Ab_semigroup_add a where {
+};
+
+class (Semigroup_add a, Zero a) => Monoid_add a where {
+};
+
+class (Ab_semigroup_add a, Monoid_add a) => Comm_monoid_add a where {
+};
+
+class (Times a, Zero a) => Mult_zero a where {
+};
+
+class (Times a) => Semigroup_mult a where {
+};
+
+class (Ab_semigroup_add a, Semigroup_mult a) => Semiring a where {
+};
+
+class (Comm_monoid_add a, Mult_zero a, Semiring a) => Semiring_0 a where {
+};
+
+class (Semiring_0 a) => Semiring_no_zero_divisors a where {
+};
+
+class (Semigroup_mult a, Power a) => Monoid_mult a where {
+};
+
+class (Monoid_mult a, Numeral a, Semiring a) => Semiring_numeral a where {
+};
+
+class (One a, Zero a) => Zero_neq_one a where {
+};
+
+class (Semiring_numeral a, Semiring_0 a, Zero_neq_one a) => Semiring_1 a where {
+};
+
+class (Semiring_1 a,
+        Semiring_no_zero_divisors a) => Semiring_1_no_zero_divisors a where {
+};
+
+class (Semigroup_add a) => Cancel_semigroup_add a where {
+};
+
+class (Ab_semigroup_add a, Cancel_semigroup_add a,
+        Minus a) => Cancel_ab_semigroup_add a where {
+};
+
+class (Cancel_ab_semigroup_add a,
+        Comm_monoid_add a) => Cancel_comm_monoid_add a where {
+};
+
+class (Cancel_comm_monoid_add a, Semiring_0 a) => Semiring_0_cancel a where {
+};
+
+class (Semigroup_mult a) => Ab_semigroup_mult a where {
+};
+
+class (Ab_semigroup_mult a, Semiring a) => Comm_semiring a where {
+};
+
+class (Comm_semiring a, Semiring_0 a) => Comm_semiring_0 a where {
+};
+
+class (Comm_semiring_0 a,
+        Semiring_0_cancel a) => Comm_semiring_0_cancel a where {
+};
+
+class (Semiring_0_cancel a, Semiring_1 a) => Semiring_1_cancel a where {
+};
+
+class (Ab_semigroup_mult a, Monoid_mult a, Dvd a) => Comm_monoid_mult a where {
+};
+
+class (Comm_monoid_mult a, Comm_semiring_0 a,
+        Semiring_1 a) => Comm_semiring_1 a where {
+};
+
+class (Comm_semiring_0_cancel a, Comm_semiring_1 a,
+        Semiring_1_cancel a) => Comm_semiring_1_cancel a where {
+};
+
+class (Comm_semiring_1_cancel a,
+        Semiring_1_no_zero_divisors a) => Semidom a where {
+};
+
+instance Ab_semigroup_add Nat where {
+};
+
+instance Monoid_add Nat where {
+};
+
+instance Comm_monoid_add Nat where {
+};
+
+instance Mult_zero Nat where {
+};
+
+instance Semigroup_mult Nat where {
+};
+
+instance Semiring Nat where {
+};
+
+instance Semiring_0 Nat where {
+};
+
+instance Semiring_no_zero_divisors Nat where {
+};
+
+instance Monoid_mult Nat where {
+};
+
+instance Semiring_numeral Nat where {
+};
+
+instance Zero_neq_one Nat where {
+};
+
+instance Semiring_1 Nat where {
+};
+
+instance Semiring_1_no_zero_divisors Nat where {
+};
+
+instance Cancel_semigroup_add Nat where {
+};
+
+instance Cancel_ab_semigroup_add Nat where {
+};
+
+instance Cancel_comm_monoid_add Nat where {
+};
+
+instance Semiring_0_cancel Nat where {
+};
+
+instance Ab_semigroup_mult Nat where {
+};
+
+instance Comm_semiring Nat where {
+};
+
+instance Comm_semiring_0 Nat where {
+};
+
+instance Comm_semiring_0_cancel Nat where {
+};
+
+instance Semiring_1_cancel Nat where {
+};
+
+instance Comm_monoid_mult Nat where {
+};
+
+instance Comm_semiring_1 Nat where {
+};
+
+instance Comm_semiring_1_cancel Nat where {
+};
+
+instance Semidom Nat where {
+};
+
+class (One a, Zero a, Divide a) => Divide_trivial a where {
+};
+
+instance Divide_trivial Nat where {
+};
+
+class (Semiring_no_zero_divisors a) => Semiring_no_zero_divisors_cancel a where {
+};
+
+class (Divide_trivial a, Semidom a,
+        Semiring_no_zero_divisors_cancel a) => Semidom_divide a where {
+};
+
+instance Semiring_no_zero_divisors_cancel Nat where {
+};
+
+instance Semidom_divide Nat where {
+};
+
+class (Comm_semiring_1_cancel a, Modulo a) => Semiring_modulo a where {
+};
+
+class (Divide_trivial a, Semiring_modulo a) => Semiring_modulo_trivial a where {
+};
+
+class (Semidom_divide a) => Algebraic_semidom a where {
+};
+
+class (Algebraic_semidom a,
+        Semiring_modulo_trivial a) => Semidom_modulo a where {
+};
+
+instance Semiring_modulo Nat where {
+};
+
+instance Semiring_modulo_trivial Nat where {
+};
+
+instance Algebraic_semidom Nat where {
+};
+
+instance Semidom_modulo Nat where {
+};
+
+one_int :: Int;
+one_int = Int_of_integer (1 :: Integer);
+
+newtype Rat = Frct (Int, Int);
+
+one_rat :: Rat;
+one_rat = Frct (one_int, one_int);
+
+instance One Rat where {
+  one = one_rat;
+};
+
+times_int :: Int -> Int -> Int;
+times_int k l = Int_of_integer (integer_of_int k * integer_of_int l);
+
+quotient_of :: Rat -> (Int, Int);
+quotient_of (Frct x) = x;
+
+divide_int :: Int -> Int -> Int;
+divide_int k l =
+  Int_of_integer (divide_integer (integer_of_int k) (integer_of_int l));
+
+uminus_int :: Int -> Int;
+uminus_int k = Int_of_integer (negate (integer_of_int k));
+
+zero_int :: Int;
+zero_int = Int_of_integer (0 :: Integer);
+
+gcd_int :: Int -> Int -> Int;
+gcd_int (Int_of_integer x) (Int_of_integer y) =
+  Int_of_integer (Prelude.gcd x y);
+
+normalize :: (Int, Int) -> (Int, Int);
+normalize p =
+  (if less_int zero_int (snd p)
+    then let {
+           a = gcd_int (fst p) (snd p);
+         } in (divide_int (fst p) a, divide_int (snd p) a)
+    else (if equal_int (snd p) zero_int then (zero_int, one_int)
+           else let {
+                  a = uminus_int (gcd_int (fst p) (snd p));
+                } in (divide_int (fst p) a, divide_int (snd p) a)));
+
+times_rat :: Rat -> Rat -> Rat;
+times_rat p q =
+  Frct (case quotient_of p of {
+         (a, c) -> (case quotient_of q of {
+                     (b, d) -> normalize (times_int a b, times_int c d);
+                   });
+       });
+
+instance Times Rat where {
+  times = times_rat;
+};
+
+instance Power Rat where {
+};
+
+equal_rat :: Rat -> Rat -> Bool;
+equal_rat a b = quotient_of a == quotient_of b;
+
+data Atom = ABool Bool | ANum Rat | AStr String | ATime Int;
+
+equal_atom :: Atom -> Atom -> Bool;
+equal_atom (AStr x3) (ATime x4) = False;
+equal_atom (ATime x4) (AStr x3) = False;
+equal_atom (ANum x2) (ATime x4) = False;
+equal_atom (ATime x4) (ANum x2) = False;
+equal_atom (ANum x2) (AStr x3) = False;
+equal_atom (AStr x3) (ANum x2) = False;
+equal_atom (ABool x1) (ATime x4) = False;
+equal_atom (ATime x4) (ABool x1) = False;
+equal_atom (ABool x1) (AStr x3) = False;
+equal_atom (AStr x3) (ABool x1) = False;
+equal_atom (ABool x1) (ANum x2) = False;
+equal_atom (ANum x2) (ABool x1) = False;
+equal_atom (ATime x4) (ATime y4) = equal_int x4 y4;
+equal_atom (AStr x3) (AStr y3) = x3 == y3;
+equal_atom (ANum x2) (ANum y2) = equal_rat x2 y2;
+equal_atom (ABool x1) (ABool y1) = x1 == y1;
+
+instance Eq Atom where {
+  a == b = equal_atom a b;
+};
+
+less_rat :: Rat -> Rat -> Bool;
+less_rat p q =
+  (case quotient_of p of {
+    (a, c) -> (case quotient_of q of {
+                (b, d) -> less_int (times_int a d) (times_int c b);
+              });
+  });
+
+vless_atom :: Atom -> Atom -> Bool;
+vless_atom (ANum p) (ANum q) = less_rat p q;
+vless_atom (ABool v) uv = False;
+vless_atom (AStr v) uv = False;
+vless_atom (ATime v) uv = False;
+vless_atom uu (ABool v) = False;
+vless_atom uu (AStr v) = False;
+vless_atom uu (ATime v) = False;
+
+less_eq_rat :: Rat -> Rat -> Bool;
+less_eq_rat p q =
+  (case quotient_of p of {
+    (a, c) -> (case quotient_of q of {
+                (b, d) -> less_eq_int (times_int a d) (times_int c b);
+              });
+  });
+
+vleq_atom :: Atom -> Atom -> Bool;
+vleq_atom (ANum p) (ANum q) = less_eq_rat p q;
+vleq_atom (ABool v) uv = False;
+vleq_atom (AStr v) uv = False;
+vleq_atom (ATime v) uv = False;
+vleq_atom uu (ABool v) = False;
+vleq_atom uu (AStr v) = False;
+vleq_atom uu (ATime v) = False;
+
+class Value_order a where {
+  vless :: a -> a -> Bool;
+  vleq :: a -> a -> Bool;
+};
+
+instance Value_order Atom where {
+  vless = vless_atom;
+  vleq = vleq_atom;
+};
 
 newtype Fmap a b = Fmap_of_list [(a, b)];
 
@@ -110,7 +561,8 @@ data Ty a b = TPrim b | TOptional (Ty a b) | TRecord [(a, Ty a b)];
 
 data Vexp a b = VConst b | VName a;
 
-data Expr a b = ETrue | EFalse | EEq (Vexp a b) (Vexp a b) | ENot (Expr a b)
+data Expr a b = ETrue | EFalse | EEq (Vexp a b) (Vexp a b)
+  | ELt (Vexp a b) (Vexp a b) | ELe (Vexp a b) (Vexp a b) | ENot (Expr a b)
   | EAnd (Expr a b) (Expr a b) | EOr (Expr a b) (Expr a b)
   | EImp (Expr a b) (Expr a b) | EPresent a;
 
@@ -135,7 +587,7 @@ data Line = LActivation Bool | LBlock Bool | LTypes (Maybe (Nat, String))
   | LComposite Nat (Maybe Bool) (Maybe Bool) (Maybe Bool)
   | LInvariant String (Maybe Bool);
 
-data Prim = PBool | PInt | PStr | PTime;
+data Prim = PBool | PInt | PDec | PStr | PTime;
 
 data Inv a b = Always (Expr a b) | Eventually (Expr a b) | Next (Expr a b);
 
@@ -160,23 +612,14 @@ data Event a b c = Deontic b c Polarity | Arrival a | Tick;
 
 data Outcome = Done | Interrupted | Violated;
 
-plus_nat :: Nat -> Nat -> Nat;
-plus_nat m n = Nat (integer_of_nat m + integer_of_nat n);
+nat_of_integer :: Integer -> Nat;
+nat_of_integer k = Nat (max (0 :: Integer) k);
 
-one_nat :: Nat;
-one_nat = Nat (1 :: Integer);
+nat :: Int -> Nat;
+nat = nat_of_integer . integer_of_int;
 
 suc :: Nat -> Nat;
 suc n = plus_nat n one_nat;
-
-max :: forall a. (Ord a) => a -> a -> a;
-max a b = (if less_eq a b then b else a);
-
-minus_nat :: Nat -> Nat -> Nat;
-minus_nat m n = Nat (max (0 :: Integer) (integer_of_nat m - integer_of_nat n));
-
-zero_nat :: Nat;
-zero_nat = Nat (0 :: Integer);
 
 nth :: forall a. [a] -> Nat -> a;
 nth (x : xs) n =
@@ -212,6 +655,9 @@ foldr f (x : xs) = f x . foldr f xs;
 map_of :: forall a b. (Eq a) => [(a, b)] -> a -> Maybe b;
 map_of [] k = Nothing;
 map_of ((l, v) : ps) k = (if l == k then Just v else map_of ps k);
+
+of_int :: Int -> Rat;
+of_int a = Frct (a, one_int);
 
 member :: forall a. (Eq a) => [a] -> a -> Bool;
 member [] y = False;
@@ -346,7 +792,8 @@ kand p q =
   (if p == Just False || q == Just False then Just False
     else (if p == Just True && q == Just True then Just True else Nothing));
 
-eval :: forall a b. (Eq b) => Expr a b -> (a -> Maybe b) -> Maybe Bool;
+eval ::
+  forall a b. (Eq b, Value_order b) => Expr a b -> (a -> Maybe b) -> Maybe Bool;
 eval ETrue sigma = Just True;
 eval EFalse sigma = Just False;
 eval (EEq a b) sigma = (case evalV a sigma of {
@@ -354,6 +801,20 @@ eval (EEq a b) sigma = (case evalV a sigma of {
                          Just u -> (case evalV b sigma of {
                                      Nothing -> Nothing;
                                      Just w -> Just (u == w);
+                                   });
+                       });
+eval (ELt a b) sigma = (case evalV a sigma of {
+                         Nothing -> Nothing;
+                         Just u -> (case evalV b sigma of {
+                                     Nothing -> Nothing;
+                                     Just w -> Just (vless u w);
+                                   });
+                       });
+eval (ELe a b) sigma = (case evalV a sigma of {
+                         Nothing -> Nothing;
+                         Just u -> (case evalV b sigma of {
+                                     Nothing -> Nothing;
+                                     Just w -> Just (vleq u w);
                                    });
                        });
 eval (ENot e) sigma = knot (eval e sigma);
@@ -371,7 +832,9 @@ st pi j = sta (nth pi j);
 
 inv_eval ::
   forall a b c d.
-    (Eq b) => Inv a b -> [(a -> Maybe b, (Int, Event a c d))] -> Maybe Bool;
+    (Eq b,
+      Value_order b) => Inv a b ->
+                          [(a -> Maybe b, (Int, Event a c d))] -> Maybe Bool;
 inv_eval (Always phi) pi =
   (if any (\ j -> eval phi (st pi j) == Just False)
         (upt zero_nat (size_list pi))
@@ -626,9 +1089,6 @@ equal_event (Deontic x11 x12 x13) (Deontic y11 y12 y13) =
   x11 == y11 && x12 == y12 && equal_polarity x13 y13;
 equal_event Tick Tick = True;
 
-nat_of_integer :: Integer -> Nat;
-nat_of_integer k = Nat (max (0 :: Integer) k);
-
 sorted_wrt :: forall a. (a -> a -> Bool) -> [a] -> Bool;
 sorted_wrt p [] = True;
 sorted_wrt p (x : ys) = all (p x) ys && sorted_wrt p ys;
@@ -639,7 +1099,9 @@ is_trace pi = not (null pi) && sorted_wrt less_eq (map tstamp pi);
 
 first_at ::
   forall a b c d e.
-    (Eq b) => Expr a b -> [(a -> Maybe b, (c, Event a d e))] -> Nat -> Bool;
+    (Eq b,
+      Value_order b) => Expr a b ->
+                          [(a -> Maybe b, (c, Event a d e))] -> Nat -> Bool;
 first_at c pi k =
   eval c (st pi k) == Just True &&
     all (\ j -> not (eval c (st pi j) == Just True)) (upt zero_nat k);
@@ -654,7 +1116,7 @@ kors xs = foldr kor xs (Just False);
 
 mem3 ::
   forall a b c d e.
-    (Eq a, Eq b, Eq c, Eq d,
+    (Eq a, Eq b, Value_order b, Eq c, Eq d,
       Linorder e) => Tm a b c d ->
                        [(a -> Maybe b, (e, Event a c d))] ->
                          Outcome -> Maybe Bool;
@@ -700,7 +1162,7 @@ mem3 (TAnd t u) pi r = Nothing;
 
 ext3 ::
   forall a b c d e.
-    (Eq a, Eq b, Eq c, Eq d,
+    (Eq a, Eq b, Value_order b, Eq c, Eq d,
       Linorder e) => Tm a b c d ->
                        [(a -> Maybe b, (e, Event a c d))] -> Maybe Bool;
 ext3 (TMust s a) rho = Just (is_trace rho);
@@ -732,9 +1194,10 @@ composite_line n t pi =
 
 may_verdict ::
   forall a b c d.
-    (Eq a, Eq b,
-      Eq d) => a -> b -> Expr c d ->
-                           [(c -> Maybe d, (Int, Event c a b))] -> Verdict;
+    (Eq a, Eq b, Eq d,
+      Value_order d) => a -> b -> Expr c d ->
+                                    [(c -> Maybe d, (Int, Event c a b))] ->
+                                      Verdict;
 may_verdict s a c pi =
   (if any (\ j ->
             does s a (evt (nth pi j)) &&
@@ -744,9 +1207,10 @@ may_verdict s a c pi =
 
 forbidden ::
   forall a b c d.
-    (Eq a, Eq b,
-      Eq d) => a -> b -> Expr c d ->
-                           [(c -> Maybe d, (Int, Event c a b))] -> Nat -> Bool;
+    (Eq a, Eq b, Eq d,
+      Value_order d) => a -> b -> Expr c d ->
+                                    [(c -> Maybe d, (Int, Event c a b))] ->
+                                      Nat -> Bool;
 forbidden s a c pi j =
   less_eq_nat one_nat j &&
     less_nat j (size_list pi) &&
@@ -755,9 +1219,10 @@ forbidden s a c pi j =
 
 pr_verdict ::
   forall a b c d.
-    (Eq a, Eq b,
-      Eq d) => a -> b -> Expr c d ->
-                           [(c -> Maybe d, (Int, Event c a b))] -> Verdict;
+    (Eq a, Eq b, Eq d,
+      Value_order d) => a -> b -> Expr c d ->
+                                    [(c -> Maybe d, (Int, Event c a b))] ->
+                                      Verdict;
 pr_verdict s a c pi =
   (case find (forbidden s a c pi) (upt zero_nat (size_list pi)) of {
     Nothing -> Pending;
@@ -790,7 +1255,7 @@ pr_actions blk i v =
 time_of :: Atom -> Maybe Int;
 time_of (ATime t) = Just t;
 time_of (ABool v) = Nothing;
-time_of (AInt v) = Nothing;
+time_of (ANum v) = Nothing;
 time_of (AStr v) = Nothing;
 
 term_line ::
@@ -850,28 +1315,57 @@ wt_fun i (TRecord fs) v =
     Just (Nom m) -> all (\ (f, t) -> wt_fun i t (fmlookup m f)) fs;
   });
 
+floor_rat :: Rat -> Int;
+floor_rat p = (case quotient_of p of {
+                (a, b) -> divide_int a b;
+              });
+
+int_rat :: Rat -> Bool;
+int_rat q = equal_rat (of_int (floor_rat q)) q;
+
+dvd :: forall a. (Eq a, Semidom_modulo a) => a -> a -> Bool;
+dvd a b = modulo b a == zero;
+
+dec_den :: Nat -> Bool;
+dec_den d =
+  (if less_eq_nat d one_nat then equal_nat d one_nat
+    else (if dvd (nat_of_integer (2 :: Integer)) d
+           then dec_den (divide_nat d (nat_of_integer (2 :: Integer)))
+           else (if dvd (nat_of_integer (5 :: Integer)) d
+                  then dec_den (divide_nat d (nat_of_integer (5 :: Integer)))
+                  else False)));
+
+decimal :: Rat -> Bool;
+decimal q = dec_den (nat (snd (quotient_of q)));
+
 interp :: Prim -> Atom -> Bool;
 interp PBool b = (case b of {
                    ABool _ -> True;
-                   AInt _ -> False;
+                   ANum _ -> False;
                    AStr _ -> False;
                    ATime _ -> False;
                  });
 interp PInt b = (case b of {
                   ABool _ -> False;
-                  AInt _ -> True;
+                  ANum a -> int_rat a;
+                  AStr _ -> False;
+                  ATime _ -> False;
+                });
+interp PDec b = (case b of {
+                  ABool _ -> False;
+                  ANum a -> decimal a;
                   AStr _ -> False;
                   ATime _ -> False;
                 });
 interp PStr b = (case b of {
                   ABool _ -> False;
-                  AInt _ -> False;
+                  ANum _ -> False;
                   AStr _ -> True;
                   ATime _ -> False;
                 });
 interp PTime b = (case b of {
                    ABool _ -> False;
-                   AInt _ -> False;
+                   ANum _ -> False;
                    AStr _ -> False;
                    ATime _ -> True;
                  });
@@ -961,5 +1455,23 @@ run sp obs =
                                Just e -> [LTypes (Just e)];
                              })));
   });
+
+divide_rat :: Rat -> Rat -> Rat;
+divide_rat p q =
+  Frct (case quotient_of p of {
+         (a, c) -> (case quotient_of q of {
+                     (b, d) -> normalize (times_int a d, times_int c b);
+                   });
+       });
+
+power :: forall a. (Power a) => a -> Nat -> a;
+power a n =
+  (if equal_nat n zero_nat then one
+    else times a (power a (minus_nat n one_nat)));
+
+dec_atom :: Int -> Nat -> Atom;
+dec_atom m k =
+  ANum (divide_rat (of_int m)
+         (power (of_int (Int_of_integer (10 :: Integer))) k));
 
 }
