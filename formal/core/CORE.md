@@ -500,6 +500,21 @@ Each decision below was made because of a theorem: either one that proves the de
     - `vless` and `vleq` give T or F on every pair of values, so a comparison is ⊥ only when an operand has no value, exactly like `=`. This keeps T4 for the comparisons: on fully defined data every condition is two-valued (`T4_classical`).
     - The price is that an ordering comparison of a number with a value that is not a number is F in the evaluator. The translator rejects such a comparison (section 10.6, rule 5), and the types of the data are checked before any verdict, so it does not arise for a translated specification.
 
+13. **The condition of `IF` and `WHEN` is evaluated once, where the term is reached, and only T selects the `THEN` branch.**
+    - `IF c THEN t₁ ELSE t₂` takes the traces of t₁ that start in a state where c = T, and the traces of t₂ that start in a state where c ≠ T (`den_if`). Without `ELSE`, the second part is the one-entry trace with outcome `Done`, like a permission that is not exercised (`if_no_else_not_true`). `ELIF` is a nested `IF` in the `ELSE` branch, and `WHEN c THEN t` is `IF c THEN t`.
+    - An undefined c goes the way of F (`if_undefined_else`). This is the reading of an undefined `UNLESS` guard, which does not fire. It is justified by two theorems. On data that defines every name c reads, c is never ⊥ and the term is the two-valued `IF` (`if_classical`, from T4). Once c has a definite value, more data does not change the branch, for every c without `PRESENT` and `DEFAULT` (`if_branch_stable`, from T2).
+    - The branch taken on ⊥ is not protected in this way: data that arrives later can make c true (`if_undefined_branch_not_stable`). Every rule that picks a branch on ⊥ has this property.
+    - `IF` and the one-entry term preserve totality (`total_if`, `total_skip`), so every term is still total (`den_total`) and the laws of `UNLESS` hold for the extended term language with no side condition.
+    - **Open question.** Should `WHEN c THEN t` wait for c to become true, activating t at that moment, instead of evaluating c once? TECHNICAL_REPORT.md §2.5 leaves this open, and this core evaluates c once, as for `IF`.
+14. **A named term is in force, and `REF` refers only backwards.**
+    - An element `name := t` of a `TERMS` block is an element like any other. `REF name` denotes the denotation of t (`resolve_den`, `block_den`).
+    - A reference to an undeclared name, or to a name declared at or below the reference, is rejected (`refs_ok`). So the reference relation is contained in the order of the elements and has no cycle (`refs_ok_acyclic`).
+    - References are removed by substitution, and substitution preserves the denotation (`resolve_den`). A resolved term contains no reference, so totality and the laws of `UNLESS` carry over to it with no side condition.
+15. **`DEFAULT` is excluded from the stability of verdicts, like `PRESENT`.**
+    - DEFAULT(f, d) is the value of f if E_f, and the value of d otherwise (`evalV_default`).
+    - DEFAULT is not monotone: on ∅ ⊑ [f ↦ v], DEFAULT(f, w) changes from w to v (`T3_default_not_monotone`), and the condition DEFAULT(f, w) = w changes its definite verdict from T to F (`default_breaks_stability`).
+    - So "PRESENT-free" means free of `PRESENT` and `DEFAULT`, the two forms §2.9 excepts from monotonicity, and the comparison atoms of section 7.2 are equitone only without `DEFAULT` (`Ex_free_atom`). `verdict_stable` and `verdict_stable_nd` do not cover a condition with `DEFAULT`.
+
 ## 10. Invariants and the evaluator (`TRIEL_Invariants.thy`, `TRIEL_Exec.thy`)
 
 ### 10.1 Invariants on finite prefixes
