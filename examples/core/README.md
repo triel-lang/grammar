@@ -1,13 +1,14 @@
 # Examples inside the formal core
 
-The six specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
+The seven specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
 
 - `core_deadline_cure.triel`: a deadline, its breach, and a cure;
 - `core_unless_records.triel`: a sequence under UNLESS, with the guard read from a nested record;
 - `core_stale_block.triel`: a stale factor under `ON_STALE BLOCK`, a prohibition with an undefined condition, and an escalation;
 - `core_prohibition_handler.triel`: a breach handler bound to a prohibition, with informational actions only;
 - `core_numbers.triel`: Integer and Decimal factors, ordering comparisons, and a comparison with an absent operand;
-- `core_conditional.triel`: `IF`/`ELIF`/`ELSE` and `WHEN` terms, a named term with `REF`, and `DEFAULT`, with a condition that is undefined where the term is reached.
+- `core_conditional.triel`: `IF`/`ELIF`/`ELSE` and `WHEN` terms, a named term with `REF`, and `DEFAULT`, with a condition that is undefined where the term is reached;
+- `core_payment.triel`: actions with arguments, an obligation whose window opens with `FROM`, and penalties with arithmetic and `CAP`, computed in the state of the breach: capped, undefined and negative.
 
 The evaluator exported from Isabelle runs them on the scenarios in `scenarios/`.
 
@@ -27,7 +28,7 @@ A scenario is an implementation trace, written as an S-expression:
 - `TIME` is an ISO-8601 time in UTC (`YYYY-MM-DDThh:mm:ssZ`). It is converted to seconds since 1970-01-01T00:00:00Z.
 - `EVENT` is one of:
   - `(activate)`: only for the first entry, the activation entry;
-  - `(act SUBJECT ACTION POLARITY)`, where `POLARITY` is `must`, `may` or `must_not`;
+  - `(act SUBJECT ACTION POLARITY)`, where `POLARITY` is `must`, `may` or `must_not`, and `ACTION` is a name, or `(NAME ARG ...)` for an action with arguments; an argument is `(name X)`, the name of a subject or a factor (`X` may be a dotted path), or a `VALUE`;
   - `(arrive FACTOR)`;
   - `(tick)`.
 - `DATA` is `(data (FACTOR VALUE) ...)`: the complete data at that entry, as nominative data. A factor that is not listed is absent.
@@ -44,6 +45,9 @@ The polarity of an event is used only when a composite term is checked against t
 5. **Activation data.** The activation time is the time of entry 0. A deadline from a factor is read in the blocked state of entry 0.
 6. **Conditional terms.** An `IF` or `WHEN` condition is read once, in the first state of the trace being checked. Only true selects `THEN`; false and undefined take `ELIF`/`ELSE`, and without them the term completes `Done` on the one-entry trace.
 7. **Named terms.** `name := t` is reported as its own element, like any other; a `REF name` inside another element is replaced by t before membership is decided.
+8. **Actions with arguments.** An event matches a norm only with the same subject, action name and arguments. Names are compared as names; values by value, so `(int 1200)` and `(dec 1200.00)` are the same argument.
+9. **FROM.** An obligation with `FROM f` is fulfilled only by an action at a time in [f, d], and a duration in `BY` counts from f. f is read at activation, like a deadline.
+10. **Penalties.** A `PENALTY` amount is computed once, in the state of the entry just before the entry that establishes the breach: for a prohibition the state before the forbidden action, for an obligation the last state not after the deadline. It is undefined if an operand is absent, reported as negative if it is negative, and otherwise capped by `CAP`.
 
 ## Output
 
@@ -56,7 +60,7 @@ METADATA SOURCE FACTOR SUBJECT      -- in FACTORS order
 ACTIVATION OK | ACTIVATION REJECTED
 BLOCK OK | BLOCK REJECTED
 TYPES OK | TYPES ILL-TYPED ENTRY J FACTOR F
-TERM I MUST S A DEADLINE (T | NONE) : STATUS
+TERM I MUST S A DEADLINE (T | NONE) : STATUS                -- A is NAME or NAME(ARG, ...)
 TERM I MUST_NOT S A : PENDING | BREACHED T ACTION*
 TERM I MAY S A : FULFILLED | PENDING
 TERM I ON_BREACH S : BOUND J
@@ -68,13 +72,15 @@ INVARIANT NAME : T | F | U
 
 - `FULFILLED`
 - `PENDING`
-- `BREACHED T` followed by the continuation, which is one of:
+- `BREACHED T`, followed by the informational actions of the handler (see below) and then by the continuation, which is one of:
   - `CLOSED`
   - `TERMINATED`
   - `CURE FULFILLED`, `CURE PENDING` or `CURE BREACHED T`
   - `ESCALATED S FULFILLED`, `ESCALATED S PENDING` or `ESCALATED S BREACHED T`
 
-After `BREACHED T`, a prohibition lists the actions of the handler bound to it, in source order: `NOTIFY S` or `PENALTY VALUE`. Only these informational actions can occur there: the translator rejects a continuation-determining action (`TERMINATE`, `CURE_BY`, `ESCALATE_TO`) in a handler bound to a prohibition, since §2.6 defines continuations only for obligations. A `PENALTY` value is printed as an integer, a string literal, `true` or `false`, or a time in seconds.
+After `BREACHED T`, an obligation or a prohibition lists the informational actions of the handler bound to it, in source order; they fire at the breach. An action is `NOTIFY S`, `PENALTY V`, `PENALTY V CAPPED` (the amount exceeded the cap and `V` is the cap), `PENALTY UNDEFINED` (an operand has no value) or `PENALTY NEGATIVE V` (the amount is negative, which the semantic rules forbid). A handler bound to a prohibition can contain only these actions: the translator rejects a continuation-determining action (`TERMINATE`, `CURE_BY`, `ESCALATE_TO`) there, since §2.6 defines continuations only for obligations.
+
+An action with arguments is printed `NAME(ARG, ...)`: a name as written, a string in quotes, a number exactly.
 
 `U` is the inconclusive verdict ⊥ of an invariant.
 

@@ -1,6 +1,6 @@
 # TRIEL core: definitions and theorems
 
-This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8), [`TRIEL_Invariants.thy`](TRIEL_Invariants.thy) (invariants, section 10), [`TRIEL_Indicators.thy`](TRIEL_Indicators.thy) (the indicators E_z and ↓z and the stability of verdicts, section 7.2), [`TRIEL_Compositions.thy`](TRIEL_Compositions.thy) (the quantifier, renomination, closure under the base compositions, and conditions as terms, section 7.3), [`TRIEL_Numbers.thy`](TRIEL_Numbers.thy) (the numeric types Integer and Decimal, section 10.4) and [`TRIEL_Exec.thy`](TRIEL_Exec.thy) (the evaluator exported to Haskell, section 10). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
+This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8), [`TRIEL_Invariants.thy`](TRIEL_Invariants.thy) (invariants, section 10), [`TRIEL_Indicators.thy`](TRIEL_Indicators.thy) (the indicators E_z and ↓z and the stability of verdicts, section 7.2), [`TRIEL_Compositions.thy`](TRIEL_Compositions.thy) (the quantifier, renomination, closure under the base compositions, and conditions as terms, section 7.3), [`TRIEL_Numbers.thy`](TRIEL_Numbers.thy) (the numeric types Integer and Decimal, section 10.4), [`TRIEL_Penalty.thy`](TRIEL_Penalty.thy) (the amount of a penalty, section 8.4) and [`TRIEL_Exec.thy`](TRIEL_Exec.thy) (the evaluator exported to Haskell, section 10). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
 
 It is based only on the public material at <https://github.com/triel-lang/grammar>: TECHNICAL_REPORT.md §2.5, §2.6 and §2.9, and FOUNDATIONS.md. It makes no assumptions about any non-public implementation.
 
@@ -411,14 +411,17 @@ Section 2.6 distinguishes the specification trace of §2.5 from the *implementat
   - A deadline that does not resolve rejects the activation.
 - **Verdicts.** Fulfilled, Breached τ or Pending (`verdict`).
   - **Obligation.** s MUST a BY d, or WITHIN d, has the window (−∞, d] (`window`, `ob_verdict`). It is Fulfilled by an action of s in the window, Breached d once the trace has an entry strictly after d with no such action, and Pending otherwise.
+  - **FROM.** s MUST a BY d FROM f has the window [f, d], which over integer times is (f − 1, d] (`start_of`, `lo_of`). f is a DATETIME or a factor, resolved at activation like a deadline, and a duration in BY counts from f (`deadline_of`). Without FROM, the start is the activation time τ₀ and the window is (−∞, d].
   - **Prohibition.** s MUST_NOT a WHEN c is Breached at the first action a of s before which ⟦c⟧ = T, where c is evaluated in the state before the action (`pr_verdict`).
   - **Permission.** s MAY a WHEN c is never breached (`may_verdict`).
 - **Enforcement and verdict: two roles.** A monitor *enforces* a prohibition fail-closed: it blocks the action unless c is known to be false, so it also blocks on ⊥ (`blocks`). The *verdict* records a breach only when c = T. The fail-closed rule listed in `FOUNDATIONS.md` belongs to enforcement, not to the verdict.
+- **Actions.** The type of actions is a parameter of every theory, so an action with arguments, `pay(bob, 100)`, is just an action; the evaluator instantiates it with a name and a list of arguments (section 10.4).
 - **Breach actions.** NOTIFY and PENALTY are informational. TERMINATE, CURE_BY and ESCALATE_TO determine the continuation (`baction`, `is_cont`). A handler is well formed if it has at least one action and at most one continuation-determining action (`wf_actions`).
 - **Status after a breach** (`handle_breach`):
   - with no continuation-determining action, or with TERMINATE, the obligation stays breached and is closed;
   - CURE_BY k opens the window (τ_b, τ_b + k] from the moment of breach τ_b;
   - ESCALATE_TO s′ gives s′ a new obligation for the same action, with a window of the same length counted from the moment of transfer.
+  - `handle_breach` takes the start of the obligation (τ₀, or f with FROM) for the length of that window, and the lower bound of its window.
 - **TERMS blocks and binding.** A TERMS block is a list of surface terms (`sterm`). A handler is bound to the nearest preceding obligation or prohibition of the same subject at the top level (`bound_to`). The well-formedness predicate `wf_block` requires three things:
   - handlers only at the top level;
   - every handler well formed and bound;
@@ -447,6 +450,12 @@ Section 2.6 distinguishes the specification trace of §2.5 from the *implementat
 - **`bound_to_nearest`, `bound_to_None`:** binding goes to the nearest preceding obligation or prohibition of the same subject, or to nothing if there is none.
 - **`nested_handler_rejected`, `wf_handler_bound`, `wf_one_handler`:** a nested handler is rejected; in a well-formed block every handler is bound, and every obligation has at most one handler.
 - **`activation_rejected`:** a deadline from an absent factor rejects the activation.
+- **`from_window`, `after_from`:** with FROM f, an action fulfils exactly when it is at a time in [f, d].
+- **`before_from_no_fulfil`, `fulfilled_at_from`:** an action before f does not fulfil, so the obligation is breached at d if nothing else happens; an action exactly at f fulfils.
+- **`from_no_deadline`:** with FROM and no deadline, only an action at or after f fulfils, and the obligation is never breached.
+- **`empty_window_breached`:** a window that starts after its deadline cannot be met: the obligation is breached at d.
+- **`no_from`, `from_duration`, `from_at`, `from_absent_factor`:** without FROM, start, window and deadline are as before; a duration in BY counts from the start; a DATETIME start is that time; a start from an absent factor does not resolve.
+- **`activation_rejected_from`, `activates_resolves`:** a start from an absent factor rejects the activation; after activation, the start and the deadline of every top-level obligation resolve.
 - **`fresh_at_max_age`:** an age equal to MAX_AGE is still fresh.
 - **`stale_absent`:** under BLOCK a stale factor is absent, so PRESENT is F.
 - **`stale_safe`:** a result computed with stale factors treated as absent is not overturned by whatever values those factors have when refreshed.
@@ -477,6 +486,25 @@ Points 1–14 are the points where §2.6 is ambiguous or contradictory. Points 1
 19. **Activation entry.** Entry 0 of an implementation trace is the activation entry; actions are the events of later entries.
 20. **Scope of verdicts.** Verdicts are given to the top-level elements of a TERMS block. Deadlines inside composite terms are resolved at activation (and can reject it), but have no verdict of their own.
 21. **Handlers of prohibitions.** §2.6 defines continuations only for obligations. A handler bound to a prohibition may have only informational actions; the evaluator and the translator reject a continuation there (section 10.6, rule 4).
+
+### 8.4 The amount of a penalty (`TRIEL_Penalty.thy`)
+
+*Definitions:*
+
+- **Amounts.** An amount expression is a value expression of section 1, or two amount expressions combined by `+`, `-` or `*`, or the negation of one (`pexp`). Its value ⟦e⟧σ ∈ ℚ ∪ {⊥} (`evalP`) reads a value as a number with a function `num`, and is ⊥ when an operand is ⊥ or not a number. Division is not admitted.
+- **The amount of a penalty.** `PENALTY e CAP c` is `Pen e (Some c)` (`pen`). Its amount in σ (`pen_amount`) is *undefined* if ⟦e⟧σ = ⊥, *negative* v if ⟦e⟧σ = v < 0, and otherwise v, or c with the mark *capped* if c < v.
+- **The state of the breach.** For an obligation with deadline d, `breach_entry d π` is the first entry strictly after d, and the penalty is read in the state of the entry before it (`ob_pen_state`). For a prohibition, `first_forbidden` is the first forbidden action, and the penalty is read in the state before it (`pr_pen_state`), in which the condition is read.
+- **Reported actions.** After a breach, the informational actions of the handler are reported in source order: NOTIFY with its subject, PENALTY with its amount in the state of the breach (`ract`, `report_actions`, `ob_report`, `pr_report`).
+
+*Theorems:*
+
+- **`evalP_strict`:** an amount is ⊥ when an operand is, as every arithmetic operation of §2.9.
+- **`evalP_mono`, `pen_amount_mono`:** without DEFAULT, a defined amount is not changed by more data, as T2 for comparisons. **`pen_default_not_mono`:** with DEFAULT it is: DEFAULT(x, 0) is 0 on ∅ and 1 on [x ↦ 1].
+- **`decimal_add`, `decimal_uminus`, `decimal_diff`, `decimal_mult`** (in `TRIEL_Numbers.thy`), **`evalP_decimal`, `pen_amount_decimal`:** the Decimals are closed under `+`, `-` and `*`, so an amount computed from Decimal values and a Decimal cap is a Decimal.
+- **`pen_amount_undefined`, `pen_amount_negative`, `pen_amount_exact`, `pen_amount_capped`, `pen_amount_bounds`:** the four cases of the amount; a reported amount is never negative and never exceeds the cap.
+- **`breach_entry_passed`, `ob_pen_state_at_deadline`:** the penalty of an obligation is read in the last state not after the deadline (in the activation state if the deadline is before activation).
+- **`pr_pen_state_condition`:** the penalty of a prohibition is read in the state in which its condition is true, the state before the forbidden action.
+- **`ob_pen_state_final`, `pr_pen_state_final`, `ob_report_final`, `pr_report_final`:** once a norm is breached, later entries change neither the state of the breach nor the reported actions and amounts.
 
 ## 9. Design decisions forced by the theory
 
@@ -538,17 +566,18 @@ Each decision below was made because of a theorem: either one that proves the de
 16. **The arguments of an action are part of the action, and they are not evaluated.**
     - `pay(bob, 100)` is the action `pay` with the argument list `bob, 100`. An event matches a norm only if its subject, action and arguments are the same; an event with other arguments, or with none, does not.
     - A literal argument is compared by value (`100` and `100.00` are the same number). A name, of a subject or a factor, is compared as a name and its value is not read, so `submit_proof(age)` does not read the hidden `age`, as TECHNICAL_REPORT.md §2.7 requires.
-    - Every theory of sections 4–8 is generic in the type of actions, so every theorem about actions holds for actions with arguments without change.
+    - Every theory of sections 4–8 is generic in the type of actions, so every theorem about actions holds for actions with arguments without change; this includes `mem3_sound` and `mem3_complete`, and the term language and its laws are unchanged. In the evaluator an action is a name with a list of arguments (`Act`, `ArgName`, `ArgVal`), and an event matches only with the same arguments (`does_args`, `other_args_no_fulfil`); `1200` and `1200.00` are the same argument (`arg_1200`).
     - **Open question.** Should a factor in an argument stand for its value at the moment of the action?
 17. **`FROM s` opens the window of an obligation at s, and a duration in `BY` counts from s.**
-    - The window of `s MUST a BY d FROM f` is [f, d]: an action before f does not fulfil it. f is resolved at activation, like a deadline, and a factor that does not resolve rejects the activation.
-    - Without `FROM` the window and the origin of durations are those of section 8. `ESCALATE_TO` gives the new obligation a window of length d − f.
+    - The window of `s MUST a BY d FROM f` is [f, d]: an action before f does not fulfil it (`from_window`, `before_from_no_fulfil`, `fulfilled_at_from`). f is resolved at activation, like a deadline, and a factor that does not resolve rejects the activation (`activation_rejected_from`). A duration in BY counts from f (`from_duration`).
+    - Without `FROM` the window and the origin of durations are those of section 8 (`no_from`). `ESCALATE_TO` gives the new obligation a window of length d − f. A window that starts after its deadline is breached at the deadline (`empty_window_breached`).
+    - The verdicts stay final (`window_final`, `handle_breach_final`, now for every lower bound of the window).
     - `UNTIL` is not formalised: point 13 of section 8.3 stays open for it.
 18. **A penalty is computed once, in the state in which the breach occurs.**
-    - The amount of `PENALTY e CAP c` is read in the state of the entry just before the entry that establishes the breach: for a prohibition the state before the forbidden action, for an obligation the last state not after the deadline. That entry is fixed once the breach is, so the amount does not change when the trace is extended.
-    - `e` uses `+`, `-` and `*` on numbers, without division, so Integer and Decimal operands give a Decimal. An operand without a value makes the amount undefined, as in §2.9; it is reported as undefined, not as 0.
-    - A negative amount violates the rule of §2.9 that the amount be non-negative. It is reported as negative and is not replaced by 0. Otherwise the amount is min(e, c), or e without `CAP`.
-    - Arithmetic without `DEFAULT` is monotone like the comparisons, so a defined amount does not change when more data is present; with `DEFAULT` it can (decision 15).
+    - The amount of `PENALTY e CAP c` is read in the state of the entry just before the entry that establishes the breach: for a prohibition the state before the forbidden action (`pr_pen_state_condition`), for an obligation the last state not after the deadline (`ob_pen_state_at_deadline`). That entry is fixed once the breach is, so the amount does not change when the trace is extended (`ob_report_final`, `pr_report_final`).
+    - `e` uses `+`, `-` and `*` on numbers, without division, so Integer and Decimal operands give a Decimal (`evalP_decimal`, `pen_amount_decimal`). An operand without a value makes the amount undefined, as in §2.9 (`evalP_strict`); it is reported as undefined, not as 0.
+    - A negative amount violates the rule of §2.9 that the amount be non-negative. It is reported as negative and is not replaced by 0. Otherwise the amount is min(e, c), or e without `CAP` (`pen_amount_bounds`).
+    - Arithmetic without `DEFAULT` is monotone like the comparisons, so a defined amount does not change when more data is present (`evalP_mono`, `pen_amount_mono`); with `DEFAULT` it can (`pen_default_not_mono`, decision 15).
 
 ## 10. Invariants and the evaluator (`TRIEL_Invariants.thy`, `TRIEL_Exec.thy`)
 
@@ -564,7 +593,7 @@ Each decision below was made because of a theorem: either one that proves the de
 
 ### 10.2 Executable equations
 
-`TRIEL_Exec.thy` restates every definition that uses unbounded quantifiers, `LEAST` or `GREATEST` with bounded quantifiers, `find` and `filter`, and proves each restatement equal to the definition: `acted_code`, `passed_code`, `ob_verdict_code`, `may_verdict_code`, `pr_verdict_code`, `bound_to_code`, `wf_block_code`, `fresh_code`, `inv_eval_code`, `eval_code`, `first_at_code`, and, in `TRIEL_Numbers.thy`, `int_rat_code` and `decimal_code`. Typing is a recursive function proved equal to the inductive judgement (`wt_fun_iff`). The code generator uses only these equations and the definitions themselves.
+`TRIEL_Exec.thy` restates every definition that uses unbounded quantifiers, `LEAST` or `GREATEST` with bounded quantifiers, `find` and `filter`, and proves each restatement equal to the definition: `acted_code`, `passed_code`, `ob_verdict_code`, `may_verdict_code`, `pr_verdict_code`, `bound_to_code`, `wf_block_code`, `fresh_code`, `inv_eval_code`, `eval_code`, `first_at_code`, and, in `TRIEL_Numbers.thy`, `int_rat_code` and `decimal_code`. The entries of a breach, `breach_entry` and `first_forbidden` (section 8.4), are defined with `find` and need no code equation. Typing is a recursive function proved equal to the inductive judgement (`wt_fun_iff`). The code generator uses only these equations and the definitions themselves.
 
 ### 10.3 Membership of a composite term
 
@@ -590,7 +619,8 @@ Whether a trace with an outcome belongs to the denotation of a composite term is
 - **Numbers** (`TRIEL_Numbers.thy`). There is no floating point. A number is a rational q (`ANum`). It has type Integer if q ∈ ℤ (`int_rat`), and type Decimal if q = m / 10ᵏ for an integer m (`decimal`); a decimal literal with k digits after the point is m / 10ᵏ (`dec_atom`, `dec_atom_Decimal`). Every Integer is a Decimal (`int_rat_decimal`, `interp_int_dec`). A rational a/b in lowest terms is a Decimal exactly when b divides a power of 10 (`decimal_iff_denominator`), that is, when b has no prime factor other than 2 and 5 (`dec_den_iff`); so 1/3 is not a Decimal (`not_decimal_third`). The ordering comparisons compare numbers as rationals and are false on any other pair of values; `=` on numbers is equality of rationals, so 2500 = 2500.00 (`eval_cmp_num`).
 - A factor under `MAX_AGE m` and `ON_STALE BLOCK` is absent, with every complex name that starts with it, at an entry where it has not arrived in the last m seconds (`blockp`). The safety claim of §2.9 holds for this blocking by factor (`blockp_stale_safe`, with `blockp_le` and `blockp_stale_absent`), as it does for `blocked` (section 8).
 - Activation is checked first, in the blocked state of entry 0. Then the block is checked with `wf_block`, `cont_free_prohibitions` (section 10.6, rule 4) and `refs_ok` (section 10.3), and then the types of the data as given (`ill_typed`, `ill_typed_None`). Verdicts, invariants and composite terms are computed on the blocked trace (`btrace`, which keeps the times and events: `btrace_is_trace`).
-- A top-level obligation gets `handle_breach` with the handler bound to it, a prohibition `pr_verdict` with the informational actions of its handler after a breach (`pr_actions`), a permission `may_verdict`, a handler the element it is bound to, a composite term `mem3` for each outcome, and an invariant `inv_eval`. A composite term is resolved in the environment of the block first, so a `REF` is reported like the term it names.
+- An action is a name with a list of arguments, each a name (`ArgName`, not evaluated) or a value (`ArgVal`) (`act`, decision 16).
+- A top-level obligation gets `handle_breach` with the handler bound to it, with its start, window and deadline from `start_of`, `lo_of` and `deadline_of` (`must_line`); a prohibition gets `pr_verdict`. After a breach, both are reported with the informational actions of their handler, each penalty with its amount in the state of the breach (`ob_report`, `pr_report`, section 8.4; `pr_report_actions` relates the latter to `pr_actions`). A permission gets `may_verdict`, a handler the element it is bound to, a composite term `mem3` for each outcome, and an invariant `inv_eval`. A composite term is resolved in the environment of the block first, so a `REF` is reported like the term it names.
 
 `export_code` writes `run` to Haskell. `isabelle build -e -D .` exports the module to [`evaluator/generated/TRIEL.hs`](../../evaluator/generated/TRIEL.hs).
 
@@ -607,7 +637,7 @@ Metadata: `JURISDICTION`, `STANDARD`, `CURRENCY`, `PROVENANCE_REQUIRED`, and the
 
 Translation rules:
 
-1. **`PENALTY`.** The amount must be a literal and is kept as an opaque value, since informational actions do not affect the status (`informational_irrelevant`). Arithmetic in `PENALTY` is rejected.
+1. **`PENALTY`.** `PENALTY e CAP c` is `(penalty P CAP)`. The amount e is built from numeric literals, Integer and Decimal factors and `DEFAULT` with `+`, `-` and `*`: P ::= (val V) | (add P P) | (sub P P) | (mul P P) | (neg P). Division is rejected ("division in PENALTY"), and so is any operand that is not a number ("PENALTY of a non-number"). CAP is a numeric literal or `(none)` ("CAP (not a number)"). The amount is computed by the evaluator (section 8.4); informational actions still do not affect the status (`informational_irrelevant`).
 2. **Boolean conditions.** A Boolean factor used as a condition, `x`, is translated to `x == true`, and `a != b` to `NOT (a == b)`. Both translations are visible in the printed core AST.
 3. **`PRESENT`.** `PRESENT` is accepted only on a complex name of primitive type.
    - This is a restriction of the translator, not of the semantics. On nominative data, `PRESENT(p)` is the total indicator E_p for every complex name p, including one that leads to a record (`T5_nd_present`, `present_nd_is_Ex`, `Ex_nd_total`, section 7).
@@ -621,6 +651,9 @@ Translation rules:
 6. **Conditional terms.** `IF c THEN t ELIF c₂ THEN t₂ ELSE e` is `(if c t (if c₂ t₂ e))`; a missing `ELSE` is `(skip)`. `WHEN c THEN t` is `(if c t (skip))`. The branches are composite terms.
 7. **Named terms.** `name := t` is the element t of the block; it is in force like any other element and is reported under its own number. `REF name` is `(ref K)`, K the index of that element counted from 0. Rejected: a reference to an undeclared name ("REF to an undeclared name"); to a name declared at or after the reference, which includes every cycle ("REF to a name declared later"); to an element with a breach handler ("REF to a breach handler"); to an element with a deadline, which a composite term cannot carry ("REF to a term with a deadline"); and a name declared twice ("duplicate term name").
 8. **`DEFAULT`.** `DEFAULT(f, d)` is `(default PATH V)`. f must not lead to a record ("DEFAULT of a record"), for the reason given in rule 3. d must be a value of the type of f: a literal, a factor or another `DEFAULT` ("DEFAULT fallback (not a value)", "DEFAULT fallback of another type"); Integer and Decimal are compatible. A Boolean `DEFAULT` used as a condition is `DEFAULT(f, d) == true`.
+
+9. **Action arguments.** `pay(bob, 100)` is `(action "pay" (path "bob") (int 100))`. An argument is a literal, or the name of a subject or a factor, which is printed as a path and not evaluated. Anything else is rejected ("action argument (not a name or literal)"), and so is a name that is neither a subject nor a factor ("action argument (undeclared name)").
+10. **`FROM`.** An obligation is `(must S A DL ST)`, where ST, the start given by `FROM`, is `(at T)`, `(factor PATH 0)` or `(none)`. `UNTIL` is rejected ("UNTIL"), and so is `FROM` inside a composite term ("FROM in a composite term") and a `REF` to an obligation with `FROM` ("REF to a term with FROM"), for the reason given for deadlines.
 
 Further rejections:
 - A deadline inside a composite term is rejected: the trace semantics of §2.5 has no time, so the deadline would be ignored. This includes the branches of `IF` and `WHEN`.
