@@ -4,9 +4,9 @@ module
   TRIEL(Int(..), integer_of_int, Nat, integer_of_nat, Num, Rat, quotient_of,
          Atom(..), Arg(..), Act(..), Fmap(..), Nd(..), Ty(..), Vexp(..),
          Expr(..), Verdict(..), Continuation(..), Status(..), Amount(..),
-         Ract(..), Line(..), Prim(..), Inv(..), Deadline(..), Baction(..),
-         Sterm(..), Pexp(..), Pen(..), Fdecl(..), Spec(..), Polarity(..),
-         Event(..), nat_of_integer, num_of, run, dec_atom)
+         Ract(..), Line(..), Prim(..), Deadline(..), Inv(..), Sinv(..),
+         Baction(..), Sterm(..), Pexp(..), Pen(..), Fdecl(..), Spec(..),
+         Polarity(..), Event(..), nat_of_integer, num_of, run, dec_atom)
   where {
 
 import Prelude ((==), (/=), (<), (<=), (>=), (>), (+), (-), (*), (/), (**),
@@ -642,9 +642,11 @@ data Line = LActivation Bool | LBlock Bool | LTypes (Maybe (Nat, String))
 
 data Prim = PBool | PInt | PDec | PStr | PTime;
 
+data Deadline a = DAt Int | DAfter Int | DFactor a Int;
+
 data Inv a b = Always (Expr a b) | Eventually (Expr a b) | Next (Expr a b);
 
-data Deadline a = DAt Int | DAfter Int | DFactor a Int;
+data Sinv a b = SInv (Inv a b) | SEventuallyWithin (Expr a b) (Deadline a);
 
 data Baction a b = Notify a | Penalty b | Terminate | CureBy Int | EscalateTo a;
 
@@ -666,7 +668,7 @@ data Fdecl = Fdecl String (Ty String Prim) (Maybe Int);
 
 data Spec =
   Spec [Fdecl] [Sterm [String] Atom String Act (Pen [String] Atom)]
-    [(String, Inv [String] Atom)];
+    [(String, Sinv [String] Atom)];
 
 data Polarity = Must | May | MustNot;
 
@@ -867,6 +869,36 @@ cont_free_prohibitions blk =
         }))
     (upt zero_nat (size_list blk));
 
+sinv_deadlines :: forall a b. Sinv a b -> [Deadline a];
+sinv_deadlines (SInv iota) = [];
+sinv_deadlines (SEventuallyWithin phi d) = [d];
+
+plus_int :: Int -> Int -> Int;
+plus_int k l = Int_of_integer (integer_of_int k + integer_of_int l);
+
+map_option :: forall a b. (a -> b) -> Maybe a -> Maybe b;
+map_option f Nothing = Nothing;
+map_option f (Just x2) = Just (f x2);
+
+resolve ::
+  forall a b.
+    (a -> Maybe Int) -> Int -> (b -> Maybe a) -> Deadline b -> Maybe Int;
+resolve ta tau_0 sigma_0 (DAt t) = Just t;
+resolve t tau_0 sigma_0 (DAfter k) = Just (plus_int tau_0 k);
+resolve t tau_0 sigma_0 (DFactor x k) =
+  (case sigma_0 x of {
+    Nothing -> Nothing;
+    Just v -> map_option (\ ta -> plus_int ta k) (t v);
+  });
+
+inv_activates ::
+  forall a b. (a -> Maybe Int) -> Int -> (b -> Maybe a) -> [Sinv b a] -> Bool;
+inv_activates t tau_0 sigma_0 invs =
+  all (\ iota ->
+        all (\ d -> not (is_none (resolve t tau_0 sigma_0 d)))
+          (sinv_deadlines iota))
+    invs;
+
 evalV :: forall a b. Vexp a b -> (a -> Maybe b) -> Maybe b;
 evalV (VConst v) sigma = Just v;
 evalV (VName x) sigma = sigma x;
@@ -943,6 +975,45 @@ inv_eval (Next phi) pi =
   (if less_nat one_nat (size_list pi) then eval phi (st pi one_nat)
     else Nothing);
 
+tstamp :: forall a b c d e. (a -> Maybe b, (c, Event a d e)) -> c;
+tstamp (sigma, (tau, e)) = tau;
+
+time :: forall a b c d. [(a -> Maybe b, (Int, Event a c d))] -> Nat -> Int;
+time pi j = tstamp (nth pi j);
+
+passed :: forall a b c d. Int -> [(a -> Maybe b, (Int, Event a c d))] -> Bool;
+passed d pi = any (\ j -> less_int d (time pi j)) (upt zero_nat (size_list pi));
+
+ew_eval ::
+  forall a b c d.
+    (Eq b,
+      Value_order b) => Expr a b ->
+                          Int ->
+                            [(a -> Maybe b, (Int, Event a c d))] -> Maybe Bool;
+ew_eval phi d pi =
+  (if any (\ j -> less_eq_int (time pi j) d && eval phi (st pi j) == Just True)
+        (upt zero_nat (size_list pi))
+    then Just True
+    else (if passed d pi &&
+               all (\ j ->
+                     (if less_eq_int (time pi j) d
+                       then eval phi (st pi j) == Just False else True))
+                 (upt zero_nat (size_list pi))
+           then Just False else Nothing));
+
+sinv_eval ::
+  forall a b c d.
+    (Eq a,
+      Value_order a) => (a -> Maybe Int) ->
+                          Sinv b a ->
+                            [(b -> Maybe a, (Int, Event b c d))] -> Maybe Bool;
+sinv_eval t (SInv iota) pi = inv_eval iota pi;
+sinv_eval t (SEventuallyWithin phi d) pi =
+  (case resolve t (time pi zero_nat) (st pi zero_nat) d of {
+    Nothing -> Nothing;
+    Just da -> ew_eval phi da pi;
+  });
+
 deadlines :: forall a b c d e. Sterm a b c d e -> [Deadline a];
 deadlines (SMust s a d f) = (case d of {
                               Nothing -> [];
@@ -962,24 +1033,6 @@ deadlines (SMay v va vb) = [];
 deadlines (SOnBreach v va) = [];
 deadlines SSkip = [];
 deadlines (SRef v) = [];
-
-plus_int :: Int -> Int -> Int;
-plus_int k l = Int_of_integer (integer_of_int k + integer_of_int l);
-
-map_option :: forall a b. (a -> b) -> Maybe a -> Maybe b;
-map_option f Nothing = Nothing;
-map_option f (Just x2) = Just (f x2);
-
-resolve ::
-  forall a b.
-    (a -> Maybe Int) -> Int -> (b -> Maybe a) -> Deadline b -> Maybe Int;
-resolve ta tau_0 sigma_0 (DAt t) = Just t;
-resolve t tau_0 sigma_0 (DAfter k) = Just (plus_int tau_0 k);
-resolve t tau_0 sigma_0 (DFactor x k) =
-  (case sigma_0 x of {
-    Nothing -> Nothing;
-    Just v -> map_option (\ ta -> plus_int ta k) (t v);
-  });
 
 activates ::
   forall a b c d e.
@@ -1088,9 +1141,6 @@ equal_event (Arrival x2) (Arrival y2) = x2 == y2;
 equal_event (Deontic x11 x12 x13) (Deontic y11 y12 y13) =
   x11 == y11 && x12 == y12 && equal_polarity x13 y13;
 equal_event Tick Tick = True;
-
-tstamp :: forall a b c d e. (a -> Maybe b, (c, Event a d e)) -> c;
-tstamp (sigma, (tau, e)) = tau;
 
 sorted_wrt :: forall a. (a -> a -> Bool) -> [a] -> Bool;
 sorted_wrt p [] = True;
@@ -1335,9 +1385,6 @@ pr_pen_state ::
                                       c -> Maybe d;
 pr_pen_state s a c pi = st pi (minus_nat (first_forbidden s a c pi) one_nat);
 
-time :: forall a b c d. [(a -> Maybe b, (Int, Event a c d))] -> Nat -> Int;
-time pi j = tstamp (nth pi j);
-
 pr_verdict ::
   forall a b c d.
     (Eq a, Eq b, Eq d,
@@ -1363,9 +1410,6 @@ pr_report num s a c acts pi =
     Breached _ -> report_actions num (pr_pen_state s a c pi) acts;
     Pending -> [];
   });
-
-passed :: forall a b c d. Int -> [(a -> Maybe b, (Int, Event a c d))] -> Bool;
-passed d pi = any (\ j -> less_int d (time pi j)) (upt zero_nat (size_list pi));
 
 after :: Maybe Int -> Int -> Bool;
 after Nothing tau = True;
@@ -1794,7 +1838,9 @@ run sp obs =
         pi = btrace (max_age fs) (raw_trace obs);
         tau_0 = time pi zero_nat;
         sigma_0 = st pi zero_nat;
-      } in (if null obs || not (activates time_of tau_0 sigma_0 blk)
+      } in (if null obs ||
+                 (not (activates time_of tau_0 sigma_0 blk) ||
+                   not (inv_activates time_of tau_0 sigma_0 (map snd invs)))
              then [LActivation False]
              else LActivation True :
                     (if not (wf_block blk) ||
@@ -1808,7 +1854,7 @@ run sp obs =
                                    map (term_line tau_0 sigma_0 blk pi)
                                      (upt zero_nat (size_list blk)) ++
                                      map (\ (n, iota) ->
-   LInvariant n (inv_eval iota pi))
+   LInvariant n (sinv_eval time_of iota pi))
                                        invs;
                                Just e -> [LTypes (Just e)];
                              })));

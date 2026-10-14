@@ -169,6 +169,18 @@ lemma inv_eval_code [code]:
   "inv_eval (Next \<phi>) \<pi> = (if 1 < length \<pi> then eval \<phi> (st \<pi> 1) else None)"
   by auto
 
+lemma ew_eval_code [code]:
+  "ew_eval \<phi> D \<pi> =
+     (if \<exists>j \<in> set [0..<length \<pi>]. time \<pi> j \<le> D \<and> eval \<phi> (st \<pi> j) = Some True then Some True
+      else if passed D \<pi> \<and> (\<forall>j \<in> set [0..<length \<pi>]. time \<pi> j \<le> D \<longrightarrow> eval \<phi> (st \<pi> j) = Some False)
+      then Some False
+      else None)"
+  unfolding ew_eval_def by auto
+
+lemma inv_activates_code [code]:
+  "inv_activates T \<tau>\<^sub>0 \<sigma>\<^sub>0 invs = list_all (\<lambda>\<iota>. list_all (\<lambda>d. resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 d \<noteq> None) (sinv_deadlines \<iota>)) invs"
+  unfolding inv_activates_def by (simp add: list_all_iff)
+
 
 section \<open>Executable typing\<close>
 
@@ -1404,7 +1416,7 @@ fun fd_name :: "fdecl \<Rightarrow> name" where "fd_name (Fdecl f t m) = f"
 fun fd_ty :: "fdecl \<Rightarrow> (name, prim) ty" where "fd_ty (Fdecl f t m) = t"
 fun fd_age :: "fdecl \<Rightarrow> int option" where "fd_age (Fdecl f t m) = m"
 
-datatype spec = Spec "fdecl list" "cterm list" "(name \<times> (path, atom) inv) list"
+datatype spec = Spec "fdecl list" "cterm list" "(name \<times> (path, atom) sinv) list"
 
 definition max_age :: "fdecl list \<Rightarrow> name \<Rightarrow> int option" where
   "max_age fs f = (case find (\<lambda>x. fd_name x = f) fs of Some x \<Rightarrow> fd_age x | None \<Rightarrow> None)"
@@ -1727,7 +1739,7 @@ definition term_line :: "int \<Rightarrow> (path, atom) state \<Rightarrow> cter
       | _ \<Rightarrow> composite_line (Suc i) (benv blk ! i) \<pi>)"
 
 text \<open>The evaluator. Activation is checked first, in the blocked state of entry 0 at the
-  time of entry 0; then the well-formedness of the block, with only informational actions
+  time of entry 0, for the deadlines of the TERMS block and of the invariants; then the well-formedness of the block, with only informational actions
   in a handler bound to a prohibition; then the types of the data as given. The verdicts, the invariants and the membership of composite terms are computed
   on the blocked trace.\<close>
 
@@ -1735,14 +1747,15 @@ definition run :: "spec \<Rightarrow> observation list \<Rightarrow> line list" 
   "run sp obs =
      (case sp of Spec fs blk invs \<Rightarrow>
         (let \<pi> = btrace (max_age fs) (raw_trace obs); \<tau>\<^sub>0 = time \<pi> 0; \<sigma>\<^sub>0 = st \<pi> 0 in
-         if obs = [] \<or> \<not> activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 blk then [LActivation False]
+         if obs = [] \<or> \<not> activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<or> \<not> inv_activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 (map snd invs)
+         then [LActivation False]
          else LActivation True #
            (if \<not> wf_block blk \<or> \<not> cont_free_prohibitions blk \<or> \<not> refs_ok blk then [LBlock False]
             else LBlock True #
               (case ill_typed fs obs of
                  Some e \<Rightarrow> [LTypes (Some e)]
                | None \<Rightarrow> LTypes None # map (term_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi>) [0..<length blk]
-                          @ map (\<lambda>(n, \<iota>). LInvariant n (inv_eval \<iota> \<pi>)) invs))))"
+                          @ map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> \<pi>)) invs))))"
 
 text \<open>A composite line reports \<open>mem3\<close> on the blocked trace. By \<open>mem3_sound\<close> its definite
   answers are membership in the denotation of the term, for terms without AND, and by
@@ -1756,7 +1769,7 @@ export_code run Spec Fdecl Act ArgName ArgVal Pen PVal PAdd PSub PMul PNeg num_o
   SMust SMustNot SMay SThen SOr SAnd SUnless SOnBreach SIf SSkip SRef DAt DAfter DFactor
   Notify Penalty Terminate CureBy EscalateTo
   ETrue EFalse EEq ELt ELe ENot EAnd EOr EImp EPresent VConst VName VDefault
-  Always Eventually Next TPrim TOptional TRecord PBool PInt PDec PStr PTime
+  Always Eventually Next SInv SEventuallyWithin TPrim TOptional TRecord PBool PInt PDec PStr PTime
   ABool ANum AStr ATime dec_atom quotient_of Atom Nom fmap_of_list Deontic Arrival Tick
   Must May MustNot
   LActivation LBlock LTypes LMust LMustNot LMay LOnBreach LComposite LInvariant
