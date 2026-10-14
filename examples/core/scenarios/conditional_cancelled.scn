@@ -1,0 +1,16 @@
+; cancelled arrives as true at entry 1, after the shipment. The UNLESS guard
+; DEFAULT(cancelled, false) is false at entry 0 and true at entry 1, so it
+; first fires at entry 1: delivery is interrupted after ship, and the handler
+; buyer MUST confirm_cancel runs, so the fourth term ends Interrupted.
+; express is true, so the IF takes REF delivery, which the trace does not
+; complete.
+(scenario conditional_cancelled
+  (spec "examples/core/core_conditional.triel")
+  (entry "2026-06-01T00:00:00Z" (activate)
+    (data (express (bool true)) (order (record (amount (dec 800.00)))) (rush_fee (int 20))))
+  (entry "2026-06-01T01:00:00Z" (act seller ship must)
+    (data (express (bool true)) (order (record (amount (dec 800.00)))) (rush_fee (int 20))
+          (cancelled (bool true))))
+  (entry "2026-06-01T02:00:00Z" (act buyer confirm_cancel must)
+    (data (express (bool true)) (order (record (amount (dec 800.00)))) (rush_fee (int 20))
+          (cancelled (bool true)))))

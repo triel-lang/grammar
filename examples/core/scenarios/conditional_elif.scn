@@ -1,0 +1,11 @@
+; express is absent, so the IF condition is undefined. It does not select the
+; THEN branch: the term goes on to ELIF, whose condition is true, and the
+; trace is a run of seller MUST ship. discount = 10 makes the WHEN condition
+; true, and rush_fee = 60 the last IF condition, but the trace performs
+; neither refund nor pay_rush.
+(scenario conditional_elif
+  (spec "examples/core/core_conditional.triel")
+  (entry "2026-06-01T00:00:00Z" (activate)
+    (data (order (record (amount (dec 1500.00)))) (discount (int 10)) (rush_fee (int 60))))
+  (entry "2026-06-01T01:00:00Z" (act seller ship must)
+    (data (order (record (amount (dec 1500.00)))) (discount (int 10)) (rush_fee (int 60)))))

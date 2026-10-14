@@ -1,0 +1,39 @@
+-- TRIEL example inside the formal core: conditional terms, named terms and
+-- DEFAULT. The condition of IF and WHEN is evaluated once, in the state in
+-- which the term is reached, and only true selects the THEN branch: a false
+-- or undefined condition goes on to ELIF or ELSE, and without them the term
+-- completes at once (TECHNICAL_REPORT 2.5). delivery is a named term, in
+-- force like every other element; REF delivery denotes the same term.
+-- DEFAULT(f, d) is the value of f when PRESENT(f) and d otherwise. Every
+-- construct in this file is translated into the Isabelle/HOL core
+-- (formal/core) and evaluated by the exported evaluator (evaluator/).
+
+SPECIFICATION core_conditional VERSION 1.0.0
+
+SUBJECTS {
+  seller : PARTY,
+  buyer  : PARTY
+}
+
+TERMS {
+  delivery := seller MUST ship THEN seller MUST invoice;
+  IF express THEN REF delivery
+    ELIF order.amount >= 1000 THEN seller MUST ship
+    ELSE buyer MAY cancel;
+  WHEN DEFAULT(discount, 0) > 0 THEN seller MUST refund;
+  REF delivery UNLESS DEFAULT(cancelled, false) DO buyer MUST confirm_cancel;
+  IF rush_fee > 50 THEN buyer MUST pay_rush
+}
+
+FACTORS {
+  express   : Boolean METADATA,
+  order     : Record { amount : Decimal } METADATA,
+  discount  : Optional<Integer> METADATA,
+  cancelled : Optional<Boolean> METADATA,
+  rush_fee  : Integer METADATA
+}
+
+INVARIANTS {
+  discount_non_negative : SAFETY : ALWAYS(DEFAULT(discount, 0) >= 0);
+  rush_fee_known        : LIVENESS : EVENTUALLY(PRESENT(rush_fee))
+}
