@@ -27,6 +27,19 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
   * `a < b` and `a <= b` are (lt a b) and (le a b); `a > b` is (lt b a) and
     `a >= b` is (le b a). The operands of an ordering comparison must be
     numbers: an Integer or Decimal factor, or a numeric literal.
+  * IF c THEN t ELIF c2 THEN t2 ELSE e is (if c t (if c2 t2 e)); a missing ELSE
+    is (skip), which completes Done at once. WHEN c THEN t is (if c t (skip)).
+    The branches are composite terms, so a deadline in a branch is rejected.
+  * `name := t` is the element t of the block, in force like any other; REF name
+    is (ref K), K the index of that element in the block, counted from 0. A
+    reference to an undeclared name or to a name declared at or after the
+    reference (so also every cycle) is rejected, and so is a reference to a
+    breach handler or to a term with a deadline, whose deadline a composite
+    term cannot carry.
+  * DEFAULT(f, d) is (default PATH V): the value of f if it is present, else d.
+    f must not be a record; d must be a value of the type of f (a literal, a
+    factor or another DEFAULT). A Boolean DEFAULT used as a condition is
+    `DEFAULT(f, d) == true`.
   * The PENALTY amount must be a literal; it is kept as an opaque value.
   * A handler binds to the nearest preceding obligation or prohibition of its
     subject at the top level (bound_to in TRIEL_Breach.thy). Section 2.6
@@ -62,12 +75,12 @@ RULES = {
     "subject_block": "core", "subject_decl": "core", "role_type": "core",
     "did_literal": "DID",
     "term_element": "core", "terms_block": "core",
-    "named_term_decl": "named term (:=)", "term_stmt": "core",
+    "named_term_decl": "core", "term_stmt": "core",
     "choice_expr": "core", "parallel_expr": "AND (term)",
     "sequence_expr": "core", "unless_expr": "core", "timeout_expr": "core",
     "base_term": "core", "matched_term": "core", "unmatched_term": "core",
-    "term_ref": "REF",
-    "matched_condition": "IF ... THEN (term)", "unmatched_condition": "IF ... THEN (term)",
+    "term_ref": "core",
+    "matched_condition": "core", "unmatched_condition": "core",
     "obligation_stmt": "core", "permission_stmt": "core", "prohibition_stmt": "core",
     "trigger_stmt": "ON ... DO", "unmatched_trigger": "ON ... DO",
     "breach_handler_stmt": "core", "breach_action": "core",
@@ -96,7 +109,7 @@ RULES = {
     "expr": "core", "implication_expr": "core", "disjunction_expr": "core",
     "conjunction_expr": "core", "negation_expr": "core", "comparison_expr": "core",
     "arithmetic_expr": "core", "mul_expr": "core", "unary_expr": "core",
-    "primary": "core", "presence_expr": "core", "default_expr": "DEFAULT",
+    "primary": "core", "presence_expr": "core", "default_expr": "core",
     "if_expr": "IF expression", "let_expr": "LET", "function_call": "function call",
     "comparison_op": "core", "action_expr": "core", "event_expr": "ON ... DO",
     "factor_ref": "core", "deadline_expr": "core", "datetime_expr": "core",
@@ -188,6 +201,8 @@ class Translation:
         self.core = None        # the core AST, if accepted
         self.top = None         # the norm or handler at the top level being translated
         self.operand_type = None  # the type of the last operand read by value()
+        self.all_names = set()  # every name declared with :=
+        self.names = {}         # name declared so far -> (index, why it cannot be referenced)
 
     def reject(self, what: str):
         self.rejected.add(what)
@@ -462,6 +477,13 @@ class Translation:
             if ty != "unknown" and ty[0] == "record":
                 return self.reject("PRESENT of a record")
             return ["present", self.path(r)]
+        if x.data == "default_expr":
+            v = self.default(x)
+            if v is None:
+                return None
+            if self.operand_type not in ("unknown", ["prim", "bool"]):
+                return self.reject("non-Boolean condition")
+            return ["eq", v, ["const", ["bool", "true"]]]
         return self.reject(RULES[x.data])
 
     def value(self, t: Tree):
@@ -503,7 +525,36 @@ class Translation:
             return self.reject("== on a condition")
         if x.data == "presence_expr":
             return self.reject("== on a condition")
+        if x.data == "default_expr":
+            return self.default(x)
         return self.reject(RULES[x.data])
+
+    def default(self, t: Tree):
+        """DEFAULT(f, d) as a value; self.operand_type is left as the type of f."""
+        f, d = subtrees(t)
+        ty = self.path_type(f)
+        if ty is None:
+            return None
+        if ty != "unknown" and ty[0] == "record":
+            return self.reject("DEFAULT of a record")
+        x = d
+        for rule in ("expr", "implication_expr", "disjunction_expr", "conjunction_expr",
+                     "negation_expr", "comparison_expr"):
+            if x.data != rule or tokens(x) or len(subtrees(x)) != 1:
+                return self.reject("DEFAULT fallback (not a value)")
+            x = subtrees(x)[0]
+        fb = self.value(x)
+        if fb is None:
+            return None
+        tb = self.operand_type
+        if fb[0] == "const" and fb[1][0] in ("bool", "str", "time"):
+            tb = ["prim", {"bool": "bool", "str": "string", "time": "datetime"}[fb[1][0]]]
+        numeric = lambda y: y == "number" or y in NUMERIC
+        if not ("unknown" in (ty, tb) or tb is None or ty == tb
+                or (numeric(ty) and numeric(tb))):
+            return self.reject("DEFAULT fallback of another type")
+        self.operand_type = ty
+        return ["default", self.path(f), fb]
 
     # --- terms ------------------------------------------------------------
 
@@ -546,21 +597,30 @@ class Translation:
         return self.base(p[0], top, p[1])
 
     def base(self, t: Tree, top: bool, within):
-        c = subtrees(t)[0]
+        return self.inner(subtrees(t)[0], top, within)
+
+    def inner(self, c: Tree, top: bool, within):
+        """A matched_term or an unmatched_term."""
         if c.data == "unmatched_term":
             u = subtrees(c)[0]
             if u.data == "unmatched_trigger":
                 return self.reject(RULES[u.data])
-            return self.reject("WHEN ... THEN (term)" if "WHEN" in tokens(u)
-                               else "IF ... THEN (term)")
+            if within is not None:
+                return self.reject("WITHIN (non-obligation)")
+            return self.conditional(u)
         m = subtrees(c)[0] if subtrees(c) else None
         if "(" in tokens(c):
             if within is not None:
                 return self.reject("WITHIN (non-obligation)")
             return self.term_stmt(m, top)
         if m.data == "matched_condition":
-            return self.reject("WHEN ... THEN (term)" if tokens(m)[0] == "WHEN"
-                               else "IF ... THEN (term)")
+            if within is not None:
+                return self.reject("WITHIN (non-obligation)")
+            return self.conditional(m)
+        if m.data == "term_ref":
+            if within is not None:
+                return self.reject("WITHIN (non-obligation)")
+            return self.ref(m)
         if m.data == "obligation_stmt":
             return self.obligation(m, top, within)
         if within is not None:
@@ -576,6 +636,39 @@ class Translation:
         if m.data == "breach_handler_stmt":
             return self.handler(m)
         return self.reject(RULES[m.data])
+
+    def conditional(self, t: Tree):
+        """IF/ELIF/ELSE or WHEN: the arms are read from the keywords."""
+        ks = kids(t)
+        arms, other, i = [], None, 0
+        while i < len(ks):
+            k = ks[i]
+            if isinstance(k, Token) and k.value in ("IF", "ELIF", "WHEN"):
+                arms.append((ks[i + 1], ks[i + 3]))
+                i += 4
+            elif isinstance(k, Token) and k.value == "ELSE":
+                other = ks[i + 1]
+                i += 2
+            else:
+                i += 1
+        branch = lambda x: (self.base(x, False, None) if x.data == "base_term"
+                            else self.inner(x, False, None))
+        xs = [(self.cond(c), branch(b)) for c, b in arms]
+        acc = ["skip"] if other is None else branch(other)
+        if acc is None or any(c is None or b is None for c, b in xs):
+            return None
+        for c, b in reversed(xs):
+            acc = ["if", c, b, acc]
+        return acc
+
+    def ref(self, t: Tree):
+        name = ident(subtrees(t)[0])
+        if name not in self.all_names:
+            return self.reject("REF to an undeclared name")
+        if name not in self.names:
+            return self.reject("REF to a name declared later")
+        k, why = self.names[name]
+        return self.reject(why) if why else ["ref", k]
 
     def note_top(self, t: Tree):
         """Record what the top-level element is, for binding handlers: an
@@ -702,13 +795,19 @@ class Translation:
             factors += self.factor(f)
         terms = []
         tops = []
-        for el in subtrees(blocks["terms_block"]):
-            x = subtrees(el)[0]
+        elements = [subtrees(el)[0] for el in subtrees(blocks["terms_block"])]
+        self.all_names = {ident(subtrees(x)[0]) for x in elements if x.data == "named_term_decl"}
+        for x in elements:
+            name = None
             if x.data == "named_term_decl":
-                self.reject("named term (:=)")
-                continue
+                name, x = ident(subtrees(x)[0]), subtrees(x)[1]
+                if name in self.names:
+                    self.reject("duplicate term name")
             self.top = None
-            terms.append(self.term_stmt(x, True))
+            y = self.term_stmt(x, True)
+            if name is not None:
+                self.names[name] = (len(terms), referable(y))
+            terms.append(y)
             tops.append(self.top)
         self.check_binding(tops)
         invs = [self.invariant(i) for i in subtrees(blocks["invariants_block"])]
@@ -716,6 +815,23 @@ class Translation:
         if not self.rejected:
             self.core = ["spec", ["factors"] + factors, ["terms"] + terms,
                          ["invariants"] + invs]
+
+
+def referable(x):
+    """Why the element x cannot be referenced with REF, or None."""
+    def walk(y):
+        if not isinstance(y, list) or not y:
+            return None
+        if y[0] == "on_breach":
+            return "REF to a breach handler"
+        if y[0] == "must" and y[3] != ["none"]:
+            return "REF to a term with a deadline"
+        for z in y[1:]:
+            w = walk(z)
+            if w:
+                return w
+        return None
+    return walk(x)
 
 
 _parser = None

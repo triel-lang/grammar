@@ -86,7 +86,7 @@ matched_condition: "IF" expr "THEN" matched_term \
 unmatched_condition: "IF" expr "THEN" base_term
                     | "IF" expr "THEN" matched_term \
                       ("ELIF" expr "THEN" matched_term)* \
-                      "ELIF" expr "THEN" unmatched_term
+                      "ELIF" expr "THEN" base_term
                     | "IF" expr "THEN" matched_term \
                       ("ELIF" expr "THEN" matched_term)* \
                       "ELSE" unmatched_term

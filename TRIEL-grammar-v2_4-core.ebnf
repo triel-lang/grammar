@@ -137,11 +137,19 @@ matched_condition    ::= "IF" expr "THEN" matched_term
 (* An unmatched_condition is an IF/ELIF chain with no ELSE yet at the
    outermost level — or one whose last ELSE/ELIF branch is itself still
    unmatched. This is the only place a "dangling" IF can occur, and it
-   can only ever occur once per chain. *)
+   can only ever occur once per chain.
+
+   NOTE (D-34): the last ELIF branch of the second alternative was an
+   unmatched_term, so a chain with no ELSE whose last branch is closed,
+   "IF a THEN x ELIF b THEN y", did not parse, although it is an
+   IF/ELIF chain with no ELSE as described above. That branch is now a
+   base_term, as the branch of the first alternative is: closed or
+   still open. An ELIF or ELSE after it still attaches to the nearest
+   open IF, since a closed last branch ends the chain. *)
 unmatched_condition  ::= "IF" expr "THEN" base_term
                        | "IF" expr "THEN" matched_term
                          {"ELIF" expr "THEN" matched_term}
-                         "ELIF" expr "THEN" unmatched_term
+                         "ELIF" expr "THEN" base_term
                        | "IF" expr "THEN" matched_term
                          {"ELIF" expr "THEN" matched_term}
                          "ELSE" unmatched_term

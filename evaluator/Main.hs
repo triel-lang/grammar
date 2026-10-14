@@ -14,13 +14,14 @@
 --            | (record (NAME TY)*)
 --   T      ::= (must NAME NAME DL) | (must_not NAME NAME X) | (may NAME NAME X)
 --            | (then T T) | (or T T) | (and T T) | (unless T X T)
---            | (on_breach NAME A*)
+--            | (if X T T) | (skip) | (ref INT) | (on_breach NAME A*)
 --   DL     ::= (none) | (at INT) | (after INT) | (factor PATH INT)
 --   A      ::= (notify NAME) | (penalty VAL) | (terminate) | (cure_by INT)
 --            | (escalate_to NAME)
 --   X      ::= (true) | (false) | (eq V V) | (lt V V) | (le V V) | (not X)
 --            | (and X X) | (or X X) | (implies X X) | (present PATH)
---   V      ::= (const VAL) | (name PATH)       PATH ::= (path NAME*)
+--   V      ::= (const VAL) | (name PATH) | (default PATH V)
+--   PATH   ::= (path NAME*)
 --   VAL    ::= (bool true|false) | (int INT) | (dec INT INT) | (str NAME) | (time INT)
 --   I      ::= (invariant NAME (always X)|(eventually X)|(next X))
 --   E      ::= (entry INT EV (data (NAME D)*))
@@ -29,6 +30,7 @@
 --
 -- NAME is a string literal; INT is a decimal integer (seconds for times).
 -- (dec M K) is the exact number M / 10^K; (int N) is the number N.
+-- (ref K) refers to the element K of (terms T*), counted from 0.
 
 module Main (main) where
 
@@ -134,6 +136,7 @@ ty x = bad "a type" x
 vexp :: Conv (T.Vexp [String] T.Atom)
 vexp (List [Sym "const", v]) = T.VConst <$> value v
 vexp (List [Sym "name", p]) = T.VName <$> path p
+vexp (List [Sym "default", p, v]) = T.VDefault <$> path p <*> vexp v
 vexp x = bad "a value expression" x
 
 expr :: Conv (T.Expr [String] T.Atom)
@@ -172,6 +175,10 @@ term (List [Sym "then", t, u]) = T.SThen <$> term t <*> term u
 term (List [Sym "or", t, u]) = T.SOr <$> term t <*> term u
 term (List [Sym "and", t, u]) = T.SAnd <$> term t <*> term u
 term (List [Sym "unless", t, c, u]) = T.SUnless <$> term t <*> expr c <*> term u
+term (List [Sym "if", c, t, u]) = T.SIf <$> expr c <*> term t <*> term u
+term (List [Sym "skip"]) = Right T.SSkip
+term (List [Sym "ref", k]) = integer k >>= \n ->
+  if n >= 0 then Right (T.SRef (T.nat_of_integer n)) else bad "an element index" k
 term (List (Sym "on_breach" : s : as)) = T.SOnBreach <$> name s <*> mapM action as
 term x = bad "a term" x
 

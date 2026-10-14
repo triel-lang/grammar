@@ -300,6 +300,8 @@ on every push.
 
 **Allowing trailing separators (D-31, partial).** `SUBJECTS`, `FACTORS`, `MODALITIES`, and `CROSS_MODAL` (comma-delimited) and `TERMS` and `INVARIANTS` (semicolon-delimited) each now accept one optional trailing separator before their closing brace, so adding a member no longer requires editing the line above it. What this does not fix, and does not claim to: the two delimiter families themselves remain genuinely different across block kinds, exactly as the finding described. Unifying them would be a breaking change to every specification using this grammar, not only to this repository's examples, and is left open for a future major version rather than forced through here.
 
+**Closing an `ELIF` chain without `ELSE` (D-34).** `unmatched_condition` is the `IF`/`ELIF` chain with no `ELSE` at its outermost level, but its `ELIF` alternative required the last branch to be itself an open conditional, so `IF a THEN x ELIF b THEN y` did not parse. That branch is now a `base_term`, closed or open, as the branch of a single `IF a THEN x` already was. A closed last branch ends the chain, so an `ELIF` or `ELSE` after it still attaches to the nearest open `IF`; the ambiguity tests include the new form (`parser/test_ambiguity.py`, group C).
+
 ---
 
 ### 2.12 Unambiguity

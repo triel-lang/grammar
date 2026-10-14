@@ -8,7 +8,7 @@ ambiguity='explicit' mode, which materialises every competing derivation
 as an _ambig node; the derivations are counted, and the test fails
 unless there is exactly one.
 
-This guards the fixes recorded as D-19, D-20, D-21, D-32 and the
+This guards the fixes recorded as D-19, D-20, D-21, D-32, D-34 and the
 2026-09 findings F-1, F-2, F-6. Ambiguity is invisible to the
 examples/*.triel corpus: an example that parses tells you nothing about
 whether it parses in more than one way.
@@ -156,6 +156,13 @@ CASES = [
      "ELSE alice MUST notify"),
     ("gC-10 ELIF, open IF in ON..", "term",
      "IF a THEN ON e DO IF b THEN alice MUST pay ELIF a THEN IF b THEN bob MUST ship"),
+    # D-34: an IF/ELIF chain with no ELSE whose last branch is closed.
+    ("gC-11 IF..ELIF, no ELSE", "term",
+     "IF a THEN alice MUST pay ELIF b THEN bob MUST ship"),
+    ("gC-12 IF..ELIF..ELIF, no ELSE", "term",
+     "IF a THEN alice MUST pay ELIF b THEN bob MUST ship ELIF a THEN alice MUST notify"),
+    ("gC-13 ELIF, closed IF in last branch", "term",
+     "IF a THEN alice MUST pay ELIF b THEN IF a THEN bob MUST ship ELSE alice MUST notify"),
 
     # Group D: parentheses around a formula with no LTL operator belong to
     # the state expression; ltl_atom parenthesises only LTL formulas.

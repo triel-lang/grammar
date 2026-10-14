@@ -175,9 +175,94 @@ def test_penalty_expression_is_rejected():
 
 
 def test_only_the_outermost_construct_is_reported():
-    src = spec(terms="WHEN g > 1 THEN a MUST b(1)", factors="g : Integer METADATA",
-               invariants="i : ALWAYS(PRESENT(g))")
-    assert rejected(src) == ["WHEN ... THEN (term)"]
+    assert rejected(spec(terms="a MUST b AND a MUST c(1)")) == ["AND (term)"]
+
+
+# --- conditional terms, named terms, DEFAULT --------------------------------
+
+G = "g : Integer METADATA, f : Boolean METADATA"
+
+
+@pytest.mark.parametrize("terms, expected", [
+    ("IF g > 1 THEN a MUST b ELSE a MAY c",
+     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none)) (may "a" "c" (true)))'),
+    ("IF g > 1 THEN a MUST b",
+     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none)) (skip))'),
+    ("IF g > 1 THEN a MUST b ELIF g > 0 THEN a MUST c",
+     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none)) '
+     '(if (lt (const (int 0)) (name (path "g"))) (must "a" "c" (none)) (skip)))'),
+    ("IF g > 1 THEN a MUST b ELIF g > 0 THEN a MUST c ELSE a MUST d",
+     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none)) '
+     '(if (lt (const (int 0)) (name (path "g"))) (must "a" "c" (none)) (must "a" "d" (none))))'),
+    ("WHEN g > 1 THEN a MUST b",
+     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none)) (skip))'),
+    ("IF g > 1 THEN IF g > 2 THEN a MUST b ELSE a MUST c",
+     '(if (lt (const (int 1)) (name (path "g"))) (if (lt (const (int 2)) (name (path "g"))) '
+     '(must "a" "b" (none)) (must "a" "c" (none))) (skip))'),
+])
+def test_conditional_terms(terms, expected):
+    assert f"(terms {expected})" in core(spec(terms=terms, factors=G))
+
+
+def test_conditional_branch_with_a_deadline_is_rejected():
+    assert rejected(spec(terms="IF g > 1 THEN (a MUST b WITHIN 1 DAYS)", factors=G)) == \
+        ["deadline in a composite term"]
+
+
+def test_conditional_needs_a_boolean_condition():
+    assert rejected(spec(terms="IF g THEN a MUST b", factors=G)) == ["non-Boolean condition"]
+
+
+def test_named_term_is_an_element_and_ref_is_its_index():
+    c = core(spec(terms="d := a MUST b THEN a MUST c; a MAY e; REF d UNLESS f DO REF d"))
+    assert ('(terms (then (must "a" "b" (none)) (must "a" "c" (none))) (may "a" "e" (true)) '
+            '(unless (ref 0) (eq (name (path "f")) (const (bool true))) (ref 0)))') in c
+
+
+@pytest.mark.parametrize("terms, why", [
+    ("a MUST b THEN REF d", "REF to an undeclared name"),
+    ("a MUST b THEN REF d; d := a MUST c", "REF to a name declared later"),
+    ("d := a MUST b THEN REF d", "REF to a name declared later"),
+    ("d := a MUST b THEN REF e; e := a MUST c THEN REF d", "REF to a name declared later"),
+    ("d := a MUST b WITHIN 1 DAYS; a MAY c THEN REF d", "REF to a term with a deadline"),
+    ("a MUST b WITHIN 1 DAYS; h := a ON_BREACH NOTIFY b2; REF h", "REF to a breach handler"),
+    ("d := a MUST b; d := a MUST c", "duplicate term name"),
+])
+def test_bad_references_are_rejected(terms, why):
+    assert rejected(spec(terms=terms)) == [why]
+
+
+def test_named_obligation_keeps_its_deadline_and_handler():
+    c = core(spec(terms="d := a MUST b WITHIN 1 DAYS; a ON_BREACH NOTIFY b2"))
+    assert '(terms (must "a" "b" (after 86400)) (on_breach "a" (notify "b2")))' in c
+
+
+@pytest.mark.parametrize("factors, cond, expected", [
+    ("g : Optional<Integer> METADATA", "DEFAULT(g, 0) >= 0",
+     '(le (const (int 0)) (default (path "g") (const (int 0))))'),
+    ("g : Optional<Decimal> METADATA", "DEFAULT(g, 1) == 2.5",
+     '(eq (default (path "g") (const (int 1))) (const (dec 25 1)))'),
+    ("g : Optional<Boolean> METADATA", "DEFAULT(g, false)",
+     '(eq (default (path "g") (const (bool false))) (const (bool true)))'),
+    ("g : Optional<Integer> METADATA, h : Integer METADATA", "DEFAULT(g, h) < 3",
+     '(lt (default (path "g") (name (path "h"))) (const (int 3)))'),
+    ("g : Optional<String> METADATA", 'DEFAULT(g, "x") == "y"',
+     '(eq (default (path "g") (const (str "x"))) (const (str "y")))'),
+])
+def test_default(factors, cond, expected):
+    assert f"(always {expected})" in core(spec(invariants=f"i : ALWAYS({cond})", factors=factors))
+
+
+@pytest.mark.parametrize("factors, cond, why", [
+    ("r : Record { x : Integer } METADATA", "DEFAULT(r, 0) == 0", "DEFAULT of a record"),
+    ("g : Optional<Integer> METADATA", 'DEFAULT(g, "x") == 0', "DEFAULT fallback of another type"),
+    ("g : Optional<Integer> METADATA", "DEFAULT(g, 1 + 1) == 0", "arithmetic"),
+    ("g : Optional<Integer> METADATA", "DEFAULT(g, g > 1) == 0", "DEFAULT fallback (not a value)"),
+    ("g : Optional<String> METADATA", 'DEFAULT(g, "x")', "non-Boolean condition"),
+    ("g : Optional<String> METADATA", 'DEFAULT(g, "x") < "y"', "ordering comparison of a non-number"),
+])
+def test_default_rejections(factors, cond, why):
+    assert rejected(spec(invariants=f"i : ALWAYS({cond})", factors=factors)) == [why]
 
 
 def test_and_of_terms_is_rejected():
