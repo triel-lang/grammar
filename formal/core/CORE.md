@@ -1,6 +1,6 @@
 # TRIEL core: definitions and theorems
 
-This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8), [`TRIEL_Invariants.thy`](TRIEL_Invariants.thy) (invariants, section 10), [`TRIEL_Indicators.thy`](TRIEL_Indicators.thy) (the indicators E_z and ↓z and the stability of verdicts, section 7.2), [`TRIEL_Compositions.thy`](TRIEL_Compositions.thy) (the quantifier, renomination, closure under the base compositions, and conditions as terms, section 7.3) and [`TRIEL_Exec.thy`](TRIEL_Exec.thy) (the evaluator exported to Haskell, section 10). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
+This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8), [`TRIEL_Invariants.thy`](TRIEL_Invariants.thy) (invariants, section 10), [`TRIEL_Indicators.thy`](TRIEL_Indicators.thy) (the indicators E_z and ↓z and the stability of verdicts, section 7.2), [`TRIEL_Compositions.thy`](TRIEL_Compositions.thy) (the quantifier, renomination, closure under the base compositions, and conditions as terms, section 7.3), [`TRIEL_Numbers.thy`](TRIEL_Numbers.thy) (the numeric types Integer and Decimal, section 10.4) and [`TRIEL_Exec.thy`](TRIEL_Exec.thy) (the evaluator exported to Haskell, section 10). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
 
 It is based only on the public material at <https://github.com/triel-lang/grammar>: TECHNICAL_REPORT.md §2.5, §2.6 and §2.9, and FOUNDATIONS.md. It makes no assumptions about any non-public implementation.
 
@@ -33,9 +33,11 @@ A name outside dom σ is *absent*. FOUNDATIONS.md treats a stale value as absent
 **Syntax.** Expressions have two sorts, so that `eval` can return a truth value:
 
   a ::= c | x                          (value constant c ∈ V, name x ∈ N)
-  e ::= true | false | a₁ = a₂ | NOT e | e₁ AND e₂ | e₁ OR e₂ | e₁ IMPLIES e₂ | PRESENT(x)
+  e ::= true | false | a₁ = a₂ | a₁ < a₂ | a₁ ≤ a₂ | NOT e | e₁ AND e₂ | e₁ OR e₂ | e₁ IMPLIES e₂ | PRESENT(x)
 
-Value constants and names can only appear as operands of `=`. A name cannot be used directly as a boolean, because its value is in V and not in the truth values.
+Value constants and names can only appear as operands of the comparisons `=`, `<` and `≤`. A name cannot be used directly as a boolean, because its value is in V and not in the truth values.
+
+**Order on values.** The ordering comparisons need two relations on V, `vless` and `vleq`. They are the parameters of the class `value_order`, which assumes nothing about them, so every theorem holds for every choice. The evaluator instantiates them with the order of exact numbers (section 10.4).
 
 **Truth values.** 𝔹⊥ = {T, F, ⊥}, represented as `bool option` with ⊥ = `None`.
 
@@ -51,6 +53,7 @@ Value constants and names can only appear as operands of `=`. A name cannot be u
 - ⟦c⟧σ = c and ⟦x⟧σ = σ x.
 - ⟦true⟧σ = T and ⟦false⟧σ = F.
 - ⟦a₁ = a₂⟧σ is ⊥ if either ⟦aᵢ⟧σ = ⊥. Otherwise it is T if ⟦a₁⟧σ = ⟦a₂⟧σ, and F if they differ.
+- ⟦a₁ < a₂⟧σ and ⟦a₁ ≤ a₂⟧σ are ⊥ if either ⟦aᵢ⟧σ = ⊥. Otherwise they are vless(⟦a₁⟧σ, ⟦a₂⟧σ) and vleq(⟦a₁⟧σ, ⟦a₂⟧σ).
 - ⟦NOT e⟧σ = ¬⟦e⟧σ. AND, OR and IMPLIES are interpreted by ∧, ∨ and → above.
 - ⟦PRESENT(x)⟧σ = (x ∈ dom σ). This is always defined.
 
@@ -58,7 +61,7 @@ Value constants and names can only appear as operands of `=`. A name cannot be u
 
 - *PRESENT-free*: e contains no PRESENT subterm (`present_free`).
 - *names(e)*: the names that occur as comparison operands (`names`). PRESENT arguments are not counted, because PRESENT never reads a value. *pnames(e)* is the set of PRESENT arguments.
-- *Classical semantics* ⟦e⟧ᶜ(D, ρ) ∈ {T, F} (`ceval`) takes a **total** valuation ρ : N → V and a set D ⊆ N of present names. It uses the ordinary two-valued connectives and ⟦PRESENT(x)⟧ᶜ = (x ∈ D).
+- *Classical semantics* ⟦e⟧ᶜ(D, ρ) ∈ {T, F} (`ceval`) takes a **total** valuation ρ : N → V and a set D ⊆ N of present names. It uses the ordinary two-valued connectives, vless and vleq for the ordering comparisons, and ⟦PRESENT(x)⟧ᶜ = (x ∈ D).
 - *Definedness order* on partial results: p ≼ q ⟺ (p = ⊥ ∨ p = q) (`approx`).
 
 ## 2. Theorems
@@ -86,6 +89,12 @@ Explanation: once a PRESENT-free expression has a definite value, giving more na
 
 **Relation to TECHNICAL_REPORT.md §2.9.** T2 is the monotonicity claim of §2.9, *"every expression form other than `PRESENT` and `DEFAULT` is monotone in the information order"*, stated for this core. The core does not include `DEFAULT`, so "other than PRESENT and DEFAULT" becomes "PRESENT-free". The §2.9 phrase "has the same value on any data that extends it" is the conclusion ⟦e⟧σ′ = ⟦e⟧σ for σ ⊑ σ′. The proof uses the stronger statement ⟦e⟧σ ≼ ⟦e⟧σ′ (`eval_mono`): every Kleene connective and the comparison are monotone in ≼.
 
+### Comparisons (`cmp_undefined`, `cmp_absent_name`, `cmp_mono`)
+
+  ⟦a⟧σ = ⊥ ∨ ⟦b⟧σ = ⊥  ⟹  ⟦a = b⟧σ = ⟦a < b⟧σ = ⟦a ≤ b⟧σ = ⊥, and σ ⊑ σ′ ⟹ ⟦a ∘ b⟧σ ≼ ⟦a ∘ b⟧σ′ for ∘ ∈ {=, <, ≤}.
+
+Explanation: a comparison with an operand that has no value is undefined, like every other condition that reads an absent name, and a definite answer of a comparison survives every extension of the state. The comparisons are PRESENT-free, so T2 and T4 cover them.
+
 ### T3: PRESENT is not monotone (`T3_present_not_monotone`)
 
   ∃ σ, σ′, x.  σ ⊑ σ′ ∧ ⟦PRESENT(x)⟧σ ≠ ⟦PRESENT(x)⟧σ′.
@@ -110,7 +119,7 @@ Explanation: PRESENT(x) is true exactly when x has a value in the state. Since i
 
 ## 3. Modelling choices
 
-- **Two-sorted syntax.** Value expressions and boolean expressions are separate sorts. Evaluation of a boolean expression returns a truth value in 𝔹⊥, while names and value constants denote values in V. In this core, value expressions occur only as the operands of `=`, which corresponds to `==` in the TRIEL grammar.
+- **Two-sorted syntax.** Value expressions and boolean expressions are separate sorts. Evaluation of a boolean expression returns a truth value in 𝔹⊥, while names and value constants denote values in V. In this core, value expressions occur only as the operands of `=`, `<` and `≤`, which correspond to `==`, `<` and `<=` in the TRIEL grammar. `a != b`, `a > b` and `a >= b` are NOT (a = b), b < a and b ≤ a (section 10.6).
 - **Stale values.** Following FOUNDATIONS.md, a stale value is outside dom σ, so PRESENT(x) is F for a stale x. The `ON_STALE`/`BLOCK` machinery from §2.9 is not modelled.
 - **Out of scope.** `DEFAULT`, arithmetic, function calls, and every construct listed as "Open" in FOUNDATIONS.md are outside this core.
 
@@ -307,7 +316,7 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 - E_z (`Ex_R`) has T(E_z) = { d | d(z)↓ } and F(E_z) = { d | d(z)↑ }. ↓z (`DownInd`) has T(↓z) = { d | d(z)↓ } and F(↓z) = ∅.
 - In logics with weak equality, ↓z is =zz. As in [8], only the diagonal is used: T(=zz) = { d | d(z)↓ } and F(=zz) = ∅. No general definition of =xy is added; the diagonal is that of TRIEL's comparison `weq` (section 5).
 - *Partial presence* of a complex name p (`present_partial`, as an R-predicate `DownInd_nd`) is ↓p on nominative data: T where p leads to an atom or a record, undefined elsewhere.
-- A *condition* (`cond`) is built from atoms by NOT, AND and OR, and evaluated with the strong Kleene connectives of section 1 (`cond_eval`). Its verdict is T, F or ⊥. Over nominative data the atoms are E_p (`AEx`), ↓p (`ADown`), and "p is an atom of primitive type q" (`AIs`, `is_prim`), which is ⊥ when p leads to nothing and F when it leads to a record.
+- A *condition* (`cond`) is built from atoms by NOT, AND and OR, and evaluated with the strong Kleene connectives of section 1 (`cond_eval`). Its verdict is T, F or ⊥. Over nominative data the atoms are E_p (`AEx`), ↓p (`ADown`), "p is an atom of primitive type q" (`AIs`, `is_prim`), which is ⊥ when p leads to nothing and F when it leads to a record, and the comparisons a = b, a < b and a ≤ b of two value expressions (`ACmp`, `crel_expr`), which are ⊥ when an operand does not lead to an atom.
 
 *Theorems* (all in `TRIEL_Indicators.thy`):
 
@@ -318,7 +327,8 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 - **`Ex_R_counterexample`, `Ex_R_not_mono`, `Ex_R_not_equitone_R`:** ∅ ⊑ [z ↦ v], with E_z(∅) = F and E_z([z ↦ v]) = T. So E_z[∅] = {F} is not a subset of E_z[[z ↦ v]] = {T}, and E_z is not monotone.
 - **`present_partial_domains`, `present_partial_below_present`, `present_partial_mono`, `present_partial_equitone`, `DownInd_nd_equitone_R`:** partial presence has the truth domain of E_p and an empty falsity domain. Wherever it is defined it agrees with PRESENT(p), and it is monotone under the extension ≤ of nominative data.
   — `self_eq_below_present_partial`: the comparison p == p is below ↓p. It is ⊥ when p leads to a record, because comparisons see only atoms.
-- **`cond_equitone`, `verdict_stable`, `verdict_stable_nd`:** if every atom of a condition is equitone, the condition is equitone: a definite verdict T or F stays the same under every extension of the data. Over nominative data this holds for every condition whose atoms are ↓p and type checks, without E_p.
+- **`cmp_equitone`, `cmp_atom_equitone`, `cmp_atom_undefined`:** the comparisons are equitone, on flat states and on nominative data, and a comparison with an operand that has no value is ⊥.
+- **`cond_equitone`, `verdict_stable`, `verdict_stable_nd`:** if every atom of a condition is equitone, the condition is equitone: a definite verdict T or F stays the same under every extension of the data. Over nominative data this holds for every condition whose atoms are ↓p, type checks and comparisons, without E_p.
 - **`opt_cond_Ex_wt`, `Ex_breaks_stability`, `Ex_cond_not_equitone`:** with the atom E_p the property fails. The condition "NOT E_f OR f has type q" is the typing judgement of Record {f: Optional⟨q⟩} (`opt_cond_Ex_wt`). On the data of `wt_not_mono_optional` (the empty record, extended by [f ↦ b] where b is not of type q) its verdict changes from T to F.
 - **`opt_cond_Down_wt`, `Down_cond_equitone`:** the same condition with ↓f agrees with typing when f is present and is ⊥ when f is absent. On the same data its verdict changes from ⊥ to F, so no definite verdict is overturned.
 - **`inv_data_mono_equitone`:** the LTL3 verdicts of invariants (section 10.1) survive more data for every state formula whose predicate is equitone. `inv_data_mono` is the case of PRESENT-free formulas.
@@ -346,7 +356,7 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 - **Pointwise extension** (`pw_le`): d ≤ d′ if every name that has a value a in d has a value a′ in d′ with a ≤ a′ in a given order on values. With equality on values this is the inclusion d ⊆ d′ of [8], that is ⊑ (`pw_le_eq`). This order is not in the sources. It is used so that one proof covers both flat named sets and nominative data.
 - **Formulas** (`fm`, [8] §2, p. 26): Fa) base predicate symbols; F↓) ↓z; Fp) ¬Φ and ∨ΦΨ; FR⊥) RΦ with extended renomination; F∃) ∃xΦ. One constructor is added here: E_z (`FE`), so that the atom E_p of conditions has a counterpart. A formula without `FE` is a formula of [8].
 - **Interpretation** (`interp`, [8] p. 26, rules Ip, IR⊥, I∃): a map I from base predicate symbols to R-predicates extends to formulas by I(¬Φ) = ¬I(Φ), I(∨ΦΨ) = ∨(I(Φ), I(Ψ)), I(RΦ) = R(I(Φ)) and I(∃xΦ) = ∃x(I(Φ)). The symbols ↓z denote the indicators, and `FE z` denotes E_z.
-- **Conditions as formulas.** A nominative datum d is read as the named set p ↦ d(p) over complex names (`nd_named`). The translation `cond_fm` sends E_p to `FE p`, ↓p to `FDown p`, and "p is an atom of primitive type q" to a base predicate symbol, interpreted by `is_R`. NOT and OR go to ¬ and ∨. AND goes to ¬(¬Φ ∨ ¬Ψ), because conjunction is not a base composition.
+- **Conditions as formulas.** A nominative datum d is read as the named set p ↦ d(p) over complex names (`nd_named`). The translation `cond_fm` sends E_p to `FE p`, ↓p to `FDown p`, and "p is an atom of primitive type q" and the comparisons to base predicate symbols (`bsym`), interpreted by `is_R`. A comparison a ∘ b is the R-predicate `cmp_R` with T = { σ | a and b denote atoms u, w and u ∘ w } and F = { σ | a and b denote atoms u, w and not u ∘ w }. NOT and OR go to ¬ and ∨. AND goes to ¬(¬Φ ∨ ¬Ψ), because conjunction is not a base composition.
 
 *Theorems* (all in `TRIEL_Compositions.thy`):
 
@@ -360,8 +370,9 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 - **`pval_R_ex`, `pval_R_ren_ext`:** on P-predicates the quantifier is the strong Kleene ∃, and renomination is precomposition with r.
 - **`interp_comp_closure`, `interp_P_pred`, `interp_equitone`:** a formula without E_z denotes a predicate of the closure. If the base predicates are P-predicates, every formula denotes a P-predicate. If they are equitone P-predicates, every formula without E_z denotes an equitone P-predicate.
 - **`nd_le_pw`:** d ≤ d′ on nominative data if and only if p ↦ d′(p) extends p ↦ d(p) pointwise, where an atom stays the same atom and a record stays a record.
-- **`cond_fm_correct`:** for every condition φ of section 7.2 and every datum d, the interpretation of `cond_fm φ` on p ↦ d(p) has the value of φ on d. So every TRIEL condition is a term of the composition algebra.
-- **`cond_equitone_from_closure`, `verdict_stable_from_closure`:** the stability of verdicts of section 7.2 (`verdict_stable_nd`) follows from the closure. A condition without E_p translates to a formula without E_z, and that formula denotes an equitone P-predicate.
+- **`cmp_R_rmono`, `cmp_R_equitone`:** a comparison is a monotone and equitone P-predicate under the extension of nominative data.
+- **`cond_fm_correct`:** for every condition φ of section 7.2, comparisons included, and every datum d, the interpretation of `cond_fm φ` on p ↦ d(p) has the value of φ on d. So every TRIEL condition is a term of the composition algebra.
+- **`cond_equitone_from_closure`, `verdict_stable_from_closure`:** the stability of verdicts of section 7.2 (`verdict_stable_nd`) follows from the closure, for conditions with comparisons too. A condition without E_p translates to a formula without E_z, and that formula denotes an equitone P-predicate.
 
 *Not formalised.* Superposition of functions into predicates, and with it the substitution of the value of an expression into a condition, is not formalised here. The sources used in this section, [2], [5] and [8], are pure first-order logics without function symbols.
 
@@ -485,6 +496,9 @@ Each decision below was made because of a theorem: either one that proves the de
     - ↓x has the truth domain of E_x but an empty falsity domain (`T_DownInd_eq_T_Ex`, `DownInd_irrefutable`). It is equitone (`DownInd_equitone`), and partial presence is monotone on nominative data (`present_partial_mono`).
     - A condition built from equitone atoms by NOT, AND and OR keeps every definite verdict when data is added (`verdict_stable`, `verdict_stable_nd`), and so do the LTL3 verdicts of invariants with an equitone formula (`inv_data_mono_equitone`). With E_x as an atom this fails, on the data of `wt_not_mono_optional` (`Ex_breaks_stability`).
     - No new construct is added for ↓x: on the flat named sets of section 1 it is the comparison `x == x` (`self_eq_is_DownInd`), which is PRESENT-free, so T2 already covers it. On nominative data `p == p` is below ↓p (`self_eq_below_present_partial`): it is ⊥ when p leads to a record. `PRESENT` keeps its meaning E_x (decision 1). A condition whose verdict must not be overturned by later data uses `x == x`, not `PRESENT(x)`.
+12. **The value order is a relation on values, not a partial function.**
+    - `vless` and `vleq` give T or F on every pair of values, so a comparison is ⊥ only when an operand has no value, exactly like `=`. This keeps T4 for the comparisons: on fully defined data every condition is two-valued (`T4_classical`).
+    - The price is that an ordering comparison of a number with a value that is not a number is F in the evaluator. The translator rejects such a comparison (section 10.6, rule 5), and the types of the data are checked before any verdict, so it does not arise for a translated specification.
 
 ## 10. Invariants and the evaluator (`TRIEL_Invariants.thy`, `TRIEL_Exec.thy`)
 
@@ -500,7 +514,7 @@ Each decision below was made because of a theorem: either one that proves the de
 
 ### 10.2 Executable equations
 
-`TRIEL_Exec.thy` restates every definition that uses unbounded quantifiers, `LEAST` or `GREATEST` with bounded quantifiers, `find` and `filter`, and proves each restatement equal to the definition: `acted_code`, `passed_code`, `ob_verdict_code`, `may_verdict_code`, `pr_verdict_code`, `bound_to_code`, `wf_block_code`, `fresh_code`, `inv_eval_code`, `eval_code`, `first_at_code`. Typing is a recursive function proved equal to the inductive judgement (`wt_fun_iff`). The code generator uses only these equations and the definitions themselves.
+`TRIEL_Exec.thy` restates every definition that uses unbounded quantifiers, `LEAST` or `GREATEST` with bounded quantifiers, `find` and `filter`, and proves each restatement equal to the definition: `acted_code`, `passed_code`, `ob_verdict_code`, `may_verdict_code`, `pr_verdict_code`, `bound_to_code`, `wf_block_code`, `fresh_code`, `inv_eval_code`, `eval_code`, `first_at_code`, and, in `TRIEL_Numbers.thy`, `int_rat_code` and `decimal_code`. Typing is a recursive function proved equal to the inductive judgement (`wt_fun_iff`). The code generator uses only these equations and the definitions themselves.
 
 ### 10.3 Membership of a composite term
 
@@ -514,7 +528,8 @@ Whether a trace with an outcome belongs to the denotation of a composite term is
 
 `run` takes a specification (factor declarations, the `TERMS` block, invariants) and a list of observations (data, time, event), and returns the report described in [`examples/core/README.md`](../../examples/core/README.md).
 
-- Data are nominative data (section 7). The state of an entry is its data flattened to complex names. Basic values are Booleans, integers, strings and times.
+- Data are nominative data (section 7). The state of an entry is its data flattened to complex names. Basic values are Booleans, exact numbers, strings and times.
+- **Numbers** (`TRIEL_Numbers.thy`). There is no floating point. A number is a rational q (`ANum`). It has type Integer if q ∈ ℤ (`int_rat`), and type Decimal if q = m / 10ᵏ for an integer m (`decimal`); a decimal literal with k digits after the point is m / 10ᵏ (`dec_atom`, `dec_atom_Decimal`). Every Integer is a Decimal (`int_rat_decimal`, `interp_int_dec`). A rational a/b in lowest terms is a Decimal exactly when b divides a power of 10 (`decimal_iff_denominator`), that is, when b has no prime factor other than 2 and 5 (`dec_den_iff`); so 1/3 is not a Decimal (`not_decimal_third`). The ordering comparisons compare numbers as rationals and are false on any other pair of values; `=` on numbers is equality of rationals, so 2500 = 2500.00 (`eval_cmp_num`).
 - A factor under `MAX_AGE m` and `ON_STALE BLOCK` is absent, with every complex name that starts with it, at an entry where it has not arrived in the last m seconds (`blockp`). The safety claim of §2.9 holds for this blocking by factor (`blockp_stale_safe`, with `blockp_le` and `blockp_stale_absent`), as it does for `blocked` (section 8).
 - Activation is checked first, in the blocked state of entry 0. Then the block is checked with `wf_block` and `cont_free_prohibitions` (section 10.6, rule 4), and then the types of the data as given (`ill_typed`, `ill_typed_None`). Verdicts, invariants and composite terms are computed on the blocked trace (`btrace`, which keeps the times and events: `btrace_is_trace`).
 - A top-level obligation gets `handle_breach` with the handler bound to it, a prohibition `pr_verdict` with the informational actions of its handler after a breach (`pr_actions`), a permission `may_verdict`, a handler the element it is bound to, a composite term `mem3` for each outcome, and an invariant `inv_eval`.
@@ -542,6 +557,8 @@ Translation rules:
 4. **Handlers of prohibitions.** A handler binds as `bound_to` does: to the nearest preceding obligation or prohibition of its subject at the top level.
    - For a prohibition with a handler, the report shows the verdict and, after a breach, the informational actions of the handler, `NOTIFY` and `PENALTY`, in source order (`pr_actions`, `pr_actions_informational`, `pr_actions_breached`).
    - §2.6 defines continuations only for obligations. A continuation-determining action (`TERMINATE`, `CURE_BY`, `ESCALATE_TO`) in a handler bound to a prohibition is rejected with the message "§2.6 defines continuations only for obligations". The evaluator checks the same condition (`cont_free_prohibitions`) and otherwise reports `BLOCK REJECTED`, so after a breach every action of such a handler is reported (`pr_actions_cont_free`).
+
+5. **Numbers and comparisons.** An integer literal is `(int N)`, and a decimal literal is `(dec M K)`, the number M / 10ᴷ: `12.50` is `(dec 1250 2)`. `a < b` and `a <= b` are `(lt a b)` and `(le a b)`; `a > b` is `(lt b a)` and `a >= b` is `(le b a)`. An ordering comparison whose operand is not of type Integer or Decimal, nor a numeric literal, is rejected ("ordering comparison of a non-number"), so the value order is applied only to numbers.
 
 Further rejections:
 - A deadline inside a composite term is rejected: the trace semantics of §2.5 has no time, so the deadline would be ignored.

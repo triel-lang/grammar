@@ -27,7 +27,8 @@ axioms beyond those of Isabelle/HOL.
 \paragraph{Expressions (theory \texttt{TRIEL\_Core}).}
 States are partial maps from names to values, ordered by information (extension).
 Boolean expressions are evaluated in strong Kleene three-valued logic; the value-presence
-predicate \texttt{PRESENT(x)} is always defined. Proved: commutativity and associativity
+predicate \texttt{PRESENT(x)} is always defined, and a comparison $=$, $<$ or $\le$ with
+an operand that has no value is undefined. Proved: commutativity and associativity
 of \texttt{AND} and \texttt{OR}, De Morgan's laws and double negation (T1); monotonicity of
 every \texttt{PRESENT}-free expression under extension of the state, the claim of
 Section~2.9 (T2); non-monotonicity of \texttt{PRESENT} (T3); agreement with two-valued
@@ -99,7 +100,7 @@ P-predicate, and in TRIEL it is the comparison $z = z$; $E_z$ is total and singl
 but not monotone, with an explicit counterexample; partial presence of a complex name is
 monotone under extension of nominative data. A condition built from equitone atoms,
 such as $\downarrow z$, by \texttt{NOT}, \texttt{AND} and \texttt{OR} keeps every
-definite verdict when the data is extended; with the atom $E_z$ this fails, on the data of
+definite verdict when the data is extended, comparisons included; with the atom $E_z$ this fails, on the data of
 the counterexample for typing with \texttt{Optional}. The equitone P-predicates are
 closed under negation and disjunction.
 
@@ -115,6 +116,13 @@ Formulas of the language are terms of the composition algebra, interpreted by th
 compositions. Every condition of \texttt{TRIEL\_Indicators} translates to such a term,
 with \texttt{AND} expressed by negation and disjunction, and the value of the condition is
 the value of the term. The stability of definite verdicts follows again, from the closure.
+
+\paragraph{Numbers (theory \texttt{TRIEL\_Numbers}).}
+There is no floating point. An Integer is a rational number in $\mathbb{Z}$, and a Decimal
+is a rational number $m / 10^k$. Proved: every Integer is a Decimal; a rational number in
+lowest terms is a Decimal if and only if its denominator divides a power of 10, that is,
+has no prime factor other than 2 and 5; $1/3$ is not a Decimal. Both types are decided by
+executable equations.
 
 \paragraph{The evaluator (theory \texttt{TRIEL\_Exec}).}
 Executable equations, each proved equal to a definition of the other theories, replace
