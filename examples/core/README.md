@@ -1,6 +1,6 @@
 # Examples inside the formal core
 
-The seven specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
+The eight specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
 
 - `core_deadline_cure.triel`: a deadline, its breach, and a cure;
 - `core_unless_records.triel`: a sequence under UNLESS, with the guard read from a nested record;
@@ -8,7 +8,8 @@ The seven specifications in this folder use only constructs that the translator 
 - `core_prohibition_handler.triel`: a breach handler bound to a prohibition, with informational actions only;
 - `core_numbers.triel`: Integer and Decimal factors, ordering comparisons, and a comparison with an absent operand;
 - `core_conditional.triel`: `IF`/`ELIF`/`ELSE` and `WHEN` terms, a named term with `REF`, and `DEFAULT`, with a condition that is undefined where the term is reached;
-- `core_payment.triel`: actions with arguments, an obligation whose window opens with `FROM`, and penalties with arithmetic and `CAP`, computed in the state of the breach: capped, undefined and negative.
+- `core_payment.triel`: actions with arguments, an obligation whose window opens with `FROM`, and penalties with arithmetic and `CAP`, computed in the state of the breach: capped, undefined and negative;
+- `core_commitment.triel`: `EVENTUALLY … WITHIN` a duration and a factor (true at the deadline, false past it, undefined on missing data, rejected activation), and `POLARITY`, `THRESHOLD` and `SENSITIVITY_BOUND` printed as metadata.
 
 The evaluator exported from Isabelle runs them on the scenarios in `scenarios/`.
 
@@ -38,7 +39,7 @@ The polarity of an event is used only when a composite term is checked against t
 
 ## Conventions of the evaluator
 
-1. **Order of checks.** Activation first (every deadline must resolve), then well-formedness of the block (`wf_block`, and every `REF` names an earlier element without a handler: `refs_ok`), then the types of the data. The first failure is reported and evaluation stops.
+1. **Order of checks.** Activation first (every deadline must resolve, in the `TERMS` block and in the invariants), then well-formedness of the block (`wf_block`, and every `REF` names an earlier element without a handler: `refs_ok`), then the types of the data. The first failure is reported and evaluation stops.
 2. **Types.** Each entry is checked against the declared factor types. A factor may be absent: data can be incomplete. A present factor must have its type, and inside a record every field whose type is not `Optional` must be present. Boolean, Integer, Decimal, String and DateTime are the primitive types. A number is exact: an Integer is a whole number, a Decimal a number with finitely many decimal places, and every Integer is a Decimal. DateTime values and DATETIME literals are seconds since the epoch.
 3. **Freshness.** A factor with `MAX_AGE m` and `ON_STALE BLOCK` is fresh at an entry if an `(arrive FACTOR)` entry at most `m` seconds earlier exists. Otherwise it is stale, and all of its complex names are absent. Data present at activation without an arrival entry counts as stale. Under `USE_LAST` the value is kept.
 4. **Blocked trace.** Verdicts, invariants and the membership of composite terms are computed on the trace in which stale factors are absent. Types are checked on the data as given.
@@ -48,6 +49,7 @@ The polarity of an event is used only when a composite term is checked against t
 8. **Actions with arguments.** An event matches a norm only with the same subject, action name and arguments. Names are compared as names; values by value, so `(int 1200)` and `(dec 1200.00)` are the same argument.
 9. **FROM.** An obligation with `FROM f` is fulfilled only by an action at a time in [f, d], and a duration in `BY` counts from f. f is read at activation, like a deadline.
 10. **Penalties.** A `PENALTY` amount is computed once, in the state of the entry just before the entry that establishes the breach: for a prohibition the state before the forbidden action, for an obligation the last state not after the deadline. It is undefined if an operand is absent, reported as negative if it is negative, and otherwise capped by `CAP`.
+11. **`EVENTUALLY … WITHIN`.** The deadline is resolved at activation, like the deadline of an obligation. The invariant is `T` once its condition is true at an entry not after the deadline, an entry at the deadline included; `F` once an entry is strictly after the deadline and the condition was false at every entry not after it; `U` otherwise, so an entry where the condition is undefined prevents `F`.
 
 ## Output
 
@@ -56,7 +58,8 @@ The first lines come from the translator; the rest are printed by the evaluator.
 ```
 SPEC NAME
 METADATA KEY VALUE                  -- JURISDICTION, STANDARD, CURRENCY, PROVENANCE_REQUIRED, in source order
-METADATA SOURCE FACTOR SUBJECT      -- in FACTORS order
+METADATA SOURCE FACTOR SUBJECT      -- in FACTORS order, and for each factor in source order:
+METADATA POLARITY FACTOR NUMBER     -- POLARITY, THRESHOLD and SENSITIVITY_BOUND, as written
 ACTIVATION OK | ACTIVATION REJECTED
 BLOCK OK | BLOCK REJECTED
 TYPES OK | TYPES ILL-TYPED ENTRY J FACTOR F

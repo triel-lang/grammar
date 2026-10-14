@@ -12,7 +12,7 @@ isabelle build -D .
 
 `isabelle build -e -D .` also writes the exported evaluator to `evaluator/generated/`.
 
-The build was checked with Isabelle2025-2. The output of a clean build (`isabelle build -c -v -D .`) is saved in [`build.log`](build.log).
+The build was checked with Isabelle2025-2. The output of a clean build (`isabelle build -c -v -D .`), with the PDF document, is saved in [`build.log`](build.log); it was produced on Linux, in the Docker image `makarius/isabelle:Isabelle2025-2` with TeX Live added.
 
 The build also typesets the theories, with a short introduction ([`document/root.tex`](document/root.tex)), into `output/document.pdf`. This step needs a LaTeX installation that provides `lualatex`, for example MiKTeX or TeX Live.
 
@@ -599,9 +599,16 @@ Each decision below was made because of a theorem: either one that proves the de
 - A definite verdict does not change when the trace is extended (`inv_final`).
 - An entry where φ is ⊥ because data is missing neither violates `ALWAYS` nor fulfils `EVENTUALLY` (`always_undefined_data`, `eventually_undefined_data`). For a `PRESENT`-free φ, a definite verdict survives more data at every entry (`inv_data_mono`, from T2).
 
+**`EVENTUALLY φ WITHIN d`** (section 9, decision 19). The deadline d is resolved at the activation entry to a time D (`sinv_eval`); the window is the set of entries with time ≤ D (`ew_eval`).
+
+- The verdict is T as soon as φ is T at an entry of the window (`ew_true`, `ew_at_deadline`), and then `EVENTUALLY φ` is T too (`ew_eventually`).
+- It is F once an entry is strictly after D and φ is F at every entry of the window (`ew_missed`); before that it is never F (`ew_not_false_before`). After D it is the strong Kleene disjunction of φ over the window (`ew_after_deadline`), so an entry of the window where φ is ⊥ prevents F (`ew_undefined_data`).
+- A definite verdict does not change when the trace is extended with non-decreasing timestamps (`ew_final`), nor, for a `PRESENT`-free φ, when the states carry more data (`ew_data_mono`). `sinv_final` and `sinv_data_mono` state the same for every invariant, with or without a deadline.
+- The invariants are activated only if every deadline in them resolves (`inv_activates`); a deadline from an absent factor rejects the activation (`activation_rejected_inv`), and after activation each one resolves (`inv_activates_resolves`).
+
 ### 10.2 Executable equations
 
-`TRIEL_Exec.thy` restates every definition that uses unbounded quantifiers, `LEAST` or `GREATEST` with bounded quantifiers, `find` and `filter`, and proves each restatement equal to the definition: `acted_code`, `passed_code`, `ob_verdict_code`, `may_verdict_code`, `pr_verdict_code`, `bound_to_code`, `wf_block_code`, `fresh_code`, `inv_eval_code`, `eval_code`, `first_at_code`, and, in `TRIEL_Numbers.thy`, `int_rat_code` and `decimal_code`. The entries of a breach, `breach_entry` and `first_forbidden` (section 8.4), are defined with `find` and need no code equation. Typing is a recursive function proved equal to the inductive judgement (`wt_fun_iff`). The code generator uses only these equations and the definitions themselves.
+`TRIEL_Exec.thy` restates every definition that uses unbounded quantifiers, `LEAST` or `GREATEST` with bounded quantifiers, `find` and `filter`, and proves each restatement equal to the definition: `acted_code`, `passed_code`, `ob_verdict_code`, `may_verdict_code`, `pr_verdict_code`, `bound_to_code`, `wf_block_code`, `fresh_code`, `inv_eval_code`, `ew_eval_code`, `inv_activates_code`, `eval_code`, `first_at_code`, and, in `TRIEL_Numbers.thy`, `int_rat_code` and `decimal_code`. The entries of a breach, `breach_entry` and `first_forbidden` (section 8.4), are defined with `find` and need no code equation. Typing is a recursive function proved equal to the inductive judgement (`wt_fun_iff`). The code generator uses only these equations and the definitions themselves.
 
 ### 10.3 Membership of a composite term
 
@@ -626,9 +633,9 @@ Whether a trace with an outcome belongs to the denotation of a composite term is
 - Data are nominative data (section 7). The state of an entry is its data flattened to complex names. Basic values are Booleans, exact numbers, strings and times.
 - **Numbers** (`TRIEL_Numbers.thy`). There is no floating point. A number is a rational q (`ANum`). It has type Integer if q ∈ ℤ (`int_rat`), and type Decimal if q = m / 10ᵏ for an integer m (`decimal`); a decimal literal with k digits after the point is m / 10ᵏ (`dec_atom`, `dec_atom_Decimal`). Every Integer is a Decimal (`int_rat_decimal`, `interp_int_dec`). A rational a/b in lowest terms is a Decimal exactly when b divides a power of 10 (`decimal_iff_denominator`), that is, when b has no prime factor other than 2 and 5 (`dec_den_iff`); so 1/3 is not a Decimal (`not_decimal_third`). The ordering comparisons compare numbers as rationals and are false on any other pair of values; `=` on numbers is equality of rationals, so 2500 = 2500.00 (`eval_cmp_num`).
 - A factor under `MAX_AGE m` and `ON_STALE BLOCK` is absent, with every complex name that starts with it, at an entry where it has not arrived in the last m seconds (`blockp`). The safety claim of §2.9 holds for this blocking by factor (`blockp_stale_safe`, with `blockp_le` and `blockp_stale_absent`), as it does for `blocked` (section 8).
-- Activation is checked first, in the blocked state of entry 0. Then the block is checked with `wf_block`, `cont_free_prohibitions` (section 10.6, rule 4) and `refs_ok` (section 10.3), and then the types of the data as given (`ill_typed`, `ill_typed_None`). Verdicts, invariants and composite terms are computed on the blocked trace (`btrace`, which keeps the times and events: `btrace_is_trace`).
+- Activation is checked first, in the blocked state of entry 0, for the deadlines of the `TERMS` block (`activates`) and of the invariants (`inv_activates`). Then the block is checked with `wf_block`, `cont_free_prohibitions` (section 10.6, rule 4) and `refs_ok` (section 10.3), and then the types of the data as given (`ill_typed`, `ill_typed_None`). Verdicts, invariants and composite terms are computed on the blocked trace (`btrace`, which keeps the times and events: `btrace_is_trace`).
 - An action is a name with a list of arguments, each a name (`ArgName`, not evaluated) or a value (`ArgVal`) (`act`, decision 16).
-- A top-level obligation gets `handle_breach` with the handler bound to it, with its start, window and deadline from `start_of`, `lo_of` and `deadline_of` (`must_line`); a prohibition gets `pr_verdict`. After a breach, both are reported with the informational actions of their handler, each penalty with its amount in the state of the breach (`ob_report`, `pr_report`, section 8.4; `pr_report_actions` relates the latter to `pr_actions`). A permission gets `may_verdict`, a handler the element it is bound to, a composite term `mem3` for each outcome, and an invariant `inv_eval`. A composite term is resolved in the environment of the block first, so a `REF` is reported like the term it names.
+- A top-level obligation gets `handle_breach` with the handler bound to it, with its start, window and deadline from `start_of`, `lo_of` and `deadline_of` (`must_line`); a prohibition gets `pr_verdict`. After a breach, both are reported with the informational actions of their handler, each penalty with its amount in the state of the breach (`ob_report`, `pr_report`, section 8.4; `pr_report_actions` relates the latter to `pr_actions`). A permission gets `may_verdict`, a handler the element it is bound to, a composite term `mem3` for each outcome, and an invariant `sinv_eval`. A composite term is resolved in the environment of the block first, so a `REF` is reported like the term it names.
 
 `export_code` writes `run` to Haskell. `isabelle build -e -D .` exports the module to [`evaluator/generated/TRIEL.hs`](../../evaluator/generated/TRIEL.hs).
 
@@ -641,7 +648,7 @@ Whether a trace with an outcome belongs to the denotation of a composite term is
 
 [`parser/triel_to_core.py`](../../parser/triel_to_core.py) parses a specification with the reference grammar and translates it into the input of `run`. Every construct is translated, printed as metadata, or rejected by name. Only the outermost unsupported construct is reported. The translator's table of grammar rules is checked against the grammar by [`parser/test_triel_to_core.py`](../../parser/test_triel_to_core.py).
 
-Metadata: `JURISDICTION`, `STANDARD`, `CURRENCY`, `PROVENANCE_REQUIRED`, and the `SOURCE` of each factor. The class of an invariant (`SAFETY`, `LIVENESS`, `FAIRNESS`) is a label.
+Metadata: `JURISDICTION`, `STANDARD`, `CURRENCY`, `PROVENANCE_REQUIRED`, and the `POLARITY`, `THRESHOLD`, `SOURCE` and `SENSITIVITY_BOUND` of each factor (section 9, decision 20; `CAUSED_BY` is rejected). The class of an invariant (`SAFETY`, `LIVENESS`, `FAIRNESS`) is a label.
 
 Translation rules:
 
@@ -662,6 +669,7 @@ Translation rules:
 
 9. **Action arguments.** `pay(bob, 100)` is `(action "pay" (path "bob") (int 100))`. An argument is a literal, or the name of a subject or a factor, which is printed as a path and not evaluated. Anything else is rejected ("action argument (not a name or literal)"), and so is a name that is neither a subject nor a factor ("action argument (undeclared name)").
 10. **`FROM`.** An obligation is `(must S A DL ST)`, where ST, the start given by `FROM`, is `(at T)`, `(factor PATH 0)` or `(none)`. `UNTIL` is rejected ("UNTIL"), and so is `FROM` inside a composite term ("FROM in a composite term") and a `REF` to an obligation with `FROM` ("REF to a term with FROM"), for the reason given for deadlines.
+11. **`EVENTUALLY … WITHIN`.** `EVENTUALLY(c) WITHIN d` is `(eventually_within X DL)`, where DL is translated as the deadline of an obligation: `(at T)`, `(after N)` or `(factor PATH N)`. A calendar unit is rejected, as in a deadline.
 
 Further rejections:
 - A deadline inside a composite term is rejected: the trace semantics of §2.5 has no time, so the deadline would be ignored. This includes the branches of `IF` and `WHEN`.
