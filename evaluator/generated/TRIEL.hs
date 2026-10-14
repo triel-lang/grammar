@@ -217,13 +217,30 @@ instance Modulo Nat where {
   modulo = modulo_nat;
 };
 
+less_eq_nat :: Nat -> Nat -> Bool;
+less_eq_nat m n = integer_of_nat m <= integer_of_nat n;
+
+less_nat :: Nat -> Nat -> Bool;
+less_nat m n = integer_of_nat m < integer_of_nat n;
+
+class (Semigroup_add a) => Cancel_semigroup_add a where {
+};
+
 class (Semigroup_add a) => Ab_semigroup_add a where {
+};
+
+class (Ab_semigroup_add a, Cancel_semigroup_add a,
+        Minus a) => Cancel_ab_semigroup_add a where {
 };
 
 class (Semigroup_add a, Zero a) => Monoid_add a where {
 };
 
 class (Ab_semigroup_add a, Monoid_add a) => Comm_monoid_add a where {
+};
+
+class (Cancel_ab_semigroup_add a,
+        Comm_monoid_add a) => Cancel_comm_monoid_add a where {
 };
 
 class (Times a, Zero a) => Mult_zero a where {
@@ -236,36 +253,6 @@ class (Ab_semigroup_add a, Semigroup_mult a) => Semiring a where {
 };
 
 class (Comm_monoid_add a, Mult_zero a, Semiring a) => Semiring_0 a where {
-};
-
-class (Semiring_0 a) => Semiring_no_zero_divisors a where {
-};
-
-class (Semigroup_mult a, Power a) => Monoid_mult a where {
-};
-
-class (Monoid_mult a, Numeral a, Semiring a) => Semiring_numeral a where {
-};
-
-class (One a, Zero a) => Zero_neq_one a where {
-};
-
-class (Semiring_numeral a, Semiring_0 a, Zero_neq_one a) => Semiring_1 a where {
-};
-
-class (Semiring_1 a,
-        Semiring_no_zero_divisors a) => Semiring_1_no_zero_divisors a where {
-};
-
-class (Semigroup_add a) => Cancel_semigroup_add a where {
-};
-
-class (Ab_semigroup_add a, Cancel_semigroup_add a,
-        Minus a) => Cancel_ab_semigroup_add a where {
-};
-
-class (Cancel_ab_semigroup_add a,
-        Comm_monoid_add a) => Cancel_comm_monoid_add a where {
 };
 
 class (Cancel_comm_monoid_add a, Semiring_0 a) => Semiring_0_cancel a where {
@@ -284,6 +271,18 @@ class (Comm_semiring_0 a,
         Semiring_0_cancel a) => Comm_semiring_0_cancel a where {
 };
 
+class (Semigroup_mult a, Power a) => Monoid_mult a where {
+};
+
+class (Monoid_mult a, Numeral a, Semiring a) => Semiring_numeral a where {
+};
+
+class (One a, Zero a) => Zero_neq_one a where {
+};
+
+class (Semiring_numeral a, Semiring_0 a, Zero_neq_one a) => Semiring_1 a where {
+};
+
 class (Semiring_0_cancel a, Semiring_1 a) => Semiring_1_cancel a where {
 };
 
@@ -298,17 +297,25 @@ class (Comm_semiring_0_cancel a, Comm_semiring_1 a,
         Semiring_1_cancel a) => Comm_semiring_1_cancel a where {
 };
 
-class (Comm_semiring_1_cancel a,
-        Semiring_1_no_zero_divisors a) => Semidom a where {
+class (Linorder a, Comm_semiring_1_cancel a) => Interval a where {
+};
+
+instance Cancel_semigroup_add Nat where {
 };
 
 instance Ab_semigroup_add Nat where {
+};
+
+instance Cancel_ab_semigroup_add Nat where {
 };
 
 instance Monoid_add Nat where {
 };
 
 instance Comm_monoid_add Nat where {
+};
+
+instance Cancel_comm_monoid_add Nat where {
 };
 
 instance Mult_zero Nat where {
@@ -321,33 +328,6 @@ instance Semiring Nat where {
 };
 
 instance Semiring_0 Nat where {
-};
-
-instance Semiring_no_zero_divisors Nat where {
-};
-
-instance Monoid_mult Nat where {
-};
-
-instance Semiring_numeral Nat where {
-};
-
-instance Zero_neq_one Nat where {
-};
-
-instance Semiring_1 Nat where {
-};
-
-instance Semiring_1_no_zero_divisors Nat where {
-};
-
-instance Cancel_semigroup_add Nat where {
-};
-
-instance Cancel_ab_semigroup_add Nat where {
-};
-
-instance Cancel_comm_monoid_add Nat where {
 };
 
 instance Semiring_0_cancel Nat where {
@@ -365,6 +345,18 @@ instance Comm_semiring_0 Nat where {
 instance Comm_semiring_0_cancel Nat where {
 };
 
+instance Monoid_mult Nat where {
+};
+
+instance Semiring_numeral Nat where {
+};
+
+instance Zero_neq_one Nat where {
+};
+
+instance Semiring_1 Nat where {
+};
+
 instance Semiring_1_cancel Nat where {
 };
 
@@ -375,6 +367,40 @@ instance Comm_semiring_1 Nat where {
 };
 
 instance Comm_semiring_1_cancel Nat where {
+};
+
+instance Ord Nat where {
+  less_eq = less_eq_nat;
+  less = less_nat;
+};
+
+instance Preorder Nat where {
+};
+
+instance Order Nat where {
+};
+
+instance Linorder Nat where {
+};
+
+instance Interval Nat where {
+};
+
+class (Semiring_0 a) => Semiring_no_zero_divisors a where {
+};
+
+class (Semiring_1 a,
+        Semiring_no_zero_divisors a) => Semiring_1_no_zero_divisors a where {
+};
+
+class (Comm_semiring_1_cancel a,
+        Semiring_1_no_zero_divisors a) => Semidom a where {
+};
+
+instance Semiring_no_zero_divisors Nat where {
+};
+
+instance Semiring_1_no_zero_divisors Nat where {
 };
 
 instance Semidom Nat where {
@@ -553,13 +579,15 @@ instance Value_order Atom where {
   vleq = vleq_atom;
 };
 
+data Set a = Set [a] | Coset [a];
+
 newtype Fmap a b = Fmap_of_list [(a, b)];
 
 data Nd a b = Atom b | Nom (Fmap a (Nd a b));
 
 data Ty a b = TPrim b | TOptional (Ty a b) | TRecord [(a, Ty a b)];
 
-data Vexp a b = VConst b | VName a;
+data Vexp a b = VConst b | VName a | VDefault a (Vexp a b);
 
 data Expr a b = ETrue | EFalse | EEq (Vexp a b) (Vexp a b)
   | ELt (Vexp a b) (Vexp a b) | ELe (Vexp a b) (Vexp a b) | ENot (Expr a b)
@@ -569,7 +597,8 @@ data Expr a b = ETrue | EFalse | EEq (Vexp a b) (Vexp a b)
 data Tm a b c d = TMust c d | TMay c d (Expr a b) | TMustNot c d (Expr a b)
   | TThen (Tm a b c d) (Tm a b c d) | TOr (Tm a b c d) (Tm a b c d)
   | TUnless (Tm a b c d) (Expr a b) (Tm a b c d)
-  | TAnd (Tm a b c d) (Tm a b c d);
+  | TAnd (Tm a b c d) (Tm a b c d) | TIf (Expr a b) (Tm a b c d) (Tm a b c d)
+  | TSkip;
 
 data Verdict = Fulfilled | Breached Int | Pending;
 
@@ -598,7 +627,8 @@ data Sterm a b c d e = SMust c d (Maybe (Deadline a)) | SMustNot c d (Expr a b)
   | SOr (Sterm a b c d e) (Sterm a b c d e)
   | SAnd (Sterm a b c d e) (Sterm a b c d e)
   | SUnless (Sterm a b c d e) (Expr a b) (Sterm a b c d e)
-  | SOnBreach c [Baction c e];
+  | SOnBreach c [Baction c e]
+  | SIf (Expr a b) (Sterm a b c d e) (Sterm a b c d e) | SSkip | SRef Nat;
 
 data Fdecl = Fdecl String (Ty String Prim) (Maybe Int);
 
@@ -625,11 +655,11 @@ nth :: forall a. [a] -> Nat -> a;
 nth (x : xs) n =
   (if equal_nat n zero_nat then x else nth xs (minus_nat n one_nat));
 
-less_nat :: Nat -> Nat -> Bool;
-less_nat m n = integer_of_nat m < integer_of_nat n;
-
 upt :: Nat -> Nat -> [Nat];
 upt i j = (if less_nat i j then i : upt (suc i) j else []);
+
+ball :: forall a. Set a -> (a -> Bool) -> Bool;
+ball (Set xs) p = all p xs;
 
 drop :: forall a. Nat -> [a] -> [a];
 drop n [] = [];
@@ -639,6 +669,10 @@ drop n (x : xs) =
 find :: forall a. (a -> Bool) -> [a] -> Maybe a;
 find uu [] = Nothing;
 find p (x : xs) = (if p x then Just x else find p xs);
+
+fold :: forall a b. (a -> b -> b) -> [a] -> b -> b;
+fold f [] s = s;
+fold f (x : xs) s = fold f xs (f x s);
 
 last :: forall a. [a] -> a;
 last (x : xs) = (if null xs then x else last xs);
@@ -659,9 +693,24 @@ map_of ((l, v) : ps) k = (if l == k then Just v else map_of ps k);
 of_int :: Int -> Rat;
 of_int a = Frct (a, one_int);
 
-member :: forall a. (Eq a) => [a] -> a -> Bool;
-member [] y = False;
-member (x : xs) y = x == y || member xs y;
+removeAll :: forall a. (Eq a) => a -> [a] -> [a];
+removeAll x [] = [];
+removeAll x (y : xs) = (if x == y then removeAll x xs else y : removeAll x xs);
+
+membera :: forall a. (Eq a) => [a] -> a -> Bool;
+membera [] y = False;
+membera (x : xs) y = x == y || membera xs y;
+
+inserta :: forall a. (Eq a) => a -> [a] -> [a];
+inserta x xs = (if membera xs x then xs else x : xs);
+
+insert :: forall a. (Eq a) => a -> Set a -> Set a;
+insert x (Set xs) = Set (inserta x xs);
+insert x (Coset xs) = Coset (removeAll x xs);
+
+member :: forall a. (Eq a) => a -> Set a -> Bool;
+member x (Set xs) = membera xs x;
+member x (Coset xs) = not (membera xs x);
 
 bind :: forall a b. Maybe a -> (a -> Maybe b) -> Maybe b;
 bind Nothing f = Nothing;
@@ -669,7 +718,7 @@ bind (Just x) f = f x;
 
 distinct :: forall a. (Eq a) => [a] -> Bool;
 distinct [] = True;
-distinct (x : xs) = not (member xs x) && distinct xs;
+distinct (x : xs) = not (membera xs x) && distinct xs;
 
 fmlookup :: forall a b. (Eq a) => Fmap a b -> a -> Maybe b;
 fmlookup (Fmap_of_list m) = map_of m;
@@ -717,6 +766,9 @@ binds s (SOr v va) = False;
 binds s (SAnd v va) = False;
 binds s (SUnless v va vb) = False;
 binds s (SOnBreach v va) = False;
+binds s (SIf v va vb) = False;
+binds s SSkip = False;
+binds s (SRef v) = False;
 
 bound_to ::
   forall a b c d e. (Eq c) => [Sterm a b c d e] -> Nat -> c -> Maybe Nat;
@@ -736,6 +788,9 @@ handler_of blk i =
                        SAnd _ _ -> False;
                        SUnless _ _ _ -> False;
                        SOnBreach s _ -> bound_to blk k s == Just i;
+                       SIf _ _ _ -> False;
+                       SSkip -> False;
+                       SRef _ -> False;
                      }))
           (upt zero_nat (size_list blk))
     of {
@@ -749,6 +804,9 @@ handler_of blk i =
                 SAnd _ _ -> [];
                 SUnless _ _ _ -> [];
                 SOnBreach _ acts -> acts;
+                SIf _ _ _ -> [];
+                SSkip -> [];
+                SRef _ -> [];
               });
   });
 
@@ -771,12 +829,19 @@ cont_free_prohibitions blk =
           SAnd _ _ -> True;
           SUnless _ _ _ -> True;
           SOnBreach _ _ -> True;
+          SIf _ _ _ -> True;
+          SSkip -> True;
+          SRef _ -> True;
         }))
     (upt zero_nat (size_list blk));
 
 evalV :: forall a b. Vexp a b -> (a -> Maybe b) -> Maybe b;
 evalV (VConst v) sigma = Just v;
 evalV (VName x) sigma = sigma x;
+evalV (VDefault x a) sigma = (case sigma x of {
+                               Nothing -> evalV a sigma;
+                               Just aa -> Just aa;
+                             });
 
 knot :: Maybe Bool -> Maybe Bool;
 knot (Just b) = Just (not b);
@@ -852,10 +917,13 @@ deadlines (SThen t u) = deadlines t ++ deadlines u;
 deadlines (SOr t u) = deadlines t ++ deadlines u;
 deadlines (SAnd t u) = deadlines t ++ deadlines u;
 deadlines (SUnless t c u) = deadlines t ++ deadlines u;
+deadlines (SIf c t u) = deadlines t ++ deadlines u;
 deadlines (SMust v va Nothing) = [];
 deadlines (SMustNot v va vb) = [];
 deadlines (SMay v va vb) = [];
 deadlines (SOnBreach v va) = [];
+deadlines SSkip = [];
+deadlines (SRef v) = [];
 
 plus_int :: Int -> Int -> Int;
 plus_int k l = Int_of_integer (integer_of_int k + integer_of_int l);
@@ -894,6 +962,9 @@ handler_bound blk i = (case nth blk i of {
                         SAnd _ _ -> Nothing;
                         SUnless _ _ _ -> Nothing;
                         SOnBreach s _ -> Just (bound_to blk i s);
+                        SIf _ _ _ -> Nothing;
+                        SSkip -> Nothing;
+                        SRef _ -> Nothing;
                       });
 
 has_handler :: forall a b c d e. Sterm a b c d e -> Bool;
@@ -902,12 +973,12 @@ has_handler (SThen t u) = has_handler t || has_handler u;
 has_handler (SOr t u) = has_handler t || has_handler u;
 has_handler (SAnd t u) = has_handler t || has_handler u;
 has_handler (SUnless t c u) = has_handler t || has_handler u;
+has_handler (SIf c t u) = has_handler t || has_handler u;
 has_handler (SMust v va vb) = False;
 has_handler (SMustNot v va vb) = False;
 has_handler (SMay v va vb) = False;
-
-less_eq_nat :: Nat -> Nat -> Bool;
-less_eq_nat m n = integer_of_nat m <= integer_of_nat n;
+has_handler SSkip = False;
+has_handler (SRef v) = False;
 
 wf_actions :: forall a b. [Baction a b] -> Bool;
 wf_actions acts =
@@ -933,6 +1004,9 @@ wf_block blk =
           SUnless _ _ _ -> not (has_handler (nth blk i));
           SOnBreach s acts ->
             wf_actions acts && not (is_none (bound_to blk i s));
+          SIf _ _ _ -> not (has_handler (nth blk i));
+          SSkip -> not (has_handler (nth blk i));
+          SRef _ -> not (has_handler (nth blk i));
         }))
     (upt zero_nat (size_list blk)) &&
     distinct
@@ -1027,32 +1101,6 @@ handle_breach tau_0 s a d acts pi =
       SBreached tau_b (continue_after tau_0 s a d tau_b (cont_of acts) pi);
     Pending -> SPending;
   });
-
-to_tm :: forall a b c d e. Sterm a b c d e -> Maybe (Tm a b c d);
-to_tm (SMust s a d) = Just (TMust s a);
-to_tm (SMustNot s a c) = Just (TMustNot s a c);
-to_tm (SMay s a c) = Just (TMay s a c);
-to_tm (SThen t u) = (case (to_tm t, to_tm u) of {
-                      (Nothing, _) -> Nothing;
-                      (Just _, Nothing) -> Nothing;
-                      (Just ta, Just ua) -> Just (TThen ta ua);
-                    });
-to_tm (SOr t u) = (case (to_tm t, to_tm u) of {
-                    (Nothing, _) -> Nothing;
-                    (Just _, Nothing) -> Nothing;
-                    (Just ta, Just ua) -> Just (TOr ta ua);
-                  });
-to_tm (SAnd t u) = (case (to_tm t, to_tm u) of {
-                     (Nothing, _) -> Nothing;
-                     (Just _, Nothing) -> Nothing;
-                     (Just ta, Just ua) -> Just (TAnd ta ua);
-                   });
-to_tm (SUnless t c u) = (case (to_tm t, to_tm u) of {
-                          (Nothing, _) -> Nothing;
-                          (Just _, Nothing) -> Nothing;
-                          (Just ta, Just ua) -> Just (TUnless ta c ua);
-                        });
-to_tm (SOnBreach s acts) = Nothing;
 
 equal_outcome :: Outcome -> Outcome -> Bool;
 equal_outcome Interrupted Violated = False;
@@ -1159,6 +1207,12 @@ mem3 (TUnless t c u) pi r =
                    else Just False))
             (upt zero_nat (size_list pi))));
 mem3 (TAnd t u) pi r = Nothing;
+mem3 (TIf c t u) pi r =
+  (if null pi then Just False
+    else (if eval c (st pi zero_nat) == Just True then mem3 t pi r
+           else mem3 u pi r));
+mem3 TSkip pi r =
+  Just (equal_outcome r Done && equal_nat (size_list pi) one_nat);
 
 ext3 ::
   forall a b c d e.
@@ -1179,13 +1233,16 @@ ext3 (TThen t u) rho =
             (upt zero_nat (size_list rho))));
 ext3 (TUnless t c u) rho = (if not (is_trace rho) then Just False else Nothing);
 ext3 (TAnd t u) rho = Nothing;
+ext3 (TIf c t u) rho =
+  (if eval c (st rho zero_nat) == Just True then ext3 t rho else ext3 u rho);
+ext3 TSkip rho = Just False;
 
 composite_line ::
   Nat ->
-    Sterm [String] Atom String String Atom ->
+    Maybe (Tm [String] Atom String String) ->
       [([String] -> Maybe Atom, (Int, Event [String] String String))] -> Line;
 composite_line n t pi =
-  (case to_tm t of {
+  (case t of {
     Nothing -> LComposite n Nothing Nothing Nothing;
     Just u ->
       LComposite n (mem3 u pi Done) (mem3 u pi Interrupted)
@@ -1258,6 +1315,52 @@ time_of (ABool v) = Nothing;
 time_of (ANum v) = Nothing;
 time_of (AStr v) = Nothing;
 
+to_tm_env ::
+  forall a b c d e.
+    [Maybe (Tm a b c d)] -> Sterm a b c d e -> Maybe (Tm a b c d);
+to_tm_env gamma (SMust s a d) = Just (TMust s a);
+to_tm_env gamma (SMustNot s a c) = Just (TMustNot s a c);
+to_tm_env gamma (SMay s a c) = Just (TMay s a c);
+to_tm_env gamma (SThen t u) = (case (to_tm_env gamma t, to_tm_env gamma u) of {
+                                (Nothing, _) -> Nothing;
+                                (Just _, Nothing) -> Nothing;
+                                (Just ta, Just ua) -> Just (TThen ta ua);
+                              });
+to_tm_env gamma (SOr t u) = (case (to_tm_env gamma t, to_tm_env gamma u) of {
+                              (Nothing, _) -> Nothing;
+                              (Just _, Nothing) -> Nothing;
+                              (Just ta, Just ua) -> Just (TOr ta ua);
+                            });
+to_tm_env gamma (SAnd t u) = (case (to_tm_env gamma t, to_tm_env gamma u) of {
+                               (Nothing, _) -> Nothing;
+                               (Just _, Nothing) -> Nothing;
+                               (Just ta, Just ua) -> Just (TAnd ta ua);
+                             });
+to_tm_env gamma (SUnless t c u) =
+  (case (to_tm_env gamma t, to_tm_env gamma u) of {
+    (Nothing, _) -> Nothing;
+    (Just _, Nothing) -> Nothing;
+    (Just ta, Just ua) -> Just (TUnless ta c ua);
+  });
+to_tm_env gamma (SIf c t u) = (case (to_tm_env gamma t, to_tm_env gamma u) of {
+                                (Nothing, _) -> Nothing;
+                                (Just _, Nothing) -> Nothing;
+                                (Just ta, Just ua) -> Just (TIf c ta ua);
+                              });
+to_tm_env gamma SSkip = Just TSkip;
+to_tm_env gamma (SRef k) =
+  (if less_nat k (size_list gamma) then nth gamma k else Nothing);
+to_tm_env gamma (SOnBreach s acts) = Nothing;
+
+benv_from ::
+  forall a b c d e.
+    [Maybe (Tm a b c d)] -> [Sterm a b c d e] -> [Maybe (Tm a b c d)];
+benv_from gamma [] = gamma;
+benv_from gamma (t : ts) = benv_from (gamma ++ [to_tm_env gamma t]) ts;
+
+benv :: forall a b c d e. [Sterm a b c d e] -> [Maybe (Tm a b c d)];
+benv blk = benv_from [] blk;
+
 term_line ::
   Int ->
     ([String] -> Maybe Atom) ->
@@ -1282,11 +1385,14 @@ term_line tau_0 sigma_0 blk pi i =
                         v = pr_verdict s a c pi;
                       } in LMustNot (suc i) s a v (pr_actions blk i v);
     SMay s a c -> LMay (suc i) s a (may_verdict s a c pi);
-    SThen _ _ -> composite_line (suc i) (nth blk i) pi;
-    SOr _ _ -> composite_line (suc i) (nth blk i) pi;
-    SAnd _ _ -> composite_line (suc i) (nth blk i) pi;
-    SUnless _ _ _ -> composite_line (suc i) (nth blk i) pi;
+    SThen _ _ -> composite_line (suc i) (nth (benv blk) i) pi;
+    SOr _ _ -> composite_line (suc i) (nth (benv blk) i) pi;
+    SAnd _ _ -> composite_line (suc i) (nth (benv blk) i) pi;
+    SUnless _ _ _ -> composite_line (suc i) (nth (benv blk) i) pi;
     SOnBreach s _ -> LOnBreach (suc i) s (map_option suc (bound_to blk i s));
+    SIf _ _ _ -> composite_line (suc i) (nth (benv blk) i) pi;
+    SSkip -> composite_line (suc i) (nth (benv blk) i) pi;
+    SRef _ -> composite_line (suc i) (nth (benv blk) i) pi;
   });
 
 raw_trace ::
@@ -1385,6 +1491,43 @@ ill_typed fs obs =
       (concatMap (\ j -> map (\ a -> (j, a)) fs)
         (upt zero_nat (size_list obs))));
 
+all_interval :: forall a. (Eq a, Interval a) => (a -> Bool) -> a -> a -> Bool;
+all_interval p a b =
+  (if less a b then p a && all_interval p (plus a one) b else True) &&
+    (if a == b then p a else True);
+
+sup_set :: forall a. (Eq a) => Set a -> Set a -> Set a;
+sup_set (Set xs) a = fold insert xs a;
+sup_set (Coset xs) a = Coset (filter (\ x -> not (member x a)) xs);
+
+bot_set :: forall a. Set a;
+bot_set = Set [];
+
+refs :: forall a b c d e. Sterm a b c d e -> Set Nat;
+refs (SRef k) = insert k bot_set;
+refs (SThen t u) = sup_set (refs t) (refs u);
+refs (SOr t u) = sup_set (refs t) (refs u);
+refs (SAnd t u) = sup_set (refs t) (refs u);
+refs (SUnless t c u) = sup_set (refs t) (refs u);
+refs (SIf c t u) = sup_set (refs t) (refs u);
+refs (SMust v va vb) = bot_set;
+refs (SMustNot v va vb) = bot_set;
+refs (SMay v va vb) = bot_set;
+refs (SOnBreach v va) = bot_set;
+refs SSkip = bot_set;
+
+refs_ok :: forall a b c d e. [Sterm a b c d e] -> Bool;
+refs_ok blk =
+  let {
+    d = minus_nat (size_list blk) one_nat;
+  } in (if less_nat d (size_list blk)
+         then all_interval
+                (\ i ->
+                  ball (refs (nth blk i))
+                    (\ k -> less_nat k i && not (has_handler (nth blk k))))
+                zero_nat d
+         else True);
+
 fd_age :: Fdecl -> Maybe Int;
 fd_age (Fdecl f t m) = m;
 
@@ -1441,7 +1584,9 @@ run sp obs =
       } in (if null obs || not (activates time_of tau_0 sigma_0 blk)
              then [LActivation False]
              else LActivation True :
-                    (if not (wf_block blk) || not (cont_free_prohibitions blk)
+                    (if not (wf_block blk) ||
+                          (not (cont_free_prohibitions blk) ||
+                            not (refs_ok blk))
                       then [LBlock False]
                       else LBlock True :
                              (case ill_typed fs obs of {

@@ -419,7 +419,9 @@ section \<open>Terms of a TERMS block and the binding of ON_BREACH\<close>
 
 text \<open>The surface terms of a TERMS block. A breach handler \<open>s ON_BREACH acts\<close> is allowed
   only at the top level of the block, and it is bound to the nearest preceding obligation
-  or prohibition of the same subject at the top level.\<close>
+  or prohibition of the same subject at the top level. \<open>SIf c t u\<close> is a conditional
+  term (IF/ELIF/ELSE and WHEN; a missing ELSE is \<open>SSkip\<close>), and \<open>SRef k\<close> is a reference
+  \<open>REF name\<close> to the named term declared as the element \<open>k\<close> of the block, counted from 0.\<close>
 
 datatype ('n, 'v, 's, 'a, 'p) sterm =
     SMust 's 'a "'n deadline option"
@@ -430,6 +432,9 @@ datatype ('n, 'v, 's, 'a, 'p) sterm =
   | SAnd "('n, 'v, 's, 'a, 'p) sterm" "('n, 'v, 's, 'a, 'p) sterm"
   | SUnless "('n, 'v, 's, 'a, 'p) sterm" "('n, 'v) expr" "('n, 'v, 's, 'a, 'p) sterm"
   | SOnBreach 's "('s, 'p) baction list"
+  | SIf "('n, 'v) expr" "('n, 'v, 's, 'a, 'p) sterm" "('n, 'v, 's, 'a, 'p) sterm"
+  | SSkip
+  | SRef nat
 
 fun has_handler :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> bool" where
   "has_handler (SOnBreach s acts) = True"
@@ -437,6 +442,7 @@ fun has_handler :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> bool" where
 | "has_handler (SOr t u) = (has_handler t \<or> has_handler u)"
 | "has_handler (SAnd t u) = (has_handler t \<or> has_handler u)"
 | "has_handler (SUnless t c u) = (has_handler t \<or> has_handler u)"
+| "has_handler (SIf c t u) = (has_handler t \<or> has_handler u)"
 | "has_handler _ = False"
 
 fun binds :: "'s \<Rightarrow> ('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> bool" where
@@ -536,6 +542,7 @@ fun deadlines :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> 'n deadline list" whe
 | "deadlines (SOr t u) = deadlines t @ deadlines u"
 | "deadlines (SAnd t u) = deadlines t @ deadlines u"
 | "deadlines (SUnless t c u) = deadlines t @ deadlines u"
+| "deadlines (SIf c t u) = deadlines t @ deadlines u"
 | "deadlines _ = []"
 
 text \<open>A block is activated at time \<open>\<tau>\<^sub>0\<close> in state \<open>\<sigma>\<^sub>0\<close> only if every deadline in it resolves.\<close>

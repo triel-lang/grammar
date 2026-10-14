@@ -1407,21 +1407,182 @@ proof -
 qed
 
 
-subsection \<open>Composite terms\<close>
+subsection \<open>Composite terms and named terms\<close>
 
-fun to_tm :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> ('n, 'v, 's, 'a) tm option" where
-  "to_tm (SMust s a D) = Some (TMust s a)"
-| "to_tm (SMustNot s a c) = Some (TMustNot s a c)"
-| "to_tm (SMay s a c) = Some (TMay s a c)"
-| "to_tm (SThen t u) = (case (to_tm t, to_tm u) of (Some t', Some u') \<Rightarrow> Some (TThen t' u') | _ \<Rightarrow> None)"
-| "to_tm (SOr t u) = (case (to_tm t, to_tm u) of (Some t', Some u') \<Rightarrow> Some (TOr t' u') | _ \<Rightarrow> None)"
-| "to_tm (SAnd t u) = (case (to_tm t, to_tm u) of (Some t', Some u') \<Rightarrow> Some (TAnd t' u') | _ \<Rightarrow> None)"
-| "to_tm (SUnless t c u) =
-     (case (to_tm t, to_tm u) of (Some t', Some u') \<Rightarrow> Some (TUnless t' c u') | _ \<Rightarrow> None)"
-| "to_tm (SOnBreach s acts) = None"
+text \<open>A composite element is translated into a term of the core under an environment
+  \<open>\<Gamma>\<close>: \<open>\<Gamma> ! k\<close> is the term the element \<open>k\<close> of the block stands for, and \<open>REF k\<close> is
+  replaced by it. A reference outside \<open>\<Gamma>\<close> has no term.\<close>
 
-lemma to_tm_defined: "\<not> has_handler t \<Longrightarrow> to_tm t \<noteq> None"
-  by (induction t) auto
+fun refs :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> nat set" where
+  "refs (SRef k) = {k}"
+| "refs (SThen t u) = refs t \<union> refs u"
+| "refs (SOr t u) = refs t \<union> refs u"
+| "refs (SAnd t u) = refs t \<union> refs u"
+| "refs (SUnless t c u) = refs t \<union> refs u"
+| "refs (SIf c t u) = refs t \<union> refs u"
+| "refs _ = {}"
+
+fun to_tm_env ::
+    "('n, 'v, 's, 'a) tm option list \<Rightarrow> ('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> ('n, 'v, 's, 'a) tm option" where
+  "to_tm_env \<Gamma> (SMust s a D) = Some (TMust s a)"
+| "to_tm_env \<Gamma> (SMustNot s a c) = Some (TMustNot s a c)"
+| "to_tm_env \<Gamma> (SMay s a c) = Some (TMay s a c)"
+| "to_tm_env \<Gamma> (SThen t u) =
+     (case (to_tm_env \<Gamma> t, to_tm_env \<Gamma> u) of (Some t', Some u') \<Rightarrow> Some (TThen t' u') | _ \<Rightarrow> None)"
+| "to_tm_env \<Gamma> (SOr t u) =
+     (case (to_tm_env \<Gamma> t, to_tm_env \<Gamma> u) of (Some t', Some u') \<Rightarrow> Some (TOr t' u') | _ \<Rightarrow> None)"
+| "to_tm_env \<Gamma> (SAnd t u) =
+     (case (to_tm_env \<Gamma> t, to_tm_env \<Gamma> u) of (Some t', Some u') \<Rightarrow> Some (TAnd t' u') | _ \<Rightarrow> None)"
+| "to_tm_env \<Gamma> (SUnless t c u) =
+     (case (to_tm_env \<Gamma> t, to_tm_env \<Gamma> u) of (Some t', Some u') \<Rightarrow> Some (TUnless t' c u') | _ \<Rightarrow> None)"
+| "to_tm_env \<Gamma> (SIf c t u) =
+     (case (to_tm_env \<Gamma> t, to_tm_env \<Gamma> u) of (Some t', Some u') \<Rightarrow> Some (TIf c t' u') | _ \<Rightarrow> None)"
+| "to_tm_env \<Gamma> SSkip = Some TSkip"
+| "to_tm_env \<Gamma> (SRef k) = (if k < length \<Gamma> then \<Gamma> ! k else None)"
+| "to_tm_env \<Gamma> (SOnBreach s acts) = None"
+
+lemma to_tm_defined:
+  "\<not> has_handler t \<Longrightarrow> (\<And>k. k \<in> refs t \<Longrightarrow> k < length \<Gamma> \<and> \<Gamma> ! k \<noteq> None) \<Longrightarrow> to_tm_env \<Gamma> t \<noteq> None"
+  by (induction t) (auto split: option.splits)
+
+text \<open>The environment of a block is built from left to right: the element \<open>i\<close> is
+  translated under the terms of the elements before it.\<close>
+
+fun benv_from :: "('n, 'v, 's, 'a) tm option list \<Rightarrow> ('n, 'v, 's, 'a, 'p) sterm list
+    \<Rightarrow> ('n, 'v, 's, 'a) tm option list" where
+  "benv_from \<Gamma> [] = \<Gamma>"
+| "benv_from \<Gamma> (t # ts) = benv_from (\<Gamma> @ [to_tm_env \<Gamma> t]) ts"
+
+definition benv :: "('n, 'v, 's, 'a, 'p) sterm list \<Rightarrow> ('n, 'v, 's, 'a) tm option list" where
+  "benv blk = benv_from [] blk"
+
+lemma benv_from_length: "length (benv_from \<Gamma> ts) = length \<Gamma> + length ts"
+  by (induction ts arbitrary: \<Gamma>) auto
+
+lemma benv_from_take: "take (length \<Gamma>) (benv_from \<Gamma> ts) = \<Gamma>"
+proof (induction ts arbitrary: \<Gamma>)
+  case (Cons t ts)
+  have "take (length \<Gamma>) (benv_from \<Gamma> (t # ts))
+      = take (length \<Gamma>) (take (length (\<Gamma> @ [to_tm_env \<Gamma> t])) (benv_from (\<Gamma> @ [to_tm_env \<Gamma> t]) ts))"
+    by (simp add: min_def)
+  also have "\<dots> = \<Gamma>" by (simp only: Cons.IH) simp
+  finally show ?case .
+qed simp
+
+lemma benv_from_nth:
+  "i < length ts \<Longrightarrow>
+     benv_from \<Gamma> ts ! (length \<Gamma> + i) = to_tm_env (take (length \<Gamma> + i) (benv_from \<Gamma> ts)) (ts ! i)"
+proof (induction ts arbitrary: \<Gamma> i)
+  case (Cons t ts)
+  let ?\<Gamma> = "\<Gamma> @ [to_tm_env \<Gamma> t]"
+  show ?case
+  proof (cases i)
+    case 0
+    have "benv_from ?\<Gamma> ts ! length \<Gamma> = take (length ?\<Gamma>) (benv_from ?\<Gamma> ts) ! length \<Gamma>"
+      by (simp add: benv_from_length)
+    also have "\<dots> = to_tm_env \<Gamma> t" by (simp only: benv_from_take) simp
+    finally have a: "benv_from ?\<Gamma> ts ! length \<Gamma> = to_tm_env \<Gamma> t" .
+    have "take (length \<Gamma>) (benv_from ?\<Gamma> ts) = take (length \<Gamma>) (take (length ?\<Gamma>) (benv_from ?\<Gamma> ts))"
+      by (simp add: min_def)
+    also have "\<dots> = \<Gamma>" by (simp only: benv_from_take) simp
+    finally have b: "take (length \<Gamma>) (benv_from ?\<Gamma> ts) = \<Gamma>" .
+    from a b 0 show ?thesis by simp
+  next
+    case (Suc j)
+    with Cons.prems have "j < length ts" by simp
+    from Cons.IH[OF this, of ?\<Gamma>] Suc show ?thesis by simp
+  qed
+qed simp
+
+lemma benv_length: "length (benv blk) = length blk"
+  by (simp add: benv_def benv_from_length)
+
+lemma benv_nth: "i < length blk \<Longrightarrow> benv blk ! i = to_tm_env (take i (benv blk)) (blk ! i)"
+  using benv_from_nth[of i blk "[]"] by (simp add: benv_def)
+
+text \<open>The references of a block are well formed if every \<open>REF\<close> in the element \<open>i\<close> names
+  an element \<open>k < i\<close> declared before it, and that element is a term, not a breach handler.
+  The translator rejects an undeclared name and a name declared later; a cycle of
+  references needs a reference to a later element, so it is rejected too.\<close>
+
+definition refs_ok :: "('n, 'v, 's, 'a, 'p) sterm list \<Rightarrow> bool" where
+  "refs_ok blk \<longleftrightarrow> (\<forall>i < length blk. \<forall>k \<in> refs (blk ! i). k < i \<and> \<not> has_handler (blk ! k))"
+
+definition ref_graph :: "('n, 'v, 's, 'a, 'p) sterm list \<Rightarrow> (nat \<times> nat) set" where
+  "ref_graph blk = {(k, i). i < length blk \<and> k \<in> refs (blk ! i)}"
+
+theorem refs_forward_rejected:
+  "i < length blk \<Longrightarrow> k \<in> refs (blk ! i) \<Longrightarrow> i \<le> k \<Longrightarrow> \<not> refs_ok blk"
+  unfolding refs_ok_def by fastforce
+
+theorem refs_ok_acyclic: "refs_ok blk \<Longrightarrow> wf (ref_graph blk)"
+proof -
+  assume ok: "refs_ok blk"
+  have "ref_graph blk \<subseteq> less_than"
+    using ok unfolding refs_ok_def ref_graph_def by auto
+  then show ?thesis by (rule wf_subset[OF wf_less_than])
+qed
+
+theorem refs_no_cycle: "refs_ok blk \<Longrightarrow> (i, i) \<notin> (ref_graph blk)\<^sup>+"
+  using wf_acyclic[OF refs_ok_acyclic] unfolding acyclic_def by blast
+
+theorem benv_defined:
+  assumes "refs_ok blk" and "i < length blk" and "\<not> has_handler (blk ! i)"
+  shows "benv blk ! i \<noteq> None"
+  using assms(2,3)
+proof (induction i rule: less_induct)
+  case (less i)
+  have "to_tm_env (take i (benv blk)) (blk ! i) \<noteq> None"
+  proof (rule to_tm_defined[OF less.prems(2)])
+    fix k assume k: "k \<in> refs (blk ! i)"
+    with assms(1) less.prems(1) have "k < i" and h: "\<not> has_handler (blk ! k)"
+      unfolding refs_ok_def by auto
+    with less.prems(1) less.IH[of k] h
+    show "k < length (take i (benv blk)) \<and> take i (benv blk) ! k \<noteq> None"
+      by (simp add: benv_length)
+  qed
+  with benv_nth[OF less.prems(1)] show ?case by simp
+qed
+
+context term_semantics
+begin
+
+text \<open>The reference semantics of an element of a block: \<open>D ! k\<close> is the denotation of the
+  element \<open>k\<close>, and \<open>REF k\<close> denotes it.\<close>
+
+fun sden :: "('n, 'v, 't, 's, 'a) den option list \<Rightarrow> ('n, 'v, 's, 'a, 'p) sterm
+    \<Rightarrow> ('n, 'v, 't, 's, 'a) den option" where
+  "sden D (SMust s a d) = Some (must_d s a)"
+| "sden D (SMustNot s a c) = Some (mustnot_d s a c)"
+| "sden D (SMay s a c) = Some (may_d s a c)"
+| "sden D (SThen t u) = (case (sden D t, sden D u) of (Some x, Some y) \<Rightarrow> Some (then_d x y) | _ \<Rightarrow> None)"
+| "sden D (SOr t u) = (case (sden D t, sden D u) of (Some x, Some y) \<Rightarrow> Some (or_d x y) | _ \<Rightarrow> None)"
+| "sden D (SAnd t u) = (case (sden D t, sden D u) of (Some x, Some y) \<Rightarrow> Some (and_d x y) | _ \<Rightarrow> None)"
+| "sden D (SUnless t c u) =
+     (case (sden D t, sden D u) of (Some x, Some y) \<Rightarrow> Some (unless_d x c y) | _ \<Rightarrow> None)"
+| "sden D (SIf c t u) = (case (sden D t, sden D u) of (Some x, Some y) \<Rightarrow> Some (if_d c x y) | _ \<Rightarrow> None)"
+| "sden D SSkip = Some skip_d"
+| "sden D (SRef k) = (if k < length D then D ! k else None)"
+| "sden D (SOnBreach s acts) = None"
+
+text \<open>Substitution preserves the denotation: the term obtained by replacing every
+  \<open>REF k\<close> by the term of the element \<open>k\<close> denotes what the reference semantics gives.\<close>
+
+theorem resolve_den: "map_option den (to_tm_env \<Gamma> t) = sden (map (map_option den) \<Gamma>) t"
+  by (induction t) (auto split: option.splits, (metis)+)
+
+theorem block_den:
+  "i < length blk \<Longrightarrow>
+     map_option den (benv blk ! i) = sden (map (map_option den) (take i (benv blk))) (blk ! i)"
+  by (simp add: benv_nth resolve_den)
+
+text \<open>A resolved element is a term of the core, so its denotation is total and the laws
+  of UNLESS apply to it without conditions.\<close>
+
+theorem benv_total: "benv blk ! i = Some u \<Longrightarrow> total (den u)"
+  by (rule den_total)
+
+end
 
 
 subsection \<open>The report\<close>
@@ -1481,9 +1642,9 @@ proof -
     by (simp add: pr_actions_def)
 qed
 
-definition composite_line :: "nat \<Rightarrow> cterm \<Rightarrow> ctrace \<Rightarrow> line" where
+definition composite_line :: "nat \<Rightarrow> (path, atom, name, name) tm option \<Rightarrow> ctrace \<Rightarrow> line" where
   "composite_line n t \<pi> =
-     (case to_tm t of
+     (case t of
         None \<Rightarrow> LComposite n None None None
       | Some u \<Rightarrow> LComposite n (mem3 u \<pi> Done) (mem3 u \<pi> Interrupted) (mem3 u \<pi> Violated))"
 
@@ -1502,7 +1663,7 @@ definition term_line :: "int \<Rightarrow> (path, atom) state \<Rightarrow> cter
           (let v = pr_verdict s a c \<pi> in LMustNot (Suc i) s a v (pr_actions blk i v))
       | SMay s a c \<Rightarrow> LMay (Suc i) s a (may_verdict s a c \<pi>)
       | SOnBreach s acts \<Rightarrow> LOnBreach (Suc i) s (map_option Suc (bound_to blk i s))
-      | _ \<Rightarrow> composite_line (Suc i) (blk ! i) \<pi>)"
+      | _ \<Rightarrow> composite_line (Suc i) (benv blk ! i) \<pi>)"
 
 text \<open>The evaluator. Activation is checked first, in the blocked state of entry 0 at the
   time of entry 0; then the well-formedness of the block, with only informational actions
@@ -1515,7 +1676,7 @@ definition run :: "spec \<Rightarrow> observation list \<Rightarrow> line list" 
         (let \<pi> = btrace (max_age fs) (raw_trace obs); \<tau>\<^sub>0 = time \<pi> 0; \<sigma>\<^sub>0 = st \<pi> 0 in
          if obs = [] \<or> \<not> activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 blk then [LActivation False]
          else LActivation True #
-           (if \<not> wf_block blk \<or> \<not> cont_free_prohibitions blk then [LBlock False]
+           (if \<not> wf_block blk \<or> \<not> cont_free_prohibitions blk \<or> \<not> refs_ok blk then [LBlock False]
             else LBlock True #
               (case ill_typed fs obs of
                  Some e \<Rightarrow> [LTypes (Some e)]
@@ -1530,9 +1691,9 @@ text \<open>A composite line reports \<open>mem3\<close> on the blocked trace. B
 subsection \<open>Export\<close>
 
 export_code run Spec Fdecl
-  SMust SMustNot SMay SThen SOr SAnd SUnless SOnBreach DAt DAfter DFactor
+  SMust SMustNot SMay SThen SOr SAnd SUnless SOnBreach SIf SSkip SRef DAt DAfter DFactor
   Notify Penalty Terminate CureBy EscalateTo
-  ETrue EFalse EEq ELt ELe ENot EAnd EOr EImp EPresent VConst VName
+  ETrue EFalse EEq ELt ELe ENot EAnd EOr EImp EPresent VConst VName VDefault
   Always Eventually Next TPrim TOptional TRecord PBool PInt PDec PStr PTime
   ABool ANum AStr ATime dec_atom quotient_of Atom Nom fmap_of_list Deontic Arrival Tick
   Must May MustNot
