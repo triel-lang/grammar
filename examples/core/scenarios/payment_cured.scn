@@ -1,0 +1,21 @@
+; The tenant pays before the window opens on 2026-03-01: that payment does not
+; count. Nothing is paid by the deadline 2026-03-11, ten days after FROM, and
+; the entry of 2026-03-12 establishes the breach. The penalty is read in the
+; entry before it, where the arrears are 1200.00: 1200.00 * 0.1 + 50 = 170,
+; below the cap. A payment of 1000 has other arguments and does not cure; the
+; payment of 1200.00 on 2026-03-14 is the same action as pay(landlord, 1200)
+; and cures within five days.
+(scenario payment_cured
+  (spec "examples/core/core_payment.triel")
+  (entry "2026-02-25T00:00:00Z" (activate)
+    (data (rent (dec 1200.00)) (notice_given (bool true))))
+  (entry "2026-02-27T00:00:00Z" (act tenant (pay (name landlord) (int 1200)) must)
+    (data (rent (dec 1200.00)) (notice_given (bool true))))
+  (entry "2026-03-10T12:00:00Z" (tick)
+    (data (arrears (dec 1200.00)) (rent (dec 1200.00)) (notice_given (bool true))))
+  (entry "2026-03-12T00:00:00Z" (tick)
+    (data (arrears (dec 2400.00)) (rent (dec 1200.00)) (notice_given (bool true))))
+  (entry "2026-03-13T00:00:00Z" (act tenant (pay (name landlord) (int 1000)) must)
+    (data (arrears (dec 2400.00)) (rent (dec 1200.00)) (notice_given (bool true))))
+  (entry "2026-03-14T00:00:00Z" (act tenant (pay (name landlord) (dec 1200.00)) must)
+    (data (rent (dec 1200.00)) (notice_given (bool true)))))

@@ -1,0 +1,10 @@
+; A negative rent gives a negative penalty, -150.00 * 2 = -300: it violates
+; the rule that a penalty is not negative, and is reported as such rather
+; than as 0. The obligation is still pending: the trace ends before its
+; deadline. The rent is not positive at activation, so the invariant is false.
+(scenario payment_negative
+  (spec "examples/core/core_payment.triel")
+  (entry "2026-02-25T00:00:00Z" (activate)
+    (data (rent (dec -150.00)) (notice_given (bool false))))
+  (entry "2026-03-01T00:00:00Z" (act landlord (enter (name tenant)) must_not)
+    (data (rent (dec -150.00)) (notice_given (bool false)))))

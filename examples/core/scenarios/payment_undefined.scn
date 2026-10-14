@@ -1,0 +1,16 @@
+; The rent is unknown. The landlord enters without notice on 2026-03-01: the
+; prohibition is breached, and its penalty rent * 2 has no value. Nothing is
+; paid; the entry of 2026-03-12 establishes the breach of the obligation, and
+; the penalty is read in the entry of 2026-03-01, where the arrears are absent:
+; DEFAULT(arrears, 0) * 0.1 + 50 = 50. The cure window closes on 2026-03-16
+; without a payment.
+(scenario payment_undefined
+  (spec "examples/core/core_payment.triel")
+  (entry "2026-02-25T00:00:00Z" (activate)
+    (data (notice_given (bool false))))
+  (entry "2026-03-01T00:00:00Z" (act landlord (enter (name tenant)) must_not)
+    (data (notice_given (bool false))))
+  (entry "2026-03-12T00:00:00Z" (tick)
+    (data (arrears (dec 1200.00)) (notice_given (bool false))))
+  (entry "2026-03-17T00:00:00Z" (tick)
+    (data (arrears (dec 1200.00)) (notice_given (bool false)))))

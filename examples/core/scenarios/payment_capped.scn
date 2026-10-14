@@ -1,0 +1,22 @@
+; The landlord enters on 2026-03-02, when notice was given: no breach. Notice
+; is withdrawn, and the entry on 2026-03-04 breaches the prohibition. The
+; penalty is read in the state before that action: rent * 2 = 2400.00, capped
+; at 1000. The tenant pays within the window. Subletting "flat" is another
+; action than sublet("room") and does not exercise the permission; subletting
+; "room" with rent at 1200.00 does.
+(scenario payment_capped
+  (spec "examples/core/core_payment.triel")
+  (entry "2026-02-25T00:00:00Z" (activate)
+    (data (rent (dec 1200.00)) (notice_given (bool true))))
+  (entry "2026-03-02T00:00:00Z" (act landlord (enter (name tenant)) must_not)
+    (data (rent (dec 1200.00)) (notice_given (bool true))))
+  (entry "2026-03-03T00:00:00Z" (tick)
+    (data (rent (dec 1200.00)) (notice_given (bool false))))
+  (entry "2026-03-04T00:00:00Z" (act landlord (enter (name tenant)) must_not)
+    (data (rent (dec 1200.00)) (notice_given (bool false))))
+  (entry "2026-03-05T00:00:00Z" (act tenant (pay (name landlord) (int 1200)) must)
+    (data (rent (dec 1200.00)) (notice_given (bool false))))
+  (entry "2026-03-05T12:00:00Z" (act tenant (sublet (str "flat")) may)
+    (data (rent (dec 1200.00)) (notice_given (bool false))))
+  (entry "2026-03-06T00:00:00Z" (act tenant (sublet (str "room")) may)
+    (data (rent (dec 1200.00)) (notice_given (bool false)))))

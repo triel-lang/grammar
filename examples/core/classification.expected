@@ -1,19 +1,20 @@
-examples/age_verification.triel: REJECTED: CURVE; PROOF_SYSTEM; ZK type; action arguments
+examples/age_verification.triel: REJECTED: CURVE; PROOF_SYSTEM; ZK type
 examples/core/core_conditional.triel: ACCEPTED
 examples/core/core_deadline_cure.triel: ACCEPTED
 examples/core/core_numbers.triel: ACCEPTED
+examples/core/core_payment.triel: ACCEPTED
 examples/core/core_prohibition_handler.triel: ACCEPTED
 examples/core/core_stale_block.triel: ACCEPTED
 examples/core/core_unless_records.triel: ACCEPTED
-examples/delivery_agreement.triel: REJECTED: CAP; PENALTY expression; POLARITY; THRESHOLD
-examples/eudi/eudi_driving_license.triel: REJECTED: CURVE; DID; PROOF_SYSTEM; ZK type; action arguments; type Hash
+examples/delivery_agreement.triel: REJECTED: POLARITY; THRESHOLD
+examples/eudi/eudi_driving_license.triel: REJECTED: CURVE; DID; PROOF_SYSTEM; ZK type; type Hash
 examples/hello_triel.triel: ACCEPTED
 examples/semantics/absence_default.triel: ACCEPTED
 examples/semantics/deadline_without_else.triel: ACCEPTED
 examples/semantics/execute_renaming.triel: REJECTED: EXECUTE
 examples/semantics/nested_naming.triel: ACCEPTED
 examples/semantics/nominative_path.triel: ACCEPTED
-examples/semantics/obligation_deadline.triel: REJECTED: FROM; action arguments
+examples/semantics/obligation_deadline.triel: ACCEPTED
 examples/semantics/prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations
 examples/semantics/sequence_unless.triel: ACCEPTED
 examples/semantics/stale_kleene.triel: ACCEPTED
