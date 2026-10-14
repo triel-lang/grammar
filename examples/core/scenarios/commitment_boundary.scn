@@ -1,0 +1,14 @@
+; The supplier confirms on the first day. The goods are delivered exactly ten
+; days after activation: an entry at the deadline counts, so delivered_in_time
+; is true. The promised date, 8 June, has passed by then with the goods not
+; delivered at any entry up to it, so delivered_by_promise is false.
+(scenario commitment_boundary
+  (spec "examples/core/core_commitment.triel")
+  (entry "2026-06-01T00:00:00Z" (activate)
+    (data (status (str "ordered")) (delay_days (int 0)) (promised_at (time "2026-06-08T00:00:00Z"))))
+  (entry "2026-06-02T00:00:00Z" (act supplier confirm_order must)
+    (data (status (str "ordered")) (delay_days (int 0)) (promised_at (time "2026-06-08T00:00:00Z"))))
+  (entry "2026-06-05T00:00:00Z" (arrive status)
+    (data (status (str "in_transit")) (delay_days (int 2)) (promised_at (time "2026-06-08T00:00:00Z"))))
+  (entry "2026-06-11T00:00:00Z" (arrive status)
+    (data (status (str "delivered")) (delay_days (int 3)) (promised_at (time "2026-06-08T00:00:00Z")))))

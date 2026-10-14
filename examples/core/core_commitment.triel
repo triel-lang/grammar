@@ -1,0 +1,36 @@
+-- TRIEL example inside the formal core: EVENTUALLY ... WITHIN, and the
+-- heuristic scoring layer as metadata.
+-- The deadline of EVENTUALLY(...) WITHIN d is fixed at activation: a
+-- duration counts from the activation time, and a factor is read in the
+-- activation state. The invariant is true once its condition is true at an
+-- entry up to the deadline, false once the trace is past the deadline with
+-- the condition false at every such entry, and undefined otherwise: missing
+-- data neither fulfils nor violates it. POLARITY, THRESHOLD and
+-- SENSITIVITY_BOUND have no formal semantics (TECHNICAL_REPORT.md section 4);
+-- they are printed as metadata. Every other construct in this file is
+-- translated into the Isabelle/HOL core (formal/core) and evaluated by the
+-- exported evaluator (evaluator/).
+
+SPECIFICATION core_commitment VERSION 1.0.0
+
+SUBJECTS {
+  supplier : PARTY,
+  buyer    : PARTY,
+  carrier  : ORACLE
+}
+
+TERMS {
+  supplier MUST confirm_order BY 2 DAYS
+}
+
+FACTORS {
+  status      : String METADATA SOURCE carrier,
+  delay_days  : Integer POLARITY 1.0 THRESHOLD 5 SOURCE carrier SENSITIVITY_BOUND 0.5,
+  promised_at : DateTime METADATA
+}
+
+INVARIANTS {
+  delivered_in_time    : LIVENESS : EVENTUALLY(status == "delivered") WITHIN 10 DAYS;
+  delivered_by_promise : LIVENESS : EVENTUALLY(status == "delivered") WITHIN promised_at;
+  delay_small          : SAFETY : ALWAYS(delay_days <= 5)
+}

@@ -1,0 +1,12 @@
+; No status is reported until 12 June, after both deadlines, and the supplier
+; never confirms. The status is unknown at every entry up to each deadline, so
+; neither invariant is violated: both are undefined, not false. The delay
+; reported on 12 June exceeds 5 days, so delay_small is false.
+(scenario commitment_missing_data
+  (spec "examples/core/core_commitment.triel")
+  (entry "2026-06-01T00:00:00Z" (activate)
+    (data (promised_at (time "2026-06-08T00:00:00Z"))))
+  (entry "2026-06-04T00:00:00Z" (tick)
+    (data (promised_at (time "2026-06-08T00:00:00Z"))))
+  (entry "2026-06-12T00:00:00Z" (arrive status)
+    (data (status (str "delivered")) (delay_days (int 7)) (promised_at (time "2026-06-08T00:00:00Z")))))

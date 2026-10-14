@@ -1,0 +1,8 @@
+; The promised date is not known at activation, so the deadline of
+; delivered_by_promise does not resolve and the activation is rejected.
+(scenario commitment_rejected
+  (spec "examples/core/core_commitment.triel")
+  (entry "2026-06-01T00:00:00Z" (activate)
+    (data (status (str "ordered"))))
+  (entry "2026-06-02T00:00:00Z" (act supplier confirm_order must)
+    (data (status (str "ordered")))))

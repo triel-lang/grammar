@@ -1,0 +1,13 @@
+SPEC core_commitment
+METADATA SOURCE status carrier
+METADATA POLARITY delay_days 1.0
+METADATA THRESHOLD delay_days 5
+METADATA SOURCE delay_days carrier
+METADATA SENSITIVITY_BOUND delay_days 0.5
+ACTIVATION OK
+BLOCK OK
+TYPES OK
+TERM 1 MUST supplier confirm_order DEADLINE 1780444800 : FULFILLED
+INVARIANT delivered_in_time : U
+INVARIANT delivered_by_promise : F
+INVARIANT delay_small : U

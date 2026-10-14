@@ -1,0 +1,11 @@
+; The trace ends on 9 June, in transit. The promised date has passed with the
+; goods in transit at every entry up to it, so delivered_by_promise is false.
+; The ten days have not passed yet, so delivered_in_time is still undefined.
+(scenario commitment_pending
+  (spec "examples/core/core_commitment.triel")
+  (entry "2026-06-01T00:00:00Z" (activate)
+    (data (status (str "ordered")) (promised_at (time "2026-06-08T00:00:00Z"))))
+  (entry "2026-06-02T00:00:00Z" (act supplier confirm_order must)
+    (data (status (str "ordered")) (promised_at (time "2026-06-08T00:00:00Z"))))
+  (entry "2026-06-09T00:00:00Z" (arrive status)
+    (data (status (str "in_transit")) (delay_days (int 1)) (promised_at (time "2026-06-08T00:00:00Z")))))

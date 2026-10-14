@@ -1,0 +1,7 @@
+SPEC core_commitment
+METADATA SOURCE status carrier
+METADATA POLARITY delay_days 1.0
+METADATA THRESHOLD delay_days 5
+METADATA SOURCE delay_days carrier
+METADATA SENSITIVITY_BOUND delay_days 0.5
+ACTIVATION REJECTED
