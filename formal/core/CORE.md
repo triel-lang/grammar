@@ -468,7 +468,7 @@ Points 1–14 are the points where §2.6 is ambiguous or contradictory. Points 1
 10. **ESCALATE_TO s′.** The original obligation stays breached. s′ gets a new obligation for the same action, with a window of the same length (d − τ₀) counted from the moment of transfer.
 11. **TERMINATE** closes the obligation, not the whole specification.
 12. **Only informational actions.** The obligation stays breached and is closed.
-13. **FROM … UNTIL** is not formalised.
+13. **FROM … UNTIL.** `FROM` is formalised (section 9, decision 17); `UNTIL` is not.
 14. **MAX_AGE.** An age equal to MAX_AGE is still fresh. Under USE_LAST the last value is kept and is present.
 15. **Binding target.** A handler binds to an obligation *or a prohibition* of the same subject, as §2.6 states.
 16. **One handler per norm.** At most one handler per obligation or prohibition (`wf_one_handler`).
@@ -535,6 +535,20 @@ Each decision below was made because of a theorem: either one that proves the de
     - DEFAULT(f, d) is the value of f if E_f, and the value of d otherwise (`evalV_default`).
     - DEFAULT is not monotone: on ∅ ⊑ [f ↦ v], DEFAULT(f, w) changes from w to v (`T3_default_not_monotone`), and the condition DEFAULT(f, w) = w changes its definite verdict from T to F (`default_breaks_stability`).
     - So "PRESENT-free" means free of `PRESENT` and `DEFAULT`, the two forms §2.9 excepts from monotonicity, and the comparison atoms of section 7.2 are equitone only without `DEFAULT` (`Ex_free_atom`). `verdict_stable` and `verdict_stable_nd` do not cover a condition with `DEFAULT`.
+16. **The arguments of an action are part of the action, and they are not evaluated.**
+    - `pay(bob, 100)` is the action `pay` with the argument list `bob, 100`. An event matches a norm only if its subject, action and arguments are the same; an event with other arguments, or with none, does not.
+    - A literal argument is compared by value (`100` and `100.00` are the same number). A name, of a subject or a factor, is compared as a name and its value is not read, so `submit_proof(age)` does not read the hidden `age`, as TECHNICAL_REPORT.md §2.7 requires.
+    - Every theory of sections 4–8 is generic in the type of actions, so every theorem about actions holds for actions with arguments without change.
+    - **Open question.** Should a factor in an argument stand for its value at the moment of the action?
+17. **`FROM s` opens the window of an obligation at s, and a duration in `BY` counts from s.**
+    - The window of `s MUST a BY d FROM f` is [f, d]: an action before f does not fulfil it. f is resolved at activation, like a deadline, and a factor that does not resolve rejects the activation.
+    - Without `FROM` the window and the origin of durations are those of section 8. `ESCALATE_TO` gives the new obligation a window of length d − f.
+    - `UNTIL` is not formalised: point 13 of section 8.3 stays open for it.
+18. **A penalty is computed once, in the state in which the breach occurs.**
+    - The amount of `PENALTY e CAP c` is read in the state of the entry just before the entry that establishes the breach: for a prohibition the state before the forbidden action, for an obligation the last state not after the deadline. That entry is fixed once the breach is, so the amount does not change when the trace is extended.
+    - `e` uses `+`, `-` and `*` on numbers, without division, so Integer and Decimal operands give a Decimal. An operand without a value makes the amount undefined, as in §2.9; it is reported as undefined, not as 0.
+    - A negative amount violates the rule of §2.9 that the amount be non-negative. It is reported as negative and is not replaced by 0. Otherwise the amount is min(e, c), or e without `CAP`.
+    - Arithmetic without `DEFAULT` is monotone like the comparisons, so a defined amount does not change when more data is present; with `DEFAULT` it can (decision 15).
 
 ## 10. Invariants and the evaluator (`TRIEL_Invariants.thy`, `TRIEL_Exec.thy`)
 
