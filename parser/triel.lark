@@ -134,7 +134,7 @@ stale_action: "BLOCK"
             | "USE_LAST"
             | "ESCALATE_TO" identifier
 
-polarity_val: ["-"] FLOAT_LITERAL
+polarity_val: ["-"] DECIMAL_LITERAL
 factor_source: identifier
 
 // --- 6. Type Expressions -----------------------------------------------
@@ -147,7 +147,7 @@ type_base: primitive_type
          | composite_type
          | "Optional" "<" type_expr ">"
 
-primitive_type: "Float" | "Decimal" | "Integer" | "Boolean"
+primitive_type: "Decimal" | "Integer" | "Boolean"
               | "String" | "DateTime" | "Duration"
               | "Address" | "Hash"
 
@@ -309,8 +309,8 @@ literal: numeric_literal
        | datetime_literal
        | duration_literal
 
-numeric_literal: FLOAT_LITERAL | INTEGER_LITERAL
-signed_numeric_literal: ["-"] (FLOAT_LITERAL | INTEGER_LITERAL)
+numeric_literal: DECIMAL_LITERAL | INTEGER_LITERAL
+signed_numeric_literal: ["-"] (DECIMAL_LITERAL | INTEGER_LITERAL)
 boolean_literal: "true" | "false"
 datetime_literal: "DATETIME" "(" STRING_LITERAL ")"
 duration_literal: INTEGER_LITERAL time_unit
@@ -328,7 +328,7 @@ identifier: IDENTIFIER
 
 IDENTIFIER: /(?!(?:AF|AG|AR|AU|AX|EF|EG|ER|EU|EX|Address|ALL|ALWAYS|ANCHOR_MODE|AND|AS|BLOCK|Boolean|BOUND_TO|BULLETPROOFS|BUSINESS_DAY|BUSINESS_DAYS|BY|CAP|CAUSED_BY|CONSTRAINT|CRITICAL|CROSS_MODAL|CROSS_MODAL_CONSISTENT|CURE_BY|CURRENCY|CURVE|DATETIME|DateTime|DAY|DAYS|Decimal|DEFAULT|DID|DO|Duration|ELIF|ELSE|ESCALATE_TO|EVENTUALLY|EXECUTE|EXISTS|F|FACTORS|FAIRNESS|false|Float|FORALL|FROM|G|GROTH16|HAPPENS_BEFORE|HASH|Hash|HOUR|HOURS|IF|IMPLIES|IMPORT|IN|Integer|INVARIANTS|JURISDICTION|LET|List|LIVENESS|LOCAL|Map|MAX_AGE|MAY|METADATA|MINUTE|MINUTES|MODALITIES|MONTH|MONTHS|MUST|MUST_NOT|NETWORK|NEXT|NOT|NOTIFY|ON|ON_BREACH|ON_STALE|Optional|OR|ORACLE|PARTY|PENALTY|PLONK|POLARITY|PRESENT|Progress|PROOF_SYSTEM|PROVENANCE_REQUIRED|PROVES|PUBLIC_WITNESS|QUORUM_THRESHOLD|R|RANGE|Record|REF|REGULATOR|REPLACES|REVEALING|SAFETY|SECOND|SECONDS|self|SENSITIVITY_BOUND|SET|SEVERITY|SOURCE|SPECIFICATION|STANDARD|STARK|String|SUBJECTS|SYSTEM|TERMINATE|TERMS|THEN|THRESHOLD|TOLERANCE|true|U|UNLESS|UNTIL|USE_LAST|VERSION|W|WARNING|WEIGHT|WHEN|WITH|WITHIN|WITHOUT|X|YEAR|YEARS|ZK)\b)[A-Za-z][A-Za-z0-9_]*/
 INTEGER_LITERAL: /[0-9]+/
-FLOAT_LITERAL: /[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?/
+DECIMAL_LITERAL: /[0-9]+\.[0-9]+/
 STRING_LITERAL: /"(?:[^"\\\n]|\\(?:["\\nt]|u[0-9a-fA-F]{4}))*"/
 
 COMMENT: /--[^\n]*/

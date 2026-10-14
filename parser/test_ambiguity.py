@@ -192,6 +192,12 @@ CASES = [
     ("gB-6 WHEN a OR b AND term", "term",
      "alice MAY pay WHEN a OR b AND bob MUST ship"),
 
+    # Numbers: a decimal literal is one exact token; there is no Float.
+    ("N-1  decimal literal", "inv", "ALWAYS(n >= 12.50)"),
+    ("N-2  negative decimal", "inv", "ALWAYS(n > -0.5 AND n <= 1.0)"),
+    ("N-3  Decimal in LET", "inv", "ALWAYS(LET x : Decimal = 1.5 IN x == n)"),
+    ("N-4  decimal PENALTY", "term", "alice ON_BREACH PENALTY 250.50 CAP 1000.00"),
+
     # Controls: must remain unambiguous.
     ("ctl  plain obligation", "term", "alice MUST pay"),
     ("ctl  breach handler", "term",
@@ -217,6 +223,11 @@ REJECT_CASES = [
     ("gA-R3 n + LET", "inv", "ALWAYS(n + LET x : Integer = 1 IN x == 3)"),
     ("gA-R4 n == IF", "inv", "ALWAYS(n == IF a THEN 1 ELSE 2)"),
     ("gA-R5 - IF", "inv", "ALWAYS(- IF a THEN 1 ELSE 2 == n)"),
+
+    # Numbers (compare N-1 and N-3): no exponent notation, no Float type.
+    ("N-R1 exponent", "inv", "ALWAYS(n >= 1.5e3)"),
+    ("N-R2 exponent E-", "inv", "ALWAYS(n >= 2.0E-1)"),
+    ("N-R3 Float type", "inv", "ALWAYS(LET x : Float = 1.5 IN x == n)"),
 ]
 
 # Which parse was chosen, not just that there is one: number of THEN-

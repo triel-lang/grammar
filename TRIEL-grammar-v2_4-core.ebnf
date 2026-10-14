@@ -263,7 +263,7 @@ stale_action       ::= "BLOCK"
    not a silent gap. Source-signing and multi-source quorum for oracle
    data remain open; see TECHNICAL_REPORT.md §2.9. *)
 
-polarity_val       ::= ["-"] float_literal
+polarity_val       ::= ["-"] decimal_literal
 
 factor_source      ::= identifier
 
@@ -279,7 +279,7 @@ type_base          ::= primitive_type
                      | composite_type
                      | "Optional" "<" type_expr ">"
 
-primitive_type     ::= "Float" | "Decimal" | "Integer" | "Boolean"
+primitive_type     ::= "Decimal" | "Integer" | "Boolean"
                      | "String" | "DateTime" | "Duration"
                      | "Address" | "Hash"
 
@@ -295,8 +295,8 @@ enum_ref           ::= identifier
 zk_type            ::= "ZK" "<" zk_primitive_type ">" zk_constraints
 
 (* NOTE: zk_type is restricted to a finite/hashable subset of primitive_type
-   (Integer, Boolean, String, Address, Hash) and excludes Float and Decimal.
-   Proof systems operate over finite fields; representing floating-point
+   (Integer, Boolean, String, Address, Hash) and excludes Decimal.
+   Proof systems operate over finite fields; representing fractional
    values in them is a known soundness and cost hazard (comparisons can
    lose meaning, and proof size grows sharply). A specification needing to
    prove something about a decimal quantity should scale it to an Integer
@@ -647,17 +647,17 @@ literal            ::= numeric_literal
                      | datetime_literal
                      | duration_literal
 
-numeric_literal    ::= integer_literal | float_literal
+numeric_literal    ::= integer_literal | decimal_literal
 
-signed_numeric_literal ::= ["-"] (integer_literal | float_literal)
+signed_numeric_literal ::= ["-"] (integer_literal | decimal_literal)
 
-(* NOTE ON SIGNED LITERALS (D-24): integer_literal and float_literal
+(* NOTE ON SIGNED LITERALS (D-24): integer_literal and decimal_literal
    were unsigned; the only way to write a negative value anywhere was
    the general subtractive unary_expr ("-" unary_expr | primary, §10),
    not available wherever a bare literal (not a full expression) is
    expected — THRESHOLD/SENSITIVITY_BOUND (§5), TOLERANCE (§7), WEIGHT
    (§11b), POLARITY (§5, fixed separately via polarity_val below since
-   it wraps float_literal directly), and comparisons inside a
+   it wraps decimal_literal directly), and comparisons inside a
    zk_constraint (§6). The grammar's own comment on caused_by_entry
    documents WEIGHT ∈ [-1.0, 1.0], a range that was not writable.
 
@@ -674,7 +674,22 @@ signed_numeric_literal ::= ["-"] (integer_literal | float_literal)
    original gap without reopening D-19's kind of problem. *)
 
 integer_literal    ::= digit+
-float_literal      ::= digit+ "." digit+ [("e" | "E") ["+" | "-"] digit+]
+decimal_literal    ::= digit+ "." digit+
+
+(* NOTE ON NUMBERS: there is no floating point. An integer_literal
+   denotes an Integer. A decimal_literal denotes an exact Decimal: the
+   literal 12.50 is the rational number 1250 / 10^2, so 12.50 == 12.5
+   holds exactly. There is no exponent notation. Every Integer is a
+   Decimal; a Decimal is a rational number with a finite decimal
+   expansion (1/3 is not one). The values of POLARITY (§5), WEIGHT
+   (§11b), THRESHOLD, SENSITIVITY_BOUND (§5) and TOLERANCE (§7) are
+   Decimals. Comparisons (==, !=, <,
+   <=, >, >=) of numbers compare these values exactly, and a comparison
+   with an operand that has no value is undefined, like every other
+   condition on absent data (TECHNICAL_REPORT.md §2.9). "Float" remains
+   a reserved word (§11a) but is not a type, so a specification that
+   declares a Float factor is rejected by the parser rather than read as
+   an enum reference. *)
 boolean_literal    ::= "true" | "false"
 
 string_literal     ::= '"' {character} '"'
@@ -742,7 +757,7 @@ identifier         ::= letter (letter | digit | "_")*
    ------------------------------------------------------------------------- *)
 
 caused_by_entry    ::= identifier "WEIGHT" signed_numeric_literal
-                       (* WEIGHT ∈ [-1.0, 1.0]; ≠ 0.0 *)
+                       (* WEIGHT is a Decimal ∈ [-1.0, 1.0]; ≠ 0.0 *)
 
 (* -------------------------------------------------------------------------
    12. Lexical Tokens
@@ -877,13 +892,11 @@ hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
    not a monetary value, just a number. The amount a PENALTY expr
    computes at breach time MUST be non-negative; CAP (breach_action,
    §4) sets its upper bound where the specification author chooses to
-   declare one. A literal used in a Decimal- or Money-denominated
-   context MUST be interpreted as an exact base-10 decimal, not an
-   IEEE-754 binary float, despite float_literal (§11) being the shared
-   lexical form for both — this grammar has no separate exact-decimal
-   literal syntax yet, so the distinction is enforced at the semantic
-   level, not the lexical one. A first-class monetary type (units,
-   rounding rules, overflow behavior) remains future work.
+   declare one. Every numeric literal is exact (§11, NOTE ON NUMBERS):
+   a decimal_literal is an exact base-10 Decimal, never an IEEE-754
+   binary float, and the grammar has no floating-point type. A
+   first-class monetary type (units, rounding rules, overflow behavior)
+   remains future work.
 
    PRESENT(f) and DEFAULT(f, fallback) (primary, §10) are ordinary
    grammar productions, not semantic-rule-gated like the fields above:
@@ -938,7 +951,7 @@ hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
    NOTE ON Progress<T> completion semantics (v2.4):
 
    Progress<T> desugars to:
-     Record { status: T, completion: Float CONSTRAINT(self >= 0.0 AND self <= 1.0) }
+     Record { status: T, completion: Decimal CONSTRAINT(self >= 0.0 AND self <= 1.0) }
 
    If T resolves to the canonical status enum (NOT_STARTED, IN_PROGRESS,
    STABLE), the compiler's validation pass enforces:
