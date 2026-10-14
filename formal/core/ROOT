@@ -13,6 +13,7 @@ session TRIEL_Core = HOL +
     TRIEL_Indicators
     TRIEL_Compositions
     TRIEL_Numbers
+    TRIEL_Penalty
     TRIEL_Exec
   document_files
     "root.tex"

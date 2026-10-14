@@ -87,28 +87,30 @@ definition window :: "'s \<Rightarrow> 'a \<Rightarrow> int option \<Rightarrow>
   "window s a lo d \<pi> =
      (if acted s a lo d \<pi> then Fulfilled else if passed d \<pi> then Breached d else Pending)"
 
-text \<open>\<open>s MUST a BY d\<close> (or \<open>WITHIN d\<close>) has the window \<open>(-\<infinity>, d]\<close>. Without a deadline an
+text \<open>\<open>s MUST a BY d\<close> (or \<open>WITHIN d\<close>) has the window \<open>(lo, d]\<close>, with \<open>lo = None\<close>, that
+  is \<open>(-\<infinity>, d]\<close>, unless the obligation has \<open>FROM\<close> (see below). Without a deadline an
   obligation is never breached.\<close>
 
-definition ob_verdict :: "'s \<Rightarrow> 'a \<Rightarrow> int option \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> verdict" where
-  "ob_verdict s a D \<pi> =
+definition ob_verdict :: "'s \<Rightarrow> 'a \<Rightarrow> int option \<Rightarrow> int option \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> verdict" where
+  "ob_verdict s a lo D \<pi> =
      (case D of
-        Some d \<Rightarrow> window s a None d \<pi>
-      | None \<Rightarrow> (if \<exists>j. 1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) then Fulfilled else Pending))"
+        Some d \<Rightarrow> window s a lo d \<pi>
+      | None \<Rightarrow> (if \<exists>j. 1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> after lo (time \<pi> j)
+                 then Fulfilled else Pending))"
 
 theorem deadline_missed_breach:
-  "\<not> acted s a None d \<pi> \<Longrightarrow> passed d \<pi> \<Longrightarrow> ob_verdict s a (Some d) \<pi> = Breached d"
+  "\<not> acted s a lo d \<pi> \<Longrightarrow> passed d \<pi> \<Longrightarrow> ob_verdict s a lo (Some d) \<pi> = Breached d"
   by (simp add: ob_verdict_def window_def)
 
 corollary within_missed_breach:
   assumes "resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 (DAfter k) = Some d"
     and "\<not> acted s a None d \<pi>" and "passed d \<pi>"
-  shows "ob_verdict s a (Some d) \<pi> = Breached (\<tau>\<^sub>0 + k)"
+  shows "ob_verdict s a None (Some d) \<pi> = Breached (\<tau>\<^sub>0 + k)"
   using assms by (simp add: ob_verdict_def window_def)
 
 theorem fulfilled_at_deadline:
   assumes "1 \<le> j" and "j < length \<pi>" and "does s a (evt (\<pi> ! j))" and "time \<pi> j = d"
-  shows "ob_verdict s a (Some d) \<pi> = Fulfilled"
+  shows "ob_verdict s a None (Some d) \<pi> = Fulfilled"
   using assms unfolding ob_verdict_def window_def acted_def by auto
 
 text \<open>A pending verdict means that the window is still open: no entry is past \<open>d\<close>.\<close>
@@ -173,9 +175,88 @@ next
 qed
 
 corollary ob_verdict_final:
-  "is_trace (\<pi> @ \<rho>) \<Longrightarrow> ob_verdict s a (Some d) \<pi> \<noteq> Pending \<Longrightarrow>
-     ob_verdict s a (Some d) (\<pi> @ \<rho>) = ob_verdict s a (Some d) \<pi>"
+  "is_trace (\<pi> @ \<rho>) \<Longrightarrow> ob_verdict s a lo (Some d) \<pi> \<noteq> Pending \<Longrightarrow>
+     ob_verdict s a lo (Some d) (\<pi> @ \<rho>) = ob_verdict s a lo (Some d) \<pi>"
   unfolding ob_verdict_def by (simp add: window_final)
+
+
+section \<open>The start of an obligation: FROM\<close>
+
+text \<open>\<open>s MUST a BY d FROM f\<close> has the window \<open>[f, d]\<close>: an action before \<open>f\<close> does not fulfil
+  it. \<open>f\<close> is resolved at activation like a deadline (a DATETIME, or a factor read in the
+  activation state), and a duration in \<open>BY\<close> counts from \<open>f\<close>. Without \<open>FROM\<close> the start
+  is the activation time \<open>\<tau>\<^sub>0\<close> and the window is \<open>(-\<infinity>, d]\<close>, as above. Times are
+  integers, so the closed window \<open>[f, d]\<close> is the window \<open>(f - 1, d]\<close>.\<close>
+
+definition start_of :: "('v \<Rightarrow> int option) \<Rightarrow> int \<Rightarrow> ('n, 'v) state \<Rightarrow> 'n deadline option \<Rightarrow> int option" where
+  "start_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 F = (case F of None \<Rightarrow> Some \<tau>\<^sub>0 | Some f \<Rightarrow> resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 f)"
+
+definition lo_of :: "'n deadline option \<Rightarrow> int \<Rightarrow> int option" where
+  "lo_of F b = (case F of None \<Rightarrow> None | Some f \<Rightarrow> Some (b - 1))"
+
+definition deadline_of :: "('v \<Rightarrow> int option) \<Rightarrow> int \<Rightarrow> ('n, 'v) state \<Rightarrow> 'n deadline option
+    \<Rightarrow> 'n deadline option \<Rightarrow> int option" where
+  "deadline_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 F D =
+     (case start_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 F of None \<Rightarrow> None | Some b \<Rightarrow> Option.bind D (resolve T b \<sigma>\<^sub>0))"
+
+lemma int_minus_one_less: "(b :: int) - 1 < t \<longleftrightarrow> b \<le> t"
+  by presburger
+
+lemma after_from: "after (Some (b - 1)) t \<longleftrightarrow> b \<le> t"
+  by (simp add: int_minus_one_less)
+
+theorem from_window:
+  "acted s a (Some (b - 1)) d \<pi> \<longleftrightarrow>
+     (\<exists>j. 1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> b \<le> time \<pi> j \<and> time \<pi> j \<le> d)"
+  unfolding acted_def by (auto simp: int_minus_one_less)
+
+text \<open>Without \<open>FROM\<close>, start, window and deadline are those of an obligation without it.\<close>
+
+theorem no_from:
+  "start_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 None = Some \<tau>\<^sub>0" and "lo_of None b = None"
+  and "deadline_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 None D = Option.bind D (resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0)"
+  by (simp_all add: start_of_def lo_of_def deadline_of_def)
+
+theorem from_duration:
+  "start_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 F = Some b \<Longrightarrow> deadline_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 F (Some (DAfter k)) = Some (b + k)"
+  by (simp add: deadline_of_def)
+
+theorem from_at: "start_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 (Some (DAt t)) = Some t"
+  by (simp add: start_of_def)
+
+theorem from_absent_factor: "\<sigma>\<^sub>0 x = None \<Longrightarrow> start_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 (Some (DFactor x k)) = None"
+  by (simp add: start_of_def)
+
+text \<open>An action before the start does not fulfil the obligation; one exactly at the start
+  does.\<close>
+
+theorem before_from_no_fulfil:
+  assumes "\<And>j. 1 \<le> j \<Longrightarrow> j < length \<pi> \<Longrightarrow> does s a (evt (\<pi> ! j)) \<Longrightarrow> time \<pi> j < b"
+    and "passed d \<pi>"
+  shows "ob_verdict s a (Some (b - 1)) (Some d) \<pi> = Breached d"
+proof -
+  have "\<not> acted s a (Some (b - 1)) d \<pi>"
+    unfolding from_window using assms(1) by force
+  from this assms(2) show ?thesis by (rule deadline_missed_breach)
+qed
+
+theorem fulfilled_at_from:
+  assumes "1 \<le> j" and "j < length \<pi>" and "does s a (evt (\<pi> ! j))" and "time \<pi> j = b"
+    and "b \<le> d"
+  shows "ob_verdict s a (Some (b - 1)) (Some d) \<pi> = Fulfilled"
+  using assms unfolding ob_verdict_def window_def acted_def by (auto simp: int_minus_one_less)
+
+theorem from_no_deadline:
+  "ob_verdict s a (Some (b - 1)) None \<pi> =
+     (if \<exists>j. 1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> b \<le> time \<pi> j then Fulfilled else Pending)"
+  by (simp add: ob_verdict_def int_minus_one_less)
+
+text \<open>A window that starts after its deadline cannot be met: the obligation is breached
+  at the deadline once the trace passes it.\<close>
+
+theorem empty_window_breached:
+  "d < b \<Longrightarrow> passed d \<pi> \<Longrightarrow> ob_verdict s a (Some (b - 1)) (Some d) \<pi> = Breached d"
+  by (rule deadline_missed_breach) (auto simp: acted_def)
 
 
 section \<open>Prohibitions and permissions\<close>
@@ -334,7 +415,10 @@ text \<open>The status of an obligation with deadline \<open>d\<close> and handl
     handler applies to it.
   \<^item> \<open>ESCALATE_TO s'\<close>: the original obligation stays breached, and \<open>s'\<close> gets a new obligation
     for the same action with the same length of window, counted from the moment of
-    transfer.\<close>
+    transfer.
+  \<open>\<tau>\<^sub>0\<close> is the start of the obligation and \<open>lo\<close> the lower bound of its window: the
+  activation time and \<open>None\<close>, or the start \<open>f\<close> and \<open>f - 1\<close> for an obligation with
+  \<open>FROM f\<close>.\<close>
 
 datatype 's continuation = NoContinuation | Terminated | Cure verdict | Escalated 's verdict
 
@@ -348,10 +432,10 @@ fun continue_after :: "int \<Rightarrow> 's \<Rightarrow> 'a \<Rightarrow> int \
      Escalated s' (window s' a (Some \<tau>\<^sub>b) (\<tau>\<^sub>b + (d - \<tau>\<^sub>0)) \<pi>)"
 | "continue_after \<tau>\<^sub>0 s a d \<tau>\<^sub>b _ \<pi> = NoContinuation"
 
-definition handle_breach :: "int \<Rightarrow> 's \<Rightarrow> 'a \<Rightarrow> int \<Rightarrow> ('s, 'p) baction list
+definition handle_breach :: "int \<Rightarrow> int option \<Rightarrow> 's \<Rightarrow> 'a \<Rightarrow> int \<Rightarrow> ('s, 'p) baction list
     \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> 's status" where
-  "handle_breach \<tau>\<^sub>0 s a d acts \<pi> =
-     (case window s a None d \<pi> of
+  "handle_breach \<tau>\<^sub>0 lo s a d acts \<pi> =
+     (case window s a lo d \<pi> of
         Fulfilled \<Rightarrow> SFulfilled
       | Pending \<Rightarrow> SPending
       | Breached \<tau>\<^sub>b \<Rightarrow> SBreached \<tau>\<^sub>b (continue_after \<tau>\<^sub>0 s a d \<tau>\<^sub>b (cont_of acts) \<pi>))"
@@ -360,24 +444,24 @@ lemma cont_of_filter: "cont_of (filter is_cont acts) = cont_of acts"
   by (simp add: cont_of_def)
 
 theorem informational_irrelevant:
-  "handle_breach \<tau>\<^sub>0 s a d acts \<pi> = handle_breach \<tau>\<^sub>0 s a d (filter is_cont acts) \<pi>"
+  "handle_breach \<tau>\<^sub>0 lo s a d acts \<pi> = handle_breach \<tau>\<^sub>0 lo s a d (filter is_cont acts) \<pi>"
   by (simp add: handle_breach_def cont_of_filter split: verdict.split)
 
 theorem cure_restores:
-  assumes "window s a None d \<pi> = Breached d" and "cont_of acts = Some (CureBy k)"
+  assumes "window s a lo d \<pi> = Breached d" and "cont_of acts = Some (CureBy k)"
     and "acted s a (Some d) (d + k) \<pi>"
-  shows "handle_breach \<tau>\<^sub>0 s a d acts \<pi> = SBreached d (Cure Fulfilled)"
+  shows "handle_breach \<tau>\<^sub>0 lo s a d acts \<pi> = SBreached d (Cure Fulfilled)"
   using assms by (simp add: handle_breach_def window_def)
 
 theorem cure_failed:
-  assumes "window s a None d \<pi> = Breached d" and "cont_of acts = Some (CureBy k)"
+  assumes "window s a lo d \<pi> = Breached d" and "cont_of acts = Some (CureBy k)"
     and "\<not> acted s a (Some d) (d + k) \<pi>" and "passed (d + k) \<pi>"
-  shows "handle_breach \<tau>\<^sub>0 s a d acts \<pi> = SBreached d (Cure (Breached (d + k)))"
+  shows "handle_breach \<tau>\<^sub>0 lo s a d acts \<pi> = SBreached d (Cure (Breached (d + k)))"
   using assms by (simp add: handle_breach_def window_def)
 
 theorem escalation_keeps_breach:
-  assumes "window s a None d \<pi> = Breached d" and "cont_of acts = Some (EscalateTo s')"
-  shows "handle_breach \<tau>\<^sub>0 s a d acts \<pi> =
+  assumes "window s a lo d \<pi> = Breached d" and "cont_of acts = Some (EscalateTo s')"
+  shows "handle_breach \<tau>\<^sub>0 lo s a d acts \<pi> =
            SBreached d (Escalated s' (window s' a (Some d) (d + (d - \<tau>\<^sub>0)) \<pi>))"
   using assms by (simp add: handle_breach_def)
 
@@ -386,16 +470,16 @@ text \<open>The status is final once the obligation and the window of its contin
 
 theorem handle_breach_final:
   assumes tr: "is_trace (\<pi> @ \<rho>)"
-    and base: "window s a None d \<pi> \<noteq> Pending"
+    and base: "window s a lo d \<pi> \<noteq> Pending"
     and cure: "\<And>k. cont_of acts = Some (CureBy k) \<Longrightarrow> window s a (Some d) (d + k) \<pi> \<noteq> Pending"
     and esc: "\<And>s'. cont_of acts = Some (EscalateTo s') \<Longrightarrow>
                 window s' a (Some d) (d + (d - \<tau>\<^sub>0)) \<pi> \<noteq> Pending"
-  shows "handle_breach \<tau>\<^sub>0 s a d acts (\<pi> @ \<rho>) = handle_breach \<tau>\<^sub>0 s a d acts \<pi>"
+  shows "handle_breach \<tau>\<^sub>0 lo s a d acts (\<pi> @ \<rho>) = handle_breach \<tau>\<^sub>0 lo s a d acts \<pi>"
 proof -
-  have w: "window s a None d (\<pi> @ \<rho>) = window s a None d \<pi>"
+  have w: "window s a lo d (\<pi> @ \<rho>) = window s a lo d \<pi>"
     using tr base by (rule window_final)
   show ?thesis
-  proof (cases "window s a None d \<pi>")
+  proof (cases "window s a lo d \<pi>")
     case (Breached \<tau>\<^sub>b)
     then have tb: "\<tau>\<^sub>b = d" by (rule window_breached_at)
     have "continue_after \<tau>\<^sub>0 s a d d (cont_of acts) (\<pi> @ \<rho>) = continue_after \<tau>\<^sub>0 s a d d (cont_of acts) \<pi>"
@@ -419,12 +503,13 @@ section \<open>Terms of a TERMS block and the binding of ON_BREACH\<close>
 
 text \<open>The surface terms of a TERMS block. A breach handler \<open>s ON_BREACH acts\<close> is allowed
   only at the top level of the block, and it is bound to the nearest preceding obligation
-  or prohibition of the same subject at the top level. \<open>SIf c t u\<close> is a conditional
+  or prohibition of the same subject at the top level. \<open>SMust s a D F\<close> is an obligation
+  with the deadline \<open>D\<close> and the start \<open>F\<close> given by FROM. \<open>SIf c t u\<close> is a conditional
   term (IF/ELIF/ELSE and WHEN; a missing ELSE is \<open>SSkip\<close>), and \<open>SRef k\<close> is a reference
   \<open>REF name\<close> to the named term declared as the element \<open>k\<close> of the block, counted from 0.\<close>
 
 datatype ('n, 'v, 's, 'a, 'p) sterm =
-    SMust 's 'a "'n deadline option"
+    SMust 's 'a "'n deadline option" "'n deadline option"
   | SMustNot 's 'a "('n, 'v) expr"
   | SMay 's 'a "('n, 'v) expr"
   | SThen "('n, 'v, 's, 'a, 'p) sterm" "('n, 'v, 's, 'a, 'p) sterm"
@@ -446,7 +531,7 @@ fun has_handler :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> bool" where
 | "has_handler _ = False"
 
 fun binds :: "'s \<Rightarrow> ('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> bool" where
-  "binds s (SMust s' a d) = (s' = s)"
+  "binds s (SMust s' a d f) = (s' = s)"
 | "binds s (SMustNot s' a c) = (s' = s)"
 | "binds s _ = False"
 
@@ -537,7 +622,7 @@ qed
 section \<open>Activation\<close>
 
 fun deadlines :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> 'n deadline list" where
-  "deadlines (SMust s a (Some d)) = [d]"
+  "deadlines (SMust s a D F) = (case D of Some d \<Rightarrow> [d] | None \<Rightarrow> []) @ (case F of Some f \<Rightarrow> [f] | None \<Rightarrow> [])"
 | "deadlines (SThen t u) = deadlines t @ deadlines u"
 | "deadlines (SOr t u) = deadlines t @ deadlines u"
 | "deadlines (SAnd t u) = deadlines t @ deadlines u"
@@ -545,16 +630,57 @@ fun deadlines :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> 'n deadline list" whe
 | "deadlines (SIf c t u) = deadlines t @ deadlines u"
 | "deadlines _ = []"
 
-text \<open>A block is activated at time \<open>\<tau>\<^sub>0\<close> in state \<open>\<sigma>\<^sub>0\<close> only if every deadline in it resolves.\<close>
+text \<open>A block is activated at time \<open>\<tau>\<^sub>0\<close> in state \<open>\<sigma>\<^sub>0\<close> only if every deadline and every
+  start (FROM) in it resolves. Whether a deadline resolves does not depend on the time a
+  duration counts from.\<close>
 
 definition activates :: "('v \<Rightarrow> int option) \<Rightarrow> int \<Rightarrow> ('n, 'v) state
     \<Rightarrow> ('n, 'v, 's, 'a, 'p) sterm list \<Rightarrow> bool" where
   "activates T \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<longleftrightarrow> (\<forall>t \<in> set blk. \<forall>d \<in> set (deadlines t). resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 d \<noteq> None)"
 
 theorem activation_rejected:
-  assumes "SMust s a (Some (DFactor x k)) \<in> set blk" and "\<sigma>\<^sub>0 x = None"
+  assumes "SMust s a (Some (DFactor x k)) F \<in> set blk" and "\<sigma>\<^sub>0 x = None"
   shows "\<not> activates T \<tau>\<^sub>0 \<sigma>\<^sub>0 blk"
   using assms unfolding activates_def by force
+
+theorem activation_rejected_from:
+  assumes "SMust s a D (Some (DFactor x k)) \<in> set blk" and "\<sigma>\<^sub>0 x = None"
+  shows "\<not> activates T \<tau>\<^sub>0 \<sigma>\<^sub>0 blk"
+  using assms unfolding activates_def by (cases D) force+
+
+lemma resolve_base: "resolve T b \<sigma>\<^sub>0 d = None \<longleftrightarrow> resolve T b' \<sigma>\<^sub>0 d = None"
+  by (cases d) (auto split: option.splits)
+
+lemma deadlines_SMust: "set (deadlines (SMust s a D F)) = set_option D \<union> set_option F"
+  by (cases D; cases F) auto
+
+text \<open>After activation, the start and the deadline of every top-level obligation resolve.\<close>
+
+theorem activates_resolves:
+  assumes "activates T \<tau>\<^sub>0 \<sigma>\<^sub>0 blk" and "SMust s a D F \<in> set blk"
+  shows "\<exists>b. start_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 F = Some b \<and> (D \<noteq> None \<longrightarrow> deadline_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 F D \<noteq> None)"
+proof -
+  note all = bspec[OF assms(1)[unfolded activates_def] assms(2), unfolded deadlines_SMust]
+  obtain b where b: "start_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 F = Some b"
+  proof (cases F)
+    case None
+    then show ?thesis using that by (simp add: start_of_def)
+  next
+    case (Some f)
+    with all have "resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 f \<noteq> None" by simp
+    then obtain b where "resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 f = Some b" by blast
+    with Some show ?thesis using that by (simp add: start_of_def)
+  qed
+  moreover have "D \<noteq> None \<longrightarrow> deadline_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 F D \<noteq> None"
+  proof
+    assume "D \<noteq> None"
+    then obtain d where d: "D = Some d" by auto
+    with all have "resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 d \<noteq> None" by simp
+    then have "resolve T b \<sigma>\<^sub>0 d \<noteq> None" using resolve_base[of T b \<sigma>\<^sub>0 d \<tau>\<^sub>0] by simp
+    with b d show "deadline_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 F D \<noteq> None" by (simp add: deadline_of_def)
+  qed
+  ultimately show ?thesis by blast
+qed
 
 
 section \<open>MAX_AGE and ON_STALE BLOCK\<close>

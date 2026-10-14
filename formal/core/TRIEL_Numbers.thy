@@ -263,4 +263,53 @@ proof
   then show False by simp
 qed
 
+section \<open>Arithmetic on decimals\<close>
+
+text \<open>The Decimals are closed under addition, subtraction, negation and multiplication,
+  but not under division (\<open>not_decimal_third\<close>). So an amount computed from Integer and
+  Decimal values with \<open>+\<close>, \<open>-\<close> and \<open>*\<close> is a Decimal: no rounding is ever needed.\<close>
+
+lemma decimal_common:
+  assumes "decimal p" and "decimal q"
+  obtains m n k where "p = of_int m / 10 ^ k" and "q = of_int n / 10 ^ k"
+proof -
+  from assms obtain m\<^sub>1 k\<^sub>1 m\<^sub>2 k\<^sub>2 where p: "p = of_int m\<^sub>1 / 10 ^ k\<^sub>1"
+    and q: "q = of_int m\<^sub>2 / 10 ^ k\<^sub>2"
+    unfolding decimal_def by blast
+  have "p = of_int (m\<^sub>1 * 10 ^ k\<^sub>2) / 10 ^ (k\<^sub>1 + k\<^sub>2)"
+    unfolding p by (simp add: power_add)
+  moreover have "q = of_int (m\<^sub>2 * 10 ^ k\<^sub>1) / 10 ^ (k\<^sub>1 + k\<^sub>2)"
+    unfolding q by (simp add: power_add)
+  ultimately show ?thesis by (rule that)
+qed
+
+theorem decimal_add: "decimal p \<Longrightarrow> decimal q \<Longrightarrow> decimal (p + q)"
+proof -
+  assume "decimal p" "decimal q"
+  then obtain m n k where "p = of_int m / 10 ^ k" "q = of_int n / 10 ^ k"
+    by (rule decimal_common)
+  then have "p + q = of_int (m + n) / 10 ^ k" by (simp add: add_divide_distrib)
+  then show "decimal (p + q)" unfolding decimal_def by blast
+qed
+
+theorem decimal_uminus: "decimal p \<Longrightarrow> decimal (- p)"
+proof -
+  assume "decimal p"
+  then obtain m k where "p = of_int m / 10 ^ k" unfolding decimal_def by blast
+  then have "- p = of_int (- m) / 10 ^ k" by simp
+  then show "decimal (- p)" unfolding decimal_def by blast
+qed
+
+theorem decimal_diff: "decimal p \<Longrightarrow> decimal q \<Longrightarrow> decimal (p - q)"
+  using decimal_add[of p "- q"] decimal_uminus[of q] by simp
+
+theorem decimal_mult: "decimal p \<Longrightarrow> decimal q \<Longrightarrow> decimal (p * q)"
+proof -
+  assume "decimal p" "decimal q"
+  then obtain m\<^sub>1 k\<^sub>1 m\<^sub>2 k\<^sub>2 where "p = of_int m\<^sub>1 / 10 ^ k\<^sub>1" "q = of_int m\<^sub>2 / 10 ^ k\<^sub>2"
+    unfolding decimal_def by blast
+  then have "p * q = of_int (m\<^sub>1 * m\<^sub>2) / 10 ^ (k\<^sub>1 + k\<^sub>2)" by (simp add: power_add)
+  then show "decimal (p * q)" unfolding decimal_def by blast
+qed
+
 end

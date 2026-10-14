@@ -2,10 +2,11 @@
 
 module
   TRIEL(Int(..), integer_of_int, Nat, integer_of_nat, Num, Rat, quotient_of,
-         Atom(..), Fmap(..), Nd(..), Ty(..), Vexp(..), Expr(..), Verdict(..),
-         Baction(..), Continuation(..), Status(..), Line(..), Prim(..), Inv(..),
-         Deadline(..), Sterm(..), Fdecl(..), Spec(..), Polarity(..), Event(..),
-         nat_of_integer, run, dec_atom)
+         Atom(..), Arg(..), Act(..), Fmap(..), Nd(..), Ty(..), Vexp(..),
+         Expr(..), Verdict(..), Continuation(..), Status(..), Amount(..),
+         Ract(..), Line(..), Prim(..), Inv(..), Deadline(..), Baction(..),
+         Sterm(..), Pexp(..), Pen(..), Fdecl(..), Spec(..), Polarity(..),
+         Event(..), nat_of_integer, num_of, run, dec_atom)
   where {
 
 import Prelude ((==), (/=), (<), (<=), (>=), (>), (+), (-), (*), (/), (**),
@@ -508,10 +509,14 @@ instance Times Rat where {
 instance Power Rat where {
 };
 
+data Atom = ABool Bool | ANum Rat | AStr String | ATime Int;
+
+data Arg = ArgName [String] | ArgVal Atom;
+
+data Act = Act String [Arg];
+
 equal_rat :: Rat -> Rat -> Bool;
 equal_rat a b = quotient_of a == quotient_of b;
-
-data Atom = ABool Bool | ANum Rat | AStr String | ATime Int;
 
 equal_atom :: Atom -> Atom -> Bool;
 equal_atom (AStr x3) (ATime x4) = False;
@@ -530,6 +535,23 @@ equal_atom (ATime x4) (ATime y4) = equal_int x4 y4;
 equal_atom (AStr x3) (AStr y3) = x3 == y3;
 equal_atom (ANum x2) (ANum y2) = equal_rat x2 y2;
 equal_atom (ABool x1) (ABool y1) = x1 == y1;
+
+equal_arg :: Arg -> Arg -> Bool;
+equal_arg (ArgName x1) (ArgVal x2) = False;
+equal_arg (ArgVal x2) (ArgName x1) = False;
+equal_arg (ArgVal x2) (ArgVal y2) = equal_atom x2 y2;
+equal_arg (ArgName x1) (ArgName y1) = x1 == y1;
+
+instance Eq Arg where {
+  a == b = equal_arg a b;
+};
+
+equal_act :: Act -> Act -> Bool;
+equal_act (Act x1 x2) (Act y1 y2) = x1 == y1 && x2 == y2;
+
+instance Eq Act where {
+  a == b = equal_act a b;
+};
 
 instance Eq Atom where {
   a == b = equal_atom a b;
@@ -602,17 +624,19 @@ data Tm a b c d = TMust c d | TMay c d (Expr a b) | TMustNot c d (Expr a b)
 
 data Verdict = Fulfilled | Breached Int | Pending;
 
-data Baction a b = Notify a | Penalty b | Terminate | CureBy Int | EscalateTo a;
-
 data Continuation a = NoContinuation | Terminated | Cure Verdict
   | Escalated a Verdict;
 
 data Status a = SFulfilled | SPending | SBreached Int (Continuation a);
 
+data Amount = PAmount Rat Bool | PUndefined | PNegative Rat;
+
+data Ract a = RNotify a | RPenalty Amount;
+
 data Line = LActivation Bool | LBlock Bool | LTypes (Maybe (Nat, String))
-  | LMust Nat String String (Maybe Int) (Status String)
-  | LMustNot Nat String String Verdict [Baction String Atom]
-  | LMay Nat String String Verdict | LOnBreach Nat String (Maybe Nat)
+  | LMust Nat String Act (Maybe Int) (Status String) [Ract String]
+  | LMustNot Nat String Act Verdict [Ract String] | LMay Nat String Act Verdict
+  | LOnBreach Nat String (Maybe Nat)
   | LComposite Nat (Maybe Bool) (Maybe Bool) (Maybe Bool)
   | LInvariant String (Maybe Bool);
 
@@ -622,18 +646,26 @@ data Inv a b = Always (Expr a b) | Eventually (Expr a b) | Next (Expr a b);
 
 data Deadline a = DAt Int | DAfter Int | DFactor a Int;
 
-data Sterm a b c d e = SMust c d (Maybe (Deadline a)) | SMustNot c d (Expr a b)
-  | SMay c d (Expr a b) | SThen (Sterm a b c d e) (Sterm a b c d e)
+data Baction a b = Notify a | Penalty b | Terminate | CureBy Int | EscalateTo a;
+
+data Sterm a b c d e = SMust c d (Maybe (Deadline a)) (Maybe (Deadline a))
+  | SMustNot c d (Expr a b) | SMay c d (Expr a b)
+  | SThen (Sterm a b c d e) (Sterm a b c d e)
   | SOr (Sterm a b c d e) (Sterm a b c d e)
   | SAnd (Sterm a b c d e) (Sterm a b c d e)
   | SUnless (Sterm a b c d e) (Expr a b) (Sterm a b c d e)
   | SOnBreach c [Baction c e]
   | SIf (Expr a b) (Sterm a b c d e) (Sterm a b c d e) | SSkip | SRef Nat;
 
+data Pexp a b = PVal (Vexp a b) | PAdd (Pexp a b) (Pexp a b)
+  | PSub (Pexp a b) (Pexp a b) | PMul (Pexp a b) (Pexp a b) | PNeg (Pexp a b);
+
+data Pen a b = Pen (Pexp a b) (Maybe Rat);
+
 data Fdecl = Fdecl String (Ty String Prim) (Maybe Int);
 
 data Spec =
-  Spec [Fdecl] [Sterm [String] Atom String String Atom]
+  Spec [Fdecl] [Sterm [String] Atom String Act (Pen [String] Atom)]
     [(String, Inv [String] Atom)];
 
 data Polarity = Must | May | MustNot;
@@ -758,7 +790,7 @@ size_list :: forall a. [a] -> Nat;
 size_list xs = length_tailrec xs zero_nat;
 
 binds :: forall a b c d e. (Eq a) => a -> Sterm b c a d e -> Bool;
-binds sa (SMust s a d) = s == sa;
+binds sa (SMust s a d f) = s == sa;
 binds sa (SMustNot s a c) = s == sa;
 binds s (SMay v va vb) = False;
 binds s (SThen v va) = False;
@@ -780,7 +812,7 @@ handler_of ::
   forall a b c d e. (Eq c) => [Sterm a b c d e] -> Nat -> [Baction c e];
 handler_of blk i =
   (case find (\ k -> (case nth blk k of {
-                       SMust _ _ _ -> False;
+                       SMust _ _ _ _ -> False;
                        SMustNot _ _ _ -> False;
                        SMay _ _ _ -> False;
                        SThen _ _ -> False;
@@ -796,7 +828,7 @@ handler_of blk i =
     of {
     Nothing -> [];
     Just k -> (case nth blk k of {
-                SMust _ _ _ -> [];
+                SMust _ _ _ _ -> [];
                 SMustNot _ _ _ -> [];
                 SMay _ _ _ -> [];
                 SThen _ _ -> [];
@@ -821,7 +853,7 @@ cont_free_prohibitions :: forall a b c d e. (Eq c) => [Sterm a b c d e] -> Bool;
 cont_free_prohibitions blk =
   all (\ k ->
         (case nth blk k of {
-          SMust _ _ _ -> True;
+          SMust _ _ _ _ -> True;
           SMustNot _ _ _ -> all (\ x -> not (is_cont x)) (handler_of blk k);
           SMay _ _ _ -> True;
           SThen _ _ -> True;
@@ -912,13 +944,19 @@ inv_eval (Next phi) pi =
     else Nothing);
 
 deadlines :: forall a b c d e. Sterm a b c d e -> [Deadline a];
-deadlines (SMust s a (Just d)) = [d];
+deadlines (SMust s a d f) = (case d of {
+                              Nothing -> [];
+                              Just da -> [da];
+                            }) ++
+                              (case f of {
+                                Nothing -> [];
+                                Just fa -> [fa];
+                              });
 deadlines (SThen t u) = deadlines t ++ deadlines u;
 deadlines (SOr t u) = deadlines t ++ deadlines u;
 deadlines (SAnd t u) = deadlines t ++ deadlines u;
 deadlines (SUnless t c u) = deadlines t ++ deadlines u;
 deadlines (SIf c t u) = deadlines t ++ deadlines u;
-deadlines (SMust v va Nothing) = [];
 deadlines (SMustNot v va vb) = [];
 deadlines (SMay v va vb) = [];
 deadlines (SOnBreach v va) = [];
@@ -954,7 +992,7 @@ activates t tau_0 sigma_0 blk =
 handler_bound ::
   forall a b c d e. (Eq c) => [Sterm a b c d e] -> Nat -> Maybe (Maybe Nat);
 handler_bound blk i = (case nth blk i of {
-                        SMust _ _ _ -> Nothing;
+                        SMust _ _ _ _ -> Nothing;
                         SMustNot _ _ _ -> Nothing;
                         SMay _ _ _ -> Nothing;
                         SThen _ _ -> Nothing;
@@ -974,7 +1012,7 @@ has_handler (SOr t u) = has_handler t || has_handler u;
 has_handler (SAnd t u) = has_handler t || has_handler u;
 has_handler (SUnless t c u) = has_handler t || has_handler u;
 has_handler (SIf c t u) = has_handler t || has_handler u;
-has_handler (SMust v va vb) = False;
+has_handler (SMust v va vb vc) = False;
 has_handler (SMustNot v va vb) = False;
 has_handler (SMay v va vb) = False;
 has_handler SSkip = False;
@@ -995,7 +1033,7 @@ wf_block :: forall a b c d e. (Eq c) => [Sterm a b c d e] -> Bool;
 wf_block blk =
   all (\ i ->
         (case nth blk i of {
-          SMust _ _ _ -> not (has_handler (nth blk i));
+          SMust _ _ _ _ -> not (has_handler (nth blk i));
           SMustNot _ _ _ -> not (has_handler (nth blk i));
           SMay _ _ _ -> not (has_handler (nth blk i));
           SThen _ _ -> not (has_handler (nth blk i));
@@ -1015,92 +1053,6 @@ wf_block blk =
           (if not (is_none (handler_bound blk x))
             then Just (handler_bound blk x) else Nothing))
         (upt zero_nat (size_list blk)));
-
-minus_int :: Int -> Int -> Int;
-minus_int k l = Int_of_integer (integer_of_int k - integer_of_int l);
-
-tstamp :: forall a b c d e. (a -> Maybe b, (c, Event a d e)) -> c;
-tstamp (sigma, (tau, e)) = tau;
-
-time :: forall a b c d. [(a -> Maybe b, (Int, Event a c d))] -> Nat -> Int;
-time pi j = tstamp (nth pi j);
-
-passed :: forall a b c d. Int -> [(a -> Maybe b, (Int, Event a c d))] -> Bool;
-passed d pi = any (\ j -> less_int d (time pi j)) (upt zero_nat (size_list pi));
-
-after :: Maybe Int -> Int -> Bool;
-after Nothing tau = True;
-after (Just l) tau = less_int l tau;
-
-does :: forall a b c. (Eq a, Eq b) => a -> b -> Event c a b -> Bool;
-does s a e = (case e of {
-               Deontic sa aa _ -> sa == s && aa == a;
-               Arrival _ -> False;
-               Tick -> False;
-             });
-
-evt :: forall a b c d e. (a -> Maybe b, (c, Event a d e)) -> Event a d e;
-evt (sigma, (tau, e)) = e;
-
-acted ::
-  forall a b c d.
-    (Eq a,
-      Eq b) => a -> b -> Maybe Int ->
-                           Int -> [(c -> Maybe d, (Int, Event c a b))] -> Bool;
-acted s a lo d pi =
-  any (\ j ->
-        does s a (evt (nth pi j)) &&
-          after lo (time pi j) && less_eq_int (time pi j) d)
-    (upt one_nat (size_list pi));
-
-window ::
-  forall a b c d.
-    (Eq a,
-      Eq b) => a -> b -> Maybe Int ->
-                           Int ->
-                             [(c -> Maybe d, (Int, Event c a b))] -> Verdict;
-window s a lo d pi =
-  (if acted s a lo d pi then Fulfilled
-    else (if passed d pi then Breached d else Pending));
-
-continue_after ::
-  forall a b c d e.
-    (Eq a,
-      Eq b) => Int ->
-                 a -> b -> Int ->
-                             Int ->
-                               Maybe (Baction a c) ->
-                                 [(d -> Maybe e, (Int, Event d a b))] ->
-                                   Continuation a;
-continue_after tau_0 s a d tau_b (Just Terminate) pi = Terminated;
-continue_after tau_0 s a d tau_b (Just (CureBy k)) pi =
-  Cure (window s a (Just tau_b) (plus_int tau_b k) pi);
-continue_after tau_0 sa a d tau_b (Just (EscalateTo s)) pi =
-  Escalated s (window s a (Just tau_b) (plus_int tau_b (minus_int d tau_0)) pi);
-continue_after tau_0 s a d tau_b Nothing pi = NoContinuation;
-continue_after tau_0 s a d tau_b (Just (Notify va)) pi = NoContinuation;
-continue_after tau_0 s a d tau_b (Just (Penalty va)) pi = NoContinuation;
-
-cont_of :: forall a b. [Baction a b] -> Maybe (Baction a b);
-cont_of acts = (case filter is_cont acts of {
-                 [] -> Nothing;
-                 c : _ -> Just c;
-               });
-
-handle_breach ::
-  forall a b c d e.
-    (Eq a,
-      Eq b) => Int ->
-                 a -> b -> Int ->
-                             [Baction a c] ->
-                               [(d -> Maybe e, (Int, Event d a b))] -> Status a;
-handle_breach tau_0 s a d acts pi =
-  (case window s a Nothing d pi of {
-    Fulfilled -> SFulfilled;
-    Breached tau_b ->
-      SBreached tau_b (continue_after tau_0 s a d tau_b (cont_of acts) pi);
-    Pending -> SPending;
-  });
 
 equal_outcome :: Outcome -> Outcome -> Bool;
 equal_outcome Interrupted Violated = False;
@@ -1137,6 +1089,9 @@ equal_event (Deontic x11 x12 x13) (Deontic y11 y12 y13) =
   x11 == y11 && x12 == y12 && equal_polarity x13 y13;
 equal_event Tick Tick = True;
 
+tstamp :: forall a b c d e. (a -> Maybe b, (c, Event a d e)) -> c;
+tstamp (sigma, (tau, e)) = tau;
+
 sorted_wrt :: forall a. (a -> a -> Bool) -> [a] -> Bool;
 sorted_wrt p [] = True;
 sorted_wrt p (x : ys) = all (p x) ys && sorted_wrt p ys;
@@ -1158,6 +1113,9 @@ kappa :: Outcome -> Outcome;
 kappa Done = Interrupted;
 kappa Interrupted = Interrupted;
 kappa Violated = Violated;
+
+evt :: forall a b c d e. (a -> Maybe b, (c, Event a d e)) -> Event a d e;
+evt (sigma, (tau, e)) = e;
 
 kors :: [Maybe Bool] -> Maybe Bool;
 kors xs = foldr kor xs (Just False);
@@ -1239,8 +1197,8 @@ ext3 TSkip rho = Just False;
 
 composite_line ::
   Nat ->
-    Maybe (Tm [String] Atom String String) ->
-      [([String] -> Maybe Atom, (Int, Event [String] String String))] -> Line;
+    Maybe (Tm [String] Atom String Act) ->
+      [([String] -> Maybe Atom, (Int, Event [String] String Act))] -> Line;
 composite_line n t pi =
   (case t of {
     Nothing -> LComposite n Nothing Nothing Nothing;
@@ -1248,6 +1206,13 @@ composite_line n t pi =
       LComposite n (mem3 u pi Done) (mem3 u pi Interrupted)
         (mem3 u pi Violated);
   });
+
+does :: forall a b c. (Eq a, Eq b) => a -> b -> Event c a b -> Bool;
+does s a e = (case e of {
+               Deontic sa aa _ -> sa == s && aa == a;
+               Arrival _ -> False;
+               Tick -> False;
+             });
 
 may_verdict ::
   forall a b c d.
@@ -1262,6 +1227,83 @@ may_verdict s a c pi =
         (upt one_nat (size_list pi))
     then Fulfilled else Pending);
 
+zero_rat :: Rat;
+zero_rat = Frct (zero_int, one_int);
+
+uminus_rat :: Rat -> Rat;
+uminus_rat p = Frct (case quotient_of p of {
+                      (a, b) -> (uminus_int a, b);
+                    });
+
+minus_int :: Int -> Int -> Int;
+minus_int k l = Int_of_integer (integer_of_int k - integer_of_int l);
+
+minus_rat :: Rat -> Rat -> Rat;
+minus_rat p q =
+  Frct (case quotient_of p of {
+         (a, c) ->
+           (case quotient_of q of {
+             (b, d) ->
+               normalize
+                 (minus_int (times_int a d) (times_int b c), times_int c d);
+           });
+       });
+
+plus_rat :: Rat -> Rat -> Rat;
+plus_rat p q =
+  Frct (case quotient_of p of {
+         (a, c) ->
+           (case quotient_of q of {
+             (b, d) ->
+               normalize
+                 (plus_int (times_int a d) (times_int b c), times_int c d);
+           });
+       });
+
+lift2 :: (Rat -> Rat -> Rat) -> Maybe Rat -> Maybe Rat -> Maybe Rat;
+lift2 f (Just x) (Just y) = Just (f x y);
+lift2 f Nothing uv = Nothing;
+lift2 f uu Nothing = Nothing;
+
+evalP ::
+  forall a b. (a -> Maybe Rat) -> Pexp b a -> (b -> Maybe a) -> Maybe Rat;
+evalP num (PVal a) sigma = bind (evalV a sigma) num;
+evalP num (PAdd p q) sigma =
+  lift2 plus_rat (evalP num p sigma) (evalP num q sigma);
+evalP num (PSub p q) sigma =
+  lift2 minus_rat (evalP num p sigma) (evalP num q sigma);
+evalP num (PMul p q) sigma =
+  lift2 times_rat (evalP num p sigma) (evalP num q sigma);
+evalP num (PNeg p) sigma = map_option uminus_rat (evalP num p sigma);
+
+pen_amount ::
+  forall a b. (a -> Maybe Rat) -> Pen b a -> (b -> Maybe a) -> Amount;
+pen_amount num (Pen e cap) sigma =
+  (case evalP num e sigma of {
+    Nothing -> PUndefined;
+    Just v ->
+      (if less_rat v zero_rat then PNegative v
+        else (case cap of {
+               Nothing -> PAmount v False;
+               Just c ->
+                 (if less_rat c v then PAmount c True else PAmount v False);
+             }));
+  });
+
+ract_of ::
+  forall a b c.
+    (a -> Maybe Rat) -> (b -> Maybe a) -> Baction c (Pen b a) -> [Ract c];
+ract_of num sigma (Notify s) = [RNotify s];
+ract_of num sigma (Penalty p) = [RPenalty (pen_amount num p sigma)];
+ract_of num sigma Terminate = [];
+ract_of num sigma (CureBy v) = [];
+ract_of num sigma (EscalateTo v) = [];
+
+report_actions ::
+  forall a b c.
+    (a -> Maybe Rat) -> (b -> Maybe a) -> [Baction c (Pen b a)] -> [Ract c];
+report_actions num sigma acts = concatMap (ract_of num sigma) acts;
+
 forbidden ::
   forall a b c d.
     (Eq a, Eq b, Eq d,
@@ -1273,6 +1315,28 @@ forbidden s a c pi j =
     less_nat j (size_list pi) &&
       does s a (evt (nth pi j)) &&
         eval c (st pi (minus_nat j one_nat)) == Just True;
+
+first_forbidden ::
+  forall a b c d.
+    (Eq a, Eq b, Eq d,
+      Value_order d) => a -> b -> Expr c d ->
+                                    [(c -> Maybe d, (Int, Event c a b))] -> Nat;
+first_forbidden s a c pi =
+  (case find (forbidden s a c pi) (upt zero_nat (size_list pi)) of {
+    Nothing -> size_list pi;
+    Just j -> j;
+  });
+
+pr_pen_state ::
+  forall a b c d.
+    (Eq a, Eq b, Eq d,
+      Value_order d) => a -> b -> Expr c d ->
+                                    [(c -> Maybe d, (Int, Event c a b))] ->
+                                      c -> Maybe d;
+pr_pen_state s a c pi = st pi (minus_nat (first_forbidden s a c pi) one_nat);
+
+time :: forall a b c d. [(a -> Maybe b, (Int, Event a c d))] -> Nat -> Int;
+time pi j = tstamp (nth pi j);
 
 pr_verdict ::
   forall a b c d.
@@ -1286,27 +1350,147 @@ pr_verdict s a c pi =
     Just j -> Breached (time pi j);
   });
 
+pr_report ::
+  forall a b c d.
+    (Eq a, Value_order a, Eq b,
+      Eq c) => (a -> Maybe Rat) ->
+                 b -> c -> Expr d a ->
+                             [Baction b (Pen d a)] ->
+                               [(d -> Maybe a, (Int, Event d b c))] -> [Ract b];
+pr_report num s a c acts pi =
+  (case pr_verdict s a c pi of {
+    Fulfilled -> [];
+    Breached _ -> report_actions num (pr_pen_state s a c pi) acts;
+    Pending -> [];
+  });
+
+passed :: forall a b c d. Int -> [(a -> Maybe b, (Int, Event a c d))] -> Bool;
+passed d pi = any (\ j -> less_int d (time pi j)) (upt zero_nat (size_list pi));
+
+after :: Maybe Int -> Int -> Bool;
+after Nothing tau = True;
+after (Just l) tau = less_int l tau;
+
+acted ::
+  forall a b c d.
+    (Eq a,
+      Eq b) => a -> b -> Maybe Int ->
+                           Int -> [(c -> Maybe d, (Int, Event c a b))] -> Bool;
+acted s a lo d pi =
+  any (\ j ->
+        does s a (evt (nth pi j)) &&
+          after lo (time pi j) && less_eq_int (time pi j) d)
+    (upt one_nat (size_list pi));
+
+window ::
+  forall a b c d.
+    (Eq a,
+      Eq b) => a -> b -> Maybe Int ->
+                           Int ->
+                             [(c -> Maybe d, (Int, Event c a b))] -> Verdict;
+window s a lo d pi =
+  (if acted s a lo d pi then Fulfilled
+    else (if passed d pi then Breached d else Pending));
+
+continue_after ::
+  forall a b c d e.
+    (Eq a,
+      Eq b) => Int ->
+                 a -> b -> Int ->
+                             Int ->
+                               Maybe (Baction a c) ->
+                                 [(d -> Maybe e, (Int, Event d a b))] ->
+                                   Continuation a;
+continue_after tau_0 s a d tau_b (Just Terminate) pi = Terminated;
+continue_after tau_0 s a d tau_b (Just (CureBy k)) pi =
+  Cure (window s a (Just tau_b) (plus_int tau_b k) pi);
+continue_after tau_0 sa a d tau_b (Just (EscalateTo s)) pi =
+  Escalated s (window s a (Just tau_b) (plus_int tau_b (minus_int d tau_0)) pi);
+continue_after tau_0 s a d tau_b Nothing pi = NoContinuation;
+continue_after tau_0 s a d tau_b (Just (Notify va)) pi = NoContinuation;
+continue_after tau_0 s a d tau_b (Just (Penalty va)) pi = NoContinuation;
+
+cont_of :: forall a b. [Baction a b] -> Maybe (Baction a b);
+cont_of acts = (case filter is_cont acts of {
+                 [] -> Nothing;
+                 c : _ -> Just c;
+               });
+
+handle_breach ::
+  forall a b c d e.
+    (Eq a,
+      Eq b) => Int ->
+                 Maybe Int ->
+                   a -> b -> Int ->
+                               [Baction a c] ->
+                                 [(d -> Maybe e, (Int, Event d a b))] ->
+                                   Status a;
+handle_breach tau_0 lo s a d acts pi =
+  (case window s a lo d pi of {
+    Fulfilled -> SFulfilled;
+    Breached tau_b ->
+      SBreached tau_b (continue_after tau_0 s a d tau_b (cont_of acts) pi);
+    Pending -> SPending;
+  });
+
+start_of ::
+  forall a b.
+    (a -> Maybe Int) ->
+      Int -> (b -> Maybe a) -> Maybe (Deadline b) -> Maybe Int;
+start_of t tau_0 sigma_0 f = (case f of {
+                               Nothing -> Just tau_0;
+                               Just a -> resolve t tau_0 sigma_0 a;
+                             });
+
+deadline_of ::
+  forall a b.
+    (a -> Maybe Int) ->
+      Int ->
+        (b -> Maybe a) -> Maybe (Deadline b) -> Maybe (Deadline b) -> Maybe Int;
+deadline_of t tau_0 sigma_0 f d = (case start_of t tau_0 sigma_0 f of {
+                                    Nothing -> Nothing;
+                                    Just b -> bind d (resolve t b sigma_0);
+                                  });
+
+breach_entry ::
+  forall a b c d. Int -> [(a -> Maybe b, (Int, Event a c d))] -> Nat;
+breach_entry d pi =
+  (case find (\ j -> less_int d (time pi j)) (upt zero_nat (size_list pi)) of {
+    Nothing -> size_list pi;
+    Just j -> j;
+  });
+
+ob_pen_state ::
+  forall a b c d. Int -> [(a -> Maybe b, (Int, Event a c d))] -> a -> Maybe b;
+ob_pen_state d pi = st pi (minus_nat (breach_entry d pi) one_nat);
+
+ob_report ::
+  forall a b c d.
+    (a -> Maybe Rat) ->
+      Int ->
+        Status b ->
+          [Baction b (Pen c a)] ->
+            [(c -> Maybe a, (Int, Event c b d))] -> [Ract b];
+ob_report num d sts acts pi =
+  (case sts of {
+    SFulfilled -> [];
+    SPending -> [];
+    SBreached _ _ -> report_actions num (ob_pen_state d pi) acts;
+  });
+
 ob_verdict ::
   forall a b c d.
     (Eq a,
       Eq b) => a -> b -> Maybe Int ->
-                           [(c -> Maybe d, (Int, Event c a b))] -> Verdict;
-ob_verdict s a d pi =
+                           Maybe Int ->
+                             [(c -> Maybe d, (Int, Event c a b))] -> Verdict;
+ob_verdict s a lo d pi =
   (case d of {
     Nothing ->
-      (if any (\ j -> does s a (evt (nth pi j))) (upt one_nat (size_list pi))
+      (if any (\ j -> does s a (evt (nth pi j)) && after lo (time pi j))
+            (upt one_nat (size_list pi))
         then Fulfilled else Pending);
-    Just da -> window s a Nothing da pi;
-  });
-
-pr_actions ::
-  forall a b c d e.
-    (Eq c) => [Sterm a b c d e] -> Nat -> Verdict -> [Baction c e];
-pr_actions blk i v =
-  (case v of {
-    Fulfilled -> [];
-    Breached _ -> filter (\ x -> not (is_cont x)) (handler_of blk i);
-    Pending -> [];
+    Just da -> window s a lo da pi;
   });
 
 time_of :: Atom -> Maybe Int;
@@ -1315,10 +1499,52 @@ time_of (ABool v) = Nothing;
 time_of (ANum v) = Nothing;
 time_of (AStr v) = Nothing;
 
+lo_of :: forall a. Maybe (Deadline a) -> Int -> Maybe Int;
+lo_of f b = (case f of {
+              Nothing -> Nothing;
+              Just _ -> Just (minus_int b one_int);
+            });
+
+num_of :: Atom -> Maybe Rat;
+num_of (ANum q) = Just q;
+num_of (ABool v) = Nothing;
+num_of (AStr v) = Nothing;
+num_of (ATime v) = Nothing;
+
+must_line ::
+  Int ->
+    ([String] -> Maybe Atom) ->
+      [Sterm [String] Atom String Act (Pen [String] Atom)] ->
+        [([String] -> Maybe Atom, (Int, Event [String] String Act))] ->
+          Nat ->
+            String ->
+              Act ->
+                Maybe (Deadline [String]) -> Maybe (Deadline [String]) -> Line;
+must_line tau_0 sigma_0 blk pi i s a d f =
+  (case start_of time_of tau_0 sigma_0 f of {
+    Nothing -> LMust (suc i) s a Nothing SPending [];
+    Just b ->
+      (case deadline_of time_of tau_0 sigma_0 f d of {
+        Nothing ->
+          LMust (suc i) s a Nothing
+            (case ob_verdict s a (lo_of f b) Nothing pi of {
+              Fulfilled -> SFulfilled;
+              Breached _ -> SPending;
+              Pending -> SPending;
+            })
+            [];
+        Just da ->
+          let {
+            st = handle_breach b (lo_of f b) s a da (handler_of blk i) pi;
+          } in LMust (suc i) s a (Just da) st
+                 (ob_report num_of da st (handler_of blk i) pi);
+      });
+  });
+
 to_tm_env ::
   forall a b c d e.
     [Maybe (Tm a b c d)] -> Sterm a b c d e -> Maybe (Tm a b c d);
-to_tm_env gamma (SMust s a d) = Just (TMust s a);
+to_tm_env gamma (SMust s a d f) = Just (TMust s a);
 to_tm_env gamma (SMustNot s a c) = Just (TMustNot s a c);
 to_tm_env gamma (SMay s a c) = Just (TMay s a c);
 to_tm_env gamma (SThen t u) = (case (to_tm_env gamma t, to_tm_env gamma u) of {
@@ -1364,26 +1590,15 @@ benv blk = benv_from [] blk;
 term_line ::
   Int ->
     ([String] -> Maybe Atom) ->
-      [Sterm [String] Atom String String Atom] ->
-        [([String] -> Maybe Atom, (Int, Event [String] String String))] ->
+      [Sterm [String] Atom String Act (Pen [String] Atom)] ->
+        [([String] -> Maybe Atom, (Int, Event [String] String Act))] ->
           Nat -> Line;
 term_line tau_0 sigma_0 blk pi i =
   (case nth blk i of {
-    SMust s a d ->
-      (case bind d (resolve time_of tau_0 sigma_0) of {
-        Nothing ->
-          LMust (suc i) s a Nothing (case ob_verdict s a Nothing pi of {
-                                      Fulfilled -> SFulfilled;
-                                      Breached _ -> SPending;
-                                      Pending -> SPending;
-                                    });
-        Just da ->
-          LMust (suc i) s a (Just da)
-            (handle_breach tau_0 s a da (handler_of blk i) pi);
-      });
-    SMustNot s a c -> let {
-                        v = pr_verdict s a c pi;
-                      } in LMustNot (suc i) s a v (pr_actions blk i v);
+    SMust a b c d -> must_line tau_0 sigma_0 blk pi i a b c d;
+    SMustNot s a c ->
+      LMustNot (suc i) s a (pr_verdict s a c pi)
+        (pr_report num_of s a c (handler_of blk i) pi);
     SMay s a c -> LMay (suc i) s a (may_verdict s a c pi);
     SThen _ _ -> composite_line (suc i) (nth (benv blk) i) pi;
     SOr _ _ -> composite_line (suc i) (nth (benv blk) i) pi;
@@ -1396,8 +1611,8 @@ term_line tau_0 sigma_0 blk pi i =
   });
 
 raw_trace ::
-  [(Nd String Atom, (Int, Event [String] String String))] ->
-    [([String] -> Maybe Atom, (Int, Event [String] String String))];
+  [(Nd String Atom, (Int, Event [String] String Act))] ->
+    [([String] -> Maybe Atom, (Int, Event [String] String Act))];
 raw_trace obs = map (\ (d, (tau, e)) -> (flat d, (tau, e))) obs;
 
 fd_name :: Fdecl -> String;
@@ -1481,8 +1696,7 @@ fd_ty (Fdecl f t m) = t;
 
 ill_typed ::
   [Fdecl] ->
-    [(Nd String Atom, (Int, Event [String] String String))] ->
-      Maybe (Nat, String);
+    [(Nd String Atom, (Int, Event [String] String Act))] -> Maybe (Nat, String);
 ill_typed fs obs =
   map_option (\ (j, x) -> (j, fd_name x))
     (find (\ (j, x) ->
@@ -1510,7 +1724,7 @@ refs (SOr t u) = sup_set (refs t) (refs u);
 refs (SAnd t u) = sup_set (refs t) (refs u);
 refs (SUnless t c u) = sup_set (refs t) (refs u);
 refs (SIf c t u) = sup_set (refs t) (refs u);
-refs (SMust v va vb) = bot_set;
+refs (SMust v va vb vc) = bot_set;
 refs (SMustNot v va vb) = bot_set;
 refs (SMay v va vb) = bot_set;
 refs (SOnBreach v va) = bot_set;
@@ -1572,8 +1786,7 @@ btrace m pi =
   map (\ j -> (blockp m pi j, (time pi j, evt (nth pi j))))
     (upt zero_nat (size_list pi));
 
-run ::
-  Spec -> [(Nd String Atom, (Int, Event [String] String String))] -> [Line];
+run :: Spec -> [(Nd String Atom, (Int, Event [String] String Act))] -> [Line];
 run sp obs =
   (case sp of {
     Spec fs blk invs ->

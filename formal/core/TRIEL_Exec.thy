@@ -8,7 +8,7 @@
 *)
 
 theory TRIEL_Exec
-  imports TRIEL_Terms TRIEL_ND TRIEL_Breach TRIEL_Invariants TRIEL_Numbers
+  imports TRIEL_Terms TRIEL_ND TRIEL_Breach TRIEL_Invariants TRIEL_Numbers TRIEL_Penalty
     "HOL-Library.Code_Target_Numeral"
 begin
 
@@ -31,10 +31,11 @@ lemma passed_code [code]: "passed d \<pi> = (\<exists>j \<in> set [0..<length \<
   by (auto simp: passed_def)
 
 lemma ob_verdict_code [code]:
-  "ob_verdict s a D \<pi> =
+  "ob_verdict s a lo D \<pi> =
      (case D of
-        Some d \<Rightarrow> window s a None d \<pi>
-      | None \<Rightarrow> (if \<exists>j \<in> set [1..<length \<pi>]. does s a (evt (\<pi> ! j)) then Fulfilled else Pending))"
+        Some d \<Rightarrow> window s a lo d \<pi>
+      | None \<Rightarrow> (if \<exists>j \<in> set [1..<length \<pi>]. does s a (evt (\<pi> ! j)) \<and> after lo (time \<pi> j)
+                 then Fulfilled else Pending))"
   by (auto simp: ob_verdict_def split: option.splits)
 
 lemma may_verdict_code [code]:
@@ -1352,9 +1353,45 @@ fun time_of :: "atom \<Rightarrow> int option" where
 type_synonym name = String.literal
 type_synonym path = "name list"
 type_synonym datum = "(name, atom) nd"
-type_synonym cterm = "(path, atom, name, name, atom) sterm"
-type_synonym cevent = "(path, name, name) event"
-type_synonym ctrace = "(path, atom, name, name) itrace"
+text \<open>An action is a name with a list of arguments (TECHNICAL_REPORT.md section 2.6). An
+  argument is a name (of a subject or a factor), which is not evaluated, or a value. An
+  action without arguments has the empty list.\<close>
+
+datatype arg = ArgName path | ArgVal atom
+
+datatype act = Act name "arg list"
+
+type_synonym cpen = "(path, atom) pen"
+type_synonym cterm = "(path, atom, name, act, cpen) sterm"
+type_synonym cevent = "(path, name, act) event"
+type_synonym ctrace = "(path, atom, name, act) itrace"
+
+text \<open>An event matches a norm only with the same subject, the same action name and the
+  same arguments. Every theory of sections 4--8 is generic in the type of actions, so all
+  of their theorems hold for these actions.\<close>
+
+theorem does_args:
+  "does s (Act a xs) (Deontic s' (Act a' ys) p) \<longleftrightarrow> s' = s \<and> a' = a \<and> ys = xs"
+  by (simp add: does_def)
+
+corollary other_args_no_fulfil:
+  "ys \<noteq> xs \<Longrightarrow> \<not> does s (Act a xs) (Deontic s' (Act a ys) p)"
+  by (simp add: does_args)
+
+text \<open>A literal argument is compared by value: the arguments \<open>1200\<close> and \<open>1200.00\<close> are the
+  same.\<close>
+
+lemma dec_atom_eq: "dec_atom m k = dec_atom n l \<longleftrightarrow> (of_int m / 10 ^ k :: rat) = of_int n / 10 ^ l"
+  by (simp add: dec_atom_def)
+
+corollary arg_1200: "ArgVal (dec_atom 1200 0) = ArgVal (dec_atom 120000 2)"
+  by (simp add: dec_atom_def)
+
+text \<open>The number a value denotes, for the amounts of penalties.\<close>
+
+fun num_of :: "atom \<Rightarrow> rat option" where
+  "num_of (ANum q) = Some q"
+| "num_of _ = None"
 type_synonym observation = "datum \<times> int \<times> cevent"
 
 text \<open>A factor declaration: the name, the declared type, and the maximum age if the factor
@@ -1424,7 +1461,7 @@ fun refs :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> nat set" where
 
 fun to_tm_env ::
     "('n, 'v, 's, 'a) tm option list \<Rightarrow> ('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> ('n, 'v, 's, 'a) tm option" where
-  "to_tm_env \<Gamma> (SMust s a D) = Some (TMust s a)"
+  "to_tm_env \<Gamma> (SMust s a D F) = Some (TMust s a)"
 | "to_tm_env \<Gamma> (SMustNot s a c) = Some (TMustNot s a c)"
 | "to_tm_env \<Gamma> (SMay s a c) = Some (TMay s a c)"
 | "to_tm_env \<Gamma> (SThen t u) =
@@ -1552,7 +1589,7 @@ text \<open>The reference semantics of an element of a block: \<open>D ! k\<clos
 
 fun sden :: "('n, 'v, 't, 's, 'a) den option list \<Rightarrow> ('n, 'v, 's, 'a, 'p) sterm
     \<Rightarrow> ('n, 'v, 't, 's, 'a) den option" where
-  "sden D (SMust s a d) = Some (must_d s a)"
+  "sden D (SMust s a d f) = Some (must_d s a)"
 | "sden D (SMustNot s a c) = Some (mustnot_d s a c)"
 | "sden D (SMay s a c) = Some (may_d s a c)"
 | "sden D (SThen t u) = (case (sden D t, sden D u) of (Some x, Some y) \<Rightarrow> Some (then_d x y) | _ \<Rightarrow> None)"
@@ -1591,9 +1628,9 @@ datatype line =
     LActivation bool
   | LBlock bool
   | LTypes "(nat \<times> name) option"
-  | LMust nat name name "int option" "name status"
-  | LMustNot nat name name verdict "(name, atom) baction list"
-  | LMay nat name name verdict
+  | LMust nat name act "int option" "name status" "name ract list"
+  | LMustNot nat name act verdict "name ract list"
+  | LMay nat name act verdict
   | LOnBreach nat name "nat option"
   | LComposite nat "bool option" "bool option" "bool option"
   | LInvariant name "bool option"
@@ -1642,25 +1679,49 @@ proof -
     by (simp add: pr_actions_def)
 qed
 
-definition composite_line :: "nat \<Rightarrow> (path, atom, name, name) tm option \<Rightarrow> ctrace \<Rightarrow> line" where
+text \<open>The actions reported with a prohibition are those of \<open>pr_actions\<close>, with each
+  penalty computed in the state of the breach.\<close>
+
+lemma pr_report_actions:
+  "pr_report num s a c (handler_of blk i) \<pi> =
+     (case pr_verdict s a c \<pi> of
+        Breached \<tau> \<Rightarrow> report_actions num (pr_pen_state s a c \<pi>) (pr_actions blk i (Breached \<tau>))
+      | _ \<Rightarrow> [])"
+  by (auto simp: pr_report_def pr_actions_def report_actions_informational[symmetric]
+      split: verdict.splits)
+
+definition composite_line :: "nat \<Rightarrow> (path, atom, name, act) tm option \<Rightarrow> ctrace \<Rightarrow> line" where
   "composite_line n t \<pi> =
      (case t of
         None \<Rightarrow> LComposite n None None None
       | Some u \<Rightarrow> LComposite n (mem3 u \<pi> Done) (mem3 u \<pi> Interrupted) (mem3 u \<pi> Violated))"
 
 text \<open>The line of the element \<open>i\<close> of the block, numbered from 1 in the report. An
-  obligation without a deadline is never breached, so its handler plays no role.\<close>
+  obligation without a deadline is never breached, so its handler plays no role. An
+  obligation with \<open>FROM\<close> has its start and window from \<open>start_of\<close> and \<open>lo_of\<close>, and its
+  deadline from \<open>deadline_of\<close>. A breached obligation or prohibition is reported with the
+  informational actions of its handler, the penalties computed in the state of the
+  breach (TRIEL_Penalty).\<close>
+
+definition must_line :: "int \<Rightarrow> (path, atom) state \<Rightarrow> cterm list \<Rightarrow> ctrace \<Rightarrow> nat
+    \<Rightarrow> name \<Rightarrow> act \<Rightarrow> path deadline option \<Rightarrow> path deadline option \<Rightarrow> line" where
+  "must_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi> i s a D F =
+     (case start_of time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 F of
+        None \<Rightarrow> LMust (Suc i) s a None SPending []
+      | Some b \<Rightarrow>
+          (case deadline_of time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 F D of
+             None \<Rightarrow> LMust (Suc i) s a None
+                       (case ob_verdict s a (lo_of F b) None \<pi> of Fulfilled \<Rightarrow> SFulfilled | _ \<Rightarrow> SPending) []
+           | Some d \<Rightarrow>
+               (let st = handle_breach b (lo_of F b) s a d (handler_of blk i) \<pi> in
+                LMust (Suc i) s a (Some d) st (ob_report num_of d st (handler_of blk i) \<pi>))))"
 
 definition term_line :: "int \<Rightarrow> (path, atom) state \<Rightarrow> cterm list \<Rightarrow> ctrace \<Rightarrow> nat \<Rightarrow> line" where
   "term_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi> i =
      (case blk ! i of
-        SMust s a D \<Rightarrow>
-          (case Option.bind D (resolve time_of \<tau>\<^sub>0 \<sigma>\<^sub>0) of
-             None \<Rightarrow> LMust (Suc i) s a None
-                       (case ob_verdict s a None \<pi> of Fulfilled \<Rightarrow> SFulfilled | _ \<Rightarrow> SPending)
-           | Some d \<Rightarrow> LMust (Suc i) s a (Some d) (handle_breach \<tau>\<^sub>0 s a d (handler_of blk i) \<pi>))
+        SMust s a D F \<Rightarrow> must_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi> i s a D F
       | SMustNot s a c \<Rightarrow>
-          (let v = pr_verdict s a c \<pi> in LMustNot (Suc i) s a v (pr_actions blk i v))
+          LMustNot (Suc i) s a (pr_verdict s a c \<pi>) (pr_report num_of s a c (handler_of blk i) \<pi>)
       | SMay s a c \<Rightarrow> LMay (Suc i) s a (may_verdict s a c \<pi>)
       | SOnBreach s acts \<Rightarrow> LOnBreach (Suc i) s (map_option Suc (bound_to blk i s))
       | _ \<Rightarrow> composite_line (Suc i) (benv blk ! i) \<pi>)"
@@ -1690,7 +1751,8 @@ text \<open>A composite line reports \<open>mem3\<close> on the blocked trace. B
 
 subsection \<open>Export\<close>
 
-export_code run Spec Fdecl
+export_code run Spec Fdecl Act ArgName ArgVal Pen PVal PAdd PSub PMul PNeg num_of
+  PAmount PUndefined PNegative RNotify RPenalty
   SMust SMustNot SMay SThen SOr SAnd SUnless SOnBreach SIf SSkip SRef DAt DAfter DFactor
   Notify Penalty Terminate CureBy EscalateTo
   ETrue EFalse EEq ELt ELe ENot EAnd EOr EImp EPresent VConst VName VDefault
