@@ -578,6 +578,14 @@ Each decision below was made because of a theorem: either one that proves the de
     - `e` uses `+`, `-` and `*` on numbers, without division, so Integer and Decimal operands give a Decimal (`evalP_decimal`, `pen_amount_decimal`). An operand without a value makes the amount undefined, as in §2.9 (`evalP_strict`); it is reported as undefined, not as 0.
     - A negative amount violates the rule of §2.9 that the amount be non-negative. It is reported as negative and is not replaced by 0. Otherwise the amount is min(e, c), or e without `CAP` (`pen_amount_bounds`).
     - Arithmetic without `DEFAULT` is monotone like the comparisons, so a defined amount does not change when more data is present (`evalP_mono`, `pen_amount_mono`); with `DEFAULT` it can (`pen_default_not_mono`, decision 15).
+19. **`EVENTUALLY φ WITHIN d` is decided by the entries up to its deadline, and missing data leaves it undefined.**
+    - d is resolved once, at activation, like the deadline of an obligation (decision 7): a duration counts from τ₀, and a deadline that does not resolve rejects the activation (`activation_rejected_inv`). The window is the set of entries with time ≤ D.
+    - The verdict is T as soon as φ = T at an entry of the window, an entry exactly at D included (`ew_at_deadline`). It is F only once the trace has an entry strictly after D and φ = F at every entry of the window (`ew_missed`). Otherwise it is ⊥. Before D it is never F (`ew_not_false_before`).
+    - After D the verdict is the strong Kleene disjunction of φ over the window (`ew_after_deadline`), so an entry where φ is ⊥ prevents F (`ew_undefined_data`). If such an entry counted as F, data that arrives later could turn F into T. With this rule, for φ without `PRESENT` and `DEFAULT`, a definite verdict does not change when the states carry more data (`ew_data_mono`), and, with non-decreasing timestamps, when the trace is extended (`ew_final`), as for obligations (`window_final`).
+    - A true `EVENTUALLY φ WITHIN d` makes `EVENTUALLY φ` true (`ew_eventually`).
+20. **The heuristic scoring layer is metadata.**
+    - TECHNICAL_REPORT.md section 4 states that `POLARITY`, `THRESHOLD`, `SENSITIVITY_BOUND`, `WEIGHT` and `CROSS_MODAL` have no formal semantics. The core does not invent one: the `POLARITY`, `THRESHOLD` and `SENSITIVITY_BOUND` of a factor are printed as metadata and do not enter any verdict, like `SOURCE`.
+    - `CROSS_MODAL` (with `TOLERANCE`) and `CAUSED_BY` (with `WEIGHT`) are still rejected: each would add an invariant or a causal claim, and a claim without a verdict must not be accepted silently.
 
 ## 10. Invariants and the evaluator (`TRIEL_Invariants.thy`, `TRIEL_Exec.thy`)
 
