@@ -27,7 +27,8 @@
 --   V      ::= (const VAL) | (name PATH) | (default PATH V)
 --   PATH   ::= (path NAME*)
 --   VAL    ::= (bool true|false) | (int INT) | (dec INT INT) | (str NAME) | (time INT)
---   I      ::= (invariant NAME (always X)|(eventually X)|(next X))
+--   I      ::= (invariant NAME (always X)|(eventually X)|(next X)
+--                          |(eventually_within X DL))       -- DL not (none)
 --   E      ::= (entry INT EV (data (NAME D)*))
 --   EV     ::= (act NAME ACT must|may|must_not) | (arrive NAME) | (tick)
 --   D      ::= VAL | (record (NAME D)*)
@@ -222,15 +223,22 @@ factor (List [Sym "factor", f, t, a]) = T.Fdecl <$> name f <*> ty t <*> age a
     age x = bad "(none) or (block N)" x
 factor x = bad "a factor" x
 
-invariant :: Conv (String, T.Inv [String] T.Atom)
+invariant :: Conv (String, T.Sinv [String] T.Atom)
+invariant (List [Sym "invariant", n, List [Sym "eventually_within", e, d]]) = do
+  n' <- name n
+  e' <- expr e
+  d' <- deadline d
+  case d' of
+    Just dl -> Right (n', T.SEventuallyWithin e' dl)
+    Nothing -> bad "a deadline" d
 invariant (List [Sym "invariant", n, List [Sym op, e]]) = do
   n' <- name n
   e' <- expr e
   case op of
-    "always" -> Right (n', T.Always e')
-    "eventually" -> Right (n', T.Eventually e')
-    "next" -> Right (n', T.Next e')
-    _ -> bad "always, eventually or next" (Sym op)
+    "always" -> Right (n', T.SInv (T.Always e'))
+    "eventually" -> Right (n', T.SInv (T.Eventually e'))
+    "next" -> Right (n', T.SInv (T.Next e'))
+    _ -> bad "always, eventually, next or eventually_within" (Sym op)
 invariant x = bad "an invariant" x
 
 datum :: Conv (T.Nd String T.Atom)

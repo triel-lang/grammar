@@ -351,6 +351,26 @@ def test_default_rejections(factors, cond, why):
     assert rejected(spec(invariants=f"i : ALWAYS({cond})", factors=factors)) == [why]
 
 
+@pytest.mark.parametrize("within,expected", [
+    ("2 DAYS", "(after 172800)"),
+    ('DATETIME("2026-06-08T00:00:00Z")', "(at 1780876800)"),
+    ("d", '(factor (path "d") 0)'),
+    ("d + 1 HOURS", '(factor (path "d") 3600)'),
+])
+def test_eventually_within(within, expected):
+    c = core(spec(factors="f : Boolean METADATA, d : DateTime METADATA",
+                  invariants=f"i : EVENTUALLY(f) WITHIN {within}"))
+    assert f'(invariant "i" (eventually_within (eq (name (path "f")) (const (bool true))) {expected}))' in c
+
+
+@pytest.mark.parametrize("within,why", [
+    ("2 MONTHS", "calendar unit"),
+    ("e", "undeclared factor"),
+])
+def test_eventually_within_rejections(within, why):
+    assert rejected(spec(invariants=f"i : EVENTUALLY(f) WITHIN {within}")) == [why]
+
+
 def test_and_of_terms_is_rejected():
     assert rejected(spec(terms="a MUST b AND a MUST c")) == ["AND (term)"]
 
@@ -373,6 +393,20 @@ def test_metadata_lines():
     assert tr.metadata == ['METADATA STANDARD "S1"', 'METADATA STANDARD "S2"',
                            'METADATA JURISDICTION "EU"', "METADATA PROVENANCE_REQUIRED true",
                            'METADATA CURRENCY "USD"', "METADATA SOURCE f a"]
+
+
+def test_heuristic_layer_is_metadata():
+    tr = translate(spec(factors="f : Integer POLARITY -0.5 THRESHOLD 3 SOURCE a SENSITIVITY_BOUND 1.5",
+                        invariants="i : ALWAYS(f >= 0)"))
+    assert not tr.rejected
+    assert tr.metadata == ["METADATA POLARITY f -0.5", "METADATA THRESHOLD f 3",
+                           "METADATA SOURCE f a", "METADATA SENSITIVITY_BOUND f 1.5"]
+    assert '(factor "f" (prim int) (none))' in sexp(tr.core)
+
+
+def test_caused_by_is_rejected():
+    assert rejected(spec(factors="f : Boolean METADATA, g : Integer POLARITY 1.0 CAUSED_BY { f WEIGHT 0.5 }")) == \
+        ["CAUSED_BY"]
 
 
 def test_stale_block_needs_max_age():

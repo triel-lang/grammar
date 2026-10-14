@@ -54,10 +54,13 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
     subject at the top level (bound_to in TRIEL_Breach.thy). Section 2.6
     defines continuations only for obligations, so TERMINATE, CURE_BY and
     ESCALATE_TO in a handler bound to a prohibition are rejected.
-  * JURISDICTION, STANDARD, CURRENCY, PROVENANCE_REQUIRED and the SOURCE of
-    each factor are metadata: they are printed and have no semantics in the core.
+  * JURISDICTION, STANDARD, CURRENCY, PROVENANCE_REQUIRED, and the POLARITY,
+    THRESHOLD, SOURCE and SENSITIVITY_BOUND of each factor are metadata: they
+    are printed and have no semantics in the core. CAUSED_BY is rejected.
   * The class of an invariant (SAFETY, LIVENESS, FAIRNESS) is a label; the
     verdict depends only on ALWAYS, EVENTUALLY or NEXT.
+  * EVENTUALLY(c) WITHIN d is (eventually_within X DL), with the deadline DL
+    translated as the deadline of an obligation and resolved at activation.
 """
 import argparse
 import calendar
@@ -95,7 +98,7 @@ RULES = {
     "breach_handler_stmt": "core", "breach_action": "core",
     "contract_ref_stmt": "EXECUTE", "binding": "EXECUTE",
     "factors_block": "core", "factor_decl": "core", "stale_action": "core",
-    "polarity_val": "POLARITY", "factor_source": "metadata",
+    "polarity_val": "metadata", "factor_source": "metadata",
     "type_expr": "core", "type_base": "core", "primitive_type": "core",
     "composite_type": "core", "field_decl": "core", "enum_ref": "enum type",
     "zk_type": "ZK type", "zk_primitive_type": "ZK type", "zk_constraints": "ZK type",
@@ -289,12 +292,20 @@ class Translation:
         ty = self.type_expr(subtrees(t)[1])
         self.factors[name] = ty
         toks = tokens(t)
-        for kw in ("POLARITY", "THRESHOLD", "CAUSED_BY", "SENSITIVITY_BOUND"):
-            if kw in toks:
-                self.reject(kw)
-        src = [s for s in subtrees(t) if s.data == "factor_source"]
-        if src:
-            self.metadata_sources.append(f"METADATA SOURCE {name} {ident(subtrees(src[0])[0])}")
+        if "CAUSED_BY" in toks:
+            self.reject("CAUSED_BY")
+        # The heuristic scoring layer has no formal semantics (TECHNICAL_REPORT.md
+        # section 4): POLARITY, THRESHOLD and SENSITIVITY_BOUND are metadata,
+        # printed in source order together with SOURCE.
+        pending = None
+        for c in kids(t):
+            if isinstance(c, Token) and c.value in ("POLARITY", "THRESHOLD", "SENSITIVITY_BOUND"):
+                pending = c.value
+            elif isinstance(c, Tree) and c.data in ("polarity_val", "signed_numeric_literal") and pending:
+                self.metadata_sources.append(f"METADATA {pending} {name} {''.join(tokens(c))}")
+                pending = None
+            elif isinstance(c, Tree) and c.data == "factor_source":
+                self.metadata_sources.append(f"METADATA SOURCE {name} {ident(subtrees(c)[0])}")
         ages = [s for s in subtrees(t) if s.data == "duration_literal"]
         stale = [s for s in subtrees(t) if s.data == "stale_action"]
         age = ["none"]
@@ -877,9 +888,10 @@ class Translation:
         if c.data != "state_invariant":
             return self.reject(RULES[c.data])
         op = tokens(c)[0]
-        if "WITHIN" in tokens(c):
-            return self.reject("EVENTUALLY ... WITHIN")
         e = self.cond(subtrees(c)[0])
+        if "WITHIN" in tokens(c):
+            dl = self.deadline(subtrees(c)[1])
+            return None if e is None or dl is None else ["invariant", name, ["eventually_within", e, dl]]
         return None if e is None else ["invariant", name, [op.lower(), e]]
 
     # --- specification ----------------------------------------------------
