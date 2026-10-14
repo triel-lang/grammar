@@ -184,11 +184,11 @@ text \<open>\<open>s MUST_NOT a WHEN c\<close> is breached at the first action \
   true; \<open>c\<close> is evaluated in the state before the action. An undefined \<open>c\<close> is not a
   breach.\<close>
 
-definition forbidden :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v) expr \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> bool" where
+definition forbidden :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> bool" where
   "forbidden s a c \<pi> j \<longleftrightarrow>
      1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> eval c (st \<pi> (j - 1)) = Some True"
 
-definition pr_verdict :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v) expr \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> verdict" where
+definition pr_verdict :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> verdict" where
   "pr_verdict s a c \<pi> =
      (if \<exists>j. forbidden s a c \<pi> j then Breached (time \<pi> (LEAST j. forbidden s a c \<pi> j)) else Pending)"
 
@@ -234,7 +234,7 @@ text \<open>Enforcement and verdict are separate roles. A monitor enforces a pro
   fail-closed: it blocks the action unless \<open>c\<close> is known to be false, so it blocks on an
   undefined \<open>c\<close>. The verdict records a breach only when \<open>c\<close> is true.\<close>
 
-definition blocks :: "('n, 'v) expr \<Rightarrow> ('n, 'v) state \<Rightarrow> bool" where
+definition blocks :: "('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v) state \<Rightarrow> bool" where
   "blocks c \<sigma> \<longleftrightarrow> eval c \<sigma> \<noteq> Some False"
 
 theorem breach_blocked:
@@ -262,7 +262,7 @@ theorem undefined_guard_blocks_not_breach:
 text \<open>\<open>s MAY a WHEN c\<close> is fulfilled when exercised in a state where \<open>c\<close> holds, and is
   never breached.\<close>
 
-definition may_verdict :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v) expr \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> verdict" where
+definition may_verdict :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> verdict" where
   "may_verdict s a c \<pi> =
      (if \<exists>j. 1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> eval c (st \<pi> (j - 1)) = Some True
       then Fulfilled else Pending)"

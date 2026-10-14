@@ -438,16 +438,44 @@ next
     unfolding nd_le_def pw_le_def nd_named_def nd_vle_def by fastforce
 qed
 
-text \<open>The atom ``\<open>p\<close> is an atom of primitive type \<open>q\<close>'' (\<open>is_prim\<close>) as a base predicate on
-  these named sets.\<close>
+text \<open>The base predicate symbols: the type check ``\<open>p\<close> is an atom of primitive type \<open>q\<close>''
+  (\<open>is_prim\<close>), and the comparison of two value expressions (\<open>ACmp\<close>). On these named sets
+  a value expression denotes an atom: a constant, or the atom that a complex name leads to
+  (\<open>vatom\<close>). The comparison is true or false when both operands denote atoms, and
+  undefined otherwise.\<close>
 
-fun is_R :: "('p \<Rightarrow> 'b \<Rightarrow> bool) \<Rightarrow> 'n list \<times> 'p \<Rightarrow> ('n list, ('n, 'b) nd) state rpred" where
-  "is_R I (p, q) =
+datatype ('n, 'p, 'b) bsym = BIs "'n list" 'p | BCmp crel "('n list, 'b) vexp" "('n list, 'b) vexp"
+
+fun vatom :: "('n list, ('n, 'b) nd) state \<Rightarrow> ('n list, 'b) vexp \<Rightarrow> 'b option" where
+  "vatom \<sigma> (VConst c) = Some c"
+| "vatom \<sigma> (VName p) = (case \<sigma> p of Some (Atom b) \<Rightarrow> Some b | _ \<Rightarrow> None)"
+
+definition cmp_R ::
+    "crel \<Rightarrow> ('n list, 'b) vexp \<Rightarrow> ('n list, 'b) vexp \<Rightarrow> ('n list, ('n, 'b :: value_order) nd) state rpred"
+  where
+  "cmp_R r a c =
+     ({\<sigma>. \<exists>u w. vatom \<sigma> a = Some u \<and> vatom \<sigma> c = Some w \<and> crel_holds r u w},
+      {\<sigma>. \<exists>u w. vatom \<sigma> a = Some u \<and> vatom \<sigma> c = Some w \<and> \<not> crel_holds r u w})"
+
+fun is_R ::
+    "('p \<Rightarrow> 'b \<Rightarrow> bool) \<Rightarrow> ('n, 'p, 'b) bsym \<Rightarrow> ('n list, ('n, 'b :: value_order) nd) state rpred"
+  where
+  "is_R I (BIs p q) =
      ({\<sigma>. \<exists>b. \<sigma> p = Some (Atom b) \<and> I q b},
       {\<sigma>. (\<exists>b. \<sigma> p = Some (Atom b) \<and> \<not> I q b) \<or> (\<exists>m. \<sigma> p = Some (Nom m))})"
+| "is_R I (BCmp r a c) = cmp_R r a c"
+
+lemma cmp_R_P_pred: "P_pred (cmp_R r a c)"
+  by (auto simp: P_pred_def cmp_R_def)
 
 lemma is_R_P_pred: "P_pred (is_R I pq)"
-  by (cases pq) (auto simp: P_pred_def)
+proof (cases pq)
+  case (BIs p q)
+  then show ?thesis by (auto simp: P_pred_def)
+next
+  case (BCmp r a c)
+  then show ?thesis by (simp add: cmp_R_P_pred)
+qed
 
 lemma pw_nd_atom: "pw_le nd_vle \<sigma> \<sigma>' \<Longrightarrow> \<sigma> p = Some (Atom b) \<Longrightarrow> \<sigma>' p = Some (Atom b)"
   unfolding pw_le_def nd_vle_def by fastforce
@@ -455,24 +483,58 @@ lemma pw_nd_atom: "pw_le nd_vle \<sigma> \<sigma>' \<Longrightarrow> \<sigma> p 
 lemma pw_nd_nom: "pw_le nd_vle \<sigma> \<sigma>' \<Longrightarrow> \<sigma> p = Some (Nom m) \<Longrightarrow> \<exists>m'. \<sigma>' p = Some (Nom m')"
   unfolding pw_le_def nd_vle_def by fastforce
 
-lemma is_R_equitone: "equitone_R (pw_le nd_vle) (is_R I pq)"
-proof (cases pq)
-  case (Pair p q)
-  have "rmono (pw_le nd_vle) (is_R I (p, q))"
-    unfolding rmono_iff by (auto dest: pw_nd_atom pw_nd_nom)
-  with Pair is_R_P_pred[of I pq] show ?thesis by (simp add: equitone_R_iff)
+lemma vatom_mono: "pw_le nd_vle \<sigma> \<sigma>' \<Longrightarrow> vatom \<sigma> a = Some u \<Longrightarrow> vatom \<sigma>' a = Some u"
+proof (cases a)
+  case (VName p)
+  assume le: "pw_le nd_vle \<sigma> \<sigma>'" and v: "vatom \<sigma> a = Some u"
+  with VName have "\<sigma> p = Some (Atom u)" by (auto split: option.splits nd.splits)
+  with le have "\<sigma>' p = Some (Atom u)" by (rule pw_nd_atom)
+  with VName show ?thesis by simp
+qed simp
+
+text \<open>The comparison is monotone and equitone under the extension of nominative data: an
+  atom stays the same atom, so a definite answer stays the same.\<close>
+
+theorem cmp_R_rmono: "rmono (pw_le nd_vle) (cmp_R r a c)"
+proof -
+  have keep: "\<exists>u w. vatom \<sigma>' a = Some u \<and> vatom \<sigma>' c = Some w \<and> P u w"
+    if le: "pw_le nd_vle \<sigma> \<sigma>'" and ex: "\<exists>u w. vatom \<sigma> a = Some u \<and> vatom \<sigma> c = Some w \<and> P u w"
+    for \<sigma> \<sigma>' P
+  proof -
+    from ex obtain u w where u: "vatom \<sigma> a = Some u" and w: "vatom \<sigma> c = Some w" and p: "P u w"
+      by blast
+    from vatom_mono[OF le u] vatom_mono[OF le w] p show ?thesis by blast
+  qed
+  show ?thesis
+    unfolding rmono_iff cmp_R_def R_T_pair R_F_pair mem_Collect_eq
+    by (intro allI impI conjI; rule keep; assumption)
 qed
 
-text \<open>The translation. The atoms \<open>E\<^sub>p\<close>, \<open>\<down>p\<close> and type checks go to \<open>FE\<close>, \<open>FDown\<close> and base
-  predicates. NOT and OR go to the compositions \<open>\<not>\<close> and \<open>\<or>\<close>. There is no conjunction among
+theorem cmp_R_equitone: "equitone_R (pw_le nd_vle) (cmp_R r a c)"
+  by (simp add: equitone_R_iff cmp_R_P_pred cmp_R_rmono)
+
+lemma is_R_equitone: "equitone_R (pw_le nd_vle) (is_R I pq)"
+proof (cases pq)
+  case (BIs p q)
+  have "rmono (pw_le nd_vle) (is_R I (BIs p q))"
+    unfolding rmono_iff by (auto dest: pw_nd_atom pw_nd_nom)
+  with BIs is_R_P_pred[of I pq] show ?thesis by (simp add: equitone_R_iff)
+next
+  case (BCmp r a c)
+  then show ?thesis by (simp add: cmp_R_equitone)
+qed
+
+text \<open>The translation. The atoms \<open>E\<^sub>p\<close>, \<open>\<down>p\<close>, type checks and comparisons go to \<open>FE\<close>,
+  \<open>FDown\<close> and base predicates. NOT and OR go to the compositions \<open>\<not>\<close> and \<open>\<or>\<close>. There is no conjunction among
   the base compositions ([8], p. 25), so AND goes to \<open>\<not>(\<not>\<Phi> \<or> \<not>\<Psi>)\<close>.\<close>
 
-primrec catom_fm :: "('n, 'p) catom \<Rightarrow> ('n list \<times> 'p, 'n list) fm" where
+primrec catom_fm :: "('n, 'p, 'b) catom \<Rightarrow> (('n, 'p, 'b) bsym, 'n list) fm" where
   "catom_fm (AEx p) = FE p"
 | "catom_fm (ADown p) = FDown p"
-| "catom_fm (AIs p q) = FPs (p, q)"
+| "catom_fm (AIs p q) = FPs (BIs p q)"
+| "catom_fm (ACmp r a c) = FPs (BCmp r a c)"
 
-primrec cond_fm :: "('n, 'p) catom cond \<Rightarrow> ('n list \<times> 'p, 'n list) fm" where
+primrec cond_fm :: "('n, 'p, 'b) catom cond \<Rightarrow> (('n, 'p, 'b) bsym, 'n list) fm" where
   "cond_fm (CAtom a) = catom_fm a"
 | "cond_fm (CNot \<phi>) = FNot (cond_fm \<phi>)"
 | "cond_fm (CAnd \<phi> \<psi>) = FNot (FOr (FNot (cond_fm \<phi>)) (FNot (cond_fm \<psi>)))"
@@ -489,6 +551,13 @@ next
   case (AIs p q)
   then show ?thesis
     by (auto simp: pval_def is_prim_def nd_named_def split: option.split nd.split)
+next
+  case (ACmp r x y)
+  have v: "vatom (nd_named d) e = evalV_nd e d" for e
+    by (cases e) (simp_all add: nd_named_def flat_def)
+  show ?thesis
+    using ACmp by (cases "evalV_nd x d"; cases "evalV_nd y d")
+      (auto simp: pval_def cmp_R_def v eval_nd_crel)
 qed
 
 lemma interp_is_R_P_pred: "P_pred (interp (is_R I) \<Phi>)"

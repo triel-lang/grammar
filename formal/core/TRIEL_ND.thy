@@ -203,13 +203,21 @@ primrec evalV_nd :: "('n list, 'b) vexp \<Rightarrow> ('n, 'b) nd \<Rightarrow> 
   "evalV_nd (VConst v) d = Some v"
 | "evalV_nd (VName p) d = flat d p"
 
-primrec eval_nd :: "('n list, 'b) expr \<Rightarrow> ('n, 'b) nd \<Rightarrow> bool option" where
+primrec eval_nd :: "('n list, 'b :: value_order) expr \<Rightarrow> ('n, 'b) nd \<Rightarrow> bool option" where
   "eval_nd ETrue d = Some True"
 | "eval_nd EFalse d = Some False"
 | "eval_nd (EEq a c) d =
      (case evalV_nd a d of
         None \<Rightarrow> None
       | Some u \<Rightarrow> (case evalV_nd c d of None \<Rightarrow> None | Some w \<Rightarrow> Some (u = w)))"
+| "eval_nd (ELt a c) d =
+     (case evalV_nd a d of
+        None \<Rightarrow> None
+      | Some u \<Rightarrow> (case evalV_nd c d of None \<Rightarrow> None | Some w \<Rightarrow> Some (vless u w)))"
+| "eval_nd (ELe a c) d =
+     (case evalV_nd a d of
+        None \<Rightarrow> None
+      | Some u \<Rightarrow> (case evalV_nd c d of None \<Rightarrow> None | Some w \<Rightarrow> Some (vleq u w)))"
 | "eval_nd (ENot e) d = knot (eval_nd e d)"
 | "eval_nd (EAnd e\<^sub>1 e\<^sub>2) d = kand (eval_nd e\<^sub>1 d) (eval_nd e\<^sub>2 d)"
 | "eval_nd (EOr e\<^sub>1 e\<^sub>2) d = kor (eval_nd e\<^sub>1 d) (eval_nd e\<^sub>2 d)"
@@ -312,7 +320,7 @@ corollary present_free_equitone_nd: "present_free e \<Longrightarrow> equitone_n
   unfolding equitone_nd_def using T2_nd_monotone by fastforce
 
 theorem T3_nd_present_not_monotone:
-  "\<exists>(d :: ('n, 'b) nd) d' p. nd_le d d' \<and> eval_nd (EPresent p) d \<noteq> eval_nd (EPresent p) d'"
+  "\<exists>(d :: ('n, 'b :: value_order) nd) d' p. nd_le d d' \<and> eval_nd (EPresent p) d \<noteq> eval_nd (EPresent p) d'"
 proof -
   fix x :: 'n and b :: 'b
   have "nd_le (Nom fmempty) (naming x (Atom b) :: ('n, 'b) nd)" by (rule nd_le_empty_naming)
@@ -330,6 +338,16 @@ theorem T4_nd:
   using assms(1)
 proof (induction e)
   case (EEq a c)
+  then have "vnames a \<subseteq> dom (flat d)" "vnames c \<subseteq> dom (flat d)" by simp_all
+  then show ?case
+    using evalV_classical[OF _ assms(2)] by (simp add: evalV_nd_flat)
+next
+  case (ELt a c)
+  then have "vnames a \<subseteq> dom (flat d)" "vnames c \<subseteq> dom (flat d)" by simp_all
+  then show ?case
+    using evalV_classical[OF _ assms(2)] by (simp add: evalV_nd_flat)
+next
+  case (ELe a c)
   then have "vnames a \<subseteq> dom (flat d)" "vnames c \<subseteq> dom (flat d)" by simp_all
   then show ?case
     using evalV_classical[OF _ assms(2)] by (simp add: evalV_nd_flat)

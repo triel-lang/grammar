@@ -12,6 +12,7 @@ session TRIEL_Core = HOL +
     TRIEL_Invariants
     TRIEL_Indicators
     TRIEL_Compositions
+    TRIEL_Numbers
     TRIEL_Exec
   document_files
     "root.tex"

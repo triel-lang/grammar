@@ -8,7 +8,8 @@
 *)
 
 theory TRIEL_Exec
-  imports TRIEL_Terms TRIEL_ND TRIEL_Breach TRIEL_Invariants "HOL-Library.Code_Target_Numeral"
+  imports TRIEL_Terms TRIEL_ND TRIEL_Breach TRIEL_Invariants TRIEL_Numbers
+    "HOL-Library.Code_Target_Numeral"
 begin
 
 section \<open>Executable equations for the verdicts\<close>
@@ -359,7 +360,7 @@ definition ext :: "('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v, 't, 's, 'a) t
 
 text \<open>\<open>first_at c \<pi> k\<close>: the guard \<open>c\<close> is true at entry \<open>k\<close> of \<open>\<pi>\<close> and at no earlier entry.\<close>
 
-definition first_at :: "('n, 'v) expr \<Rightarrow> ('n, 'v, 't, 's, 'a) trace \<Rightarrow> nat \<Rightarrow> bool" where
+definition first_at :: "('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 't, 's, 'a) trace \<Rightarrow> nat \<Rightarrow> bool" where
   "first_at c \<pi> k \<longleftrightarrow> eval c (st \<pi> k) = Some True \<and> (\<forall>j < k. eval c (st \<pi> j) \<noteq> Some True)"
 
 lemma st_take: "j < n \<Longrightarrow> st (take n \<pi>) j = st \<pi> j"
@@ -693,8 +694,8 @@ text \<open>\<open>mem3 t \<pi> r\<close> decides whether \<open>(\<pi>, r)\<clo
   decided exactly for MUST and THEN-chains of MUST, and left unknown where it would depend
   on the satisfiability of a guard.\<close>
 
-fun mem3 :: "('n, 'v, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> outcome \<Rightarrow> bool option"
-and ext3 :: "('n, 'v, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> bool option" where
+fun mem3 :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> outcome \<Rightarrow> bool option"
+and ext3 :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> bool option" where
   "mem3 (TMust s a) \<pi> r = Some (is_trace \<pi> \<and> evt (last \<pi>) = Deontic s a Must \<and> r = Done)"
 | "mem3 (TMay s a c) \<pi> r =
      Some (r = Done \<and> ((is_trace \<pi> \<and> evt (last \<pi>) = Deontic s a May \<and> 1 \<le> length \<pi> - 1
@@ -1075,7 +1076,7 @@ section \<open>Executable equations for expressions and guards\<close>
 lemma eval_present_code: "eval (EPresent x) \<sigma> = Some (\<sigma> x \<noteq> None)"
   by (simp add: domIff)
 
-lemmas eval_code [code] = eval.simps(1-7) eval_present_code
+lemmas eval_code [code] = eval.simps(1-9) eval_present_code
 
 lemma first_at_code [code]:
   "first_at c \<pi> k \<longleftrightarrow>
@@ -1173,19 +1174,64 @@ section \<open>The evaluator\<close>
 
 subsection \<open>Values, types and specifications\<close>
 
-text \<open>Basic values are Booleans, integers, strings and times. A time is an integer number
-  of seconds since 1970-01-01T00:00:00Z; the translator converts DATETIME literals and
-  DAYS, HOURS, MINUTES and SECONDS durations into seconds.\<close>
+text \<open>Basic values are Booleans, exact numbers, strings and times. A number is a rational
+  (TRIEL_Numbers): Integer and Decimal are its two types, an Integer is a number in \<open>\<int>\<close>,
+  and a Decimal is a number with a finite decimal expansion, so every Integer is a
+  Decimal. There is no floating point. A time is an integer number of seconds since
+  1970-01-01T00:00:00Z; the translator converts DATETIME literals and DAYS, HOURS,
+  MINUTES and SECONDS durations into seconds.\<close>
 
-datatype atom = ABool bool | AInt int | AStr String.literal | ATime int
+datatype atom = ABool bool | ANum rat | AStr String.literal | ATime int
 
-datatype prim = PBool | PInt | PStr | PTime
+datatype prim = PBool | PInt | PDec | PStr | PTime
 
 fun interp :: "prim \<Rightarrow> atom \<Rightarrow> bool" where
   "interp PBool b = (case b of ABool _ \<Rightarrow> True | _ \<Rightarrow> False)"
-| "interp PInt b = (case b of AInt _ \<Rightarrow> True | _ \<Rightarrow> False)"
+| "interp PInt b = (case b of ANum q \<Rightarrow> int_rat q | _ \<Rightarrow> False)"
+| "interp PDec b = (case b of ANum q \<Rightarrow> decimal q | _ \<Rightarrow> False)"
 | "interp PStr b = (case b of AStr _ \<Rightarrow> True | _ \<Rightarrow> False)"
 | "interp PTime b = (case b of ATime _ \<Rightarrow> True | _ \<Rightarrow> False)"
+
+lemma interp_int_dec: "interp PInt b \<Longrightarrow> interp PDec b"
+  by (cases b) (simp_all add: int_rat_decimal)
+
+text \<open>The decimal literal \<open>m\<close> with \<open>k\<close> digits after the point.\<close>
+
+definition dec_atom :: "int \<Rightarrow> nat \<Rightarrow> atom" where
+  "dec_atom m k = ANum (of_int m / 10 ^ k)"
+
+lemma dec_atom_Decimal: "interp PDec (dec_atom m k)"
+  by (simp add: dec_atom_def decimal_literal)
+
+text \<open>The ordering comparisons compare numbers as rationals. They are only applied to
+  numbers: the translator rejects an ordering comparison whose operand is not of type
+  Integer or Decimal, and the types of the data are checked before any verdict. On any
+  other pair of values they are false.\<close>
+
+instantiation atom :: value_order
+begin
+
+fun vless_atom :: "atom \<Rightarrow> atom \<Rightarrow> bool" where
+  "vless_atom (ANum p) (ANum q) = (p < q)"
+| "vless_atom _ _ = False"
+
+fun vleq_atom :: "atom \<Rightarrow> atom \<Rightarrow> bool" where
+  "vleq_atom (ANum p) (ANum q) = (p \<le> q)"
+| "vleq_atom _ _ = False"
+
+instance ..
+
+end
+
+text \<open>On numbers, \<open>=\<close>, \<open><\<close> and \<open>\<le>\<close> are the equality and the order of the rationals; so an
+  Integer and a Decimal with the same value are equal (\<open>12 = 12.00\<close>). An operand without
+  a value makes the comparison undefined (\<open>cmp_undefined\<close>).\<close>
+
+theorem eval_cmp_num:
+  assumes "evalV a \<sigma> = Some (ANum p)" and "evalV b \<sigma> = Some (ANum q)"
+  shows "eval (EEq a b) \<sigma> = Some (p = q)" and "eval (ELt a b) \<sigma> = Some (p < q)"
+    and "eval (ELe a b) \<sigma> = Some (p \<le> q)"
+  using assms by simp_all
 
 fun time_of :: "atom \<Rightarrow> int option" where
   "time_of (ATime t) = Some t"
@@ -1374,9 +1420,10 @@ subsection \<open>Export\<close>
 export_code run Spec Fdecl
   SMust SMustNot SMay SThen SOr SAnd SUnless SOnBreach DAt DAfter DFactor
   Notify Penalty Terminate CureBy EscalateTo
-  ETrue EFalse EEq ENot EAnd EOr EImp EPresent VConst VName
-  Always Eventually Next TPrim TOptional TRecord PBool PInt PStr PTime
-  ABool AInt AStr ATime Atom Nom fmap_of_list Deontic Arrival Tick Must May MustNot
+  ETrue EFalse EEq ELt ELe ENot EAnd EOr EImp EPresent VConst VName
+  Always Eventually Next TPrim TOptional TRecord PBool PInt PDec PStr PTime
+  ABool ANum AStr ATime dec_atom quotient_of Atom Nom fmap_of_list Deontic Arrival Tick
+  Must May MustNot
   LActivation LBlock LTypes LMust LMustNot LMay LOnBreach LComposite LInvariant
   SFulfilled SPending SBreached NoContinuation Terminated Cure Escalated
   Fulfilled Breached Pending

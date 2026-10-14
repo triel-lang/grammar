@@ -102,7 +102,7 @@ theorem present_is_Ex: "eval (EPresent x) = Ex_ind x"
   by (rule ext) (simp add: Ex_ind_def)
 
 corollary present_total_not_equitone:
-  "total_pred (eval (EPresent x))" and "\<not> equitone (eval (EPresent x) :: ('n, 'v) qpred)"
+  "total_pred (eval (EPresent x))" and "\<not> equitone (eval (EPresent x) :: ('n, 'v :: value_order) qpred)"
   unfolding present_is_Ex by (rule Ex_ind_total, rule Ex_ind_not_equitone)
 
 
@@ -141,10 +141,20 @@ proof -
     by (auto simp: truth_dom_def weq_def Ex_ind_def split: option.splits)
   show "false_dom (weq x x :: ('n, 'v) qpred) = {}"
     by (auto simp: false_dom_def weq_def split: option.splits)
-  have "equitone (eval (EEq (VName x) (VName x)) :: ('n, 'v) qpred)"
-    by (rule present_free_equitone) simp
-  then show "equitone (weq x x :: ('n, 'v) qpred)"
-    by (simp add: eval_eq_names)
+  show "equitone (weq x x :: ('n, 'v) qpred)"
+    unfolding equitone_def
+  proof (intro allI impI)
+    fix d d' :: "('n, 'v) state"
+    assume a: "weq x x d \<noteq> None \<and> d \<sqsubseteq> d'"
+    then obtain v where v: "d x = Some v" by (auto simp: weq_def split: option.splits)
+    with a have "d' x = Some v" by (blast intro: info_leD)
+    with v show "weq x x d' = weq x x d" by (simp add: weq_def)
+  qed
 qed
+
+text \<open>The proof above does not go through \<open>eval\<close>: \<open>weq\<close> is defined for values of any
+  type, and \<open>eval\<close> needs the order of the class \<open>value_order\<close> for its ordering
+  comparisons. For values with an order, \<open>weq x x\<close> is the comparison \<open>x = x\<close>
+  (\<open>eval_eq_names\<close>), which is equitone by T2.\<close>
 
 end

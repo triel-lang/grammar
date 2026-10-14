@@ -93,7 +93,7 @@ text \<open>\<open>\<pi>\<close> ends with \<open>(subject, action, polarity)\<c
 definition must_d :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) den" where
   "must_d s a = {(\<pi>, Done) | \<pi>. is_trace \<pi> \<and> evt (last \<pi>) = Deontic s a Must}"
 
-definition may_d :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v) expr \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) den" where
+definition may_d :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) den" where
   "may_d s a c =
      {(\<pi>, Done) | \<pi>. is_trace \<pi> \<and> evt (last \<pi>) = Deontic s a May
                      \<and> 1 \<le> length \<pi> - 1 \<and> eval c (st \<pi> (length \<pi> - 2)) = Some True}
@@ -113,7 +113,7 @@ definition or_d :: "('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v, 't, 's, 'a) 
   "or_d T\<^sub>1 T\<^sub>2 = T\<^sub>1 \<union> T\<^sub>2"
 
 definition unless_d ::
-  "('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v) expr \<Rightarrow> ('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v, 't, 's, 'a) den" where
+  "('n, 'v :: value_order, 't, 's, 'a) den \<Rightarrow> ('n, 'v) expr \<Rightarrow> ('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v, 't, 's, 'a) den" where
   "unless_d T c E =
      {(\<pi>, r). (\<pi>, r) \<in> T \<and> (\<forall>j < length \<pi> - 1. eval c (st \<pi> j) \<noteq> Some True)}
      \<union> {(fuse (pre \<pi> k) \<pi>', kappa r') | \<pi> r k \<pi>' r'.
@@ -176,10 +176,10 @@ text \<open>The guard \<open>c\<close> fires at entry \<open>j\<close> of \<open
   except the last) and \<open>eval(c, \<sigma>\<^sub>j)\<close> is true; an undefined guard does not fire.
   \<open>first_fire\<close> is the least such \<open>j\<close>.\<close>
 
-definition fires :: "('n, 'v) expr \<Rightarrow> ('n, 'v, 't, 's, 'a) trace \<Rightarrow> nat \<Rightarrow> bool" where
+definition fires :: "('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 't, 's, 'a) trace \<Rightarrow> nat \<Rightarrow> bool" where
   "fires c \<pi> j \<longleftrightarrow> j < length \<pi> - 1 \<and> eval c (st \<pi> j) = Some True"
 
-definition first_fire :: "('n, 'v) expr \<Rightarrow> ('n, 'v, 't, 's, 'a) trace \<Rightarrow> nat" where
+definition first_fire :: "('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 't, 's, 'a) trace \<Rightarrow> nat" where
   "first_fire c \<pi> = (LEAST j. fires c \<pi> j)"
 
 lemma unless_d_iff:
@@ -1032,7 +1032,7 @@ text \<open>Without totality of \<open>t\<^sub>2\<close> the law fails. Take \<o
   is empty, while the right side contains \<open>(\<langle>x\<rangle>, Interrupted)\<close>.\<close>
 
 theorem unless_then_counterexample:
-  fixes x :: "('n, 'v, 't, 's, 'a) entry"
+  fixes x :: "('n, 'v :: value_order, 't, 's, 'a) entry"
   defines "T\<^sub>1 \<equiv> {([x, x], Done)}" and "E \<equiv> {([x], Done)}"
   shows "\<not> total ({} :: ('n, 'v, 't, 's, 'a) den)"
     and "unless_d (then_d T\<^sub>1 {}) ETrue E = {}"
@@ -1064,7 +1064,7 @@ proof -
 qed
 
 corollary unless_then_not_unconditional:
-  "\<exists>(T\<^sub>1 :: ('n, 'v, 't, 's, 'a) den) T\<^sub>2 c E.
+  "\<exists>(T\<^sub>1 :: ('n, 'v :: value_order, 't, 's, 'a) den) T\<^sub>2 c E.
      unless_d (then_d T\<^sub>1 T\<^sub>2) c E \<noteq> then_d (unless_d T\<^sub>1 c E) (unless_d T\<^sub>2 c E)"
 proof -
   fix x :: "('n, 'v, 't, 's, 'a) entry"
@@ -1082,7 +1082,7 @@ text \<open>\<open>(t UNLESS c DO e) UNLESS d DO e\<close> differs from \<open>t
 
 (* §2.5, non-law *)
 theorem unless_nested_ne_or:
-  fixes n :: 'n and v :: 'v and t :: 't and ev :: "('n, 's, 'a) event"
+  fixes n :: 'n and v :: "'v :: value_order" and t :: 't and ev :: "('n, 's, 'a) event"
   defines "a \<equiv> (Map.empty :: ('n, 'v) state, t, ev)" and "b \<equiv> ([n \<mapsto> v], t, ev)"
   defines "T \<equiv> {([a, a], Done)}" and "E \<equiv> {([a, b, b], Done), ([b], Done)}"
   shows "unless_d (unless_d T ETrue E) (EPresent n) E \<noteq> unless_d T (EOr ETrue (EPresent n)) E"

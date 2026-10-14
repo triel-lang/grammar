@@ -368,25 +368,55 @@ theorem verdict_stable:
 
 subsection \<open>Atoms over nominative data\<close>
 
-text \<open>Three kinds of atoms over TRIEL data: \<open>PRESENT(p)\<close> (that is \<open>E\<^sub>p\<close>), partial presence
-  \<open>\<down>p\<close>, and ``\<open>p\<close> is an atom of primitive type \<open>q\<close>'', which is undefined when \<open>p\<close> leads to
-  nothing and false when it leads to a record.\<close>
+text \<open>Four kinds of atoms over TRIEL data: \<open>PRESENT(p)\<close> (that is \<open>E\<^sub>p\<close>), partial presence
+  \<open>\<down>p\<close>, ``\<open>p\<close> is an atom of primitive type \<open>q\<close>'', which is undefined when \<open>p\<close> leads to
+  nothing and false when it leads to a record, and the comparisons \<open>a = b\<close>, \<open>a < b\<close> and
+  \<open>a \<le> b\<close> of two value expressions (complex names or constants), as in TRIEL_ND: a
+  comparison is undefined when an operand does not lead to an atom. \<open>a > b\<close> and \<open>a \<ge> b\<close>
+  are \<open>b < a\<close> and \<open>b \<le> a\<close>.\<close>
 
-datatype ('n, 'p) catom = AEx "'n list" | ADown "'n list" | AIs "'n list" 'p
+datatype crel = REq | RLt | RLe
+
+fun crel_expr :: "crel \<Rightarrow> ('n, 'v) vexp \<Rightarrow> ('n, 'v) vexp \<Rightarrow> ('n, 'v) expr" where
+  "crel_expr REq a c = EEq a c"
+| "crel_expr RLt a c = ELt a c"
+| "crel_expr RLe a c = ELe a c"
+
+fun crel_holds :: "crel \<Rightarrow> 'v :: value_order \<Rightarrow> 'v \<Rightarrow> bool" where
+  "crel_holds REq u w = (u = w)"
+| "crel_holds RLt u w = vless u w"
+| "crel_holds RLe u w = vleq u w"
+
+lemma crel_expr_present_free [simp]: "present_free (crel_expr r a c)"
+  by (cases r) simp_all
+
+lemma eval_nd_crel:
+  "eval_nd (crel_expr r a c) d =
+     (case evalV_nd a d of
+        None \<Rightarrow> None
+      | Some u \<Rightarrow> (case evalV_nd c d of None \<Rightarrow> None | Some w \<Rightarrow> Some (crel_holds r u w)))"
+  by (cases r) (simp_all cong: option.case_cong)
+
+datatype ('n, 'p, 'b) catom =
+    AEx "'n list" | ADown "'n list" | AIs "'n list" 'p
+  | ACmp crel "('n list, 'b) vexp" "('n list, 'b) vexp"
 
 definition is_prim :: "('p \<Rightarrow> 'b \<Rightarrow> bool) \<Rightarrow> 'n list \<Rightarrow> 'p \<Rightarrow> ('n, 'b) nd \<Rightarrow> bool option" where
   "is_prim I p q d =
      (case den_path p d of None \<Rightarrow> None | Some (Atom b) \<Rightarrow> Some (I q b) | Some (Nom m) \<Rightarrow> Some False)"
 
-primrec catom_eval :: "('p \<Rightarrow> 'b \<Rightarrow> bool) \<Rightarrow> ('n, 'p) catom \<Rightarrow> ('n, 'b) nd \<Rightarrow> bool option" where
+primrec catom_eval ::
+    "('p \<Rightarrow> 'b \<Rightarrow> bool) \<Rightarrow> ('n, 'p, 'b) catom \<Rightarrow> ('n, 'b :: value_order) nd \<Rightarrow> bool option" where
   "catom_eval I (AEx p) = Ex_nd p"
 | "catom_eval I (ADown p) = present_partial p"
 | "catom_eval I (AIs p q) = is_prim I p q"
+| "catom_eval I (ACmp r a c) = eval_nd (crel_expr r a c)"
 
-primrec Ex_free_atom :: "('n, 'p) catom \<Rightarrow> bool" where
+primrec Ex_free_atom :: "('n, 'p, 'b) catom \<Rightarrow> bool" where
   "Ex_free_atom (AEx p) = False"
 | "Ex_free_atom (ADown p) = True"
 | "Ex_free_atom (AIs p q) = True"
+| "Ex_free_atom (ACmp r a c) = True"
 
 lemma is_prim_equitone: "equitone_nd (is_prim I p q)"
   unfolding equitone_nd_def
@@ -405,11 +435,25 @@ proof (intro allI impI)
   qed
 qed
 
-lemma catom_equitone: "Ex_free_atom a \<Longrightarrow> equitone_nd (catom_eval I a)"
-  by (cases a) (simp_all add: present_partial_equitone is_prim_equitone)
+text \<open>The comparisons are equitone: a definite answer survives every extension of the
+  data, on flat states (T2) and on nominative data (\<open>T2_nd_monotone\<close>). An operand that has
+  no value makes the comparison undefined.\<close>
 
-text \<open>Theorem 5 for TRIEL data: with atoms \<open>\<down>p\<close> and type checks, and without \<open>E\<^sub>p\<close>, a
-  definite verdict survives every extension of the data.\<close>
+theorem cmp_equitone: "equitone (eval (crel_expr r a c))"
+  by (rule present_free_equitone) simp
+
+theorem cmp_atom_equitone: "equitone_nd (catom_eval I (ACmp r a c))"
+  by (simp add: present_free_equitone_nd)
+
+theorem cmp_atom_undefined:
+  "evalV_nd a d = None \<or> evalV_nd c d = None \<Longrightarrow> catom_eval I (ACmp r a c) d = None"
+  by (auto simp: eval_nd_crel split: option.splits)
+
+lemma catom_equitone: "Ex_free_atom a \<Longrightarrow> equitone_nd (catom_eval I a)"
+  by (cases a) (simp_all add: present_partial_equitone is_prim_equitone present_free_equitone_nd)
+
+text \<open>Theorem 5 for TRIEL data: with atoms \<open>\<down>p\<close>, type checks and comparisons, and without
+  \<open>E\<^sub>p\<close>, a definite verdict survives every extension of the data.\<close>
 
 theorem verdict_stable_nd:
   assumes "\<And>a. a \<in> cond_atoms \<phi> \<Longrightarrow> Ex_free_atom a"
@@ -423,10 +467,10 @@ subsection \<open>With the atom Ex the property fails: the example of \<open>wt_
 text \<open>A field \<open>f\<close> of type \<open>Optional<q>\<close> in a record, as a condition. With \<open>E\<^sub>f\<close>:
   ``\<open>f\<close> is absent, or \<open>f\<close> has type \<open>q\<close>''. With \<open>\<down>f\<close>, the same shape.\<close>
 
-definition opt_cond_Ex :: "'n \<Rightarrow> 'p \<Rightarrow> ('n, 'p) catom cond" where
+definition opt_cond_Ex :: "'n \<Rightarrow> 'p \<Rightarrow> ('n, 'p, 'b) catom cond" where
   "opt_cond_Ex f q = COr (CNot (CAtom (AEx [f]))) (CAtom (AIs [f] q))"
 
-definition opt_cond_Down :: "'n \<Rightarrow> 'p \<Rightarrow> ('n, 'p) catom cond" where
+definition opt_cond_Down :: "'n \<Rightarrow> 'p \<Rightarrow> ('n, 'p, 'b) catom cond" where
   "opt_cond_Down f q = COr (CNot (CAtom (ADown [f]))) (CAtom (AIs [f] q))"
 
 inductive_cases wt_Record_NomE: "wt I (TRecord fs) (Some (Nom m))"
@@ -483,7 +527,7 @@ text \<open>The data of \<open>wt_not_mono_optional\<close>: the empty record, e
   verdict is undefined before the extension, so no definite verdict is overturned.\<close>
 
 theorem Ex_breaks_stability:
-  fixes f :: 'n and q :: 'p and b :: 'b
+  fixes f :: 'n and q :: 'p and b :: "'b :: value_order"
   defines "I \<equiv> \<lambda>(q :: 'p) (b :: 'b). False"
   defines "t \<equiv> TRecord [(f, TOptional (TPrim q))] :: ('n, 'p) ty"
   shows "nd_le (Nom fmempty) (naming f (Atom b))"
@@ -510,7 +554,7 @@ proof -
 qed
 
 corollary Ex_cond_not_equitone:
-  "\<not> equitone_nd (cond_eval (catom_eval (\<lambda>(q :: 'p) (b :: 'b). False)) (opt_cond_Ex (f :: 'n) (q :: 'p)))"
+  "\<not> equitone_nd (cond_eval (catom_eval (\<lambda>(q :: 'p) (b :: 'b :: value_order). False)) (opt_cond_Ex (f :: 'n) (q :: 'p)))"
 proof
   fix b :: 'b
   let ?Q = "cond_eval (catom_eval (\<lambda>(q :: 'p) (b :: 'b). False)) (opt_cond_Ex f q)"

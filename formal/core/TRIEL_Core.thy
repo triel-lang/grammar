@@ -2,7 +2,8 @@
     Purpose:    A small core of the TRIEL specification language:
                 states as partial maps, the information order, strong-Kleene
                 three-valued evaluation of boolean expressions, PRESENT,
-                and five theorems (T1-T5) about that semantics.
+                the ordering comparisons, and five theorems (T1-T5) about that
+                semantics.
     Source:     Public description only (github.com/triel-lang/grammar,
                 TECHNICAL_REPORT.md section 2.9, FOUNDATIONS.md).
 *)
@@ -43,19 +44,30 @@ lemma info_le_antisym: "\<sigma> \<sqsubseteq> \<sigma>' \<Longrightarrow> \<sig
 section \<open>Syntax\<close>
 
 text \<open>Expressions are two-sorted. Value expressions (value constants and names)
-  denote values; they occur only as operands of the equality comparison.
-  Boolean expressions are the literals true/false, equality, NOT, AND, OR,
-  IMPLIES and PRESENT(name). This is what lets
+  denote values; they occur only as operands of the comparisons.
+  Boolean expressions are the literals true/false, the comparisons \<open>=\<close>, \<open><\<close> and
+  \<open>\<le>\<close>, NOT, AND, OR, IMPLIES and PRESENT(name). This is what lets
   \<open>eval :: expr \<Rightarrow> state \<Rightarrow> bool option\<close> be well typed.\<close>
 
 datatype ('n, 'v) vexp =
     VConst 'v       \<comment> \<open>value constant\<close>
   | VName 'n        \<comment> \<open>name\<close>
 
+text \<open>The ordering comparisons need an order on values. The class \<open>value_order\<close> fixes
+  the two relations and assumes nothing about them, so every theorem below holds for
+  every choice. TRIEL_Exec instantiates them on its basic values: exact numbers
+  (Integer and Decimal, TRIEL_Numbers) are compared as rationals.\<close>
+
+class value_order =
+  fixes vless :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
+    and vleq :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
+
 datatype ('n, 'v) expr =
     ETrue                                         \<comment> \<open>literal true\<close>
   | EFalse                                        \<comment> \<open>literal false\<close>
   | EEq "('n, 'v) vexp" "('n, 'v) vexp"           \<comment> \<open>a = b\<close>
+  | ELt "('n, 'v) vexp" "('n, 'v) vexp"           \<comment> \<open>a < b\<close>
+  | ELe "('n, 'v) vexp" "('n, 'v) vexp"           \<comment> \<open>a <= b\<close>
   | ENot "('n, 'v) expr"                          \<comment> \<open>NOT e\<close>
   | EAnd "('n, 'v) expr" "('n, 'v) expr"          \<comment> \<open>e AND e\<close>
   | EOr "('n, 'v) expr" "('n, 'v) expr"           \<comment> \<open>e OR e\<close>
@@ -117,13 +129,21 @@ primrec evalV :: "('n, 'v) vexp \<Rightarrow> ('n, 'v) state \<Rightarrow> 'v op
   "evalV (VConst v) \<sigma> = Some v"
 | "evalV (VName x) \<sigma> = \<sigma> x"
 
-primrec eval :: "('n, 'v) expr \<Rightarrow> ('n, 'v) state \<Rightarrow> bool option" where
+primrec eval :: "('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v) state \<Rightarrow> bool option" where
   "eval ETrue \<sigma> = Some True"
 | "eval EFalse \<sigma> = Some False"
 | "eval (EEq a b) \<sigma> =
      (case evalV a \<sigma> of
         None \<Rightarrow> None
       | Some u \<Rightarrow> (case evalV b \<sigma> of None \<Rightarrow> None | Some w \<Rightarrow> Some (u = w)))"
+| "eval (ELt a b) \<sigma> =
+     (case evalV a \<sigma> of
+        None \<Rightarrow> None
+      | Some u \<Rightarrow> (case evalV b \<sigma> of None \<Rightarrow> None | Some w \<Rightarrow> Some (vless u w)))"
+| "eval (ELe a b) \<sigma> =
+     (case evalV a \<sigma> of
+        None \<Rightarrow> None
+      | Some u \<Rightarrow> (case evalV b \<sigma> of None \<Rightarrow> None | Some w \<Rightarrow> Some (vleq u w)))"
 | "eval (ENot e) \<sigma> = knot (eval e \<sigma>)"
 | "eval (EAnd e\<^sub>1 e\<^sub>2) \<sigma> = kand (eval e\<^sub>1 \<sigma>) (eval e\<^sub>2 \<sigma>)"
 | "eval (EOr e\<^sub>1 e\<^sub>2) \<sigma> = kor (eval e\<^sub>1 \<sigma>) (eval e\<^sub>2 \<sigma>)"
@@ -134,6 +154,20 @@ text \<open>PRESENT is always defined.\<close>
 
 lemma eval_present_defined: "eval (EPresent x) \<sigma> \<noteq> None"
   by simp
+
+text \<open>A comparison with an operand that has no value is undefined, like every other
+  condition of the core that reads an absent name.\<close>
+
+theorem cmp_undefined:
+  assumes "evalV a \<sigma> = None \<or> evalV b \<sigma> = None"
+  shows "eval (EEq a b) \<sigma> = None" and "eval (ELt a b) \<sigma> = None" and "eval (ELe a b) \<sigma> = None"
+  using assms by (auto split: option.splits)
+
+corollary cmp_absent_name:
+  assumes "x \<notin> dom \<sigma>"
+  shows "eval (ELt (VName x) b) \<sigma> = None" and "eval (ELt b (VName x)) \<sigma> = None"
+    and "eval (ELe (VName x) b) \<sigma> = None" and "eval (ELe b (VName x)) \<sigma> = None"
+  using assms by (auto simp: domIff split: option.splits)
 
 
 section \<open>T1: algebraic laws\<close>
@@ -193,6 +227,8 @@ primrec present_free :: "('n, 'v) expr \<Rightarrow> bool" where
   "present_free ETrue = True"
 | "present_free EFalse = True"
 | "present_free (EEq a b) = True"
+| "present_free (ELt a b) = True"
+| "present_free (ELe a b) = True"
 | "present_free (ENot e) = present_free e"
 | "present_free (EAnd e\<^sub>1 e\<^sub>2) = (present_free e\<^sub>1 \<and> present_free e\<^sub>2)"
 | "present_free (EOr e\<^sub>1 e\<^sub>2) = (present_free e\<^sub>1 \<and> present_free e\<^sub>2)"
@@ -239,12 +275,34 @@ proof (induction e)
     by (simp_all add: evalV_mono)
   then show ?case
     by (auto simp: approx_iff split: option.splits)
+next
+  case (ELt a b)
+  then have "evalV a \<sigma> \<preceq> evalV a \<sigma>'" "evalV b \<sigma> \<preceq> evalV b \<sigma>'"
+    by (simp_all add: evalV_mono)
+  then show ?case
+    by (auto simp: approx_iff split: option.splits)
+next
+  case (ELe a b)
+  then have "evalV a \<sigma> \<preceq> evalV a \<sigma>'" "evalV b \<sigma> \<preceq> evalV b \<sigma>'"
+    by (simp_all add: evalV_mono)
+  then show ?case
+    by (auto simp: approx_iff split: option.splits)
 qed (simp_all add: knot_mono kand_mono kor_mono kimp_mono)
 
 theorem T2_monotone:
   assumes "present_free e" and "\<sigma> \<sqsubseteq> \<sigma>'" and "eval e \<sigma> = Some b"
   shows "eval e \<sigma>' = Some b"
   using eval_mono[OF assms(1,2)] assms(3) by (simp add: approx_def)
+
+text \<open>The comparisons are PRESENT-free, so they are monotone: a definite answer of
+  \<open>a = b\<close>, \<open>a < b\<close> or \<open>a \<le> b\<close> survives every extension of the state.\<close>
+
+corollary cmp_mono:
+  assumes "\<sigma> \<sqsubseteq> \<sigma>'"
+  shows "eval (EEq a b) \<sigma> \<preceq> eval (EEq a b) \<sigma>'"
+    and "eval (ELt a b) \<sigma> \<preceq> eval (ELt a b) \<sigma>'"
+    and "eval (ELe a b) \<sigma> \<preceq> eval (ELe a b) \<sigma>'"
+  by (rule eval_mono[OF _ assms], simp)+
 
 
 section \<open>T3: PRESENT is not monotone\<close>
@@ -257,7 +315,7 @@ lemma present_flips:
   using assms by (auto simp: info_le_def)
 
 theorem T3_present_not_monotone:
-  "\<exists>(\<sigma> :: ('n, 'v) state) \<sigma>' x. \<sigma> \<sqsubseteq> \<sigma>' \<and> eval (EPresent x) \<sigma> \<noteq> eval (EPresent x) \<sigma>'"
+  "\<exists>(\<sigma> :: ('n, 'v :: value_order) state) \<sigma>' x. \<sigma> \<sqsubseteq> \<sigma>' \<and> eval (EPresent x) \<sigma> \<noteq> eval (EPresent x) \<sigma>'"
 proof -
   fix x :: 'n and v :: 'v
   have "(Map.empty :: ('n, 'v) state) \<sqsubseteq> [x \<mapsto> v]"
@@ -282,6 +340,8 @@ primrec names :: "('n, 'v) expr \<Rightarrow> 'n set" where
   "names ETrue = {}"
 | "names EFalse = {}"
 | "names (EEq a b) = vnames a \<union> vnames b"
+| "names (ELt a b) = vnames a \<union> vnames b"
+| "names (ELe a b) = vnames a \<union> vnames b"
 | "names (ENot e) = names e"
 | "names (EAnd e\<^sub>1 e\<^sub>2) = names e\<^sub>1 \<union> names e\<^sub>2"
 | "names (EOr e\<^sub>1 e\<^sub>2) = names e\<^sub>1 \<union> names e\<^sub>2"
@@ -295,10 +355,12 @@ primrec cevalV :: "('n, 'v) vexp \<Rightarrow> ('n \<Rightarrow> 'v) \<Rightarro
   "cevalV (VConst v) \<rho> = v"
 | "cevalV (VName x) \<rho> = \<rho> x"
 
-primrec ceval :: "('n, 'v) expr \<Rightarrow> 'n set \<Rightarrow> ('n \<Rightarrow> 'v) \<Rightarrow> bool" where
+primrec ceval :: "('n, 'v :: value_order) expr \<Rightarrow> 'n set \<Rightarrow> ('n \<Rightarrow> 'v) \<Rightarrow> bool" where
   "ceval ETrue D \<rho> = True"
 | "ceval EFalse D \<rho> = False"
 | "ceval (EEq a b) D \<rho> = (cevalV a \<rho> = cevalV b \<rho>)"
+| "ceval (ELt a b) D \<rho> = vless (cevalV a \<rho>) (cevalV b \<rho>)"
+| "ceval (ELe a b) D \<rho> = vleq (cevalV a \<rho>) (cevalV b \<rho>)"
 | "ceval (ENot e) D \<rho> = (\<not> ceval e D \<rho>)"
 | "ceval (EAnd e\<^sub>1 e\<^sub>2) D \<rho> = (ceval e\<^sub>1 D \<rho> \<and> ceval e\<^sub>2 D \<rho>)"
 | "ceval (EOr e\<^sub>1 e\<^sub>2) D \<rho> = (ceval e\<^sub>1 D \<rho> \<or> ceval e\<^sub>2 D \<rho>)"
@@ -316,6 +378,18 @@ lemma eval_classical:
   using assms(1)
 proof (induction e)
   case (EEq a b)
+  then have "vnames a \<subseteq> dom \<sigma>" "vnames b \<subseteq> dom \<sigma>"
+    by simp_all
+  then show ?case
+    using evalV_classical[OF _ assms(2)] by simp
+next
+  case (ELt a b)
+  then have "vnames a \<subseteq> dom \<sigma>" "vnames b \<subseteq> dom \<sigma>"
+    by simp_all
+  then show ?case
+    using evalV_classical[OF _ assms(2)] by simp
+next
+  case (ELe a b)
   then have "vnames a \<subseteq> dom \<sigma>" "vnames b \<subseteq> dom \<sigma>"
     by simp_all
   then show ?case
@@ -343,6 +417,8 @@ primrec pnames :: "('n, 'v) expr \<Rightarrow> 'n set" where
   "pnames ETrue = {}"
 | "pnames EFalse = {}"
 | "pnames (EEq a b) = {}"
+| "pnames (ELt a b) = {}"
+| "pnames (ELe a b) = {}"
 | "pnames (ENot e) = pnames e"
 | "pnames (EAnd e\<^sub>1 e\<^sub>2) = pnames e\<^sub>1 \<union> pnames e\<^sub>2"
 | "pnames (EOr e\<^sub>1 e\<^sub>2) = pnames e\<^sub>1 \<union> pnames e\<^sub>2"

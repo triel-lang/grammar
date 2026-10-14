@@ -27,7 +27,7 @@ datatype ('n, 'v) inv =
   | Eventually "('n, 'v) expr"
   | Next "('n, 'v) expr"
 
-fun inv_eval :: "('n, 'v) inv \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> bool option" where
+fun inv_eval :: "('n, 'v :: value_order) inv \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> bool option" where
   "inv_eval (Always \<phi>) \<pi> =
      (if \<exists>j < length \<pi>. eval \<phi> (st \<pi> j) = Some False then Some False else None)"
 | "inv_eval (Eventually \<phi>) \<pi> =

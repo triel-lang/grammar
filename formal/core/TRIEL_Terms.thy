@@ -23,11 +23,12 @@ datatype ('n, 'v, 's, 'a) tm =
 section \<open>Denotation\<close>
 
 text \<open>The denotation needs \<open>interleave\<close> for AND, so it is defined in an extension of
-  the locale \<open>interleaving\<close> with timestamps in a linear order.\<close>
+  the locale \<open>interleaving\<close> with timestamps in a linear order. Values carry the order of
+  the ordering comparisons (\<open>value_order\<close> of TRIEL_Core), since guards may compare.\<close>
 
 locale term_semantics = interleaving interleave
   for interleave ::
-    "('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> ('n, 'v, 't, 's, 'a) trace
+    "('n, 'v :: value_order, 't :: linorder, 's, 'a) trace \<Rightarrow> ('n, 'v, 't, 's, 'a) trace
        \<Rightarrow> ('n, 'v, 't, 's, 'a) trace set"
 begin
 
