@@ -671,6 +671,63 @@ lemma mem_may:
 lemma mem_mustnot: "(\<pi>, r) \<in> mustnot_d s a c \<longleftrightarrow> r = Done \<and> length \<pi> = 1"
   unfolding mustnot_d_def len1[symmetric] by auto
 
+lemma mem_skip: "(\<pi>, r) \<in> skip_d \<longleftrightarrow> r = Done \<and> length \<pi> = 1"
+  unfolding skip_d_def len1[symmetric] by auto
+
+lemma ext_skip:
+  assumes "\<rho> \<noteq> []"
+  shows "\<not> ext skip_d \<rho>"
+proof
+  assume "ext skip_d \<rho>"
+  then obtain \<pi>\<^sub>0 r\<^sub>0 where m: "(\<pi>\<^sub>0, r\<^sub>0) \<in> skip_d" and len: "length \<rho> < length \<pi>\<^sub>0"
+    and "take (length \<rho>) \<pi>\<^sub>0 = \<rho>"
+    unfolding ext_def by blast
+  from m obtain x where "\<pi>\<^sub>0 = [x]" unfolding skip_d_def by blast
+  with len assms show False by simp
+qed
+
+lemma st_0: "\<pi> \<noteq> [] \<Longrightarrow> st \<pi> 0 = sta (hd \<pi>)"
+  by (cases \<pi>) (simp_all add: st_def)
+
+lemma take_hd: "take (length \<rho>) \<pi>\<^sub>0 = \<rho> \<Longrightarrow> \<rho> \<noteq> [] \<Longrightarrow> \<pi>\<^sub>0 \<noteq> [] \<and> hd \<pi>\<^sub>0 = hd \<rho>"
+  by (cases \<pi>\<^sub>0; cases \<rho>) auto
+
+text \<open>A proper prefix of a trace of IF starts where the trace does, so the condition is read
+  in the first state of the prefix.\<close>
+
+lemma ext_if_branch:
+  assumes ne: "\<rho> \<noteq> []"
+    and br: "\<And>\<pi>\<^sub>0 r\<^sub>0. \<pi>\<^sub>0 \<noteq> [] \<Longrightarrow> hd \<pi>\<^sub>0 = hd \<rho> \<Longrightarrow> (\<pi>\<^sub>0, r\<^sub>0) \<in> if_d c T E \<longleftrightarrow> (\<pi>\<^sub>0, r\<^sub>0) \<in> X"
+  shows "ext (if_d c T E) \<rho> \<longleftrightarrow> ext X \<rho>"
+proof
+  assume "ext (if_d c T E) \<rho>"
+  then obtain \<pi>\<^sub>0 r\<^sub>0 where m: "(\<pi>\<^sub>0, r\<^sub>0) \<in> if_d c T E" and l: "length \<rho> < length \<pi>\<^sub>0"
+    and tk: "take (length \<rho>) \<pi>\<^sub>0 = \<rho>" unfolding ext_def by blast
+  from take_hd[OF tk ne] m br have "(\<pi>\<^sub>0, r\<^sub>0) \<in> X" by blast
+  with l tk show "ext X \<rho>" unfolding ext_def by blast
+next
+  assume "ext X \<rho>"
+  then obtain \<pi>\<^sub>0 r\<^sub>0 where m: "(\<pi>\<^sub>0, r\<^sub>0) \<in> X" and l: "length \<rho> < length \<pi>\<^sub>0"
+    and tk: "take (length \<rho>) \<pi>\<^sub>0 = \<rho>" unfolding ext_def by blast
+  from take_hd[OF tk ne] m br have "(\<pi>\<^sub>0, r\<^sub>0) \<in> if_d c T E" by blast
+  with l tk show "ext (if_d c T E) \<rho>" unfolding ext_def by blast
+qed
+
+lemma ext_if:
+  assumes ne: "\<rho> \<noteq> []"
+  shows "ext (if_d c T E) \<rho> \<longleftrightarrow> (if eval c (sta (hd \<rho>)) = Some True then ext T \<rho> else ext E \<rho>)"
+proof (cases "eval c (sta (hd \<rho>)) = Some True")
+  case True
+  have "ext (if_d c T E) \<rho> \<longleftrightarrow> ext T \<rho>"
+    by (rule ext_if_branch[OF ne]) (use True in \<open>auto simp: if_d_def\<close>)
+  with True show ?thesis by simp
+next
+  case False
+  have "ext (if_d c T E) \<rho> \<longleftrightarrow> ext E \<rho>"
+    by (rule ext_if_branch[OF ne]) (use False in \<open>auto simp: if_d_def\<close>)
+  with False show ?thesis by simp
+qed
+
 
 subsection \<open>The decision procedure\<close>
 
@@ -679,12 +736,14 @@ fun and_free :: "('n, 'v, 's, 'a) tm \<Rightarrow> bool" where
 | "and_free (TOr t u) = (and_free t \<and> and_free u)"
 | "and_free (TUnless t c u) = (and_free t \<and> and_free u)"
 | "and_free (TAnd t u) = False"
+| "and_free (TIf c t u) = (and_free t \<and> and_free u)"
 | "and_free _ = True"
 
 fun unless_free :: "('n, 'v, 's, 'a) tm \<Rightarrow> bool" where
   "unless_free (TThen t u) = (unless_free t \<and> unless_free u)"
 | "unless_free (TOr t u) = (unless_free t \<and> unless_free u)"
 | "unless_free (TUnless t c u) = False"
+| "unless_free (TIf c t u) = (unless_free t \<and> unless_free u)"
 | "unless_free (TAnd t u) = (unless_free t \<and> unless_free u)"
 | "unless_free _ = True"
 
@@ -714,6 +773,10 @@ and ext3 :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: lin
                          else Some False)
                     [0..<length \<pi>]))"
 | "mem3 (TAnd t u) \<pi> r = None"
+| "mem3 (TIf c t u) \<pi> r =
+     (if \<pi> = [] then Some False
+      else if eval c (st \<pi> 0) = Some True then mem3 t \<pi> r else mem3 u \<pi> r)"
+| "mem3 TSkip \<pi> r = Some (r = Done \<and> length \<pi> = 1)"
 | "ext3 (TMust s a) \<rho> = Some (is_trace \<rho>)"
 | "ext3 (TMay s a c) \<rho> =
      (if \<not> is_trace \<rho> then Some False
@@ -725,6 +788,8 @@ and ext3 :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: lin
          (kors (map (\<lambda>k. kand (mem3 t (take (Suc k) \<rho>) Done) (ext3 u (drop k \<rho>))) [0..<length \<rho>]))"
 | "ext3 (TUnless t c u) \<rho> = (if \<not> is_trace \<rho> then Some False else None)"
 | "ext3 (TAnd t u) \<rho> = None"
+| "ext3 (TIf c t u) \<rho> = (if eval c (st \<rho> 0) = Some True then ext3 t \<rho> else ext3 u \<rho>)"
+| "ext3 TSkip \<rho> = Some False"
 
 lemma kappa_exists:
   "(\<exists>r'. kappa r' = r \<and> P r') \<longleftrightarrow>
@@ -768,7 +833,7 @@ context term_semantics
 begin
 
 lemma wf_den_den: "and_free t \<Longrightarrow> wf_den (den t)"
-  by (induction t) (simp_all add: wf_must wf_may wf_mustnot wf_then wf_or wf_unless)
+  by (induction t) (simp_all add: wf_must wf_may wf_mustnot wf_then wf_or wf_unless wf_if wf_skip)
 
 text \<open>Soundness: a definite answer of \<open>mem3\<close> or \<open>ext3\<close> is the truth.\<close>
 
@@ -1035,6 +1100,48 @@ next
 next
   case (TAnd t u)
   then show ?case by simp
+next
+  case (TIf c t u)
+  from TIf.prems have ft: "and_free t" and fu: "and_free u" by simp_all
+  note IHt = TIf.IH(1)[OF ft] and IHu = TIf.IH(2)[OF fu]
+  show ?case
+  proof (intro conjI impI)
+    assume m: "mem3 (TIf c t u) \<pi> r = Some b"
+    show "(\<pi>, r) \<in> den (TIf c t u) \<longleftrightarrow> b"
+    proof (cases "\<pi> = []")
+      case True
+      with m den_if[of \<pi> r c t u] show ?thesis by simp
+    next
+      case False
+      then have s0: "st \<pi> 0 = sta (hd \<pi>)" by (rule st_0)
+      show ?thesis
+      proof (cases "eval c (sta (hd \<pi>)) = Some True")
+        case True
+        with m False s0 have "mem3 t \<pi> r = Some b" by simp
+        with IHt[of \<pi> r b] True False den_if[of \<pi> r c t u] show ?thesis by simp
+      next
+        case nt: False
+        with m False s0 have "mem3 u \<pi> r = Some b" by simp
+        with IHu[of \<pi> r b] nt False den_if[of \<pi> r c t u] show ?thesis by simp
+      qed
+    qed
+  next
+    assume ne: "\<rho> \<noteq> []" and e: "ext3 (TIf c t u) \<rho> = Some b'"
+    have s0: "st \<rho> 0 = sta (hd \<rho>)" using ne by (rule st_0)
+    show "ext (den (TIf c t u)) \<rho> \<longleftrightarrow> b'"
+    proof (cases "eval c (sta (hd \<rho>)) = Some True")
+      case True
+      with e s0 have "ext3 t \<rho> = Some b'" by simp
+      with IHt[of _ _ _ \<rho> b'] ne True show ?thesis by (simp add: ext_if)
+    next
+      case False
+      with e s0 have "ext3 u \<rho> = Some b'" by simp
+      with IHu[of _ _ _ \<rho> b'] ne False show ?thesis by (simp add: ext_if)
+    qed
+  qed
+next
+  case TSkip
+  then show ?case by (auto simp: mem_skip ext_skip)
 qed
 
 corollary mem3_sound:
@@ -1069,6 +1176,11 @@ next
   from TOr.prems have ut: "unless_free t" and ft: "and_free t"
     and uu: "unless_free u" and fu: "and_free u" by simp_all
   show ?case unfolding mem3.simps by (rule kor_defined[OF TOr.IH(1)[OF ut ft] TOr.IH(2)[OF uu fu]])
+next
+  case (TIf c t u)
+  from TIf.prems have ut: "unless_free t" and ft: "and_free t"
+    and uu: "unless_free u" and fu: "and_free u" by simp_all
+  show ?case using TIf.IH(1)[OF ut ft, of \<pi> r] TIf.IH(2)[OF uu fu, of \<pi> r] by auto
 qed simp_all
 
 section \<open>Executable equations for expressions and guards\<close>

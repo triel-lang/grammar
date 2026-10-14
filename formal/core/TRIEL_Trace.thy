@@ -1,7 +1,7 @@
 (*  Title:      TRIEL_Trace.thy
     Purpose:    Trace semantics of TRIEL terms (TECHNICAL_REPORT.md section 2.5):
                 traces, fusion, outcomes, the denotations of MUST, MAY, MUST_NOT,
-                THEN, AND, OR and UNLESS, and the algebraic laws of UNLESS.
+                THEN, AND, OR, UNLESS and IF, and the algebraic laws of UNLESS.
     Source:     Public description only (github.com/triel-lang/grammar,
                 TECHNICAL_REPORT.md section 2.5). Guards are expressions of
                 TRIEL_Core, evaluated by its strong Kleene semantics.
@@ -111,6 +111,20 @@ definition then_d :: "('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v, 't, 's, 'a
 
 definition or_d :: "('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v, 't, 's, 'a) den" where
   "or_d T\<^sub>1 T\<^sub>2 = T\<^sub>1 \<union> T\<^sub>2"
+
+text \<open>Conditional terms evaluate their condition once, in the first state of the trace,
+  where the term is reached; only \<open>true\<close> selects the first branch. The term that completes
+  at once, with the one-entry trace and outcome Done, is the missing ELSE branch.\<close>
+
+definition skip_d :: "('n, 'v, 't, 's, 'a) den" where
+  "skip_d = {([x], Done) | x. True}"
+
+definition if_d ::
+  "('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v, 't, 's, 'a) den"
+  where
+  "if_d c T E =
+     {(\<pi>, r). (\<pi>, r) \<in> T \<and> \<pi> \<noteq> [] \<and> eval c (sta (hd \<pi>)) = Some True}
+     \<union> {(\<pi>, r). (\<pi>, r) \<in> E \<and> \<pi> \<noteq> [] \<and> eval c (sta (hd \<pi>)) \<noteq> Some True}"
 
 definition unless_d ::
   "('n, 'v :: value_order, 't, 's, 'a) den \<Rightarrow> ('n, 'v) expr \<Rightarrow> ('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v, 't, 's, 'a) den" where
@@ -646,6 +660,107 @@ next
 qed
 
 
+section \<open>UNLESS distributes over IF\<close>
+
+text \<open>An interrupted trace starts where the interrupted one does, so the condition of an
+  IF reads the same state on both sides: the guard of UNLESS can be pushed into the
+  branches.\<close>
+
+lemma hd_interrupted:
+  assumes "\<pi>\<^sub>0 \<noteq> []"
+  shows "hd (fuse (pre \<pi>\<^sub>0 k) \<pi>') = hd \<pi>\<^sub>0" and "fuse (pre \<pi>\<^sub>0 k) \<pi>' \<noteq> []"
+  using assms by (simp_all add: hd_fuse pre_nonempty hd_pre fuse_nonempty)
+
+lemma fires_nonempty: "fires c \<pi> j \<Longrightarrow> \<pi> \<noteq> []"
+  by (auto simp: fires_def)
+
+lemma unless_branch:
+  assumes "(\<pi>, r) \<in> unless_d X d H" and "\<pi> \<noteq> []"
+    and "\<And>\<pi>\<^sub>0 r\<^sub>0. \<pi>\<^sub>0 \<noteq> [] \<Longrightarrow> hd \<pi>\<^sub>0 = hd \<pi> \<Longrightarrow> (\<pi>\<^sub>0, r\<^sub>0) \<in> X \<Longrightarrow> (\<pi>\<^sub>0, r\<^sub>0) \<in> Y"
+  shows "(\<pi>, r) \<in> unless_d Y d H"
+proof -
+  from assms(1) consider (keep) "(\<pi>, r) \<in> X" "\<forall>j. \<not> fires d \<pi> j"
+    | (int) \<pi>\<^sub>0 r\<^sub>0 \<pi>' r' where "(\<pi>\<^sub>0, r\<^sub>0) \<in> X" "\<exists>j. fires d \<pi>\<^sub>0 j" "(\<pi>', r') \<in> H"
+        "fusable (pre \<pi>\<^sub>0 (first_fire d \<pi>\<^sub>0)) \<pi>'" "\<pi> = fuse (pre \<pi>\<^sub>0 (first_fire d \<pi>\<^sub>0)) \<pi>'" "r = kappa r'"
+    unfolding unless_d_iff by blast
+  then show ?thesis
+  proof cases
+    case keep
+    have "(\<pi>, r) \<in> Y" by (rule assms(3)[OF assms(2) refl keep(1)])
+    with keep(2) show ?thesis unfolding unless_d_iff by blast
+  next
+    case int
+    from int(2) obtain j where "fires d \<pi>\<^sub>0 j" ..
+    then have ne0: "\<pi>\<^sub>0 \<noteq> []" by (rule fires_nonempty)
+    have "hd \<pi> = hd \<pi>\<^sub>0" using int(5) hd_interrupted[OF ne0] by simp
+    then have "(\<pi>\<^sub>0, r\<^sub>0) \<in> Y" using assms(3)[OF ne0 _ int(1)] by simp
+    with int(2-6) show ?thesis unfolding unless_d_iff by blast
+  qed
+qed
+
+theorem unless_if: "unless_d (if_d c T E) d H = if_d c (unless_d T d H) (unless_d E d H)"
+proof -
+  have ne: "\<pi> \<noteq> []" if m: "(\<pi>, r) \<in> unless_d X d H" and ok: "\<And>\<pi>\<^sub>0 r\<^sub>0. (\<pi>\<^sub>0, r\<^sub>0) \<in> X \<Longrightarrow> \<pi>\<^sub>0 \<noteq> []"
+    for \<pi> r X
+  proof -
+    from m consider "(\<pi>, r) \<in> X"
+      | \<pi>\<^sub>0 r\<^sub>0 \<pi>' where "(\<pi>\<^sub>0, r\<^sub>0) \<in> X" "\<pi> = fuse (pre \<pi>\<^sub>0 (first_fire d \<pi>\<^sub>0)) \<pi>'"
+      unfolding unless_d_iff by blast
+    then show ?thesis
+    proof cases
+      case 1
+      then show ?thesis using ok by blast
+    next
+      case 2
+      from 2(1) ok have "\<pi>\<^sub>0 \<noteq> []" by blast
+      with 2(2) show ?thesis using hd_interrupted(2) by simp
+    qed
+  qed
+  have l2r: "(\<pi>, r) \<in> if_d c (unless_d T d H) (unless_d E d H)"
+    if a: "(\<pi>, r) \<in> unless_d (if_d c T E) d H" for \<pi> r
+  proof -
+    have n: "\<pi> \<noteq> []" by (rule ne[OF a]) (auto simp: if_d_def)
+    show ?thesis
+    proof (cases "eval c (sta (hd \<pi>)) = Some True")
+      case True
+      have "(\<pi>, r) \<in> unless_d T d H"
+        by (rule unless_branch[OF a n]) (use True in \<open>simp add: if_d_def\<close>)
+      with True n show ?thesis by (simp add: if_d_def)
+    next
+      case False
+      have "(\<pi>, r) \<in> unless_d E d H"
+        by (rule unless_branch[OF a n]) (use False in \<open>simp add: if_d_def\<close>)
+      with False n show ?thesis by (simp add: if_d_def)
+    qed
+  qed
+  have r2l: "(\<pi>, r) \<in> unless_d (if_d c T E) d H"
+    if a: "(\<pi>, r) \<in> if_d c (unless_d T d H) (unless_d E d H)" for \<pi> r
+  proof -
+    from a have n: "\<pi> \<noteq> []" by (auto simp: if_d_def)
+    show ?thesis
+    proof (cases "eval c (sta (hd \<pi>)) = Some True")
+      case True
+      with a have m: "(\<pi>, r) \<in> unless_d T d H" by (simp add: if_d_def)
+      show ?thesis
+        by (rule unless_branch[OF m n]) (use True in \<open>simp add: if_d_def\<close>)
+    next
+      case False
+      with a have m: "(\<pi>, r) \<in> unless_d E d H" by (simp add: if_d_def)
+      show ?thesis
+        by (rule unless_branch[OF m n]) (use False in \<open>simp add: if_d_def\<close>)
+    qed
+  qed
+  show ?thesis
+  proof (rule subset_antisym; rule subrelI)
+    fix \<pi> r assume "(\<pi>, r) \<in> unless_d (if_d c T E) d H"
+    then show "(\<pi>, r) \<in> if_d c (unless_d T d H) (unless_d E d H)" by (rule l2r)
+  next
+    fix \<pi> r assume "(\<pi>, r) \<in> if_d c (unless_d T d H) (unless_d E d H)"
+    then show "(\<pi>, r) \<in> unless_d (if_d c T E) d H" by (rule r2l)
+  qed
+qed
+
+
 section \<open>Totality\<close>
 
 text \<open>A denotation is total when every entry is the first entry of one of its traces:
@@ -747,6 +862,32 @@ proof (rule totalI)
     moreover have "hd (fuse (pre \<pi> (first_fire c \<pi>)) \<pi>') = x"
       using m(2,3) by (simp add: hd_fuse pre_nonempty hd_pre)
     ultimately show ?thesis by blast
+  qed
+qed
+
+lemma total_skip: "total skip_d"
+proof (rule totalI)
+  fix x
+  have "([x], Done) \<in> skip_d" unfolding skip_d_def by blast
+  then show "\<exists>\<pi> r. (\<pi>, r) \<in> skip_d \<and> \<pi> \<noteq> [] \<and> hd \<pi> = x" by fastforce
+qed
+
+lemma total_if:
+  assumes "total T" and "total E"
+  shows "total (if_d c T E)"
+proof (rule totalI)
+  fix x
+  show "\<exists>\<pi> r. (\<pi>, r) \<in> if_d c T E \<and> \<pi> \<noteq> [] \<and> hd \<pi> = x"
+  proof (cases "eval c (sta x) = Some True")
+    case True
+    from assms(1) obtain \<pi> r where "(\<pi>, r) \<in> T" "\<pi> \<noteq> []" "hd \<pi> = x" by (rule totalE)
+    with True have "(\<pi>, r) \<in> if_d c T E" by (simp add: if_d_def)
+    with \<open>\<pi> \<noteq> []\<close> \<open>hd \<pi> = x\<close> show ?thesis by blast
+  next
+    case False
+    from assms(2) obtain \<pi> r where "(\<pi>, r) \<in> E" "\<pi> \<noteq> []" "hd \<pi> = x" by (rule totalE)
+    with False have "(\<pi>, r) \<in> if_d c T E" by (simp add: if_d_def)
+    with \<open>\<pi> \<noteq> []\<close> \<open>hd \<pi> = x\<close> show ?thesis by blast
   qed
 qed
 
@@ -1237,6 +1378,12 @@ lemma wf_may: "wf_den (may_d s a c)"
 
 lemma wf_mustnot: "wf_den (mustnot_d s a c)"
   by (auto simp: wf_den_def mustnot_d_def is_trace_def)
+
+lemma wf_skip: "wf_den skip_d"
+  by (rule wf_denI) (auto simp: skip_d_def is_trace_def)
+
+lemma wf_if: "wf_den T \<Longrightarrow> wf_den E \<Longrightarrow> wf_den (if_d c T E)"
+  unfolding if_d_def by (auto intro!: wf_denI dest: wf_denD)
 
 lemma wf_or: "wf_den T\<^sub>1 \<Longrightarrow> wf_den T\<^sub>2 \<Longrightarrow> wf_den (or_d T\<^sub>1 T\<^sub>2)"
   by (auto simp: wf_den_def or_d_def)
