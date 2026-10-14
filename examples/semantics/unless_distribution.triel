@@ -7,10 +7,9 @@
 -- it (TECHNICAL_REPORT 2.5). If the guard were checked only once on entry,
 -- they would differ: with c turning true during A, the first completes
 -- A THEN B, while the second runs E instead of B.
--- The names lhs and rhs only label the two sides of the equation. This
--- file illustrates a law; it is not a contract in which both terms are
--- in force at once. The semantics of named terms (:= and REF) is not yet
--- defined in TECHNICAL_REPORT.
+-- The names lhs and rhs label the two sides of the equation. A named term
+-- is in force (TECHNICAL_REPORT 2.5), so read as a contract this file puts
+-- both sides in force at once; it is meant only to illustrate the law.
 
 SPECIFICATION sem_unless_distribution VERSION 1.0.0
 

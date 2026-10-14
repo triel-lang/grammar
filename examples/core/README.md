@@ -1,12 +1,13 @@
 # Examples inside the formal core
 
-The five specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
+The six specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
 
 - `core_deadline_cure.triel`: a deadline, its breach, and a cure;
 - `core_unless_records.triel`: a sequence under UNLESS, with the guard read from a nested record;
 - `core_stale_block.triel`: a stale factor under `ON_STALE BLOCK`, a prohibition with an undefined condition, and an escalation;
 - `core_prohibition_handler.triel`: a breach handler bound to a prohibition, with informational actions only;
-- `core_numbers.triel`: Integer and Decimal factors, ordering comparisons, and a comparison with an absent operand.
+- `core_numbers.triel`: Integer and Decimal factors, ordering comparisons, and a comparison with an absent operand;
+- `core_conditional.triel`: `IF`/`ELIF`/`ELSE` and `WHEN` terms, a named term with `REF`, and `DEFAULT`, with a condition that is undefined where the term is reached.
 
 The evaluator exported from Isabelle runs them on the scenarios in `scenarios/`.
 
@@ -36,11 +37,13 @@ The polarity of an event is used only when a composite term is checked against t
 
 ## Conventions of the evaluator
 
-1. **Order of checks.** Activation first (every deadline must resolve), then well-formedness of the block (`wf_block`), then the types of the data. The first failure is reported and evaluation stops.
+1. **Order of checks.** Activation first (every deadline must resolve), then well-formedness of the block (`wf_block`, and every `REF` names an earlier element without a handler: `refs_ok`), then the types of the data. The first failure is reported and evaluation stops.
 2. **Types.** Each entry is checked against the declared factor types. A factor may be absent: data can be incomplete. A present factor must have its type, and inside a record every field whose type is not `Optional` must be present. Boolean, Integer, Decimal, String and DateTime are the primitive types. A number is exact: an Integer is a whole number, a Decimal a number with finitely many decimal places, and every Integer is a Decimal. DateTime values and DATETIME literals are seconds since the epoch.
 3. **Freshness.** A factor with `MAX_AGE m` and `ON_STALE BLOCK` is fresh at an entry if an `(arrive FACTOR)` entry at most `m` seconds earlier exists. Otherwise it is stale, and all of its complex names are absent. Data present at activation without an arrival entry counts as stale. Under `USE_LAST` the value is kept.
 4. **Blocked trace.** Verdicts, invariants and the membership of composite terms are computed on the trace in which stale factors are absent. Types are checked on the data as given.
 5. **Activation data.** The activation time is the time of entry 0. A deadline from a factor is read in the blocked state of entry 0.
+6. **Conditional terms.** An `IF` or `WHEN` condition is read once, in the first state of the trace being checked. Only true selects `THEN`; false and undefined take `ELIF`/`ELSE`, and without them the term completes `Done` on the one-entry trace.
+7. **Named terms.** `name := t` is reported as its own element, like any other; a `REF name` inside another element is replaced by t before membership is decided.
 
 ## Output
 
@@ -57,7 +60,7 @@ TERM I MUST S A DEADLINE (T | NONE) : STATUS
 TERM I MUST_NOT S A : PENDING | BREACHED T ACTION*
 TERM I MAY S A : FULFILLED | PENDING
 TERM I ON_BREACH S : BOUND J
-TERM I COMPOSITE : DONE X INTERRUPTED X VIOLATED X        -- X is YES, NO or UNKNOWN
+TERM I COMPOSITE : DONE X INTERRUPTED X VIOLATED X        -- X is YES, NO or UNKNOWN; also IF, WHEN and REF
 INVARIANT NAME : T | F | U
 ```
 

@@ -32,10 +32,10 @@ A name outside dom σ is *absent*. FOUNDATIONS.md treats a stale value as absent
 
 **Syntax.** Expressions have two sorts, so that `eval` can return a truth value:
 
-  a ::= c | x                          (value constant c ∈ V, name x ∈ N)
+  a ::= c | x | DEFAULT(x, a)          (value constant c ∈ V, name x ∈ N)
   e ::= true | false | a₁ = a₂ | a₁ < a₂ | a₁ ≤ a₂ | NOT e | e₁ AND e₂ | e₁ OR e₂ | e₁ IMPLIES e₂ | PRESENT(x)
 
-Value constants and names can only appear as operands of the comparisons `=`, `<` and `≤`. A name cannot be used directly as a boolean, because its value is in V and not in the truth values.
+Value constants, names and `DEFAULT` can only appear as operands of the comparisons `=`, `<` and `≤`. A name cannot be used directly as a boolean, because its value is in V and not in the truth values.
 
 **Order on values.** The ordering comparisons need two relations on V, `vless` and `vleq`. They are the parameters of the class `value_order`, which assumes nothing about them, so every theorem holds for every choice. The evaluator instantiates them with the order of exact numbers (section 10.4).
 
@@ -50,7 +50,7 @@ Value constants and names can only appear as operands of the comparisons `=`, `<
 
 **Evaluation.** ⟦a⟧σ ∈ V ∪ {⊥} and ⟦e⟧σ ∈ 𝔹⊥:
 
-- ⟦c⟧σ = c and ⟦x⟧σ = σ x.
+- ⟦c⟧σ = c and ⟦x⟧σ = σ x. ⟦DEFAULT(x, a)⟧σ = σ x if x ∈ dom σ, and ⟦a⟧σ otherwise (`evalV_default`).
 - ⟦true⟧σ = T and ⟦false⟧σ = F.
 - ⟦a₁ = a₂⟧σ is ⊥ if either ⟦aᵢ⟧σ = ⊥. Otherwise it is T if ⟦a₁⟧σ = ⟦a₂⟧σ, and F if they differ.
 - ⟦a₁ < a₂⟧σ and ⟦a₁ ≤ a₂⟧σ are ⊥ if either ⟦aᵢ⟧σ = ⊥. Otherwise they are vless(⟦a₁⟧σ, ⟦a₂⟧σ) and vleq(⟦a₁⟧σ, ⟦a₂⟧σ).
@@ -59,9 +59,9 @@ Value constants and names can only appear as operands of the comparisons `=`, `<
 
 **Auxiliary notions.**
 
-- *PRESENT-free*: e contains no PRESENT subterm (`present_free`).
-- *names(e)*: the names that occur as comparison operands (`names`). PRESENT arguments are not counted, because PRESENT never reads a value. *pnames(e)* is the set of PRESENT arguments.
-- *Classical semantics* ⟦e⟧ᶜ(D, ρ) ∈ {T, F} (`ceval`) takes a **total** valuation ρ : N → V and a set D ⊆ N of present names. It uses the ordinary two-valued connectives, vless and vleq for the ordering comparisons, and ⟦PRESENT(x)⟧ᶜ = (x ∈ D).
+- *PRESENT-free*: e contains no PRESENT subterm and no DEFAULT (`present_free`, with `default_free` for value expressions). §2.9 excepts both forms from monotonicity (T3 and `T3_default_not_monotone`).
+- *names(e)*: the names that occur as comparison operands (`names`). PRESENT arguments are not counted, because PRESENT never reads a value; the first argument of DEFAULT is not counted either, because DEFAULT reads it only when it is present. *pnames(e)* is the set of PRESENT arguments and first arguments of DEFAULT.
+- *Classical semantics* ⟦e⟧ᶜ(D, ρ) ∈ {T, F} (`ceval`) takes a **total** valuation ρ : N → V and a set D ⊆ N of present names. It uses the ordinary two-valued connectives, vless and vleq for the ordering comparisons, ⟦PRESENT(x)⟧ᶜ = (x ∈ D), and ⟦DEFAULT(x, a)⟧ᶜ = ρ x if x ∈ D, ⟦a⟧ᶜ otherwise.
 - *Definedness order* on partial results: p ≼ q ⟺ (p = ⊥ ∨ p = q) (`approx`).
 
 ## 2. Theorems
@@ -87,7 +87,7 @@ For all e, e₁, e₂, e₃ and σ:
 
 Explanation: once a PRESENT-free expression has a definite value, giving more names a value cannot change that value.
 
-**Relation to TECHNICAL_REPORT.md §2.9.** T2 is the monotonicity claim of §2.9, *"every expression form other than `PRESENT` and `DEFAULT` is monotone in the information order"*, stated for this core. The core does not include `DEFAULT`, so "other than PRESENT and DEFAULT" becomes "PRESENT-free". The §2.9 phrase "has the same value on any data that extends it" is the conclusion ⟦e⟧σ′ = ⟦e⟧σ for σ ⊑ σ′. The proof uses the stronger statement ⟦e⟧σ ≼ ⟦e⟧σ′ (`eval_mono`): every Kleene connective and the comparison are monotone in ≼.
+**Relation to TECHNICAL_REPORT.md §2.9.** T2 is the monotonicity claim of §2.9, *"every expression form other than `PRESENT` and `DEFAULT` is monotone in the information order"*, stated for this core: "other than PRESENT and DEFAULT" is "PRESENT-free", which excludes both. The §2.9 phrase "has the same value on any data that extends it" is the conclusion ⟦e⟧σ′ = ⟦e⟧σ for σ ⊑ σ′. The proof uses the stronger statement ⟦e⟧σ ≼ ⟦e⟧σ′ (`eval_mono`): every Kleene connective and the comparison are monotone in ≼.
 
 ### Comparisons (`cmp_undefined`, `cmp_absent_name`, `cmp_mono`)
 
@@ -101,6 +101,8 @@ Explanation: a comparison with an operand that has no value is undefined, like e
 
 Explanation: take σ = ∅ and σ′ = [x ↦ v]. Then PRESENT(x) changes from F to T, which is why §2.9 excludes PRESENT from the monotonicity claim. Lemma `present_flips` gives the general form: whenever x ∉ dom σ, extending σ with x flips PRESENT(x) from F to T.
 
+DEFAULT is not monotone either (`T3_default_not_monotone`): for v ≠ w, ∅ ⊑ [x ↦ v], DEFAULT(x, w) changes from w to v, and DEFAULT(x, w) = w changes from T to F.
+
 ### T4: agreement with two-valued logic (`T4_classical`, `T4_classical_the`, `T4_total`)
 
 If names(e) ⊆ dom σ, then for every total ρ that extends σ (∀x ∈ dom σ. σ x = ρ x):
@@ -108,6 +110,8 @@ If names(e) ⊆ dom σ, then for every total ρ that extends σ (∀x ∈ dom σ
   ⟦e⟧σ ≠ ⊥  and  ⟦e⟧σ = ⟦e⟧ᶜ(dom σ, ρ).
 
 Explanation: when every name the expression reads is defined, the three-valued semantics never produces ⊥ and gives the ordinary Boolean result. One instance is ρ = λx. the(σ x) (`T4_classical_the`).
+
+T4 holds with DEFAULT: DEFAULT reads its first argument only when it is present, so it needs no condition beyond names(e) ⊆ dom σ.
 
 If in addition pnames(e) ⊆ dom σ, then ⟦e⟧σ = ⟦e⟧ᶜ(N, ρ) (`T4_total`). This is the fully classical reading, in which every name is present and PRESENT is constantly T.
 
@@ -121,7 +125,7 @@ Explanation: PRESENT(x) is true exactly when x has a value in the state. Since i
 
 - **Two-sorted syntax.** Value expressions and boolean expressions are separate sorts. Evaluation of a boolean expression returns a truth value in 𝔹⊥, while names and value constants denote values in V. In this core, value expressions occur only as the operands of `=`, `<` and `≤`, which correspond to `==`, `<` and `<=` in the TRIEL grammar. `a != b`, `a > b` and `a >= b` are NOT (a = b), b < a and b ≤ a (section 10.6).
 - **Stale values.** Following FOUNDATIONS.md, a stale value is outside dom σ, so PRESENT(x) is F for a stale x. The `ON_STALE`/`BLOCK` machinery from §2.9 is not modelled.
-- **Out of scope.** `DEFAULT`, arithmetic, function calls, and every construct listed as "Open" in FOUNDATIONS.md are outside this core.
+- **Out of scope.** Arithmetic, function calls, and every construct listed as "Open" in FOUNDATIONS.md are outside this core.
 
 ## 4. Trace semantics (TECHNICAL_REPORT.md §2.5)
 
@@ -159,6 +163,8 @@ A trace π is a non-empty list of entries whose timestamps do not decrease (`is_
 - **UNLESS.** The guard c *fires* at entry j of π if j < |π| − 1 and ⟦c⟧σⱼ = T (`fires`). Let k be the first entry at which it fires (`first_fire`).
   - If c never fires on π, then ⟦t₁ UNLESS c DO t₂⟧ contains (π, o) ∈ ⟦t₁⟧ unchanged.
   - If it does, it contains (π[0..k] ⌢ π′, κ(o′)) for each (π′, o′) ∈ ⟦t₂⟧.
+- **IF.** ⟦IF c THEN t₁ ELSE t₂⟧ = { (π, o) ∈ ⟦t₁⟧ | ⟦c⟧σ₀ = T } ∪ { (π, o) ∈ ⟦t₂⟧ | ⟦c⟧σ₀ ≠ T }, where σ₀ is the state of the first entry of π (`if_d`).
+- **The one-entry term.** ⟦skip⟧ = { (⟨x⟩, Done) | x any entry } (`skip_d`). `IF c THEN t` without `ELSE` is `IF c THEN t ELSE skip`.
 
 **Totality.** ⟦t⟧ is *total* if every entry is the first entry of some trace in ⟦t⟧, that is, t can start from any entry (`total`).
 
@@ -181,12 +187,14 @@ All of the following are proved in `TRIEL_Trace.thy`, with no `sorry` and no `oo
   — The outer guard first fires at the same entry as the inner one, so e runs once (`refire`).
 - **Non-law** (`unless_nested_ne_or`): (t UNLESS c DO e) UNLESS d DO e ≠ t UNLESS (c OR d) DO e for some t, c, d and e.
   — The outer guard d is still watched while the handler e runs, so it can cut e short. The witness uses c = true and d = PRESENT(n).
+- **UNLESS distributes over IF** (`unless_if`): (IF c THEN t ELSE e) UNLESS d DO h = IF c THEN (t UNLESS d DO h) ELSE (e UNLESS d DO h).
+  — Both sides decide the branch on the first entry, and UNLESS keeps the first entry of every trace.
 - **Totality.**
-  - MUST, MAY and MUST_NOT are total (`total_must`, `total_may`, `total_mustnot`).
-  - THEN, OR and UNLESS preserve totality (`total_then`, `total_or`, `total_unless`).
+  - MUST, MAY, MUST_NOT and skip are total (`total_must`, `total_may`, `total_mustnot`, `total_skip`).
+  - THEN, OR, UNLESS and IF preserve totality (`total_then`, `total_or`, `total_unless`, `total_if`).
   - AND preserves totality under the locale assumption (`interleaving.total_and`), and that assumption is satisfiable (`interleaving_satisfiable`).
   - So law 3 holds whenever t₂ is built from these forms.
-- **Well-formed traces.** The denotations of MUST, MAY and MUST_NOT contain only traces. THEN, OR and UNLESS preserve this (`wf_must`, `wf_may`, `wf_mustnot`, `wf_then`, `wf_or`, `wf_unless`).
+- **Well-formed traces.** The denotations of MUST, MAY and MUST_NOT contain only traces. THEN, OR, UNLESS and IF preserve this, and skip contains only traces (`wf_must`, `wf_may`, `wf_mustnot`, `wf_then`, `wf_or`, `wf_unless`, `wf_if`, `wf_skip`).
 
 ### 4.3 Clarifications of §2.5
 
@@ -200,7 +208,7 @@ In five places the text of §2.5 is incomplete, and this formalisation adopts th
 
 ### 4.4 Not formalised
 
-These term forms have no denotation in §2.5 and are outside this theory: `IF c THEN t`, `WHEN c THEN t`, `ON … DO`, `WITHIN … ELSE`, `REF`, `EXECUTE` and `ON_BREACH`. The breach and deadline semantics of §2.6 and the satisfaction of `INVARIANTS` are not formalised either.
+These term forms have no denotation in §2.5 and are outside this theory: `ON … DO`, `WITHIN … ELSE`, `EXECUTE` and `ON_BREACH`. `IF`, `WHEN` and the one-entry term are in section 6; `REF` is resolved by substitution in section 10.3. The breach and deadline semantics of §2.6 and the satisfaction of `INVARIANTS` are not formalised either.
 
 ## 5. The indicator predicate *Ex* (`TRIEL_Ex.thy`)
 
@@ -233,6 +241,9 @@ This section follows the logics of quasiary predicates of Nikitchenko and Shkiln
 - **Terms.** Terms form an inductive type (`tm`):
 
     t ::= s MUST a | s MAY a WHEN c | s MUST_NOT a WHEN c | t₁ THEN t₂ | t₁ OR t₂ | t₁ UNLESS c DO t₂ | t₁ AND t₂
+        | IF c THEN t₁ ELSE t₂ | skip
+
+  `IF c THEN t` without `ELSE` is `IF c THEN t ELSE skip`; `ELIF` is a nested `IF` in the `ELSE` branch; `WHEN c THEN t` is `IF c THEN t`. `REF` is not a term of `tm`: it is resolved into a term by substitution (section 10.3), so every theorem about `tm` covers the terms it produces.
 
 - **Denotation.** The denotation `den` maps each term, structurally, to the denotation of section 4. It is defined in the locale `term_semantics`, which extends `interleaving` with timestamps in a linear order, because AND needs `interleave`.
 
@@ -243,6 +254,14 @@ This section follows the logics of quasiary predicates of Nikitchenko and Shkiln
 - **`term_unless_false`, `term_unless_or`, `term_unless_idem`:** laws 1, 2 and 4 of §2.5, stated for terms.
 - **`term_unless_then`:** ⟦(t₁ THEN t₂) UNLESS c DO e⟧ = ⟦(t₁ UNLESS c DO e) THEN (t₂ UNLESS c DO e)⟧ for all terms t₁, t₂, e and every guard c.
   — Law 3 holds for the term language with no side condition, because every term is total.
+- **`term_unless_if`:** ⟦(IF c THEN t ELSE e) UNLESS d DO h⟧ = ⟦IF c THEN (t UNLESS d DO h) ELSE (e UNLESS d DO h)⟧.
+- **`den_if`:** (π, o) ∈ ⟦IF c THEN t ELSE e⟧ ⟺ π ≠ ⟨⟩ and (π, o) ∈ ⟦t⟧ if ⟦c⟧σ₀ = T, (π, o) ∈ ⟦e⟧ otherwise, where σ₀ is the first state of π.
+  — The condition is evaluated once, where the term is reached.
+- **`if_no_else_not_true`:** if ⟦c⟧σ₀ ≠ T at the entry x, then (⟨x⟩, Done) ∈ ⟦IF c THEN t⟧, and it is the only trace of `IF c THEN t` that starts at x.
+- **`if_undefined_else`:** if ⟦c⟧σ₀ = ⊥, then IF c THEN t ELSE e has the traces of e that start there, as IF false THEN t ELSE e does.
+- **`if_classical`** (from T4): if the first state σ₀ defines names(c) and ρ is a total valuation that extends it, then ⟦IF c THEN t ELSE e⟧ takes t or e as ⟦c⟧ᶜ(dom σ₀, ρ) is T or F.
+- **`if_branch_stable`** (from T2): if c is PRESENT-free, σ ⊑ σ₀ and ⟦c⟧σ ≠ ⊥, then every trace whose first state is σ₀ takes the branch chosen in σ.
+- **`if_undefined_branch_not_stable`:** the branch taken on ⊥ is not protected: x = v is ⊥ in ∅ and T in [x ↦ v]. Every rule that picks a branch on ⊥ has this property.
 
 ## 7. Nominative data (`TRIEL_ND.thy`)
 
@@ -283,7 +302,7 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 - **`T2_nd_monotone`, `present_free_equitone_nd`:** if e is PRESENT-free, d ≤ d′ and ⟦e⟧d = b ≠ ⊥, then ⟦e⟧d′ = b.
   — This is the monotonicity claim of §2.9 for nested data, derived from T2 through `flat_mono`.
 - **`T3_nd_present_not_monotone`:** PRESENT is not monotone under ≤.
-- **`T4_nd`:** agreement with two-valued logic, with PRESENT read as presence of a node.
+- **`T4_nd`:** agreement with two-valued logic, with PRESENT read as presence of a node. For `DEFAULT(p, a)` the classical reading takes p as present when it leads to a node, so T4_nd assumes that the first argument of every `DEFAULT` leads to an atom whenever it leads to anything (`dnames`, `evalV_nd_classical`); the translator rejects `DEFAULT` of a record (section 10.6, rule 8).
 - **`T5_nd_present`:** ⟦PRESENT(p)⟧d = T ⟺ d(p)↓.
 - **`present_nd_is_Ex`, `Ex_nd_total`, `Ex_nd_not_equitone`:** PRESENT(p) is E_p, and E_p is total and not equitone.
 - **`denaming_naming`, `denaming_local_overlapping_same`, `denaming_local_overlapping_other`:** the basic equations of the operations of [7].
@@ -327,7 +346,8 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 - **`Ex_R_counterexample`, `Ex_R_not_mono`, `Ex_R_not_equitone_R`:** ∅ ⊑ [z ↦ v], with E_z(∅) = F and E_z([z ↦ v]) = T. So E_z[∅] = {F} is not a subset of E_z[[z ↦ v]] = {T}, and E_z is not monotone.
 - **`present_partial_domains`, `present_partial_below_present`, `present_partial_mono`, `present_partial_equitone`, `DownInd_nd_equitone_R`:** partial presence has the truth domain of E_p and an empty falsity domain. Wherever it is defined it agrees with PRESENT(p), and it is monotone under the extension ≤ of nominative data.
   — `self_eq_below_present_partial`: the comparison p == p is below ↓p. It is ⊥ when p leads to a record, because comparisons see only atoms.
-- **`cmp_equitone`, `cmp_atom_equitone`, `cmp_atom_undefined`:** the comparisons are equitone, on flat states and on nominative data, and a comparison with an operand that has no value is ⊥.
+- **`cmp_equitone`, `cmp_atom_equitone`, `cmp_atom_undefined`:** the comparisons without `DEFAULT` are equitone, on flat states and on nominative data, and a comparison with an operand that has no value is ⊥.
+- **`default_breaks_stability`, `default_cmp_not_equitone`:** a comparison with `DEFAULT` is not: on the empty record, extended by [f ↦ v], the condition DEFAULT(f, w) = w changes its verdict from T to F for v ≠ w. So `Ex_free_atom` excludes `DEFAULT` as it excludes E_p, and `verdict_stable`, `verdict_stable_nd` do not cover it.
 - **`cond_equitone`, `verdict_stable`, `verdict_stable_nd`:** if every atom of a condition is equitone, the condition is equitone: a definite verdict T or F stays the same under every extension of the data. Over nominative data this holds for every condition whose atoms are ↓p, type checks and comparisons, without E_p.
 - **`opt_cond_Ex_wt`, `Ex_breaks_stability`, `Ex_cond_not_equitone`:** with the atom E_p the property fails. The condition "NOT E_f OR f has type q" is the typing judgement of Record {f: Optional⟨q⟩} (`opt_cond_Ex_wt`). On the data of `wt_not_mono_optional` (the empty record, extended by [f ↦ b] where b is not of type q) its verdict changes from T to F.
 - **`opt_cond_Down_wt`, `Down_cond_equitone`:** the same condition with ↓f agrees with typing when f is present and is ⊥ when f is absent. On the same data its verdict changes from ⊥ to F, so no definite verdict is overturned.
@@ -370,9 +390,9 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 - **`pval_R_ex`, `pval_R_ren_ext`:** on P-predicates the quantifier is the strong Kleene ∃, and renomination is precomposition with r.
 - **`interp_comp_closure`, `interp_P_pred`, `interp_equitone`:** a formula without E_z denotes a predicate of the closure. If the base predicates are P-predicates, every formula denotes a P-predicate. If they are equitone P-predicates, every formula without E_z denotes an equitone P-predicate.
 - **`nd_le_pw`:** d ≤ d′ on nominative data if and only if p ↦ d′(p) extends p ↦ d(p) pointwise, where an atom stays the same atom and a record stays a record.
-- **`cmp_R_rmono`, `cmp_R_equitone`:** a comparison is a monotone and equitone P-predicate under the extension of nominative data.
+- **`cmp_R_rmono`, `cmp_R_equitone`:** a comparison without `DEFAULT` is a monotone and equitone P-predicate under the extension of nominative data.
 - **`cond_fm_correct`:** for every condition φ of section 7.2, comparisons included, and every datum d, the interpretation of `cond_fm φ` on p ↦ d(p) has the value of φ on d. So every TRIEL condition is a term of the composition algebra.
-- **`cond_equitone_from_closure`, `verdict_stable_from_closure`:** the stability of verdicts of section 7.2 (`verdict_stable_nd`) follows from the closure, for conditions with comparisons too. A condition without E_p translates to a formula without E_z, and that formula denotes an equitone P-predicate.
+- **`cond_equitone_from_closure`, `verdict_stable_from_closure`:** the stability of verdicts of section 7.2 (`verdict_stable_nd`) follows from the closure, for conditions with comparisons too. A condition without E_p and `DEFAULT` translates to a formula without E_z whose base predicates are equitone (`catom_fm_E_free`, `cond_fm_syms`, `interp_equitone_pw_syms`), and that formula denotes an equitone P-predicate.
 
 *Not formalised.* Superposition of functions into predicates, and with it the substitution of the value of an expression into a condition, is not formalised here. The sources used in this section, [2], [5] and [8], are pure first-order logics without function symbols.
 
@@ -508,8 +528,9 @@ Each decision below was made because of a theorem: either one that proves the de
     - **Open question.** Should `WHEN c THEN t` wait for c to become true, activating t at that moment, instead of evaluating c once? TECHNICAL_REPORT.md §2.5 leaves this open, and this core evaluates c once, as for `IF`.
 14. **A named term is in force, and `REF` refers only backwards.**
     - An element `name := t` of a `TERMS` block is an element like any other. `REF name` denotes the denotation of t (`resolve_den`, `block_den`).
-    - A reference to an undeclared name, or to a name declared at or below the reference, is rejected (`refs_ok`). So the reference relation is contained in the order of the elements and has no cycle (`refs_ok_acyclic`).
-    - References are removed by substitution, and substitution preserves the denotation (`resolve_den`). A resolved term contains no reference, so totality and the laws of `UNLESS` carry over to it with no side condition.
+    - A reference to an undeclared name, or to a name declared at or below the reference, is rejected (`refs_ok`). So the reference relation is contained in the order of the elements and has no cycle (`refs_forward_rejected`, `refs_ok_acyclic`, `refs_no_cycle`).
+    - References are removed by substitution, and substitution preserves the denotation (`resolve_den`). A resolved term contains no reference, so totality and the laws of `UNLESS` carry over to it with no side condition (`benv_total`).
+    - A `REF` to an element with a breach handler or a deadline is rejected too: a handler is not a term, and a composite term cannot carry a deadline (section 10.6, rule 7). Under these rules every element without a handler resolves (`benv_defined`).
 15. **`DEFAULT` is excluded from the stability of verdicts, like `PRESENT`.**
     - DEFAULT(f, d) is the value of f if E_f, and the value of d otherwise (`evalV_default`).
     - DEFAULT is not monotone: on ∅ ⊑ [f ↦ v], DEFAULT(f, w) changes from w to v (`T3_default_not_monotone`), and the condition DEFAULT(f, w) = w changes its definite verdict from T to F (`default_breaks_stability`).
@@ -533,10 +554,18 @@ Each decision below was made because of a theorem: either one that proves the de
 
 ### 10.3 Membership of a composite term
 
-Whether a trace with an outcome belongs to the denotation of a composite term is decided by a three-valued function `mem3` (yes, no, unknown). A companion function `ext3` decides whether a prefix can be continued to a trace of a term. An interrupted trace of `t UNLESS c DO u` needs a continuation of the prefix by `t`. `ext3` decides this for `MUST` and for `THEN` chains, and answers unknown where the answer would depend on the satisfiability of a guard (`MAY` with a condition that is not true, `UNLESS` inside the interrupted term).
+Whether a trace with an outcome belongs to the denotation of a composite term is decided by a three-valued function `mem3` (yes, no, unknown). A companion function `ext3` decides whether a prefix can be continued to a trace of a term. An interrupted trace of `t UNLESS c DO u` needs a continuation of the prefix by `t`. `ext3` decides this for `MUST`, `THEN` chains, `IF` and skip, and answers unknown where the answer would depend on the satisfiability of a guard (`MAY` with a condition that is not true, `UNLESS` inside the interrupted term).
 
+- `IF` reads its condition in the first state of the trace, and so do `mem3` and `ext3` (`ext_if`, `ext_if_branch`); skip has only one-entry traces, which no proper prefix extends (`mem_skip`, `ext_skip`).
 - Soundness: a definite answer is the truth, for every term without `AND` (`mem3_ext3_sound`, `mem3_sound`, in the locale `term_semantics`).
-- Completeness: for terms without `UNLESS` and `AND` the answer is always definite (`mem3_complete`).
+- Completeness: for terms without `UNLESS` and `AND` the answer is always definite (`mem3_complete`); this includes `IF` and skip.
+
+**Named terms and `REF`.** In a `TERMS` block, `REF name` is the surface term `SRef k`, where k is the index of the element `name := t`, counted from 0. A composite element is translated into a term of `tm` under an environment Γ, a list whose entry k is the term of element k; `SRef k` is replaced by Γ ! k (`to_tm_env`). The environment of a block is built from left to right, each element under the terms of the elements before it (`benv`, `benv_nth`).
+
+- `refs_ok`: every `REF` in element i names an element k < i that contains no breach handler. A reference to a later element, or to the element itself, violates it (`refs_forward_rejected`). The reference relation of a block that satisfies it is well-founded (`refs_ok_acyclic`) and has no cycle (`refs_no_cycle`).
+- Under `refs_ok`, every element without a handler resolves to a term (`benv_defined`).
+- Substitution preserves the denotation (`resolve_den`, `block_den`): the denotation of the resolved term is the reference semantics `sden`, in which `REF k` denotes the denotation of element k.
+- A resolved element is a term of `tm`, so its denotation is total (`benv_total`) and the laws of `UNLESS` hold for it with no side condition.
 - `AND` is answered unknown, and the translator rejects it: its denotation depends on the parameter `interleave` (section 6).
 
 ### 10.4 The evaluator
@@ -546,8 +575,8 @@ Whether a trace with an outcome belongs to the denotation of a composite term is
 - Data are nominative data (section 7). The state of an entry is its data flattened to complex names. Basic values are Booleans, exact numbers, strings and times.
 - **Numbers** (`TRIEL_Numbers.thy`). There is no floating point. A number is a rational q (`ANum`). It has type Integer if q ∈ ℤ (`int_rat`), and type Decimal if q = m / 10ᵏ for an integer m (`decimal`); a decimal literal with k digits after the point is m / 10ᵏ (`dec_atom`, `dec_atom_Decimal`). Every Integer is a Decimal (`int_rat_decimal`, `interp_int_dec`). A rational a/b in lowest terms is a Decimal exactly when b divides a power of 10 (`decimal_iff_denominator`), that is, when b has no prime factor other than 2 and 5 (`dec_den_iff`); so 1/3 is not a Decimal (`not_decimal_third`). The ordering comparisons compare numbers as rationals and are false on any other pair of values; `=` on numbers is equality of rationals, so 2500 = 2500.00 (`eval_cmp_num`).
 - A factor under `MAX_AGE m` and `ON_STALE BLOCK` is absent, with every complex name that starts with it, at an entry where it has not arrived in the last m seconds (`blockp`). The safety claim of §2.9 holds for this blocking by factor (`blockp_stale_safe`, with `blockp_le` and `blockp_stale_absent`), as it does for `blocked` (section 8).
-- Activation is checked first, in the blocked state of entry 0. Then the block is checked with `wf_block` and `cont_free_prohibitions` (section 10.6, rule 4), and then the types of the data as given (`ill_typed`, `ill_typed_None`). Verdicts, invariants and composite terms are computed on the blocked trace (`btrace`, which keeps the times and events: `btrace_is_trace`).
-- A top-level obligation gets `handle_breach` with the handler bound to it, a prohibition `pr_verdict` with the informational actions of its handler after a breach (`pr_actions`), a permission `may_verdict`, a handler the element it is bound to, a composite term `mem3` for each outcome, and an invariant `inv_eval`.
+- Activation is checked first, in the blocked state of entry 0. Then the block is checked with `wf_block`, `cont_free_prohibitions` (section 10.6, rule 4) and `refs_ok` (section 10.3), and then the types of the data as given (`ill_typed`, `ill_typed_None`). Verdicts, invariants and composite terms are computed on the blocked trace (`btrace`, which keeps the times and events: `btrace_is_trace`).
+- A top-level obligation gets `handle_breach` with the handler bound to it, a prohibition `pr_verdict` with the informational actions of its handler after a breach (`pr_actions`), a permission `may_verdict`, a handler the element it is bound to, a composite term `mem3` for each outcome, and an invariant `inv_eval`. A composite term is resolved in the environment of the block first, so a `REF` is reported like the term it names.
 
 `export_code` writes `run` to Haskell. `isabelle build -e -D .` exports the module to [`evaluator/generated/TRIEL.hs`](../../evaluator/generated/TRIEL.hs).
 
@@ -575,8 +604,12 @@ Translation rules:
 
 5. **Numbers and comparisons.** An integer literal is `(int N)`, and a decimal literal is `(dec M K)`, the number M / 10ᴷ: `12.50` is `(dec 1250 2)`. `a < b` and `a <= b` are `(lt a b)` and `(le a b)`; `a > b` is `(lt b a)` and `a >= b` is `(le b a)`. An ordering comparison whose operand is not of type Integer or Decimal, nor a numeric literal, is rejected ("ordering comparison of a non-number"), so the value order is applied only to numbers.
 
+6. **Conditional terms.** `IF c THEN t ELIF c₂ THEN t₂ ELSE e` is `(if c t (if c₂ t₂ e))`; a missing `ELSE` is `(skip)`. `WHEN c THEN t` is `(if c t (skip))`. The branches are composite terms.
+7. **Named terms.** `name := t` is the element t of the block; it is in force like any other element and is reported under its own number. `REF name` is `(ref K)`, K the index of that element counted from 0. Rejected: a reference to an undeclared name ("REF to an undeclared name"); to a name declared at or after the reference, which includes every cycle ("REF to a name declared later"); to an element with a breach handler ("REF to a breach handler"); to an element with a deadline, which a composite term cannot carry ("REF to a term with a deadline"); and a name declared twice ("duplicate term name").
+8. **`DEFAULT`.** `DEFAULT(f, d)` is `(default PATH V)`. f must not lead to a record ("DEFAULT of a record"), for the reason given in rule 3. d must be a value of the type of f: a literal, a factor or another `DEFAULT` ("DEFAULT fallback (not a value)", "DEFAULT fallback of another type"); Integer and Decimal are compatible. A Boolean `DEFAULT` used as a condition is `DEFAULT(f, d) == true`.
+
 Further rejections:
-- A deadline inside a composite term is rejected: the trace semantics of §2.5 has no time, so the deadline would be ignored.
+- A deadline inside a composite term is rejected: the trace semantics of §2.5 has no time, so the deadline would be ignored. This includes the branches of `IF` and `WHEN`.
 - `MAX_AGE` without `ON_STALE`, and `ON_STALE` without `MAX_AGE`, are rejected.
 
 Beyond Isabelle/HOL, the following are trusted:
