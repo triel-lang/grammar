@@ -2,8 +2,8 @@
     Purpose:    A small core of the TRIEL specification language:
                 states as partial maps, the information order, strong-Kleene
                 three-valued evaluation of boolean expressions, PRESENT,
-                the ordering comparisons, and five theorems (T1-T5) about that
-                semantics.
+                DEFAULT, the ordering comparisons, and five theorems (T1-T5)
+                about that semantics.
     Source:     Public description only (github.com/triel-lang/grammar,
                 TECHNICAL_REPORT.md section 2.9, FOUNDATIONS.md).
 *)
@@ -43,15 +43,16 @@ lemma info_le_antisym: "\<sigma> \<sqsubseteq> \<sigma>' \<Longrightarrow> \<sig
 
 section \<open>Syntax\<close>
 
-text \<open>Expressions are two-sorted. Value expressions (value constants and names)
-  denote values; they occur only as operands of the comparisons.
+text \<open>Expressions are two-sorted. Value expressions (value constants, names and
+  DEFAULT(x, a)) denote values; they occur only as operands of the comparisons.
   Boolean expressions are the literals true/false, the comparisons \<open>=\<close>, \<open><\<close> and
   \<open>\<le>\<close>, NOT, AND, OR, IMPLIES and PRESENT(name). This is what lets
   \<open>eval :: expr \<Rightarrow> state \<Rightarrow> bool option\<close> be well typed.\<close>
 
 datatype ('n, 'v) vexp =
-    VConst 'v       \<comment> \<open>value constant\<close>
-  | VName 'n        \<comment> \<open>name\<close>
+    VConst 'v                       \<comment> \<open>value constant\<close>
+  | VName 'n                        \<comment> \<open>name\<close>
+  | VDefault 'n "('n, 'v) vexp"     \<comment> \<open>DEFAULT(x, a)\<close>
 
 text \<open>The ordering comparisons need an order on values. The class \<open>value_order\<close> fixes
   the two relations and assumes nothing about them, so every theorem below holds for
@@ -125,9 +126,13 @@ lemma kimp_kor_knot: "kimp p q = kor (knot p) q"
 
 section \<open>Evaluation\<close>
 
+text \<open>DEFAULT(x, a) is the value of \<open>x\<close> when \<open>x\<close> has one, and the value of \<open>a\<close>
+  otherwise (TECHNICAL_REPORT.md section 2.9).\<close>
+
 primrec evalV :: "('n, 'v) vexp \<Rightarrow> ('n, 'v) state \<Rightarrow> 'v option" where
   "evalV (VConst v) \<sigma> = Some v"
 | "evalV (VName x) \<sigma> = \<sigma> x"
+| "evalV (VDefault x a) \<sigma> = (case \<sigma> x of Some v \<Rightarrow> Some v | None \<Rightarrow> evalV a \<sigma>)"
 
 primrec eval :: "('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v) state \<Rightarrow> bool option" where
   "eval ETrue \<sigma> = Some True"
@@ -149,6 +154,12 @@ primrec eval :: "('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v) state \<Rig
 | "eval (EOr e\<^sub>1 e\<^sub>2) \<sigma> = kor (eval e\<^sub>1 \<sigma>) (eval e\<^sub>2 \<sigma>)"
 | "eval (EImp e\<^sub>1 e\<^sub>2) \<sigma> = kimp (eval e\<^sub>1 \<sigma>) (eval e\<^sub>2 \<sigma>)"
 | "eval (EPresent x) \<sigma> = Some (x \<in> dom \<sigma>)"
+
+text \<open>DEFAULT(x, a) is x when PRESENT(x) is true, that is when x has a value (\<open>E\<^sub>x\<close>),
+  and a otherwise.\<close>
+
+lemma evalV_default: "evalV (VDefault x a) \<sigma> = (if x \<in> dom \<sigma> then \<sigma> x else evalV a \<sigma>)"
+  by (auto split: option.splits)
 
 text \<open>PRESENT is always defined.\<close>
 
@@ -223,12 +234,21 @@ theorem T1_not_not: "eval (ENot (ENot e)) \<sigma> = eval e \<sigma>"
 
 section \<open>T2: monotonicity of PRESENT-free expressions\<close>
 
+text \<open>Section 2.9 excepts PRESENT and DEFAULT from monotonicity. An expression is
+  \<open>present_free\<close> if it contains neither: no PRESENT, and no DEFAULT in an operand of a
+  comparison.\<close>
+
+primrec default_free :: "('n, 'v) vexp \<Rightarrow> bool" where
+  "default_free (VConst v) = True"
+| "default_free (VName x) = True"
+| "default_free (VDefault x a) = False"
+
 primrec present_free :: "('n, 'v) expr \<Rightarrow> bool" where
   "present_free ETrue = True"
 | "present_free EFalse = True"
-| "present_free (EEq a b) = True"
-| "present_free (ELt a b) = True"
-| "present_free (ELe a b) = True"
+| "present_free (EEq a b) = (default_free a \<and> default_free b)"
+| "present_free (ELt a b) = (default_free a \<and> default_free b)"
+| "present_free (ELe a b) = (default_free a \<and> default_free b)"
 | "present_free (ENot e) = present_free e"
 | "present_free (EAnd e\<^sub>1 e\<^sub>2) = (present_free e\<^sub>1 \<and> present_free e\<^sub>2)"
 | "present_free (EOr e\<^sub>1 e\<^sub>2) = (present_free e\<^sub>1 \<and> present_free e\<^sub>2)"
@@ -265,7 +285,7 @@ lemma kimp_mono: "p \<preceq> p' \<Longrightarrow> q \<preceq> q' \<Longrightarr
         bool_option_cases[of p'] bool_option_cases[of q']
   by (auto simp: approx_iff kimp_def)
 
-lemma evalV_mono: "\<sigma> \<sqsubseteq> \<sigma>' \<Longrightarrow> evalV a \<sigma> \<preceq> evalV a \<sigma>'"
+lemma evalV_mono: "default_free a \<Longrightarrow> \<sigma> \<sqsubseteq> \<sigma>' \<Longrightarrow> evalV a \<sigma> \<preceq> evalV a \<sigma>'"
   by (cases a) (auto simp: approx_def intro: info_leD)
 
 lemma eval_mono: "present_free e \<Longrightarrow> \<sigma> \<sqsubseteq> \<sigma>' \<Longrightarrow> eval e \<sigma> \<preceq> eval e \<sigma>'"
@@ -294,15 +314,15 @@ theorem T2_monotone:
   shows "eval e \<sigma>' = Some b"
   using eval_mono[OF assms(1,2)] assms(3) by (simp add: approx_def)
 
-text \<open>The comparisons are PRESENT-free, so they are monotone: a definite answer of
-  \<open>a = b\<close>, \<open>a < b\<close> or \<open>a \<le> b\<close> survives every extension of the state.\<close>
+text \<open>A comparison without DEFAULT is PRESENT-free, so it is monotone: a definite answer
+  of \<open>a = b\<close>, \<open>a < b\<close> or \<open>a \<le> b\<close> survives every extension of the state.\<close>
 
 corollary cmp_mono:
-  assumes "\<sigma> \<sqsubseteq> \<sigma>'"
+  assumes "default_free a" and "default_free b" and "\<sigma> \<sqsubseteq> \<sigma>'"
   shows "eval (EEq a b) \<sigma> \<preceq> eval (EEq a b) \<sigma>'"
     and "eval (ELt a b) \<sigma> \<preceq> eval (ELt a b) \<sigma>'"
     and "eval (ELe a b) \<sigma> \<preceq> eval (ELe a b) \<sigma>'"
-  by (rule eval_mono[OF _ assms], simp)+
+  by (rule eval_mono[OF _ assms(3)], simp add: assms(1,2))+
 
 
 section \<open>T3: PRESENT is not monotone\<close>
@@ -327,14 +347,31 @@ proof -
 qed
 
 
+text \<open>DEFAULT is not monotone either: on \<open>\<emptyset> \<sqsubseteq> [x \<mapsto> v]\<close>, DEFAULT(x, w) changes from \<open>w\<close>
+  to \<open>v\<close>, and the condition DEFAULT(x, w) = w changes from T to F. Both results are
+  definite, so this is not the passage from \<open>\<bottom>\<close> to a value that monotonicity allows.\<close>
+
+theorem T3_default_not_monotone:
+  fixes v w :: "'v :: value_order" and x :: 'n
+  assumes "v \<noteq> w"
+  shows "(Map.empty :: ('n, 'v) state) \<sqsubseteq> [x \<mapsto> v]"
+    and "evalV (VDefault x (VConst w)) (Map.empty :: ('n, 'v) state) = Some w"
+    and "evalV (VDefault x (VConst w)) [x \<mapsto> v] = Some v"
+    and "eval (EEq (VDefault x (VConst w)) (VConst w)) (Map.empty :: ('n, 'v) state) = Some True"
+    and "eval (EEq (VDefault x (VConst w)) (VConst w)) [x \<mapsto> v] = Some False"
+  using assms by (simp_all add: info_le_def)
+
+
 section \<open>T4: agreement with two-valued logic\<close>
 
 text \<open>Names occurring in value positions (operands of comparisons). The argument
-  of PRESENT is not included: PRESENT never needs the name's value.\<close>
+  of PRESENT is not included: PRESENT never needs the name's value. Nor is the first
+  argument of DEFAULT: DEFAULT(x, a) has a value whenever \<open>a\<close> has one.\<close>
 
 primrec vnames :: "('n, 'v) vexp \<Rightarrow> 'n set" where
   "vnames (VConst v) = {}"
 | "vnames (VName x) = {x}"
+| "vnames (VDefault x a) = vnames a"
 
 primrec names :: "('n, 'v) expr \<Rightarrow> 'n set" where
   "names ETrue = {}"
@@ -349,18 +386,20 @@ primrec names :: "('n, 'v) expr \<Rightarrow> 'n set" where
 | "names (EPresent x) = {}"
 
 text \<open>Classical two-valued semantics over a total valuation \<open>\<rho>\<close> and a set \<open>D\<close>
-  of present names (PRESENT is a plain two-valued predicate here).\<close>
+  of present names (PRESENT is a plain two-valued predicate here, and DEFAULT(x, a) is
+  \<open>\<rho> x\<close> if \<open>x \<in> D\<close> and the value of \<open>a\<close> otherwise).\<close>
 
-primrec cevalV :: "('n, 'v) vexp \<Rightarrow> ('n \<Rightarrow> 'v) \<Rightarrow> 'v" where
-  "cevalV (VConst v) \<rho> = v"
-| "cevalV (VName x) \<rho> = \<rho> x"
+primrec cevalV :: "('n, 'v) vexp \<Rightarrow> 'n set \<Rightarrow> ('n \<Rightarrow> 'v) \<Rightarrow> 'v" where
+  "cevalV (VConst v) D \<rho> = v"
+| "cevalV (VName x) D \<rho> = \<rho> x"
+| "cevalV (VDefault x a) D \<rho> = (if x \<in> D then \<rho> x else cevalV a D \<rho>)"
 
 primrec ceval :: "('n, 'v :: value_order) expr \<Rightarrow> 'n set \<Rightarrow> ('n \<Rightarrow> 'v) \<Rightarrow> bool" where
   "ceval ETrue D \<rho> = True"
 | "ceval EFalse D \<rho> = False"
-| "ceval (EEq a b) D \<rho> = (cevalV a \<rho> = cevalV b \<rho>)"
-| "ceval (ELt a b) D \<rho> = vless (cevalV a \<rho>) (cevalV b \<rho>)"
-| "ceval (ELe a b) D \<rho> = vleq (cevalV a \<rho>) (cevalV b \<rho>)"
+| "ceval (EEq a b) D \<rho> = (cevalV a D \<rho> = cevalV b D \<rho>)"
+| "ceval (ELt a b) D \<rho> = vless (cevalV a D \<rho>) (cevalV b D \<rho>)"
+| "ceval (ELe a b) D \<rho> = vleq (cevalV a D \<rho>) (cevalV b D \<rho>)"
 | "ceval (ENot e) D \<rho> = (\<not> ceval e D \<rho>)"
 | "ceval (EAnd e\<^sub>1 e\<^sub>2) D \<rho> = (ceval e\<^sub>1 D \<rho> \<and> ceval e\<^sub>2 D \<rho>)"
 | "ceval (EOr e\<^sub>1 e\<^sub>2) D \<rho> = (ceval e\<^sub>1 D \<rho> \<or> ceval e\<^sub>2 D \<rho>)"
@@ -369,8 +408,8 @@ primrec ceval :: "('n, 'v :: value_order) expr \<Rightarrow> 'n set \<Rightarrow
 
 lemma evalV_classical:
   assumes "vnames a \<subseteq> dom \<sigma>" and "\<forall>x \<in> dom \<sigma>. \<sigma> x = Some (\<rho> x)"
-  shows "evalV a \<sigma> = Some (cevalV a \<rho>)"
-  using assms by (cases a) auto
+  shows "evalV a \<sigma> = Some (cevalV a (dom \<sigma>) \<rho>)"
+  using assms by (induction a) (auto split: option.splits)
 
 lemma eval_classical:
   assumes "names e \<subseteq> dom \<sigma>" and "\<forall>x \<in> dom \<sigma>. \<sigma> x = Some (\<rho> x)"
@@ -410,23 +449,55 @@ corollary T4_classical_the:
   shows "eval e \<sigma> = Some (ceval e (dom \<sigma>) (\<lambda>x. the (\<sigma> x)))"
   by (rule eval_classical[OF assms]) auto
 
-text \<open>If also every PRESENT argument is defined, PRESENT is just \<open>True\<close> and \<open>D\<close>
+text \<open>If also every argument of PRESENT and the first argument of every DEFAULT is
+  defined, PRESENT is just \<open>True\<close> and \<open>D\<close>
   can be taken to be the set of all names: a fully classical, total valuation.\<close>
+
+primrec vpnames :: "('n, 'v) vexp \<Rightarrow> 'n set" where
+  "vpnames (VConst v) = {}"
+| "vpnames (VName x) = {}"
+| "vpnames (VDefault x a) = insert x (vpnames a)"
 
 primrec pnames :: "('n, 'v) expr \<Rightarrow> 'n set" where
   "pnames ETrue = {}"
 | "pnames EFalse = {}"
-| "pnames (EEq a b) = {}"
-| "pnames (ELt a b) = {}"
-| "pnames (ELe a b) = {}"
+| "pnames (EEq a b) = vpnames a \<union> vpnames b"
+| "pnames (ELt a b) = vpnames a \<union> vpnames b"
+| "pnames (ELe a b) = vpnames a \<union> vpnames b"
 | "pnames (ENot e) = pnames e"
 | "pnames (EAnd e\<^sub>1 e\<^sub>2) = pnames e\<^sub>1 \<union> pnames e\<^sub>2"
 | "pnames (EOr e\<^sub>1 e\<^sub>2) = pnames e\<^sub>1 \<union> pnames e\<^sub>2"
 | "pnames (EImp e\<^sub>1 e\<^sub>2) = pnames e\<^sub>1 \<union> pnames e\<^sub>2"
 | "pnames (EPresent x) = {x}"
 
+text \<open>The names whose presence a DEFAULT tests: the first arguments of DEFAULT.\<close>
+
+primrec dnames :: "('n, 'v) expr \<Rightarrow> 'n set" where
+  "dnames ETrue = {}"
+| "dnames EFalse = {}"
+| "dnames (EEq a b) = vpnames a \<union> vpnames b"
+| "dnames (ELt a b) = vpnames a \<union> vpnames b"
+| "dnames (ELe a b) = vpnames a \<union> vpnames b"
+| "dnames (ENot e) = dnames e"
+| "dnames (EAnd e\<^sub>1 e\<^sub>2) = dnames e\<^sub>1 \<union> dnames e\<^sub>2"
+| "dnames (EOr e\<^sub>1 e\<^sub>2) = dnames e\<^sub>1 \<union> dnames e\<^sub>2"
+| "dnames (EImp e\<^sub>1 e\<^sub>2) = dnames e\<^sub>1 \<union> dnames e\<^sub>2"
+| "dnames (EPresent x) = {}"
+
+lemma cevalV_present_UNIV: "vpnames a \<subseteq> D \<Longrightarrow> cevalV a D \<rho> = cevalV a UNIV \<rho>"
+  by (induction a) auto
+
 lemma ceval_present_UNIV: "pnames e \<subseteq> D \<Longrightarrow> ceval e D \<rho> = ceval e UNIV \<rho>"
-  by (induction e) auto
+proof (induction e)
+  case (EEq a b)
+  then show ?case using cevalV_present_UNIV[of a D \<rho>] cevalV_present_UNIV[of b D \<rho>] by simp
+next
+  case (ELt a b)
+  then show ?case using cevalV_present_UNIV[of a D \<rho>] cevalV_present_UNIV[of b D \<rho>] by simp
+next
+  case (ELe a b)
+  then show ?case using cevalV_present_UNIV[of a D \<rho>] cevalV_present_UNIV[of b D \<rho>] by simp
+qed auto
 
 corollary T4_total:
   assumes "names e \<union> pnames e \<subseteq> dom \<sigma>" and "\<forall>x \<in> dom \<sigma>. \<sigma> x = Some (\<rho> x)"

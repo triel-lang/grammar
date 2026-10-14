@@ -387,6 +387,38 @@ theorem interp_P_pred: "(\<And>p. P_pred (I p)) \<Longrightarrow> P_pred (interp
   by (induction \<Phi>)
      (simp_all add: DownInd_P_pred Ex_R_P_pred P_pred_R_not P_pred_R_or P_pred_R_ren_ext P_pred_R_ex)
 
+text \<open>The base predicate symbols that occur in a formula.\<close>
+
+primrec fsyms :: "('p, 'n) fm \<Rightarrow> 'p set" where
+  "fsyms (FPs p) = {p}"
+| "fsyms (FDown z) = {}"
+| "fsyms (FE z) = {}"
+| "fsyms (FNot \<Phi>) = fsyms \<Phi>"
+| "fsyms (FOr \<Phi> \<Psi>) = fsyms \<Phi> \<union> fsyms \<Psi>"
+| "fsyms (FRen \<rho> \<Phi>) = fsyms \<Phi>"
+| "fsyms (FExists x \<Phi>) = fsyms \<Phi>"
+
+lemma comp_closure_mono: "Q \<in> comp_closure B \<Longrightarrow> B \<subseteq> B' \<Longrightarrow> Q \<in> comp_closure B'"
+  by (induction rule: comp_closure.induct) (auto intro: comp_closure.intros)
+
+theorem interp_comp_closure_syms: "E_free \<Phi> \<Longrightarrow> interp I \<Phi> \<in> comp_closure (I ` fsyms \<Phi>)"
+proof (induction \<Phi>)
+  case (FOr \<Phi> \<Psi>)
+  then have a: "interp I \<Phi> \<in> comp_closure (I ` fsyms \<Phi>)" "interp I \<Psi> \<in> comp_closure (I ` fsyms \<Psi>)"
+    by simp_all
+  have "interp I \<Phi> \<in> comp_closure (I ` fsyms (FOr \<Phi> \<Psi>))" by (rule comp_closure_mono[OF a(1)]) auto
+  moreover have "interp I \<Psi> \<in> comp_closure (I ` fsyms (FOr \<Phi> \<Psi>))" by (rule comp_closure_mono[OF a(2)]) auto
+  ultimately show ?case by (simp add: comp_closure.disj)
+qed (auto intro: comp_closure.intros)
+
+text \<open>Only the base predicates that occur in the formula need to be equitone.\<close>
+
+theorem interp_equitone_pw_syms:
+  assumes "\<And>a. vle a a" and "\<And>p. p \<in> fsyms \<Phi> \<Longrightarrow> equitone_R (pw_le vle) (I p)" and "E_free \<Phi>"
+  shows "equitone_R (pw_le vle) (interp I \<Phi>)"
+  using comp_closure_equitone_pw[where vle = vle, OF assms(1) _ interp_comp_closure_syms[OF assms(3)]] assms(2)
+  by blast
+
 theorem interp_equitone_pw:
   assumes "\<And>a. vle a a" and "\<And>p. equitone_R (pw_le vle) (I p)" and "E_free \<Phi>"
   shows "equitone_R (pw_le vle) (interp I \<Phi>)"
@@ -440,15 +472,23 @@ qed
 
 text \<open>The base predicate symbols: the type check ``\<open>p\<close> is an atom of primitive type \<open>q\<close>''
   (\<open>is_prim\<close>), and the comparison of two value expressions (\<open>ACmp\<close>). On these named sets
-  a value expression denotes an atom: a constant, or the atom that a complex name leads to
-  (\<open>vatom\<close>). The comparison is true or false when both operands denote atoms, and
-  undefined otherwise.\<close>
+  a value expression denotes an atom: a constant, the atom that a complex name leads to,
+  or for DEFAULT(p, a) the atom that p leads to and otherwise the atom a denotes (\<open>vatom\<close>).
+  The comparison is true or false when both operands denote atoms, and undefined
+  otherwise.\<close>
 
 datatype ('n, 'p, 'b) bsym = BIs "'n list" 'p | BCmp crel "('n list, 'b) vexp" "('n list, 'b) vexp"
 
 fun vatom :: "('n list, ('n, 'b) nd) state \<Rightarrow> ('n list, 'b) vexp \<Rightarrow> 'b option" where
   "vatom \<sigma> (VConst c) = Some c"
 | "vatom \<sigma> (VName p) = (case \<sigma> p of Some (Atom b) \<Rightarrow> Some b | _ \<Rightarrow> None)"
+| "vatom \<sigma> (VDefault p a) = (case \<sigma> p of Some (Atom b) \<Rightarrow> Some b | _ \<Rightarrow> vatom \<sigma> a)"
+
+text \<open>A base symbol without DEFAULT.\<close>
+
+fun bsym_default_free :: "('n, 'p, 'b) bsym \<Rightarrow> bool" where
+  "bsym_default_free (BIs p q) = True"
+| "bsym_default_free (BCmp r a c) = (default_free a \<and> default_free c)"
 
 definition cmp_R ::
     "crel \<Rightarrow> ('n list, 'b) vexp \<Rightarrow> ('n list, 'b) vexp \<Rightarrow> ('n list, ('n, 'b :: value_order) nd) state rpred"
@@ -483,19 +523,22 @@ lemma pw_nd_atom: "pw_le nd_vle \<sigma> \<sigma>' \<Longrightarrow> \<sigma> p 
 lemma pw_nd_nom: "pw_le nd_vle \<sigma> \<sigma>' \<Longrightarrow> \<sigma> p = Some (Nom m) \<Longrightarrow> \<exists>m'. \<sigma>' p = Some (Nom m')"
   unfolding pw_le_def nd_vle_def by fastforce
 
-lemma vatom_mono: "pw_le nd_vle \<sigma> \<sigma>' \<Longrightarrow> vatom \<sigma> a = Some u \<Longrightarrow> vatom \<sigma>' a = Some u"
+lemma vatom_mono:
+  "default_free a \<Longrightarrow> pw_le nd_vle \<sigma> \<sigma>' \<Longrightarrow> vatom \<sigma> a = Some u \<Longrightarrow> vatom \<sigma>' a = Some u"
 proof (cases a)
   case (VName p)
   assume le: "pw_le nd_vle \<sigma> \<sigma>'" and v: "vatom \<sigma> a = Some u"
   with VName have "\<sigma> p = Some (Atom u)" by (auto split: option.splits nd.splits)
   with le have "\<sigma>' p = Some (Atom u)" by (rule pw_nd_atom)
   with VName show ?thesis by simp
-qed simp
+qed simp_all
 
-text \<open>The comparison is monotone and equitone under the extension of nominative data: an
-  atom stays the same atom, so a definite answer stays the same.\<close>
+text \<open>A comparison without DEFAULT is monotone and equitone under the extension of
+  nominative data: an atom stays the same atom, so a definite answer stays the same.\<close>
 
-theorem cmp_R_rmono: "rmono (pw_le nd_vle) (cmp_R r a c)"
+theorem cmp_R_rmono:
+  assumes "default_free a" and "default_free c"
+  shows "rmono (pw_le nd_vle) (cmp_R r a c)"
 proof -
   have keep: "\<exists>u w. vatom \<sigma>' a = Some u \<and> vatom \<sigma>' c = Some w \<and> P u w"
     if le: "pw_le nd_vle \<sigma> \<sigma>'" and ex: "\<exists>u w. vatom \<sigma> a = Some u \<and> vatom \<sigma> c = Some w \<and> P u w"
@@ -503,17 +546,18 @@ proof -
   proof -
     from ex obtain u w where u: "vatom \<sigma> a = Some u" and w: "vatom \<sigma> c = Some w" and p: "P u w"
       by blast
-    from vatom_mono[OF le u] vatom_mono[OF le w] p show ?thesis by blast
+    from vatom_mono[OF assms(1) le u] vatom_mono[OF assms(2) le w] p show ?thesis by blast
   qed
   show ?thesis
     unfolding rmono_iff cmp_R_def R_T_pair R_F_pair mem_Collect_eq
     by (intro allI impI conjI; rule keep; assumption)
 qed
 
-theorem cmp_R_equitone: "equitone_R (pw_le nd_vle) (cmp_R r a c)"
+theorem cmp_R_equitone:
+  "default_free a \<Longrightarrow> default_free c \<Longrightarrow> equitone_R (pw_le nd_vle) (cmp_R r a c)"
   by (simp add: equitone_R_iff cmp_R_P_pred cmp_R_rmono)
 
-lemma is_R_equitone: "equitone_R (pw_le nd_vle) (is_R I pq)"
+lemma is_R_equitone: "bsym_default_free pq \<Longrightarrow> equitone_R (pw_le nd_vle) (is_R I pq)"
 proof (cases pq)
   case (BIs p q)
   have "rmono (pw_le nd_vle) (is_R I (BIs p q))"
@@ -521,7 +565,8 @@ proof (cases pq)
   with BIs is_R_P_pred[of I pq] show ?thesis by (simp add: equitone_R_iff)
 next
   case (BCmp r a c)
-  then show ?thesis by (simp add: cmp_R_equitone)
+  assume "bsym_default_free pq"
+  with BCmp show ?thesis by (simp add: cmp_R_equitone)
 qed
 
 text \<open>The translation. The atoms \<open>E\<^sub>p\<close>, \<open>\<down>p\<close>, type checks and comparisons go to \<open>FE\<close>,
@@ -554,7 +599,7 @@ next
 next
   case (ACmp r x y)
   have v: "vatom (nd_named d) e = evalV_nd e d" for e
-    by (cases e) (simp_all add: nd_named_def flat_def)
+    by (induction e) (simp_all add: nd_named_def flat_def split: option.splits nd.splits)
   show ?thesis
     using ACmp by (cases "evalV_nd x d"; cases "evalV_nd y d")
       (auto simp: pval_def cmp_R_def v eval_nd_crel)
@@ -578,11 +623,23 @@ theorem cond_fm_correct:
      (simp_all add: pval_catom_fm pval_R_not_apply pval_R_or interp_is_R_P_pred P_pred_R_not
        P_pred_R_or kand_de_morgan)
 
-lemma catom_fm_E_free: "E_free (catom_fm a) = Ex_free_atom a"
+lemma catom_fm_E_free: "Ex_free_atom a \<Longrightarrow> E_free (catom_fm a)"
   by (cases a) simp_all
 
 lemma cond_fm_E_free: "(\<And>a. a \<in> cond_atoms \<phi> \<Longrightarrow> Ex_free_atom a) \<Longrightarrow> E_free (cond_fm \<phi>)"
-  by (induction \<phi>) (simp_all add: catom_fm_E_free)
+  by (induction \<phi>) (auto intro: catom_fm_E_free)
+
+lemma catom_fm_syms:
+  assumes "Ex_free_atom a" and "p \<in> fsyms (catom_fm a)"
+  shows "bsym_default_free p"
+proof (cases a)
+  case (ACmp r x y)
+  with assms show ?thesis by simp
+qed (use assms in simp_all)
+
+lemma cond_fm_syms:
+  "(\<And>a. a \<in> cond_atoms \<phi> \<Longrightarrow> Ex_free_atom a) \<Longrightarrow> p \<in> fsyms (cond_fm \<phi>) \<Longrightarrow> bsym_default_free p"
+  by (induction \<phi>) (auto intro: catom_fm_syms)
 
 text \<open>Stability of verdicts (theorem 5 of TRIEL_Indicators) again, now from the closure of
   the equitone P-predicates under the base compositions.\<close>
@@ -593,7 +650,8 @@ theorem cond_equitone_from_closure:
 proof -
   let ?Q = "interp (is_R I) (cond_fm \<phi>)"
   have "equitone_R (pw_le nd_vle) ?Q"
-    by (rule interp_equitone_pw[where vle = nd_vle, OF nd_vle_refl is_R_equitone cond_fm_E_free[OF assms]])
+    by (rule interp_equitone_pw_syms[where vle = nd_vle, OF nd_vle_refl _ cond_fm_E_free[OF assms]])
+       (rule is_R_equitone, rule cond_fm_syms[OF assms])
   then have e: "equitone_on (pw_le nd_vle) (pval ?Q)"
     by (simp add: equitone_R_def)
   show ?thesis

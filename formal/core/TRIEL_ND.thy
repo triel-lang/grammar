@@ -197,11 +197,13 @@ section \<open>Expressions over nominative data\<close>
 text \<open>Expressions are those of TRIEL_Core with complex names. A complex name denotes a
   basic value only when it leads to an atom; a name that leads to a record, or to nothing,
   is undefined in comparisons (\<open>\<bottom>\<close>). \<open>PRESENT(p)\<close> asks whether \<open>p\<close> leads to anything,
-  an atom or a record.\<close>
+  an atom or a record. \<open>DEFAULT(p, a)\<close> is the atom that \<open>p\<close> leads to, if it leads to one,
+  and the value of \<open>a\<close> otherwise.\<close>
 
 primrec evalV_nd :: "('n list, 'b) vexp \<Rightarrow> ('n, 'b) nd \<Rightarrow> 'b option" where
   "evalV_nd (VConst v) d = Some v"
 | "evalV_nd (VName p) d = flat d p"
+| "evalV_nd (VDefault p a) d = (case flat d p of Some v \<Rightarrow> Some v | None \<Rightarrow> evalV_nd a d)"
 
 primrec eval_nd :: "('n list, 'b :: value_order) expr \<Rightarrow> ('n, 'b) nd \<Rightarrow> bool option" where
   "eval_nd ETrue d = Some True"
@@ -225,7 +227,7 @@ primrec eval_nd :: "('n list, 'b :: value_order) expr \<Rightarrow> ('n, 'b) nd 
 | "eval_nd (EPresent p) d = Some (den_path p d \<noteq> None)"
 
 lemma evalV_nd_flat: "evalV_nd a d = evalV a (flat d)"
-  by (cases a) simp_all
+  by (induction a) (simp_all cong: option.case_cong)
 
 text \<open>On PRESENT-free expressions, evaluation over nominative data is evaluation of
   TRIEL_Core over the flattened state. This is how the theorems of TRIEL_Core carry over.\<close>
@@ -330,27 +332,54 @@ proof -
 qed
 
 text \<open>Agreement with two-valued logic: if every complex name read by a comparison leads to
-  an atom, evaluation is defined and classical, with PRESENT read as presence of a node.\<close>
+  an atom, evaluation is defined and classical, with PRESENT read as presence of a node.
+  A name tested by DEFAULT must lead to an atom or to nothing: DEFAULT takes the value of
+  an atom, and a record has none.\<close>
+
+lemma evalV_nd_classical:
+  assumes "vnames a \<subseteq> dom (flat d)" and "\<forall>p \<in> dom (flat d). flat d p = Some (\<rho> p)"
+    and "\<forall>p \<in> vpnames a. den_path p d \<noteq> None \<longrightarrow> p \<in> dom (flat d)"
+  shows "evalV_nd a d = Some (cevalV a {p. den_path p d \<noteq> None} \<rho>)"
+  using assms(1,3)
+proof (induction a)
+  case (VConst v)
+  then show ?case by simp
+next
+  case (VName p)
+  then show ?case using assms(2) by auto
+next
+  case (VDefault p a)
+  then have ih: "evalV_nd a d = Some (cevalV a {p. den_path p d \<noteq> None} \<rho>)" by simp
+  show ?case
+  proof (cases "flat d p")
+    case None
+    then have "p \<notin> dom (flat d)" by auto
+    with VDefault.prems(2) have "den_path p d = None" by auto
+    with None ih show ?thesis by simp
+  next
+    case (Some v)
+    then have "p \<in> dom (flat d)" and "den_path p d \<noteq> None" by (auto simp: flat_Some)
+    with Some assms(2) show ?thesis by auto
+  qed
+qed
 
 theorem T4_nd:
   assumes "names e \<subseteq> dom (flat d)" and "\<forall>p \<in> dom (flat d). flat d p = Some (\<rho> p)"
+    and "\<forall>p \<in> dnames e. den_path p d \<noteq> None \<longrightarrow> p \<in> dom (flat d)"
   shows "eval_nd e d = Some (ceval e {p. den_path p d \<noteq> None} \<rho>)"
-  using assms(1)
+  using assms(1,3)
 proof (induction e)
   case (EEq a c)
-  then have "vnames a \<subseteq> dom (flat d)" "vnames c \<subseteq> dom (flat d)" by simp_all
   then show ?case
-    using evalV_classical[OF _ assms(2)] by (simp add: evalV_nd_flat)
+    using evalV_nd_classical[of a d \<rho>] evalV_nd_classical[of c d \<rho>] assms(2) by simp
 next
   case (ELt a c)
-  then have "vnames a \<subseteq> dom (flat d)" "vnames c \<subseteq> dom (flat d)" by simp_all
   then show ?case
-    using evalV_classical[OF _ assms(2)] by (simp add: evalV_nd_flat)
+    using evalV_nd_classical[of a d \<rho>] evalV_nd_classical[of c d \<rho>] assms(2) by simp
 next
   case (ELe a c)
-  then have "vnames a \<subseteq> dom (flat d)" "vnames c \<subseteq> dom (flat d)" by simp_all
   then show ?case
-    using evalV_classical[OF _ assms(2)] by (simp add: evalV_nd_flat)
+    using evalV_nd_classical[of a d \<rho>] evalV_nd_classical[of c d \<rho>] assms(2) by simp
 qed auto
 
 theorem T5_nd_present: "eval_nd (EPresent p) d = Some True \<longleftrightarrow> den_path p d \<noteq> None"

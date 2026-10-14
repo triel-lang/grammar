@@ -387,7 +387,8 @@ fun crel_holds :: "crel \<Rightarrow> 'v :: value_order \<Rightarrow> 'v \<Right
 | "crel_holds RLt u w = vless u w"
 | "crel_holds RLe u w = vleq u w"
 
-lemma crel_expr_present_free [simp]: "present_free (crel_expr r a c)"
+lemma crel_expr_present_free [simp]:
+  "present_free (crel_expr r a c) \<longleftrightarrow> default_free a \<and> default_free c"
   by (cases r) simp_all
 
 lemma eval_nd_crel:
@@ -416,7 +417,7 @@ primrec Ex_free_atom :: "('n, 'p, 'b) catom \<Rightarrow> bool" where
   "Ex_free_atom (AEx p) = False"
 | "Ex_free_atom (ADown p) = True"
 | "Ex_free_atom (AIs p q) = True"
-| "Ex_free_atom (ACmp r a c) = True"
+| "Ex_free_atom (ACmp r a c) = (default_free a \<and> default_free c)"
 
 lemma is_prim_equitone: "equitone_nd (is_prim I p q)"
   unfolding equitone_nd_def
@@ -435,14 +436,15 @@ proof (intro allI impI)
   qed
 qed
 
-text \<open>The comparisons are equitone: a definite answer survives every extension of the
-  data, on flat states (T2) and on nominative data (\<open>T2_nd_monotone\<close>). An operand that has
-  no value makes the comparison undefined.\<close>
+text \<open>The comparisons without DEFAULT are equitone: a definite answer survives every
+  extension of the data, on flat states (T2) and on nominative data (\<open>T2_nd_monotone\<close>).
+  An operand that has no value makes the comparison undefined.\<close>
 
-theorem cmp_equitone: "equitone (eval (crel_expr r a c))"
+theorem cmp_equitone: "default_free a \<Longrightarrow> default_free c \<Longrightarrow> equitone (eval (crel_expr r a c))"
   by (rule present_free_equitone) simp
 
-theorem cmp_atom_equitone: "equitone_nd (catom_eval I (ACmp r a c))"
+theorem cmp_atom_equitone:
+  "default_free a \<Longrightarrow> default_free c \<Longrightarrow> equitone_nd (catom_eval I (ACmp r a c))"
   by (simp add: present_free_equitone_nd)
 
 theorem cmp_atom_undefined:
@@ -453,7 +455,7 @@ lemma catom_equitone: "Ex_free_atom a \<Longrightarrow> equitone_nd (catom_eval 
   by (cases a) (simp_all add: present_partial_equitone is_prim_equitone present_free_equitone_nd)
 
 text \<open>Theorem 5 for TRIEL data: with atoms \<open>\<down>p\<close>, type checks and comparisons, and without
-  \<open>E\<^sub>p\<close>, a definite verdict survives every extension of the data.\<close>
+  \<open>E\<^sub>p\<close> and DEFAULT, a definite verdict survives every extension of the data.\<close>
 
 theorem verdict_stable_nd:
   assumes "\<And>a. a \<in> cond_atoms \<phi> \<Longrightarrow> Ex_free_atom a"
@@ -461,6 +463,42 @@ theorem verdict_stable_nd:
   shows "cond_eval (catom_eval I) \<phi> d' = Some b"
   by (rule verdict_stable[where le = nd_le, OF _ assms(2,3)])
      (simp add: equitone_on_nd catom_equitone assms(1))
+
+subsection \<open>With DEFAULT the property fails\<close>
+
+text \<open>DEFAULT(f, w) = w is true on the empty record and false once \<open>f\<close> arrives with a
+  value \<open>v\<close> other than \<open>w\<close>: the definite verdict T becomes F. So a comparison with DEFAULT
+  is not an equitone atom, and \<open>verdict_stable_nd\<close> excludes it (\<open>Ex_free_atom\<close>).\<close>
+
+theorem default_breaks_stability:
+  fixes f :: 'n and v w :: "'b :: value_order"
+  assumes "v \<noteq> w"
+  shows "nd_le (Nom fmempty) (naming f (Atom v))"
+    and "cond_eval (catom_eval I) (CAtom (ACmp REq (VDefault [f] (VConst w)) (VConst w))) (Nom fmempty)
+           = Some True"
+    and "cond_eval (catom_eval I) (CAtom (ACmp REq (VDefault [f] (VConst w)) (VConst w)))
+           (naming f (Atom v)) = Some False"
+    and "\<not> Ex_free_atom (ACmp REq (VDefault [f] (VConst w)) (VConst w) :: ('n, 'p, 'b) catom)"
+proof -
+  show "nd_le (Nom fmempty) (naming f (Atom v))" by (rule nd_le_empty_naming)
+qed (use assms in \<open>simp_all add: naming_def flat_def den_path_Nom\<close>)
+
+corollary default_cmp_not_equitone:
+  fixes f :: 'n and v w :: "'b :: value_order"
+  assumes "v \<noteq> w"
+  shows "\<not> equitone_nd (catom_eval I (ACmp REq (VDefault [f] (VConst w)) (VConst w)))"
+proof
+  let ?Q = "catom_eval I (ACmp REq (VDefault [f] (VConst w)) (VConst w))"
+  assume e: "equitone_nd ?Q"
+  have d: "?Q (Nom fmempty) = Some True"
+    using default_breaks_stability(2)[OF assms, where f = f and I = I] by (simp only: cond_eval.simps)
+  have d': "?Q (naming f (Atom v)) = Some False"
+    using default_breaks_stability(3)[OF assms, where f = f and I = I] by (simp only: cond_eval.simps)
+  have le: "nd_le (Nom fmempty) (naming f (Atom v))" by (rule nd_le_empty_naming)
+  from e d le have "?Q (naming f (Atom v)) = ?Q (Nom fmempty)"
+    unfolding equitone_nd_def by blast
+  with d d' show False by simp
+qed
 
 subsection \<open>With the atom Ex the property fails: the example of \<open>wt_not_mono_optional\<close>\<close>
 
