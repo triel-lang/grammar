@@ -112,7 +112,7 @@ def test_float_and_exponents_do_not_parse(src):
 
 def test_datetime_is_seconds_since_the_epoch():
     c = core(spec(terms='a MUST b BY DATETIME("1970-01-02T00:00:00Z")'))
-    assert '(must "a" "b" (at 86400))' in c
+    assert '(must "a" "b" (at 86400) (none))' in c
 
 
 @pytest.mark.parametrize("text", ["2026-13-01T00:00:00Z", "2026-01-01T00:00:00+01:00",
@@ -131,9 +131,9 @@ def test_durations_are_seconds():
     assert '(after 7200)' in c and '(cure_by 1800)' in c
 
 
-def test_penalty_literal_is_opaque():
+def test_penalty_literal():
     c = core(spec(terms='a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY 500, NOTIFY b2'))
-    assert '(on_breach "a" (penalty (int 500)) (notify "b2"))' in c
+    assert '(on_breach "a" (penalty (val (const (int 500))) (none)) (notify "b2"))' in c
 
 
 CONT = "§2.6 defines continuations only for obligations"
@@ -147,12 +147,12 @@ def test_continuation_bound_to_a_prohibition_is_rejected(act):
 
 def test_decimal_penalty_is_exact():
     c = core(spec(terms="a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY 250.50"))
-    assert '(penalty (dec 25050 2))' in c
+    assert '(penalty (val (const (dec 25050 2))) (none))' in c
 
 
 def test_informational_actions_bound_to_a_prohibition():
     c = core(spec(terms="a MUST_NOT b; a ON_BREACH NOTIFY b2, PENALTY 5"))
-    assert '(on_breach "a" (notify "b2") (penalty (int 5)))' in c
+    assert '(on_breach "a" (notify "b2") (penalty (val (const (int 5))) (none)))' in c
 
 
 @pytest.mark.parametrize("terms", [
@@ -169,9 +169,95 @@ def test_continuation_after_the_nearest_prohibition_is_rejected():
     assert rejected(spec(terms="a MUST c WITHIN 1 DAYS; a MUST_NOT b; a ON_BREACH CURE_BY 1 DAYS"))         == [CONT]
 
 
-def test_penalty_expression_is_rejected():
-    assert rejected(spec(terms="a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY 5 * 2")) == \
-        ["PENALTY expression"]
+N = "g : Decimal METADATA, h : Optional<Integer> METADATA, f : Boolean METADATA"
+
+
+@pytest.mark.parametrize("amount, expected", [
+    ("g * 0.05 CAP 10000",
+     '(penalty (mul (val (name (path "g"))) (val (const (dec 5 2)))) (int 10000))'),
+    ("g - 5 + 2 * 3",
+     '(penalty (add (sub (val (name (path "g"))) (val (const (int 5)))) '
+     '(mul (val (const (int 2))) (val (const (int 3))))) (none))'),
+    ("-(g + 1) CAP 2.5",
+     '(penalty (neg (add (val (name (path "g"))) (val (const (int 1))))) (dec 25 1))'),
+    ("DEFAULT(h, 0) * 2",
+     '(penalty (mul (val (default (path "h") (const (int 0)))) (val (const (int 2)))) (none))'),
+])
+def test_penalty_amount(amount, expected):
+    c = core(spec(terms=f"a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY {amount}", factors=N))
+    assert expected in c
+
+
+@pytest.mark.parametrize("amount, why", [
+    ("g / 2", "division in PENALTY"),
+    ("g % 2", "division in PENALTY"),
+    ('"x"', "PENALTY of a non-number"),
+    ("f", "PENALTY of a non-number"),
+    ("g > 1", "PENALTY of a non-number"),
+    ("PRESENT(g)", "PENALTY of a non-number"),
+    ('g CAP "x"', "CAP (not a number)"),
+    ("k * 2", "undeclared factor"),
+])
+def test_penalty_rejections(amount, why):
+    assert rejected(spec(terms=f"a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY {amount}",
+                         factors=N)) == [why]
+
+
+# --- action arguments and FROM ------------------------------------------------
+
+@pytest.mark.parametrize("act, expected", [
+    ("pay(b2, 100)", '(action "pay" (path "b2") (int 100))'),
+    ("pay(b2, 100.50, -1)", '(action "pay" (path "b2") (dec 10050 2) (int -1))'),
+    ('note("x", true)', '(action "note" (str "x") (bool true))'),
+    ("submit(g)", '(action "submit" (path "g"))'),
+    ("submit(r.x)", '(action "submit" (path "r" "x"))'),
+    ("pay()", '(action "pay")'),
+])
+def test_action_arguments(act, expected):
+    c = core(spec(terms=f"a MUST {act}", factors="f : Boolean METADATA, g : Integer METADATA, r : Record { x : Integer } METADATA"))
+    assert f'(must "a" {expected} (none) (none))' in c
+
+
+@pytest.mark.parametrize("act, why", [
+    ("pay(c)", "action argument (undeclared name)"),
+    ("pay(g + 1)", "action argument (not a name or literal)"),
+    ("pay(g > 1)", "action argument (not a name or literal)"),
+    ("pay(DEFAULT(g, 1))", "action argument (not a name or literal)"),
+    ("pay(r.y)", "undeclared field"),
+])
+def test_action_argument_rejections(act, why):
+    assert rejected(spec(terms=f"a MUST {act}",
+                         factors="f : Boolean METADATA, g : Integer METADATA, r : Record { x : Integer } METADATA")) == [why]
+
+
+def test_arguments_in_permissions_and_prohibitions():
+    c = core(spec(terms="a MAY pay(b2) WHEN f; a MUST_NOT pay(b2, 1)"))
+    assert '(may "a" (action "pay" (path "b2")) (eq (name (path "f")) (const (bool true))))' in c
+    assert '(must_not "a" (action "pay" (path "b2") (int 1)) (true))' in c
+
+
+@pytest.mark.parametrize("terms, expected", [
+    ('a MUST b BY 10 DAYS FROM DATETIME("2026-03-01T00:00:00Z")',
+     '(must "a" "b" (after 864000) (at 1772323200))'),
+    ('a MUST b FROM DATETIME("2026-03-01T00:00:00Z")', '(must "a" "b" (none) (at 1772323200))'),
+    ("a MUST b BY t FROM s", '(must "a" "b" (factor (path "t") 0) (factor (path "s") 0))'),
+    ("a MUST b FROM s WITHIN 1 DAYS", '(must "a" "b" (after 86400) (factor (path "s") 0))'),
+])
+def test_from(terms, expected):
+    c = core(spec(terms=terms, factors="f : Boolean METADATA, s : DateTime METADATA, t : DateTime METADATA"))
+    assert f"(terms {expected})" in c
+
+
+@pytest.mark.parametrize("terms, why", [
+    ('a MUST b FROM DATETIME("2026-03-01T00:00:00Z") UNTIL DATETIME("2026-04-01T00:00:00Z")',
+     "UNTIL"),
+    ('a MAY c THEN a MUST b FROM DATETIME("2026-03-01T00:00:00Z")', "FROM in a composite term"),
+    ('d := a MUST b FROM DATETIME("2026-03-01T00:00:00Z"); a MAY c THEN REF d',
+     "REF to a term with FROM"),
+    ("a MUST b FROM u", "undeclared factor"),
+])
+def test_from_rejections(terms, why):
+    assert rejected(spec(terms=terms)) == [why]
 
 
 def test_only_the_outermost_construct_is_reported():
@@ -185,20 +271,20 @@ G = "g : Integer METADATA, f : Boolean METADATA"
 
 @pytest.mark.parametrize("terms, expected", [
     ("IF g > 1 THEN a MUST b ELSE a MAY c",
-     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none)) (may "a" "c" (true)))'),
+     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none) (none)) (may "a" "c" (true)))'),
     ("IF g > 1 THEN a MUST b",
-     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none)) (skip))'),
+     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none) (none)) (skip))'),
     ("IF g > 1 THEN a MUST b ELIF g > 0 THEN a MUST c",
-     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none)) '
-     '(if (lt (const (int 0)) (name (path "g"))) (must "a" "c" (none)) (skip)))'),
+     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none) (none)) '
+     '(if (lt (const (int 0)) (name (path "g"))) (must "a" "c" (none) (none)) (skip)))'),
     ("IF g > 1 THEN a MUST b ELIF g > 0 THEN a MUST c ELSE a MUST d",
-     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none)) '
-     '(if (lt (const (int 0)) (name (path "g"))) (must "a" "c" (none)) (must "a" "d" (none))))'),
+     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none) (none)) '
+     '(if (lt (const (int 0)) (name (path "g"))) (must "a" "c" (none) (none)) (must "a" "d" (none) (none))))'),
     ("WHEN g > 1 THEN a MUST b",
-     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none)) (skip))'),
+     '(if (lt (const (int 1)) (name (path "g"))) (must "a" "b" (none) (none)) (skip))'),
     ("IF g > 1 THEN IF g > 2 THEN a MUST b ELSE a MUST c",
      '(if (lt (const (int 1)) (name (path "g"))) (if (lt (const (int 2)) (name (path "g"))) '
-     '(must "a" "b" (none)) (must "a" "c" (none))) (skip))'),
+     '(must "a" "b" (none) (none)) (must "a" "c" (none) (none))) (skip))'),
 ])
 def test_conditional_terms(terms, expected):
     assert f"(terms {expected})" in core(spec(terms=terms, factors=G))
@@ -215,7 +301,7 @@ def test_conditional_needs_a_boolean_condition():
 
 def test_named_term_is_an_element_and_ref_is_its_index():
     c = core(spec(terms="d := a MUST b THEN a MUST c; a MAY e; REF d UNLESS f DO REF d"))
-    assert ('(terms (then (must "a" "b" (none)) (must "a" "c" (none))) (may "a" "e" (true)) '
+    assert ('(terms (then (must "a" "b" (none) (none)) (must "a" "c" (none) (none))) (may "a" "e" (true)) '
             '(unless (ref 0) (eq (name (path "f")) (const (bool true))) (ref 0)))') in c
 
 
@@ -234,7 +320,7 @@ def test_bad_references_are_rejected(terms, why):
 
 def test_named_obligation_keeps_its_deadline_and_handler():
     c = core(spec(terms="d := a MUST b WITHIN 1 DAYS; a ON_BREACH NOTIFY b2"))
-    assert '(terms (must "a" "b" (after 86400)) (on_breach "a" (notify "b2")))' in c
+    assert '(terms (must "a" "b" (after 86400) (none)) (on_breach "a" (notify "b2")))' in c
 
 
 @pytest.mark.parametrize("factors, cond, expected", [

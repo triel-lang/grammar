@@ -137,8 +137,25 @@ def event(x, first: bool):
     if isinstance(x, list) and len(x) == 2 and x[0] == "arrive":
         return ["arrive", Str(x[1])]
     if isinstance(x, list) and len(x) == 4 and x[0] == "act" and x[3] in ("must", "may", "must_not"):
-        return ["act", Str(x[1]), Str(x[2]), Sym(x[3])]
+        return ["act", Str(x[1]), action(x[2]), Sym(x[3])]
     raise ScenarioError(f"not an event: {sexp(x)}")
+
+
+def action(x):
+    """An action: NAME, or (NAME ARG ...) with ARG (name X) or a value."""
+    if isinstance(x, Sym):
+        return Str(x)
+    if isinstance(x, list) and x and isinstance(x[0], Sym):
+        args = []
+        for a in x[1:]:
+            if isinstance(a, list) and len(a) == 2 and a[0] == "name" and isinstance(a[1], Sym):
+                args.append(["path"] + [Str(n) for n in a[1].split(".")])
+            elif isinstance(a, list) and a and a[0] != "record":
+                args.append(value(a))
+            else:
+                raise ScenarioError(f"not an argument: {sexp(a)}")
+        return ["action", Str(x[0])] + args
+    raise ScenarioError(f"not an action: {sexp(x)}")
 
 
 def scenario_input(scn):

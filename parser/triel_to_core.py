@@ -40,7 +40,16 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
     f must not be a record; d must be a value of the type of f (a literal, a
     factor or another DEFAULT). A Boolean DEFAULT used as a condition is
     `DEFAULT(f, d) == true`.
-  * The PENALTY amount must be a literal; it is kept as an opaque value.
+  * An action with arguments, pay(bob, 100), is (action "pay" ARG ...). An
+    argument is a literal (a value) or the name of a subject or a factor
+    (a path), which is not evaluated; anything else is rejected.
+  * FROM s of an obligation is (at T) or (factor PATH 0), the start of its
+    window; a duration in BY counts from it. Without FROM it is (none).
+    UNTIL is rejected, and so is FROM inside a composite term.
+  * The PENALTY amount is built from numeric literals, Integer and Decimal
+    factors and DEFAULT with +, - and * (no division): (penalty P CAP) with
+    P ::= (val V) | (add P P) | (sub P P) | (mul P P) | (neg P), and CAP the
+    literal of CAP, a number, or (none).
   * A handler binds to the nearest preceding obligation or prohibition of its
     subject at the top level (bound_to in TRIEL_Breach.thy). Section 2.6
     defines continuations only for obligations, so TERMINATE, CURE_BY and
@@ -203,6 +212,7 @@ class Translation:
         self.operand_type = None  # the type of the last operand read by value()
         self.all_names = set()  # every name declared with :=
         self.names = {}         # name declared so far -> (index, why it cannot be referenced)
+        self.subject_names = set()
 
     def reject(self, what: str):
         self.rejected.add(what)
@@ -236,6 +246,7 @@ class Translation:
 
     def subjects(self, t: Tree):
         for d in subtrees(t):
+            self.subject_names.add(ident(subtrees(d)[0]))
             if "DID" in tokens(d):
                 self.reject("DID")
 
@@ -698,29 +709,73 @@ class Translation:
                 self.reject(PROHIBITION_CONTINUATION)
 
     def action(self, t: Tree):
-        if "(" in tokens(t):
-            return self.reject("action arguments")
-        return ident(subtrees(t)[0])
+        """An action: its name, or (action NAME ARG ...) with arguments."""
+        name = ident(subtrees(t)[0])
+        if "(" not in tokens(t):
+            return name
+        args = [self.argument(e) for e in subtrees(t)[1:]]
+        if any(x is None for x in args):
+            return None
+        return ["action", name] + args
+
+    def argument(self, t: Tree):
+        """An argument of an action: a literal, or the name of a subject or a
+        factor, which is not evaluated (TECHNICAL_REPORT.md section 2.6)."""
+        x = t
+        for rule in ("expr", "implication_expr", "disjunction_expr", "conjunction_expr",
+                     "negation_expr", "comparison_expr"):
+            if x.data != rule or tokens(x) or len(subtrees(x)) != 1:
+                return self.reject("action argument (not a name or literal)")
+            x = subtrees(x)[0]
+        p = self.primary_of(x)
+        if p == "arithmetic":
+            return self.reject("action argument (not a name or literal)")
+        if isinstance(p, tuple):
+            v = self.value(x)
+            return None if v is None else v[1]
+        c = subtrees(p)[0] if subtrees(p) and not tokens(p) else None
+        if c is not None and c.data == "literal":
+            return self.literal_value(c)
+        if c is not None and c.data == "factor_ref":
+            names = [ident(n) for n in subtrees(c)]
+            if len(names) == 1 and names[0] in self.subject_names:
+                return self.path(c)
+            if names[0] not in self.factors:
+                return self.reject("action argument (undeclared name)")
+            return None if self.path_type(c) is None else self.path(c)
+        return self.reject("action argument (not a name or literal)")
+
+    def start(self, t: Tree):
+        """The start of an obligation, FROM: a DATETIME or a factor."""
+        c = subtrees(t)[0]
+        if c.data == "datetime_literal":
+            s = self.datetime(c)
+            return None if s is None else ["at", s]
+        return None if self.path_type(c) is None else ["factor", self.path(c), 0]
 
     def obligation(self, t: Tree, top: bool, within):
         s = ident(subtrees(t)[0])
         a = self.action(subtrees(t)[1])
         toks = tokens(t)
-        for kw in ("FROM", "UNTIL"):
-            if kw in toks:
-                self.reject(kw)
+        if "UNTIL" in toks:
+            return self.reject("UNTIL")
         dl = ["none"]
         if "BY" in toks:
             if within is not None:
                 return self.reject("BY and WITHIN")
-            dl = self.deadline(subtrees(t)[2])
+            dl = self.deadline([x for x in subtrees(t) if x.data == "deadline_expr"][0])
         elif within is not None:
             dl = self.deadline(within)
         if dl is not None and dl != ["none"] and not top:
             return self.reject("deadline in a composite term")
-        if a is None or dl is None or "FROM" in toks or "UNTIL" in toks:
+        st = ["none"]
+        if "FROM" in toks:
+            if not top:
+                return self.reject("FROM in a composite term")
+            st = self.start([x for x in subtrees(t) if x.data == "datetime_expr"][0])
+        if a is None or dl is None or st is None:
             return None
-        return ["must", s, a, dl]
+        return ["must", s, a, dl, st]
 
     def handler(self, t: Tree):
         s = ident(subtrees(t)[0])
@@ -730,11 +785,7 @@ class Translation:
             kw = tokens(b)[0]
             x = None
             if kw == "PENALTY":
-                if "CAP" in tokens(b):
-                    self.reject("CAP")
-                x = self.penalty(subtrees(b)[0])
-                if "CAP" in tokens(b):
-                    x = None
+                x = self.penalty(b)
             elif kw == "NOTIFY":
                 x = ["notify", ident(subtrees(b)[0])]
             elif kw == "TERMINATE":
@@ -752,19 +803,70 @@ class Translation:
             acts.append(x)
         return ["on_breach", s] + acts if ok else None
 
-    def penalty(self, t: Tree):
-        """The PENALTY amount: a literal, kept as an opaque value."""
+    def penalty(self, b: Tree):
+        """PENALTY e [CAP c]: (penalty P CAP), the amount and the cap."""
+        e = self.amount_expr(subtrees(b)[0])
+        cap = ["none"]
+        if "CAP" in tokens(b):
+            cap = self.literal_value(subtrees(b)[1])
+            if cap is not None and cap[0] not in ("int", "dec"):
+                cap = self.reject("CAP (not a number)")
+        return None if e is None or cap is None else ["penalty", e, cap]
+
+    def amount_expr(self, t: Tree):
+        """An amount from an expr subtree: arithmetic on numbers, no condition."""
         x = t
         for rule in ("expr", "implication_expr", "disjunction_expr", "conjunction_expr",
-                     "negation_expr", "comparison_expr", "arithmetic_expr", "mul_expr",
-                     "unary_expr", "primary"):
+                     "negation_expr", "comparison_expr"):
             if x.data != rule or tokens(x) or len(subtrees(x)) != 1:
-                return self.reject("PENALTY expression")
+                return self.reject("PENALTY of a non-number")
             x = subtrees(x)[0]
-        if x.data != "literal":
-            return self.reject("PENALTY expression")
-        v = self.literal_value(x)
-        return None if v is None else ["penalty", v]
+        return self.amount(x)
+
+    def amount(self, t: Tree):
+        """An amount from arithmetic_expr, mul_expr, unary_expr or primary."""
+        if t.data in ("arithmetic_expr", "mul_expr"):
+            parts = subtrees(t)
+            ops = [k.value for k in kids(t) if isinstance(k, Token)]
+            if any(op in ("/", "%") for op in ops):
+                return self.reject("division in PENALTY")
+            xs = [self.amount(p) for p in parts]
+            if any(x is None for x in xs):
+                return None
+            acc = xs[0]
+            for op, x in zip(ops, xs[1:]):
+                acc = [{"+": "add", "-": "sub", "*": "mul"}[op], acc, x]
+            return acc
+        if t.data == "unary_expr":
+            if "-" in tokens(t):
+                x = self.amount(subtrees(t)[0])
+                return None if x is None else ["neg", x]
+            return self.amount(subtrees(t)[0])
+        c = subtrees(t)[0]
+        if "(" in tokens(t):
+            return self.amount_expr(c)
+        if c.data == "literal":
+            v = self.literal_value(c)
+            if v is not None and v[0] not in ("int", "dec"):
+                return self.reject("PENALTY of a non-number")
+            return None if v is None else ["val", ["const", v]]
+        if c.data == "factor_ref":
+            ty = self.path_type(c)
+            if ty is None:
+                return None
+            if ty != "unknown" and ty not in NUMERIC:
+                return self.reject("PENALTY of a non-number")
+            return ["val", ["name", self.path(c)]]
+        if c.data == "default_expr":
+            v = self.default(c)
+            if v is None:
+                return None
+            if self.operand_type not in ("unknown",) and self.operand_type not in NUMERIC:
+                return self.reject("PENALTY of a non-number")
+            return ["val", v]
+        if c.data == "presence_expr":
+            return self.reject("PENALTY of a non-number")
+        return self.reject(RULES[c.data])
 
     # --- invariants -------------------------------------------------------
 
@@ -826,6 +928,8 @@ def referable(x):
             return "REF to a breach handler"
         if y[0] == "must" and y[3] != ["none"]:
             return "REF to a term with a deadline"
+        if y[0] == "must" and y[4] != ["none"]:
+            return "REF to a term with FROM"
         for z in y[1:]:
             w = walk(z)
             if w:

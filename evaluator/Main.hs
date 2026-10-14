@@ -12,12 +12,16 @@
 --   F      ::= (factor NAME TY AGE)          AGE ::= (none) | (block INT)
 --   TY     ::= (prim bool|int|decimal|string|datetime) | (optional TY)
 --            | (record (NAME TY)*)
---   T      ::= (must NAME NAME DL) | (must_not NAME NAME X) | (may NAME NAME X)
+--   T      ::= (must NAME ACT DL ST) | (must_not NAME ACT X) | (may NAME ACT X)
 --            | (then T T) | (or T T) | (and T T) | (unless T X T)
 --            | (if X T T) | (skip) | (ref INT) | (on_breach NAME A*)
+--   ACT    ::= NAME | (action NAME ARG*)    ARG ::= PATH | VAL
 --   DL     ::= (none) | (at INT) | (after INT) | (factor PATH INT)
---   A      ::= (notify NAME) | (penalty VAL) | (terminate) | (cure_by INT)
+--   ST     ::= (none) | (at INT) | (factor PATH INT)       -- FROM
+--   A      ::= (notify NAME) | (penalty P CAP) | (terminate) | (cure_by INT)
 --            | (escalate_to NAME)
+--   P      ::= (val V) | (add P P) | (sub P P) | (mul P P) | (neg P)
+--   CAP    ::= (none) | VAL
 --   X      ::= (true) | (false) | (eq V V) | (lt V V) | (le V V) | (not X)
 --            | (and X X) | (or X X) | (implies X X) | (present PATH)
 --   V      ::= (const VAL) | (name PATH) | (default PATH V)
@@ -25,7 +29,7 @@
 --   VAL    ::= (bool true|false) | (int INT) | (dec INT INT) | (str NAME) | (time INT)
 --   I      ::= (invariant NAME (always X)|(eventually X)|(next X))
 --   E      ::= (entry INT EV (data (NAME D)*))
---   EV     ::= (act NAME NAME must|may|must_not) | (arrive NAME) | (tick)
+--   EV     ::= (act NAME ACT must|may|must_not) | (arrive NAME) | (tick)
 --   D      ::= VAL | (record (NAME D)*)
 --
 -- NAME is a string literal; INT is a decimal integer (seconds for times).
@@ -35,6 +39,7 @@
 module Main (main) where
 
 import Data.Char (isDigit, isSpace)
+import Data.List (intercalate)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import qualified TRIEL as T
@@ -159,18 +164,45 @@ deadline (List [Sym "after", n]) = Just . T.DAfter <$> int n
 deadline (List [Sym "factor", p, n]) = Just <$> (T.DFactor <$> path p <*> int n)
 deadline x = bad "a deadline" x
 
-action :: Conv (T.Baction String T.Atom)
+start :: Conv (Maybe (T.Deadline [String]))
+start (List [Sym "none"]) = Right Nothing
+start (List [Sym "at", n]) = Just . T.DAt <$> int n
+start (List [Sym "factor", p, n]) = Just <$> (T.DFactor <$> path p <*> int n)
+start x = bad "a start (FROM)" x
+
+-- An action: a name, or a name with arguments; an argument is a path or a value.
+act :: Conv T.Act
+act (Str a) = Right (T.Act a [])
+act (List (Sym "action" : a : xs)) = T.Act <$> name a <*> mapM arg xs
+  where
+    arg x@(List (Sym "path" : _)) = T.ArgName <$> path x
+    arg x = T.ArgVal <$> value x
+act x = bad "an action" x
+
+pexp :: Conv (T.Pexp [String] T.Atom)
+pexp (List [Sym "val", v]) = T.PVal <$> vexp v
+pexp (List [Sym "add", a, b]) = T.PAdd <$> pexp a <*> pexp b
+pexp (List [Sym "sub", a, b]) = T.PSub <$> pexp a <*> pexp b
+pexp (List [Sym "mul", a, b]) = T.PMul <$> pexp a <*> pexp b
+pexp (List [Sym "neg", a]) = T.PNeg <$> pexp a
+pexp x = bad "an amount" x
+
+cap :: Conv (Maybe T.Rat)
+cap (List [Sym "none"]) = Right Nothing
+cap x = value x >>= \v -> maybe (bad "a numeric cap" x) (Right . Just) (T.num_of v)
+
+action :: Conv (T.Baction String (T.Pen [String] T.Atom))
 action (List [Sym "notify", s]) = T.Notify <$> name s
-action (List [Sym "penalty", v]) = T.Penalty <$> value v
+action (List [Sym "penalty", e, c]) = T.Penalty <$> (T.Pen <$> pexp e <*> cap c)
 action (List [Sym "terminate"]) = Right T.Terminate
 action (List [Sym "cure_by", n]) = T.CureBy <$> int n
 action (List [Sym "escalate_to", s]) = T.EscalateTo <$> name s
 action x = bad "a breach action" x
 
-term :: Conv (T.Sterm [String] T.Atom String String T.Atom)
-term (List [Sym "must", s, a, d]) = T.SMust <$> name s <*> name a <*> deadline d
-term (List [Sym "must_not", s, a, c]) = T.SMustNot <$> name s <*> name a <*> expr c
-term (List [Sym "may", s, a, c]) = T.SMay <$> name s <*> name a <*> expr c
+term :: Conv (T.Sterm [String] T.Atom String T.Act (T.Pen [String] T.Atom))
+term (List [Sym "must", s, a, d, f]) = T.SMust <$> name s <*> act a <*> deadline d <*> start f
+term (List [Sym "must_not", s, a, c]) = T.SMustNot <$> name s <*> act a <*> expr c
+term (List [Sym "may", s, a, c]) = T.SMay <$> name s <*> act a <*> expr c
 term (List [Sym "then", t, u]) = T.SThen <$> term t <*> term u
 term (List [Sym "or", t, u]) = T.SOr <$> term t <*> term u
 term (List [Sym "and", t, u]) = T.SAnd <$> term t <*> term u
@@ -208,19 +240,19 @@ datum (List (Sym "record" : fs)) = T.Nom . T.Fmap_of_list <$> mapM field fs
     field x = bad "a field" x
 datum x = T.Atom <$> value x
 
-event :: Conv (T.Event [String] String String)
+event :: Conv (T.Event [String] String T.Act)
 event (List [Sym "act", s, a, Sym p]) = do
   pol <- case p of
     "must" -> Right T.Must
     "may" -> Right T.May
     "must_not" -> Right T.MustNot
     _ -> bad "must, may or must_not" (Sym p)
-  T.Deontic <$> name s <*> name a <*> pure pol
+  T.Deontic <$> name s <*> act a <*> pure pol
 event (List [Sym "arrive", f]) = (\n -> T.Arrival [n]) <$> name f
 event (List [Sym "tick"]) = Right T.Tick
 event x = bad "an event" x
 
-entry :: Conv (T.Nd String T.Atom, (T.Int, T.Event [String] String String))
+entry :: Conv (T.Nd String T.Atom, (T.Int, T.Event [String] String T.Act))
 entry (List [Sym "entry", t, e, List (Sym "data" : ds)]) = do
   t' <- int t
   e' <- event e
@@ -228,7 +260,7 @@ entry (List [Sym "entry", t, e, List (Sym "data" : ds)]) = do
   return (d, (t', e'))
 entry x = bad "an entry" x
 
-input :: Conv (T.Spec, [(T.Nd String T.Atom, (T.Int, T.Event [String] String String))])
+input :: Conv (T.Spec, [(T.Nd String T.Atom, (T.Int, T.Event [String] String T.Act))])
 input (List [Sym "input",
              List [Sym "spec", List (Sym "factors" : fs), List (Sym "terms" : ts),
                    List (Sym "invariants" : is)],
@@ -251,10 +283,12 @@ verdict T.Fulfilled = "FULFILLED"
 verdict T.Pending = "PENDING"
 verdict (T.Breached t) = "BREACHED " ++ tm t
 
-status :: T.Status String -> String
-status T.SFulfilled = "FULFILLED"
-status T.SPending = "PENDING"
-status (T.SBreached t c) = "BREACHED " ++ tm t ++ " " ++ continuation c
+-- The informational actions of the handler follow BREACHED T: they fire at the breach.
+status :: T.Status String -> [T.Ract String] -> String
+status T.SFulfilled _ = "FULFILLED"
+status T.SPending _ = "PENDING"
+status (T.SBreached t c) acts =
+  "BREACHED " ++ tm t ++ concatMap ((' ' :) . ract) acts ++ " " ++ continuation c
   where
     continuation T.NoContinuation = "CLOSED"
     continuation T.Terminated = "TERMINATED"
@@ -285,14 +319,20 @@ atom (T.ANum q) = number q
 atom (T.AStr s) = show s
 atom (T.ATime t) = tm t
 
--- A prohibition is reported with the informational actions of its handler;
--- the other actions cannot occur there (run rejects them).
-baction :: T.Baction String T.Atom -> String
-baction (T.Notify s) = "NOTIFY " ++ s
-baction (T.Penalty v) = "PENALTY " ++ atom v
-baction T.Terminate = "TERMINATE"
-baction (T.CureBy k) = "CURE_BY " ++ tm k
-baction (T.EscalateTo s) = "ESCALATE_TO " ++ s
+-- A breached norm is reported with the informational actions of its handler,
+-- the penalties with their amounts in the state of the breach.
+ract :: T.Ract String -> String
+ract (T.RNotify s) = "NOTIFY " ++ s
+ract (T.RPenalty (T.PAmount q capped)) = "PENALTY " ++ number q ++ (if capped then " CAPPED" else "")
+ract (T.RPenalty T.PUndefined) = "PENALTY UNDEFINED"
+ract (T.RPenalty (T.PNegative q)) = "PENALTY NEGATIVE " ++ number q
+
+showAct :: T.Act -> String
+showAct (T.Act a []) = a
+showAct (T.Act a xs) = a ++ "(" ++ intercalate ", " (map arg xs) ++ ")"
+  where
+    arg (T.ArgName p) = intercalate "." p
+    arg (T.ArgVal v) = atom v
 
 answer :: Maybe Bool -> String
 answer (Just True) = "YES"
@@ -309,13 +349,13 @@ line (T.LActivation b) = "ACTIVATION " ++ (if b then "OK" else "REJECTED")
 line (T.LBlock b) = "BLOCK " ++ (if b then "OK" else "REJECTED")
 line (T.LTypes Nothing) = "TYPES OK"
 line (T.LTypes (Just (j, f))) = "TYPES ILL-TYPED ENTRY " ++ nat j ++ " FACTOR " ++ f
-line (T.LMust i s a d st) =
-  "TERM " ++ nat i ++ " MUST " ++ s ++ " " ++ a ++ " DEADLINE "
-    ++ maybe "NONE" tm d ++ " : " ++ status st
+line (T.LMust i s a d st acts) =
+  "TERM " ++ nat i ++ " MUST " ++ s ++ " " ++ showAct a ++ " DEADLINE "
+    ++ maybe "NONE" tm d ++ " : " ++ status st acts
 line (T.LMustNot i s a v acts) =
-  "TERM " ++ nat i ++ " MUST_NOT " ++ s ++ " " ++ a ++ " : " ++ verdict v
-    ++ concatMap ((' ' :) . baction) acts
-line (T.LMay i s a v) = "TERM " ++ nat i ++ " MAY " ++ s ++ " " ++ a ++ " : " ++ verdict v
+  "TERM " ++ nat i ++ " MUST_NOT " ++ s ++ " " ++ showAct a ++ " : " ++ verdict v
+    ++ concatMap ((' ' :) . ract) acts
+line (T.LMay i s a v) = "TERM " ++ nat i ++ " MAY " ++ s ++ " " ++ showAct a ++ " : " ++ verdict v
 line (T.LOnBreach i s j) =
   "TERM " ++ nat i ++ " ON_BREACH " ++ s ++ " : " ++ maybe "UNBOUND" (("BOUND " ++) . nat) j
 line (T.LComposite i d n v) =
