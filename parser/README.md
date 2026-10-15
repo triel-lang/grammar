@@ -23,11 +23,14 @@ A reference parser for TRIEL v2.4, built from the published grammar
   zero-knowledge *semantics* of a specification — those are defined
   separately in `TECHNICAL_REPORT.md` §2.5. Trace satisfaction for the
   fragment inside the formal core is computed by the evaluator exported from
-  `formal/core` (see below); nothing here checks ZK-constraint soundness.
+  `formal/core` (see below), and the semantic-analysis rules that apply to
+  that fragment (`TECHNICAL_REPORT.md` §2.7–§2.9, declared names) are checked
+  by `triel_to_core.py`; nothing here checks ZK-constraint soundness.
 - **Not a validator of well-formedness beyond syntax.** A file can parse
   successfully and still, for example, read a `WITHOUT REVEALING`-marked
   field directly in an invariant (see audit finding B-08) — the grammar as
-  published does not forbid this, and neither does this parser.
+  published does not forbid this, and neither does this parser. The
+  translator `triel_to_core.py` rejects it.
 - **Ambiguity is reported, not resolved.** Where the grammar is genuinely
   ambiguous, `ambiguity="resolve"` (the default mode used for pass/fail
   checks) picks *a* parse silently, the same way most parser generators

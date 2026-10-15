@@ -124,8 +124,8 @@ Explanation: PRESENT(x) is true exactly when x has a value in the state. Since i
 ## 3. Modelling choices
 
 - **Two-sorted syntax.** Value expressions and boolean expressions are separate sorts. Evaluation of a boolean expression returns a truth value in 𝔹⊥, while names and value constants denote values in V. In this core, value expressions occur only as the operands of `=`, `<` and `≤`, which correspond to `==`, `<` and `<=` in the TRIEL grammar. `a != b`, `a > b` and `a >= b` are NOT (a = b), b < a and b ≤ a (section 10.6).
-- **Stale values.** Following FOUNDATIONS.md, a stale value is outside dom σ, so PRESENT(x) is F for a stale x. The `ON_STALE`/`BLOCK` machinery from §2.9 is not modelled.
-- **Out of scope.** Arithmetic, function calls, and every construct listed as "Open" in FOUNDATIONS.md are outside this core.
+- **Stale values.** Following FOUNDATIONS.md, a stale value is outside dom σ, so PRESENT(x) is F for a stale x. The theories of this section do not model when a value becomes stale; `ON_STALE BLOCK` is modelled in sections 8 and 10.4 (`blocked`, `blockp`).
+- **Out of scope.** Arithmetic occurs only in the amount of a `PENALTY` (section 8.4). Function calls, and every construct listed as "Open" in FOUNDATIONS.md, are outside this core.
 
 ## 4. Trace semantics (TECHNICAL_REPORT.md §2.5)
 
@@ -208,7 +208,7 @@ In five places the text of §2.5 is incomplete, and this formalisation adopts th
 
 ### 4.4 Not formalised
 
-These term forms have no denotation in §2.5 and are outside this theory: `ON … DO`, `WITHIN … ELSE`, `EXECUTE` and `ON_BREACH`. (`WITHIN … ELSE` at the top level of a block has a verdict semantics in section 8, and in the trace semantics it is read as the choice of its two obligations, section 10.3.) `IF`, `WHEN` and the one-entry term are in section 6; `REF` is resolved by substitution in section 10.3. The breach and deadline semantics of §2.6 and the satisfaction of `INVARIANTS` are not formalised either.
+These term forms have no denotation in §2.5 and are outside this theory: `ON … DO`, `WITHIN … ELSE`, `EXECUTE` and `ON_BREACH`. (`WITHIN … ELSE` at the top level of a block has a verdict semantics in section 8, and in the trace semantics it is read as the choice of its two obligations, section 10.3.) `IF`, `WHEN` and the one-entry term are in section 6; `REF` is resolved by substitution in section 10.3. The breach and deadline semantics of §2.6 are formalised in section 8, and the satisfaction of `INVARIANTS` in section 10.1.
 
 ## 5. The indicator predicate *Ex* (`TRIEL_Ex.thy`)
 
@@ -422,7 +422,7 @@ Section 2.6 distinguishes the specification trace of §2.5 from the *implementat
   - CURE_BY k opens the window (τ_b, τ_b + k] from the moment of breach τ_b;
   - ESCALATE_TO s′ gives s′ a new obligation for the same action, with a window of the same length counted from the moment of transfer.
   - `handle_breach` takes the start of the obligation (τ₀, or f with FROM) for the length of that window, and the lower bound of its window.
-- **Fallbacks** (`else_verdict`, section 9, decision 22). `s MUST a WITHIN d ELSE s′ MUST a′ BY d′` is `SMustElse`. It is fulfilled by an action of s in (−∞, d]. Once the trace passes d without one, it is not breached: the status is `EElse d v`, where v is the verdict of the fallback with the window (d, d′]. A duration in d′ counts from d (`else_deadline`). A handler bound to an obligation with a fallback is rejected (`else_handlers_ok`).
+- **Fallbacks** (`else_verdict`, section 9, decision 22). `s MUST a WITHIN d ELSE s′ MUST a′ BY d′` is `SMustElse`. It is fulfilled by an action of s in (−∞, d]. Once the trace passes d without one, it is not breached: the status is `EElse d v`, where v is the verdict of the fallback with the window (d, d′]. A duration in d′ counts from d (`else_deadline`). A handler bound to an obligation with a fallback is rejected (`else_handlers_ok`). At activation, d′ must resolve to a time after d (`else_order_ok`, decision 27).
 - **TERMS blocks and binding.** A TERMS block is a list of surface terms (`sterm`). A handler is bound to the nearest preceding obligation or prohibition of the same subject at the top level (`bound_to`). The well-formedness predicate `wf_block` requires three things:
   - handlers only at the top level;
   - every handler well formed and bound;
@@ -461,6 +461,7 @@ Section 2.6 distinguishes the specification trace of §2.5 from the *implementat
 - **`else_alt_after`, `else_alt_breached`, `else_alt_duration`:** only an action strictly after d fulfils the fallback; a missed fallback deadline d′ is a breach at d′; a duration in d′ counts from d.
 - **`else_final`, `activation_rejected_else`, `activates_resolves_else`:** the status is final once decided; both deadlines are resolved at activation, and one from an absent factor rejects it.
 - **`else_handler_rejected`:** a handler bound to an obligation with a fallback is rejected.
+- **`else_order_rejected`, `else_order_window`, `else_order_duration`:** a fallback deadline that resolves at or before d fails `else_order_ok`; when it holds, d < d′, so the window (d, d′] is not empty; a positive duration in d′ always gives d < d′.
 - **`fresh_at_max_age`:** an age equal to MAX_AGE is still fresh.
 - **`stale_absent`:** under BLOCK a stale factor is absent, so PRESENT is F.
 - **`stale_safe`:** a result computed with stale factors treated as absent is not overturned by whatever values those factors have when refreshed.
@@ -660,7 +661,7 @@ Whether a trace with an outcome belongs to the denotation of a composite term is
 - Data are nominative data (section 7). The state of an entry is its data flattened to complex names. Basic values are Booleans, exact numbers, strings and times.
 - **Numbers** (`TRIEL_Numbers.thy`). There is no floating point. A number is a rational q (`ANum`). It has type Integer if q ∈ ℤ (`int_rat`), and type Decimal if q = m / 10ᵏ for an integer m (`decimal`); a decimal literal with k digits after the point is m / 10ᵏ (`dec_atom`, `dec_atom_Decimal`). Every Integer is a Decimal (`int_rat_decimal`, `interp_int_dec`). A rational a/b in lowest terms is a Decimal exactly when b divides a power of 10 (`decimal_iff_denominator`), that is, when b has no prime factor other than 2 and 5 (`dec_den_iff`); so 1/3 is not a Decimal (`not_decimal_third`). The ordering comparisons compare numbers as rationals and are false on any other pair of values; `=` on numbers is equality of rationals, so 2500 = 2500.00 (`eval_cmp_num`).
 - A factor under `MAX_AGE m` and `ON_STALE BLOCK` is absent, with every complex name that starts with it, at an entry where it has not arrived in the last m seconds (`blockp`). The safety claim of §2.9 holds for this blocking by factor (`blockp_stale_safe`, with `blockp_le` and `blockp_stale_absent`), as it does for `blocked` (section 8).
-- Activation is checked first, in the blocked state of entry 0, for the deadlines of the `TERMS` block (`activates`) and of the invariants (`inv_activates`). Then the block is checked with `wf_block`, `cont_free_prohibitions` (section 10.6, rule 4), `else_handlers_ok` (rule 12) and `refs_ok` (section 10.3), and then the types of the data as given (`ill_typed`, `ill_typed_None`). Verdicts, invariants and composite terms are computed on the blocked trace (`btrace`, which keeps the times and events: `btrace_is_trace`).
+- Activation is checked first, in the blocked state of entry 0, for the deadlines of the `TERMS` block (`activates`) and of the invariants (`inv_activates`), and for the order of the deadlines of every fallback (`else_order_ok`, decision 27). Then the block is checked with `wf_block`, `cont_free_prohibitions` (section 10.6, rule 4), `else_handlers_ok` (rule 12) and `refs_ok` (section 10.3), and then the types of the data as given (`ill_typed`, `ill_typed_None`). Verdicts, invariants and composite terms are computed on the blocked trace (`btrace`, which keeps the times and events: `btrace_is_trace`).
 - An action is a name with a list of arguments, each a name (`ArgName`, not evaluated) or a value (`ArgVal`) (`act`, decision 16).
 - A top-level obligation gets `handle_breach` with the handler bound to it, with its start, window and deadline from `start_of`, `lo_of` and `deadline_of` (`must_line`); a prohibition gets `pr_verdict`. After a breach, both are reported with the informational actions of their handler, each penalty with its amount in the state of the breach (`ob_report`, `pr_report`, section 8.4; `pr_report_actions` relates the latter to `pr_actions`). An obligation with a fallback gets `else_verdict`, with the deadline of the fallback from `else_deadline` (`else_line`). A permission gets `may_verdict`, a handler the element it is bound to, a composite term `mem3` for each outcome, and an invariant `sinv_eval`. A composite term is resolved in the environment of the block first, so a `REF` is reported like the term it names.
 
@@ -703,6 +704,9 @@ Translation rules:
 Further rejections:
 - A deadline inside a composite term is rejected: the trace semantics of §2.5 has no time, so the deadline would be ignored. This includes the branches of `IF` and `WHEN`.
 - `MAX_AGE` without `ON_STALE`, and `ON_STALE` without `MAX_AGE`, are rejected.
+- A fallback whose deadline is a `DATETIME` not later than the `DATETIME` of the first deadline is rejected ("ELSE deadline not after the first deadline"). Other deadlines are compared by the evaluator at activation (decision 27).
+- By the rules of TECHNICAL_REPORT.md §2.9 (decision 28), a factor sourced from an `ORACLE` subject without `PROVENANCE_REQUIRED: true` is rejected ("ORACLE source without PROVENANCE_REQUIRED"), and so is a `PENALTY` without `CURRENCY` ("PENALTY without CURRENCY").
+- A subject or a factor declared twice is rejected ("duplicate subject", "duplicate factor"), and so is an undeclared subject of a term, of a handler, of `NOTIFY`, `ESCALATE_TO` or `SOURCE` ("undeclared subject", decision 29).
 
 Beyond Isabelle/HOL, the following are trusted:
 - Isabelle's code generator and GHC;
