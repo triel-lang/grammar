@@ -1,11 +1,14 @@
 -- TRIEL example inside the formal core: exact numbers and comparisons.
 -- Integer and Decimal values are exact rationals, so 2500.00 == 2500 and
 -- 250.50 is 250.5. An ordering comparison with an operand that has no value
--- is undefined, like every other condition on absent data. Every construct in
--- this file is translated into the Isabelle/HOL core (formal/core) and
--- evaluated by the exported evaluator (evaluator/).
+-- is undefined, like every other condition on absent data. A PENALTY requires
+-- CURRENCY, and data from an ORACLE require PROVENANCE_REQUIRED: true
+-- (TECHNICAL_REPORT.md section 2.9). Every construct in this file is
+-- translated into the Isabelle/HOL core (formal/core) and evaluated by the
+-- exported evaluator (evaluator/).
 
 SPECIFICATION core_numbers VERSION 1.0.0
+    PROVENANCE_REQUIRED: true
     CURRENCY: "EUR"
 
 SUBJECTS {

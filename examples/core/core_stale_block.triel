@@ -1,10 +1,13 @@
 -- TRIEL example inside the formal core: a stale factor under ON_STALE BLOCK,
--- a prohibition whose condition becomes undefined, and an escalation.
--- Every construct in this file is translated into the Isabelle/HOL core
--- (formal/core) and evaluated by the exported evaluator (evaluator/).
+-- a prohibition whose condition becomes undefined, and an escalation. The
+-- data come from an ORACLE, so PROVENANCE_REQUIRED is true (TECHNICAL_REPORT.md
+-- section 2.9). Every construct in this file is translated into the
+-- Isabelle/HOL core (formal/core) and evaluated by the exported evaluator
+-- (evaluator/).
 
 SPECIFICATION core_stale_block VERSION 1.0.0
     JURISDICTION "EU"
+    PROVENANCE_REQUIRED: true
 
 SUBJECTS {
   insurer  : PARTY,

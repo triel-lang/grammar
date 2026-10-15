@@ -1,4 +1,5 @@
 SPEC core_commitment
+METADATA PROVENANCE_REQUIRED true
 METADATA SOURCE status carrier
 METADATA POLARITY delay_days 1.0
 METADATA THRESHOLD delay_days 5
