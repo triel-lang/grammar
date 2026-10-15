@@ -171,8 +171,11 @@ def test_durations_are_seconds():
     assert '(after 7200)' in c and '(cure_by 1800)' in c
 
 
+CUR = 'CURRENCY: "EUR"'
+
+
 def test_penalty_literal():
-    c = core(spec(terms='a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY 500, NOTIFY b2'))
+    c = core(spec(terms='a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY 500, NOTIFY b2', decl=CUR))
     assert '(on_breach "a" (penalty (val (const (int 500))) (none)) (notify "b2"))' in c
 
 
@@ -186,12 +189,12 @@ def test_continuation_bound_to_a_prohibition_is_rejected(act):
 
 
 def test_decimal_penalty_is_exact():
-    c = core(spec(terms="a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY 250.50"))
+    c = core(spec(terms="a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY 250.50", decl=CUR))
     assert '(penalty (val (const (dec 25050 2))) (none))' in c
 
 
 def test_informational_actions_bound_to_a_prohibition():
-    c = core(spec(terms="a MUST_NOT b; a ON_BREACH NOTIFY b2, PENALTY 5"))
+    c = core(spec(terms="a MUST_NOT b; a ON_BREACH NOTIFY b2, PENALTY 5", decl=CUR))
     assert '(on_breach "a" (notify "b2") (penalty (val (const (int 5))) (none)))' in c
 
 
@@ -224,7 +227,8 @@ N = "g : Decimal METADATA, h : Optional<Integer> METADATA, f : Boolean METADATA"
      '(penalty (mul (val (default (path "h") (const (int 0)))) (val (const (int 2)))) (none))'),
 ])
 def test_penalty_amount(amount, expected):
-    c = core(spec(terms=f"a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY {amount}", factors=N))
+    c = core(spec(terms=f"a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY {amount}", factors=N,
+                  decl=CUR))
     assert expected in c
 
 
@@ -240,7 +244,37 @@ def test_penalty_amount(amount, expected):
 ])
 def test_penalty_rejections(amount, why):
     assert rejected(spec(terms=f"a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY {amount}",
-                         factors=N)) == [why]
+                         factors=N, decl=CUR)) == [why]
+
+
+def oracle_spec(decl, factors="f : Boolean METADATA SOURCE o"):
+    return (f"SPECIFICATION t VERSION 1.0.0 {decl}\n"
+            "SUBJECTS { a : PARTY, o : ORACLE }\n"
+            f"TERMS {{ a MUST b }}\nFACTORS {{ {factors} }}\nINVARIANTS {{ i : ALWAYS(f) }}\n")
+
+
+@pytest.mark.parametrize("decl, factors, why", [
+    ("", "f : Boolean METADATA SOURCE o", ["ORACLE source without PROVENANCE_REQUIRED"]),
+    ("PROVENANCE_REQUIRED: false", "f : Boolean METADATA SOURCE o",
+     ["ORACLE source without PROVENANCE_REQUIRED"]),
+    ("", "f : Boolean POLARITY 1.0 SOURCE o", ["ORACLE source without PROVENANCE_REQUIRED"]),
+    ("PROVENANCE_REQUIRED: true", "f : Boolean METADATA SOURCE o", []),
+    ("", "f : Boolean METADATA SOURCE a", []),
+    ("", "f : Boolean METADATA", []),
+])
+def test_oracle_source_requires_provenance(decl, factors, why):
+    assert rejected(oracle_spec(decl, factors)) == why
+
+
+@pytest.mark.parametrize("terms", [
+    "a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY 500",
+    "a MUST_NOT b; a ON_BREACH NOTIFY b2, PENALTY 5",
+])
+def test_penalty_requires_currency(terms):
+    assert rejected(spec(terms=terms)) == ["PENALTY without CURRENCY"]
+    assert rejected(spec(terms=terms, decl='JURISDICTION "EU"')) == ["PENALTY without CURRENCY"]
+    assert not translate(spec(terms=terms, decl=CUR)).rejected
+    assert not translate(spec(terms="a MUST b WITHIN 1 DAYS; a ON_BREACH NOTIFY b2")).rejected
 
 
 # --- action arguments and FROM ------------------------------------------------
@@ -535,7 +569,8 @@ def test_hash_and_address_are_strings():
     ("a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY 10 * z", "i : ALWAYS(f)"),
 ])
 def test_flow_rule(terms, invariants):
-    assert rejected(zk_spec(terms=terms, invariants=invariants)) == ["ZK flow rule"]
+    assert rejected(zk_spec(terms=terms, invariants=invariants, decl=f"{ZK_DECL} {CUR}")) == \
+        ["ZK flow rule"]
 
 
 def test_visible_zk_factor_is_read():

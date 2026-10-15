@@ -64,7 +64,9 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
   * JURISDICTION, STANDARD, CURRENCY, PROVENANCE_REQUIRED, PROOF_SYSTEM, CURVE,
     the DID of a subject, and the POLARITY, THRESHOLD, SOURCE and
     SENSITIVITY_BOUND of each factor are metadata: they are printed and have no
-    semantics in the core. CAUSED_BY is rejected.
+    semantics in the core. CAUSED_BY is rejected. By the rules of
+    TECHNICAL_REPORT.md section 2.9, a factor whose SOURCE is an ORACLE
+    requires PROVENANCE_REQUIRED: true, and a PENALTY requires CURRENCY.
   * A ZK<T> factor is a factor of type T; Hash and Address are strings. Without
     WITHOUT REVEALING ALL it is hidden, (hidden_factor NAME TY AGE): the
     evaluator removes it from the data before typing and evaluation. The flow
@@ -268,7 +270,11 @@ class Translation:
         self.dids = set()       # subjects with a DID
         self.hidden = set()     # hidden factors: ZK<T> without WITHOUT REVEALING ALL
         self.zk = []            # (factor, salts, BOUND_TO (subject, nonce) or None, SOURCE or None)
-        self.declared = set()   # PROOF_SYSTEM and CURVE, if declared
+        self.declared = set()   # PROOF_SYSTEM, CURVE and CURRENCY, if declared
+        self.provenance = False # PROVENANCE_REQUIRED: true
+        self.oracles = set()    # subjects declared ORACLE
+        self.sources = set()    # subjects named in a SOURCE clause
+        self.penalties = False  # a PENALTY in a breach handler
 
     def reject(self, what: str):
         self.rejected.add(what)
@@ -282,7 +288,7 @@ class Translation:
             if isinstance(c, Token):
                 if c.value in ("REPLACES", "IMPORT", "ANCHOR_MODE", "QUORUM_THRESHOLD"):
                     self.reject(c.value)
-                if c.value in ("PROOF_SYSTEM", "CURVE"):
+                if c.value in ("PROOF_SYSTEM", "CURVE", "CURRENCY"):
                     self.declared.add(c.value)
                 if c.value in ("SPECIFICATION", "VERSION", "REPLACES", "STANDARD",
                                "JURISDICTION", "IMPORT", "PROVENANCE_REQUIRED",
@@ -300,6 +306,7 @@ class Translation:
                 self.metadata.append(f"METADATA JURISDICTION {kids(c)[0].value}")
             elif key == "PROVENANCE_REQUIRED" and c.data == "boolean_literal":
                 self.metadata.append(f"METADATA PROVENANCE_REQUIRED {tokens(c)[0]}")
+                self.provenance = tokens(c)[0] == "true"
             elif key == "PROOF_SYSTEM" and c.data == "proof_system_val":
                 self.metadata.append(f"METADATA PROOF_SYSTEM {tokens(c)[0]}")
 
@@ -307,6 +314,8 @@ class Translation:
         for d in subtrees(t):
             name = ident(subtrees(d)[0])
             self.subject_names.add(name)
+            if "ORACLE" in tokens([x for x in subtrees(d) if x.data == "role_type"][0]):
+                self.oracles.add(name)
             if "DID" in tokens(d):
                 self.dids.add(name)
                 did = kids([x for x in subtrees(d) if x.data == "did_literal"][0])[0].value
@@ -385,6 +394,13 @@ class Translation:
             if any(x not in self.factors for x in salts):
                 self.reject("undeclared salt")
 
+    def check_rules(self):
+        """The semantic rules of TECHNICAL_REPORT.md section 2.9."""
+        if self.sources & self.oracles and not self.provenance:
+            self.reject("ORACLE source without PROVENANCE_REQUIRED")
+        if self.penalties and "CURRENCY" not in self.declared:
+            self.reject("PENALTY without CURRENCY")
+
     def factor(self, t: Tree):
         name = ident(subtrees(t)[0])
         te = subtrees(t)[1]
@@ -412,6 +428,7 @@ class Translation:
                 pending = None
             elif isinstance(c, Tree) and c.data == "factor_source":
                 source = ident(subtrees(c)[0])
+                self.sources.add(source)
                 self.metadata_sources.append(f"METADATA SOURCE {name} {source}")
                 if self.zk and self.zk[-1][0] == name:
                     self.zk[-1][3] = source
@@ -941,6 +958,7 @@ class Translation:
             kw = tokens(b)[0]
             x = None
             if kw == "PENALTY":
+                self.penalties = True
                 x = self.penalty(b)
             elif kw == "NOTIFY":
                 x = ["notify", ident(subtrees(b)[0])]
@@ -1071,6 +1089,7 @@ class Translation:
             tops.append(self.top)
         self.check_binding(tops)
         invs = [self.invariant(i) for i in subtrees(blocks["invariants_block"])]
+        self.check_rules()
         self.metadata += self.metadata_sources
         if not self.rejected:
             self.core = ["spec", ["factors"] + factors, ["terms"] + terms,
