@@ -444,6 +444,107 @@ def test_stale_block_needs_max_age():
     assert '(block 86400)' in core(spec(factors="f : Boolean METADATA MAX_AGE 1 DAYS ON_STALE BLOCK"))
 
 
+# --- hidden ZK factors (TECHNICAL_REPORT.md sections 2.7 and 2.8) ----------
+
+ZK_DECL = 'PROOF_SYSTEM: GROTH16 CURVE: "BN254"'
+Z = "z : ZK<Integer> PROVES(self >= 18) METADATA, f : Boolean METADATA, s : DateTime METADATA"
+
+
+def zk_spec(terms="a MUST b", factors=Z, invariants="i : ALWAYS(f)", decl=ZK_DECL,
+            subjects="a : PARTY, b2 : PARTY"):
+    return (f"SPECIFICATION t VERSION 1.0.0 {decl}\n"
+            f"SUBJECTS {{ {subjects} }}\n"
+            f"TERMS {{ {terms} }}\nFACTORS {{ {factors} }}\nINVARIANTS {{ {invariants} }}\n")
+
+
+@pytest.mark.parametrize("clause, tag", [
+    ("", "hidden_factor"),
+    ("WITHOUT REVEALING self", "hidden_factor"),
+    ("WITHOUT REVEALING ALL", "factor"),
+])
+def test_zk_factor_is_hidden_by_default(clause, tag):
+    c = core(zk_spec(factors=f"z : ZK<Integer> PROVES(self >= 18) {clause} METADATA, f : Boolean METADATA"))
+    assert f'({tag} "z" (prim int) (none))' in c
+
+
+def test_hash_and_address_are_strings():
+    c = core(spec(factors="f : Boolean METADATA, h : Hash METADATA, d : Address METADATA, "
+                          "z : ZK<Hash> PROVES(self == \"0x1\") WITHOUT REVEALING ALL METADATA",
+                  decl=ZK_DECL, invariants='i : ALWAYS(h == "0xab" OR d == z)'))
+    assert '(factor "h" (prim string) (none))' in c
+    assert '(factor "d" (prim string) (none))' in c
+    assert '(factor "z" (prim string) (none))' in c
+
+
+@pytest.mark.parametrize("terms, invariants", [
+    ("a MUST b", "i : ALWAYS(z >= 18)"),
+    ("a MUST b", "i : ALWAYS(PRESENT(z))"),
+    ("a MUST b", "i : ALWAYS(DEFAULT(z, 0) >= 18)"),
+    ("a MUST b", "i : EVENTUALLY(f) WITHIN z"),
+    ("IF z > 1 THEN a MUST b", "i : ALWAYS(f)"),
+    ("a MAY b WHEN z == 1", "i : ALWAYS(f)"),
+    ("a MUST_NOT b WHEN f AND z == 1", "i : ALWAYS(f)"),
+    ("a MUST b BY z", "i : ALWAYS(f)"),
+    ("a MUST b BY s FROM z", "i : ALWAYS(f)"),
+    ("a MUST b WITHIN 1 DAYS; a ON_BREACH PENALTY 10 * z", "i : ALWAYS(f)"),
+])
+def test_flow_rule(terms, invariants):
+    assert rejected(zk_spec(terms=terms, invariants=invariants)) == ["ZK flow rule"]
+
+
+def test_visible_zk_factor_is_read():
+    c = core(zk_spec(factors="z : ZK<Integer> PROVES(self >= 18) WITHOUT REVEALING ALL METADATA",
+                     invariants="i : ALWAYS(z >= 18)"))
+    assert '(always (le (const (int 18)) (name (path "z"))))' in c
+
+
+def test_hidden_factor_is_named_in_an_action():
+    c = core(zk_spec(terms="a MUST submit_proof(z, f) WITHIN 1 DAYS"))
+    assert '(action "submit_proof" (path "z") (path "f"))' in c
+    assert rejected(zk_spec(terms="a MUST submit_proof(z.x)")) == ["undeclared field"]
+
+
+def test_zk_metadata_lines():
+    tr = translate(zk_spec(
+        subjects='a : PARTY DID "did:example:a", b2 : PARTY',
+        factors='z : ZK<Integer> PROVES(self >= 18, self IN RANGE [-5, 7], self IN SET {1, 2}, '
+                'HASH(self, salt) == "0x1") BOUND_TO(a, nonce) METADATA SOURCE a, '
+                'f : Boolean METADATA, nonce : Hash METADATA, salt : Hash METADATA'))
+    assert not tr.rejected
+    assert tr.metadata == ["METADATA PROOF_SYSTEM GROTH16", 'METADATA CURVE "BN254"',
+                           'METADATA DID a "did:example:a"',
+                           "METADATA PROVES z self >= 18", "METADATA PROVES z self IN RANGE [-5, 7]",
+                           "METADATA PROVES z self IN SET {1, 2}",
+                           'METADATA PROVES z HASH(self, salt) == "0x1"',
+                           "METADATA BOUND_TO z a nonce", "METADATA SOURCE z a"]
+
+
+@pytest.mark.parametrize("decl, subjects, factors, why", [
+    ('CURVE: "BN254"', "a : PARTY", Z, "ZK type without PROOF_SYSTEM"),
+    ("PROOF_SYSTEM: PLONK", "a : PARTY", Z, "ZK type without CURVE"),
+    (ZK_DECL, 'a : PARTY DID "did:x"', "z : ZK<Integer> PROVES(self >= 18) METADATA SOURCE a, "
+     "f : Boolean METADATA", "ZK type without BOUND_TO"),
+    (ZK_DECL, "a : PARTY", "z : ZK<Integer> PROVES(self >= 18) BOUND_TO(a, f) METADATA, "
+     "f : Boolean METADATA", "BOUND_TO subject without DID"),
+    (ZK_DECL, 'a : PARTY DID "did:x"', "z : ZK<Integer> PROVES(self >= 18) BOUND_TO(a, n) METADATA, "
+     "f : Boolean METADATA", "undeclared nonce"),
+    (ZK_DECL, "a : PARTY", 'z : ZK<Integer> PROVES(HASH(self, salt) == "0x1") METADATA, '
+     "f : Boolean METADATA", "undeclared salt"),
+    (ZK_DECL, "a : PARTY", "z : ZK<Integer> PROVES(self >= 18) PUBLIC_WITNESS(f) METADATA, "
+     "f : Boolean METADATA", "PUBLIC_WITNESS"),
+    (ZK_DECL, "a : PARTY", "z : Optional<ZK<Integer> PROVES(self >= 18)> METADATA, "
+     "f : Boolean METADATA", "nested ZK type"),
+])
+def test_zk_rejections(decl, subjects, factors, why):
+    assert rejected(zk_spec(decl=decl, subjects=subjects, factors=factors)) == [why]
+
+
+def test_proof_system_without_zk_is_metadata():
+    tr = translate(spec(decl=ZK_DECL))
+    assert not tr.rejected
+    assert tr.metadata == ["METADATA PROOF_SYSTEM GROTH16", 'METADATA CURVE "BN254"']
+
+
 # --- command-line behaviour ----------------------------------------------
 
 def run(args, **kw):

@@ -9,7 +9,8 @@
 -- parser/triel_eval.py. Its grammar:
 --
 --   input  ::= (input (spec (factors F*) (terms T*) (invariants I*)) (trace E*))
---   F      ::= (factor NAME TY AGE)          AGE ::= (none) | (block INT)
+--   F      ::= (factor NAME TY AGE) | (hidden_factor NAME TY AGE)
+--   AGE    ::= (none) | (block INT)
 --   TY     ::= (prim bool|int|decimal|string|datetime) | (optional TY)
 --            | (record (NAME TY)*)
 --   T      ::= (must NAME ACT DL ST) | (must_not NAME ACT X) | (may NAME ACT X)
@@ -221,8 +222,12 @@ term (List [Sym "must_else", s, a, d, s', a', d']) = do
     Nothing -> bad "a deadline" d
 term x = bad "a term" x
 
+-- A hidden factor (a ZK<T> factor without WITHOUT REVEALING ALL) is removed from
+-- the data of every entry before evaluation.
 factor :: Conv T.Fdecl
-factor (List [Sym "factor", f, t, a]) = T.Fdecl <$> name f <*> ty t <*> age a
+factor (List [Sym k, f, t, a])
+  | k == "factor" || k == "hidden_factor" =
+      T.Fdecl <$> name f <*> ty t <*> age a <*> pure (k == "hidden_factor")
   where
     age (List [Sym "none"]) = Right Nothing
     age (List [Sym "block", n]) = Just <$> int n

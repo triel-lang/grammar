@@ -59,9 +59,20 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
     subject at the top level (bound_to in TRIEL_Breach.thy). Section 2.6
     defines continuations only for obligations, so TERMINATE, CURE_BY and
     ESCALATE_TO in a handler bound to a prohibition are rejected.
-  * JURISDICTION, STANDARD, CURRENCY, PROVENANCE_REQUIRED, and the POLARITY,
-    THRESHOLD, SOURCE and SENSITIVITY_BOUND of each factor are metadata: they
-    are printed and have no semantics in the core. CAUSED_BY is rejected.
+  * JURISDICTION, STANDARD, CURRENCY, PROVENANCE_REQUIRED, PROOF_SYSTEM, CURVE,
+    the DID of a subject, and the POLARITY, THRESHOLD, SOURCE and
+    SENSITIVITY_BOUND of each factor are metadata: they are printed and have no
+    semantics in the core. CAUSED_BY is rejected.
+  * A ZK<T> factor is a factor of type T; Hash and Address are strings. Without
+    WITHOUT REVEALING ALL it is hidden, (hidden_factor NAME TY AGE): the
+    evaluator removes it from the data before typing and evaluation. The flow
+    rule (TECHNICAL_REPORT.md section 2.7): a hidden factor may be named only as
+    an action argument; read anywhere else (a condition, an invariant, PRESENT,
+    DEFAULT, PENALTY, a deadline, FROM) it is rejected as "ZK flow rule". Its
+    PROVES constraints and BOUND_TO are metadata. Rejected (section 2.8): a ZK
+    factor without PROOF_SYSTEM or CURVE, a ZK factor whose SOURCE subject has a
+    DID but which has no BOUND_TO, a BOUND_TO subject without a DID, an
+    undeclared nonce or salt, PUBLIC_WITNESS, and a ZK type inside another type.
   * The class of an invariant (SAFETY, LIVENESS, FAIRNESS) is a label; the
     verdict depends only on ALWAYS, EVENTUALLY or NEXT.
   * EVENTUALLY(c) WITHIN d is (eventually_within X DL), with the deadline DL
@@ -88,9 +99,9 @@ RULES = {
     "declaration_block": "core", "version_literal": "core",
     "standard_ref": "metadata", "jurisdiction_literal": "metadata",
     "import_decl": "IMPORT", "hash_literal": "core",
-    "anchor_mode_val": "ANCHOR_MODE", "proof_system_val": "PROOF_SYSTEM",
+    "anchor_mode_val": "ANCHOR_MODE", "proof_system_val": "metadata",
     "subject_block": "core", "subject_decl": "core", "role_type": "core",
-    "did_literal": "DID",
+    "did_literal": "metadata",
     "term_element": "core", "terms_block": "core",
     "named_term_decl": "core", "term_stmt": "core",
     "choice_expr": "core", "parallel_expr": "AND (term)",
@@ -106,9 +117,9 @@ RULES = {
     "polarity_val": "metadata", "factor_source": "metadata",
     "type_expr": "core", "type_base": "core", "primitive_type": "core",
     "composite_type": "core", "field_decl": "core", "enum_ref": "enum type",
-    "zk_type": "ZK type", "zk_primitive_type": "ZK type", "zk_constraints": "ZK type",
-    "zk_constraint": "ZK type", "signed_literal": "ZK type", "salt_ref": "ZK type",
-    "zk_visibility": "ZK type",
+    "zk_type": "core", "zk_primitive_type": "core", "zk_constraints": "core",
+    "zk_constraint": "metadata", "signed_literal": "metadata", "salt_ref": "core",
+    "zk_visibility": "core",
     "cross_modal_block": "CROSS_MODAL", "cross_modal_decl": "CROSS_MODAL",
     "modality_id": "CROSS_MODAL",
     "invariants_block": "core", "invariant_decl": "core", "invariant_type": "metadata",
@@ -131,7 +142,7 @@ RULES = {
     "comparison_op": "core", "action_expr": "core", "event_expr": "ON ... DO",
     "factor_ref": "core", "deadline_expr": "core", "datetime_expr": "core",
     "state_expr": "LTL formula",
-    "literal": "core", "numeric_literal": "core", "signed_numeric_literal": "THRESHOLD",
+    "literal": "core", "numeric_literal": "core", "signed_numeric_literal": "metadata",
     "boolean_literal": "core", "datetime_literal": "core", "duration_literal": "core",
     "time_unit": "core", "caused_by_entry": "CAUSED_BY", "identifier": "core",
 }
@@ -142,7 +153,7 @@ CONTINUATIONS = {"TERMINATE", "CURE_BY", "ESCALATE_TO"}
 PROHIBITION_CONTINUATION = "§2.6 defines continuations only for obligations"
 CALENDAR_UNITS = {"BUSINESS_DAY", "BUSINESS_DAYS", "MONTH", "MONTHS", "YEAR", "YEARS"}
 PRIMITIVES = {"Integer": "int", "Decimal": "decimal", "Boolean": "bool", "String": "string",
-              "DateTime": "datetime"}
+              "DateTime": "datetime", "Hash": "string", "Address": "string"}
 NUMERIC = (["prim", "int"], ["prim", "decimal"])
 ISO_UTC = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
@@ -198,6 +209,37 @@ def tokens(t: Tree):
     return [c.value for c in kids(t) if isinstance(c, Token)]
 
 
+def leaves(t):
+    """Every token below t, in source order."""
+    if isinstance(t, Token):
+        return [t.value]
+    return [v for c in kids(t) for v in leaves(c)]
+
+
+def literal_text(t: Tree) -> str:
+    """A signed_literal as written: 5 DAYS, -10, DATETIME("..."), "EU"."""
+    c = kids(t)[0]
+    if isinstance(c, Tree) and c.data == "duration_literal":
+        return " ".join(leaves(c))
+    return "".join(leaves(c))
+
+
+def constraint_text(t: Tree) -> str:
+    """A zk_constraint as written, with normalised spacing."""
+    toks = tokens(t)
+    sub = subtrees(t)
+    lits = [literal_text(x) for x in sub if x.data == "signed_literal"]
+    op = [tokens(x)[0] for x in sub if x.data == "comparison_op"]
+    if toks[0] == "HASH":
+        salt = ident(subtrees([x for x in sub if x.data == "salt_ref"][0])[0])
+        return f"HASH(self, {salt}) {op[0]} {lits[0]}"
+    if "RANGE" in toks:
+        return f"self IN RANGE [{lits[0]}, {lits[1]}]"
+    if "SET" in toks:
+        return "self IN SET {" + ", ".join(lits) + "}"
+    return f"self {op[0]} {lits[0]}"
+
+
 def ident(t: Tree) -> Str:
     assert t.data == "identifier"
     return Str(kids(t)[0].value)
@@ -221,6 +263,10 @@ class Translation:
         self.all_names = set()  # every name declared with :=
         self.names = {}         # name declared so far -> (index, why it cannot be referenced)
         self.subject_names = set()
+        self.dids = set()       # subjects with a DID
+        self.hidden = set()     # hidden factors: ZK<T> without WITHOUT REVEALING ALL
+        self.zk = []            # (factor, salts, BOUND_TO (subject, nonce) or None, SOURCE or None)
+        self.declared = set()   # PROOF_SYSTEM and CURVE, if declared
 
     def reject(self, what: str):
         self.rejected.add(what)
@@ -232,16 +278,17 @@ class Translation:
         key = None
         for c in kids(t):
             if isinstance(c, Token):
-                if c.value in ("REPLACES", "IMPORT", "ANCHOR_MODE", "QUORUM_THRESHOLD",
-                               "PROOF_SYSTEM", "CURVE"):
+                if c.value in ("REPLACES", "IMPORT", "ANCHOR_MODE", "QUORUM_THRESHOLD"):
                     self.reject(c.value)
+                if c.value in ("PROOF_SYSTEM", "CURVE"):
+                    self.declared.add(c.value)
                 if c.value in ("SPECIFICATION", "VERSION", "REPLACES", "STANDARD",
                                "JURISDICTION", "IMPORT", "PROVENANCE_REQUIRED",
                                "ANCHOR_MODE", "QUORUM_THRESHOLD", "PROOF_SYSTEM",
                                "CURVE", "CURRENCY"):
                     key = c.value
-                elif key == "CURRENCY" and c.type == "STRING_LITERAL":
-                    self.metadata.append(f"METADATA CURRENCY {c.value}")
+                elif key in ("CURRENCY", "CURVE") and c.type == "STRING_LITERAL":
+                    self.metadata.append(f"METADATA {key} {c.value}")
                 continue
             if key == "SPECIFICATION" and c.data == "identifier":
                 self.name = ident(c)
@@ -251,12 +298,17 @@ class Translation:
                 self.metadata.append(f"METADATA JURISDICTION {kids(c)[0].value}")
             elif key == "PROVENANCE_REQUIRED" and c.data == "boolean_literal":
                 self.metadata.append(f"METADATA PROVENANCE_REQUIRED {tokens(c)[0]}")
+            elif key == "PROOF_SYSTEM" and c.data == "proof_system_val":
+                self.metadata.append(f"METADATA PROOF_SYSTEM {tokens(c)[0]}")
 
     def subjects(self, t: Tree):
         for d in subtrees(t):
-            self.subject_names.add(ident(subtrees(d)[0]))
+            name = ident(subtrees(d)[0])
+            self.subject_names.add(name)
             if "DID" in tokens(d):
-                self.reject("DID")
+                self.dids.add(name)
+                did = kids([x for x in subtrees(d) if x.data == "did_literal"][0])[0].value
+                self.metadata.append(f"METADATA DID {name} {did}")
 
     # --- factors and types ------------------------------------------------
 
@@ -290,11 +342,58 @@ class Translation:
                 ok = ok and ft is not None
                 fields.append([ident(subtrees(f)[0]), ft])
             return ["record"] + fields if ok else None
+        if c.data == "zk_type":
+            return self.reject("nested ZK type")
         return self.reject(RULES[c.data])
+
+    def zk_factor(self, name, z: Tree):
+        """The type of a ZK<T> factor, T, and whether it is hidden. PROVES and
+        BOUND_TO are metadata (TECHNICAL_REPORT.md sections 2.7 and 2.8)."""
+        prim, cons = subtrees(z)
+        salts = []
+        for c in subtrees(cons):
+            if c.data == "zk_constraint":
+                self.metadata_sources.append(f"METADATA PROVES {name} {constraint_text(c)}")
+                salts += [ident(subtrees(x)[0]) for x in subtrees(c) if x.data == "salt_ref"]
+        toks = tokens(cons)
+        vis = [tokens(x)[0] for x in subtrees(cons) if x.data == "zk_visibility"]
+        if "PUBLIC_WITNESS" in toks:
+            self.reject("PUBLIC_WITNESS")
+        bound = None
+        if "BOUND_TO" in toks:
+            ids = [ident(x) for x in subtrees(cons) if x.data == "identifier"]
+            bound = (ids[-2], ids[-1])
+            self.metadata_sources.append(f"METADATA BOUND_TO {name} {bound[0]} {bound[1]}")
+        self.zk.append([name, salts, bound, None])
+        return ["prim", PRIMITIVES[tokens(prim)[0]]], vis != ["ALL"]
+
+    def check_zk(self):
+        """The semantic rules of TECHNICAL_REPORT.md section 2.8."""
+        if self.zk:
+            for k in ("PROOF_SYSTEM", "CURVE"):
+                if k not in self.declared:
+                    self.reject(f"ZK type without {k}")
+        for name, salts, bound, source in self.zk:
+            if bound is None and source in self.dids:
+                self.reject("ZK type without BOUND_TO")
+            if bound is not None and bound[0] not in self.dids:
+                self.reject("BOUND_TO subject without DID")
+            if bound is not None and bound[1] not in self.factors:
+                self.reject("undeclared nonce")
+            if any(x not in self.factors for x in salts):
+                self.reject("undeclared salt")
 
     def factor(self, t: Tree):
         name = ident(subtrees(t)[0])
-        ty = self.type_expr(subtrees(t)[1])
+        te = subtrees(t)[1]
+        base = subtrees(subtrees(te)[0])[0]
+        hidden = False
+        if base.data == "zk_type" and "CONSTRAINT" not in tokens(te):
+            ty, hidden = self.zk_factor(name, base)
+        else:
+            ty = self.type_expr(te)
+        if hidden:
+            self.hidden.add(name)
         self.factors[name] = ty
         toks = tokens(t)
         if "CAUSED_BY" in toks:
@@ -310,7 +409,10 @@ class Translation:
                 self.metadata_sources.append(f"METADATA {pending} {name} {''.join(tokens(c))}")
                 pending = None
             elif isinstance(c, Tree) and c.data == "factor_source":
-                self.metadata_sources.append(f"METADATA SOURCE {name} {ident(subtrees(c)[0])}")
+                source = ident(subtrees(c)[0])
+                self.metadata_sources.append(f"METADATA SOURCE {name} {source}")
+                if self.zk and self.zk[-1][0] == name:
+                    self.zk[-1][3] = source
         ages = [s for s in subtrees(t) if s.data == "duration_literal"]
         stale = [s for s in subtrees(t) if s.data == "stale_action"]
         age = ["none"]
@@ -323,7 +425,8 @@ class Translation:
         elif ages and tokens(stale[0])[0] == "BLOCK":
             m = self.duration(ages[0])
             age = None if m is None else ["block", m]
-        return [["factor", name, ty, age]] if ty is not None and age is not None else []
+        tag = "hidden_factor" if hidden else "factor"
+        return [[tag, name, ty, age]] if ty is not None and age is not None else []
 
     def path_type(self, t: Tree):
         """The declared type of a factor_ref, "unknown" if a type on the way was
@@ -331,6 +434,8 @@ class Translation:
         names = [ident(c) for c in subtrees(t)]
         if names[0] not in self.factors:
             return self.reject("undeclared factor")
+        if names[0] in self.hidden:
+            return self.reject("ZK flow rule")
         ty = self.factors[names[0]]
         for f in names[1:]:
             while ty is not None and ty[0] == "optional":
@@ -787,6 +892,9 @@ class Translation:
                 return self.path(c)
             if names[0] not in self.factors:
                 return self.reject("action argument (undeclared name)")
+            if names[0] in self.hidden:
+                # A hidden factor named, not read (decision 24, TECHNICAL_REPORT.md 2.7).
+                return self.path(c) if len(names) == 1 else self.reject("undeclared field")
             return None if self.path_type(c) is None else self.path(c)
         return self.reject("action argument (not a name or literal)")
 
@@ -939,6 +1047,7 @@ class Translation:
         factors = []
         for f in subtrees(blocks["factors_block"]):
             factors += self.factor(f)
+        self.check_zk()
         terms = []
         tops = []
         elements = [subtrees(el)[0] for el in subtrees(blocks["terms_block"])]
