@@ -511,6 +511,29 @@ def test_heuristic_layer_is_metadata():
     assert '(factor "f" (prim int) (none))' in sexp(tr.core)
 
 
+@pytest.mark.parametrize("terms, factors, why", [
+    ("a MUST b", "f : Boolean METADATA, g : Integer METADATA, g : Boolean METADATA", "duplicate factor"),
+    ("a MUST b", "f : Boolean METADATA, f : Boolean METADATA", "duplicate factor"),
+    ("x MUST b", "f : Boolean METADATA", "undeclared subject"),
+    ("x MUST_NOT b", "f : Boolean METADATA", "undeclared subject"),
+    ("x MAY b", "f : Boolean METADATA", "undeclared subject"),
+    ("a MUST b WITHIN 1 DAYS ELSE x MUST c", "f : Boolean METADATA", "undeclared subject"),
+    ("a MUST b THEN x MUST c", "f : Boolean METADATA", "undeclared subject"),
+    ("a MUST b WITHIN 1 DAYS; x ON_BREACH TERMINATE", "f : Boolean METADATA", "undeclared subject"),
+    ("a MUST b WITHIN 1 DAYS; a ON_BREACH NOTIFY x", "f : Boolean METADATA", "undeclared subject"),
+    ("a MUST b WITHIN 1 DAYS; a ON_BREACH ESCALATE_TO x", "f : Boolean METADATA",
+     "undeclared subject"),
+    ("a MUST b", "f : Boolean METADATA SOURCE x", "undeclared subject"),
+])
+def test_declarations(terms, factors, why):
+    assert rejected(spec(terms=terms, factors=factors)) == [why]
+
+
+def test_duplicate_subject_is_rejected():
+    src = spec().replace("a : PARTY, b2 : PARTY", "a : PARTY, a : ORACLE")
+    assert rejected(src) == ["duplicate subject"]
+
+
 def test_caused_by_is_rejected():
     assert rejected(spec(factors="f : Boolean METADATA, g : Integer POLARITY 1.0 CAUSED_BY { f WEIGHT 0.5 }")) == \
         ["CAUSED_BY"]

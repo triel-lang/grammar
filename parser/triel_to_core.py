@@ -64,7 +64,9 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
   * JURISDICTION, STANDARD, CURRENCY, PROVENANCE_REQUIRED, PROOF_SYSTEM, CURVE,
     the DID of a subject, and the POLARITY, THRESHOLD, SOURCE and
     SENSITIVITY_BOUND of each factor are metadata: they are printed and have no
-    semantics in the core. CAUSED_BY is rejected. By the rules of
+    semantics in the core. CAUSED_BY is rejected. A subject or a factor declared
+    twice is rejected, and so is an undeclared subject of a term, a handler,
+    NOTIFY, ESCALATE_TO or SOURCE. By the rules of
     TECHNICAL_REPORT.md section 2.9, a factor whose SOURCE is an ORACLE
     requires PROVENANCE_REQUIRED: true, and a PENALTY requires CURRENCY.
   * A ZK<T> factor is a factor of type T; Hash and Address are strings. Without
@@ -280,6 +282,13 @@ class Translation:
         self.rejected.add(what)
         return None
 
+    def subject(self, t: Tree):
+        """An identifier that must name a subject declared in SUBJECTS."""
+        s = ident(t)
+        if s not in self.subject_names:
+            self.reject("undeclared subject")
+        return s
+
     # --- declaration, subjects --------------------------------------------
 
     def declaration(self, t: Tree):
@@ -313,6 +322,8 @@ class Translation:
     def subjects(self, t: Tree):
         for d in subtrees(t):
             name = ident(subtrees(d)[0])
+            if name in self.subject_names:
+                self.reject("duplicate subject")
             self.subject_names.add(name)
             if "ORACLE" in tokens([x for x in subtrees(d) if x.data == "role_type"][0]):
                 self.oracles.add(name)
@@ -412,6 +423,8 @@ class Translation:
             ty = self.type_expr(te)
         if hidden:
             self.hidden.add(name)
+        if name in self.factors:
+            self.reject("duplicate factor")
         self.factors[name] = ty
         toks = tokens(t)
         if "CAUSED_BY" in toks:
@@ -427,7 +440,7 @@ class Translation:
                 self.metadata_sources.append(f"METADATA {pending} {name} {''.join(tokens(c))}")
                 pending = None
             elif isinstance(c, Tree) and c.data == "factor_source":
-                source = ident(subtrees(c)[0])
+                source = self.subject(subtrees(c)[0])
                 self.sources.add(source)
                 self.metadata_sources.append(f"METADATA SOURCE {name} {source}")
                 if self.zk and self.zk[-1][0] == name:
@@ -806,7 +819,7 @@ class Translation:
         if within is not None:
             return self.reject("WITHIN (non-obligation)")
         if m.data in ("permission_stmt", "prohibition_stmt"):
-            s = ident(subtrees(m)[0])
+            s = self.subject(subtrees(m)[0])
             a = self.action(subtrees(m)[1])
             cs = subtrees(m)[2:]
             c = self.cond(cs[0]) if cs else ["true"]
@@ -929,7 +942,7 @@ class Translation:
         return None if self.path_type(c) is None else ["factor", self.path(c), 0]
 
     def obligation(self, t: Tree, top: bool, within):
-        s = ident(subtrees(t)[0])
+        s = self.subject(subtrees(t)[0])
         a = self.action(subtrees(t)[1])
         toks = tokens(t)
         dl = ["none"]
@@ -951,7 +964,7 @@ class Translation:
         return ["must", s, a, dl, st]
 
     def handler(self, t: Tree):
-        s = ident(subtrees(t)[0])
+        s = self.subject(subtrees(t)[0])
         acts = []
         ok = True
         for b in subtrees(t)[1:]:
@@ -961,7 +974,7 @@ class Translation:
                 self.penalties = True
                 x = self.penalty(b)
             elif kw == "NOTIFY":
-                x = ["notify", ident(subtrees(b)[0])]
+                x = ["notify", self.subject(subtrees(b)[0])]
             elif kw == "TERMINATE":
                 x = ["terminate"]
             elif kw == "CURE_BY":
@@ -972,7 +985,7 @@ class Translation:
                 else:
                     self.reject("CURE_BY (not a duration)")
             elif kw == "ESCALATE_TO":
-                x = ["escalate_to", ident(subtrees(b)[0])]
+                x = ["escalate_to", self.subject(subtrees(b)[0])]
             ok = ok and x is not None
             acts.append(x)
         return ["on_breach", s] + acts if ok else None
