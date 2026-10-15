@@ -601,6 +601,12 @@ Each decision below was made because of a theorem: either one that proves the de
 23. **`WHEN c THEN t` is evaluated once.** The open question of decision 13 is closed this way: `WHEN c THEN t` is `IF c THEN t` without `ELSE`. Waiting for c is not part of `WHEN`; an event is waited for with `ON event DO term`, which is outside this core.
 24. **A factor in an action argument stands for its name.** The open question of decision 16 is closed this way: the value of a factor is never read in an argument, so a `ZK` factor can be named in an action without its value being revealed (TECHNICAL_REPORT.md §2.7).
 
+25. **A hidden factor is removed before evaluation, and the flow rule makes the removal harmless.**
+    - A `ZK<T>` factor without `WITHOUT REVEALING ALL` is *hidden* (TECHNICAL_REPORT.md §2.7). The evaluator removes every hidden factor from the data of every entry before typing and evaluation (`erase_obs`, `run`). So two traces that differ only in the values of hidden factors get the same report (`run_noninterference`); in particular the hidden value cannot change a verdict, a penalty, an invariant or the result of typing.
+    - The flow rule of §2.7 is checked by the translator: a hidden factor may not be read anywhere a value is evaluated (a condition, an invariant, a `PENALTY`, `DEFAULT`, a deadline or `FROM`), and may be named only as a bare action argument (decision 24). For a condition that does not read a hidden factor, removing the hidden factors changes nothing (`flow_safe_eval`), so a specification that passes the flow rule means the same with and without the removal.
+    - The `PROVES` constraints are checked by the proof system, not by the core; they are metadata. A `ZK<T>` factor `WITHOUT REVEALING ALL` is an ordinary factor of type T.
+26. **The cryptographic declarations are metadata, with the semantic rules of §2.8 checked at translation.** `PROOF_SYSTEM`, `CURVE`, `DID`, `BOUND_TO` and `PROVES` are printed and enter no verdict. A specification with a `ZK<T>` factor without `PROOF_SYSTEM` or `CURVE`, a `ZK<T>` factor sourced from a subject with a `DID` but without `BOUND_TO`, a `BOUND_TO` subject without a `DID`, and an undeclared nonce or salt are rejected. `Hash` and `Address` are opaque strings.
+
 ## 10. Invariants and the evaluator (`TRIEL_Invariants.thy`, `TRIEL_Exec.thy`)
 
 ### 10.1 Invariants on finite prefixes
