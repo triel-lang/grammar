@@ -472,12 +472,12 @@ Points 1–14 are the points where §2.6 is ambiguous or contradictory. Points 1
 5. **Origin of durations.** Durations in BY and in a term-level WITHIN count from the activation time τ₀. CURE_BY counts from the moment of breach.
 6. **Boundary.** An action at the deadline fulfils. A breach is established only when the trace has an entry strictly after the deadline, and the time of breach is the deadline.
 7. **Deadline from a factor.** It is fixed at activation; if the factor is absent there, the activation is rejected.
-8. **WITHIN without ELSE.** A missed deadline is a breach (`within_missed_breach`). WITHIN … ELSE is not formalised.
+8. **WITHIN without ELSE.** A missed deadline is a breach (`within_missed_breach`). With ELSE, a missed deadline puts the fallback obligation in force instead (section 9, decision 22).
 9. **Failed cure.** A failed cure is a second breach and is final: no handler applies to it, so there is no loop.
 10. **ESCALATE_TO s′.** The original obligation stays breached. s′ gets a new obligation for the same action, with a window of the same length (d − τ₀) counted from the moment of transfer.
 11. **TERMINATE** closes the obligation, not the whole specification.
 12. **Only informational actions.** The obligation stays breached and is closed.
-13. **FROM … UNTIL.** `FROM` is formalised (section 9, decision 17); `UNTIL` is not.
+13. **FROM … UNTIL.** `FROM` is formalised (section 9, decision 17); `UNTIL` is removed from obligations (decision 21).
 14. **MAX_AGE.** An age equal to MAX_AGE is still fresh. Under USE_LAST the last value is kept and is present.
 15. **Binding target.** A handler binds to an obligation *or a prohibition* of the same subject, as §2.6 states.
 16. **One handler per norm.** At most one handler per obligation or prohibition (`wf_one_handler`).
@@ -553,7 +553,7 @@ Each decision below was made because of a theorem: either one that proves the de
     - An undefined c goes the way of F (`if_undefined_else`). This is the reading of an undefined `UNLESS` guard, which does not fire. It is justified by two theorems. On data that defines every name c reads, c is never ⊥ and the term is the two-valued `IF` (`if_classical`, from T4). Once c has a definite value, more data does not change the branch, for every c without `PRESENT` and `DEFAULT` (`if_branch_stable`, from T2).
     - The branch taken on ⊥ is not protected in this way: data that arrives later can make c true (`if_undefined_branch_not_stable`). Every rule that picks a branch on ⊥ has this property.
     - `IF` and the one-entry term preserve totality (`total_if`, `total_skip`), so every term is still total (`den_total`) and the laws of `UNLESS` hold for the extended term language with no side condition.
-    - **Open question.** Should `WHEN c THEN t` wait for c to become true, activating t at that moment, instead of evaluating c once? TECHNICAL_REPORT.md §2.5 leaves this open, and this core evaluates c once, as for `IF`.
+    - `WHEN c THEN t` does not wait for c (decision 23): it is evaluated once, as for `IF`. Waiting for an event is `ON event DO term`.
 14. **A named term is in force, and `REF` refers only backwards.**
     - An element `name := t` of a `TERMS` block is an element like any other. `REF name` denotes the denotation of t (`resolve_den`, `block_den`).
     - A reference to an undeclared name, or to a name declared at or below the reference, is rejected (`refs_ok`). So the reference relation is contained in the order of the elements and has no cycle (`refs_forward_rejected`, `refs_ok_acyclic`, `refs_no_cycle`).
@@ -567,12 +567,12 @@ Each decision below was made because of a theorem: either one that proves the de
     - `pay(bob, 100)` is the action `pay` with the argument list `bob, 100`. An event matches a norm only if its subject, action and arguments are the same; an event with other arguments, or with none, does not.
     - A literal argument is compared by value (`100` and `100.00` are the same number). A name, of a subject or a factor, is compared as a name and its value is not read, so `submit_proof(age)` does not read the hidden `age`, as TECHNICAL_REPORT.md §2.7 requires.
     - Every theory of sections 4–8 is generic in the type of actions, so every theorem about actions holds for actions with arguments without change; this includes `mem3_sound` and `mem3_complete`, and the term language and its laws are unchanged. In the evaluator an action is a name with a list of arguments (`Act`, `ArgName`, `ArgVal`), and an event matches only with the same arguments (`does_args`, `other_args_no_fulfil`); `1200` and `1200.00` are the same argument (`arg_1200`).
-    - **Open question.** Should a factor in an argument stand for its value at the moment of the action?
+    - A factor in an argument stands for its name, not for its value (decision 24).
 17. **`FROM s` opens the window of an obligation at s, and a duration in `BY` counts from s.**
     - The window of `s MUST a BY d FROM f` is [f, d]: an action before f does not fulfil it (`from_window`, `before_from_no_fulfil`, `fulfilled_at_from`). f is resolved at activation, like a deadline, and a factor that does not resolve rejects the activation (`activation_rejected_from`). A duration in BY counts from f (`from_duration`).
     - Without `FROM` the window and the origin of durations are those of section 8 (`no_from`). `ESCALATE_TO` gives the new obligation a window of length d − f. A window that starts after its deadline is breached at the deadline (`empty_window_breached`).
     - The verdicts stay final (`window_final`, `handle_breach_final`, now for every lower bound of the window).
-    - `UNTIL` is not formalised: point 13 of section 8.3 stays open for it.
+    - `UNTIL` is removed from obligations (decision 21).
 18. **A penalty is computed once, in the state in which the breach occurs.**
     - The amount of `PENALTY e CAP c` is read in the state of the entry just before the entry that establishes the breach: for a prohibition the state before the forbidden action (`pr_pen_state_condition`), for an obligation the last state not after the deadline (`ob_pen_state_at_deadline`). That entry is fixed once the breach is, so the amount does not change when the trace is extended (`ob_report_final`, `pr_report_final`).
     - `e` uses `+`, `-` and `*` on numbers, without division, so Integer and Decimal operands give a Decimal (`evalP_decimal`, `pen_amount_decimal`). An operand without a value makes the amount undefined, as in §2.9 (`evalP_strict`); it is reported as undefined, not as 0.
@@ -586,6 +586,15 @@ Each decision below was made because of a theorem: either one that proves the de
 20. **The heuristic scoring layer is metadata.**
     - TECHNICAL_REPORT.md section 4 states that `POLARITY`, `THRESHOLD`, `SENSITIVITY_BOUND`, `WEIGHT` and `CROSS_MODAL` have no formal semantics. The core does not invent one: the `POLARITY`, `THRESHOLD` and `SENSITIVITY_BOUND` of a factor are printed as metadata and do not enter any verdict, like `SOURCE`.
     - `CROSS_MODAL` (with `TOLERANCE`) and `CAUSED_BY` (with `WEIGHT`) are still rejected: each would add an invariant or a causal claim, and a claim without a verdict must not be accepted silently.
+
+21. **`UNTIL` is removed from obligations.**
+    - TECHNICAL_REPORT.md never gave `subject MUST a … UNTIL e` a meaning, and the end of the window of an obligation is already its deadline `BY`. The clause is removed from `obligation_stmt` in the grammar, so it is a syntax error, not a rejection by the translator. `UNTIL` stays a reserved word, as `Float` did in stage 9.
+22. **`WITHIN d ELSE u` is a fallback, not a breach.**
+    - `s MUST a WITHIN d ELSE s′ MUST a′ BY d′`, at the top level, is an obligation with a fallback (`SMustElse`, `else_verdict`). An action of s in (−∞, d] fulfils it (`else_fulfilled`). If the trace passes d with no such action, it is not breached: the fallback is in force from d, with the window (d, d′] (`else_taken`, `else_no_breach`). Only the fallback can be breached (`else_alt_breached`), and an action at or before d does not fulfil it (`else_alt_after`).
+    - A duration in d′ counts from d, as `CURE_BY` counts from the moment of breach (`else_alt_duration`). Both deadlines are resolved at activation, and a deadline that does not resolve rejects the activation (`activation_rejected_else`). The verdicts stay final (`else_final`).
+    - The fallback must be an obligation without `FROM`, the first obligation has no `FROM`, and `ELSE` inside a composite term, a nested `ELSE`, and a handler bound to an obligation with a fallback are rejected (`else_handlers_ok`): a fallback is what happens instead of a breach, so a handler for that obligation would never fire. In the trace semantics of §2.5, which has no time, the term is the choice of the two obligations.
+23. **`WHEN c THEN t` is evaluated once.** The open question of decision 13 is closed this way: `WHEN c THEN t` is `IF c THEN t` without `ELSE`. Waiting for c is not part of `WHEN`; an event is waited for with `ON event DO term`, which is outside this core.
+24. **A factor in an action argument stands for its name.** The open question of decision 16 is closed this way: the value of a factor is never read in an argument, so a `ZK` factor can be named in an action without its value being revealed (TECHNICAL_REPORT.md §2.7).
 
 ## 10. Invariants and the evaluator (`TRIEL_Invariants.thy`, `TRIEL_Exec.thy`)
 
