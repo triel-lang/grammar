@@ -819,6 +819,39 @@ proof -
   ultimately show ?thesis by blast
 qed
 
+text \<open>A fallback must end strictly after the first deadline (decision 27 of CORE.md): if its
+  deadline resolves at or before the first one, the window \<open>(d, d']\<close> is empty and the
+  fallback could never be fulfilled. Such a block is rejected at activation.\<close>
+
+definition else_order_ok :: "('v \<Rightarrow> int option) \<Rightarrow> int \<Rightarrow> ('n, 'v) state
+    \<Rightarrow> ('n, 'v, 's, 'a, 'p) sterm list \<Rightarrow> bool" where
+  "else_order_ok T \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<longleftrightarrow>
+     (\<forall>t \<in> set blk. case t of
+        SMustElse s a d s' a' D' \<Rightarrow>
+          (case resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 d of
+             None \<Rightarrow> True
+           | Some e \<Rightarrow> (case else_deadline T \<sigma>\<^sub>0 e D' of None \<Rightarrow> True | Some e' \<Rightarrow> e < e'))
+      | _ \<Rightarrow> True)"
+
+theorem else_order_rejected:
+  assumes "SMustElse s a d s' a' D' \<in> set blk" and "resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 d = Some e"
+    and "else_deadline T \<sigma>\<^sub>0 e D' = Some e'" and "e' \<le> e"
+  shows "\<not> else_order_ok T \<tau>\<^sub>0 \<sigma>\<^sub>0 blk"
+  using assms unfolding else_order_ok_def by force
+
+theorem else_order_window:
+  assumes "else_order_ok T \<tau>\<^sub>0 \<sigma>\<^sub>0 blk" and "SMustElse s a d s' a' D' \<in> set blk"
+    and "resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 d = Some e" and "else_deadline T \<sigma>\<^sub>0 e D' = Some e'"
+  shows "e < e'"
+  using assms unfolding else_order_ok_def by force
+
+text \<open>A fallback with a positive duration always ends after the first deadline, since the
+  duration counts from it.\<close>
+
+lemma else_order_duration:
+  "0 < k \<Longrightarrow> else_deadline T \<sigma>\<^sub>0 e (Some (DAfter k)) = Some e' \<Longrightarrow> e < e'"
+  by (auto simp: else_deadline_def)
+
 text \<open>A handler bound to an obligation with a fallback would never fire: a fallback is what
   happens instead of a breach. Such a handler is rejected.\<close>
 

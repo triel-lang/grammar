@@ -1071,6 +1071,40 @@ sinv_eval t (SEventuallyWithin phi d) pi =
     Just da -> ew_eval phi da pi;
   });
 
+else_deadline ::
+  forall a b.
+    (a -> Maybe Int) ->
+      (b -> Maybe a) -> Int -> Maybe (Deadline b) -> Maybe Int;
+else_deadline t sigma_0 da d = bind d (resolve t da sigma_0);
+
+else_order_ok ::
+  forall a b c d e.
+    (a -> Maybe Int) -> Int -> (b -> Maybe a) -> [Sterm b a c d e] -> Bool;
+else_order_ok t tau_0 sigma_0 blk =
+  all (\ a ->
+        (case a of {
+          SMust _ _ _ _ -> True;
+          SMustNot _ _ _ -> True;
+          SMay _ _ _ -> True;
+          SThen _ _ -> True;
+          SOr _ _ -> True;
+          SAnd _ _ -> True;
+          SUnless _ _ _ -> True;
+          SOnBreach _ _ -> True;
+          SIf _ _ _ -> True;
+          SSkip -> True;
+          SRef _ -> True;
+          SMustElse _ _ d _ _ da ->
+            (case resolve t tau_0 sigma_0 d of {
+              Nothing -> True;
+              Just e -> (case else_deadline t sigma_0 e da of {
+                          Nothing -> True;
+                          Just aa -> less_int e aa;
+                        });
+            });
+        }))
+    blk;
+
 deadlines :: forall a b c d e. Sterm a b c d e -> [Deadline a];
 deadlines (SMust s a d f) = (case d of {
                               Nothing -> [];
@@ -1649,12 +1683,6 @@ must_line tau_0 sigma_0 blk pi i s a d f =
       });
   });
 
-else_deadline ::
-  forall a b.
-    (a -> Maybe Int) ->
-      (b -> Maybe a) -> Int -> Maybe (Deadline b) -> Maybe Int;
-else_deadline t sigma_0 da d = bind d (resolve t da sigma_0);
-
 else_verdict ::
   forall a b c d.
     (Eq a,
@@ -1946,7 +1974,8 @@ evaluate sp obs =
         sigma_0 = st pi zero_nat;
       } in (if null obs ||
                  (not (activates time_of tau_0 sigma_0 blk) ||
-                   not (inv_activates time_of tau_0 sigma_0 (map snd invs)))
+                   (not (inv_activates time_of tau_0 sigma_0 (map snd invs)) ||
+                     not (else_order_ok time_of tau_0 sigma_0 blk)))
              then [LActivation False]
              else LActivation True :
                     (if not (wf_block blk) ||

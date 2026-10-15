@@ -1954,7 +1954,7 @@ definition term_line :: "int \<Rightarrow> (path, atom) state \<Rightarrow> cter
 
 text \<open>The evaluator on data without hidden factors. Activation is checked first, in the
   blocked state of entry 0 at the time of entry 0, for the deadlines of the TERMS block and
-  of the invariants; then the well-formedness of the block, with only informational actions
+  of the invariants, and for the order of the deadlines of each fallback; then the well-formedness of the block, with only informational actions
   in a handler bound to a prohibition; then the types of the data as given. The verdicts,
   the invariants and the membership of composite terms are computed on the blocked trace.\<close>
 
@@ -1963,6 +1963,7 @@ definition evaluate :: "spec \<Rightarrow> observation list \<Rightarrow> line l
      (case sp of Spec fs blk invs \<Rightarrow>
         (let \<pi> = btrace (max_age fs) (raw_trace obs); \<tau>\<^sub>0 = time \<pi> 0; \<sigma>\<^sub>0 = st \<pi> 0 in
          if obs = [] \<or> \<not> activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<or> \<not> inv_activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 (map snd invs)
+            \<or> \<not> else_order_ok time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 blk
          then [LActivation False]
          else LActivation True #
            (if \<not> wf_block blk \<or> \<not> cont_free_prohibitions blk \<or> \<not> else_handlers_ok blk \<or> \<not> refs_ok blk
