@@ -669,7 +669,7 @@ data Pexp a b = PVal (Vexp a b) | PAdd (Pexp a b) (Pexp a b)
 
 data Pen a b = Pen (Pexp a b) (Maybe Rat);
 
-data Fdecl = Fdecl String (Ty String Prim) (Maybe Int);
+data Fdecl = Fdecl String (Ty String Prim) (Maybe Int) Bool;
 
 data Spec =
   Spec [Fdecl] [Sterm [String] Atom String Act (Pen [String] Atom)]
@@ -788,6 +788,19 @@ kor :: Maybe Bool -> Maybe Bool -> Maybe Bool;
 kor p q =
   (if p == Just True || q == Just True then Just True
     else (if p == Just False && q == Just False then Just False else Nothing));
+
+fmfilter :: forall a b. (a -> Bool) -> Fmap a b -> Fmap a b;
+fmfilter p (Fmap_of_list m) = Fmap_of_list (filter (\ (k, _) -> p k) m);
+
+erase :: [String] -> Nd String Atom -> Nd String Atom;
+erase h (Nom m) = Nom (fmfilter (\ x -> not (membera h x)) m);
+erase h (Atom b) = Atom b;
+
+erase_obs ::
+  [String] ->
+    [(Nd String Atom, (Int, Event [String] String Act))] ->
+      [(Nd String Atom, (Int, Event [String] String Act))];
+erase_obs h obs = map (\ (d, (tau, e)) -> (erase h d, (tau, e))) obs;
 
 length_tailrec :: forall a. [a] -> Nat -> Nat;
 length_tailrec [] n = n;
@@ -1751,7 +1764,7 @@ raw_trace ::
 raw_trace obs = map (\ (d, (tau, e)) -> (flat d, (tau, e))) obs;
 
 fd_name :: Fdecl -> String;
-fd_name (Fdecl f t m) = f;
+fd_name (Fdecl f t m h) = f;
 
 wt_fun ::
   forall a b c. (Eq c) => (a -> b -> Bool) -> Ty c a -> Maybe (Nd c b) -> Bool;
@@ -1827,7 +1840,7 @@ interp PTime b = (case b of {
                  });
 
 fd_ty :: Fdecl -> Ty String Prim;
-fd_ty (Fdecl f t m) = t;
+fd_ty (Fdecl f t m h) = t;
 
 ill_typed ::
   [Fdecl] ->
@@ -1879,7 +1892,7 @@ refs_ok blk =
          else True);
 
 fd_age :: Fdecl -> Maybe Int;
-fd_age (Fdecl f t m) = m;
+fd_age (Fdecl f t m h) = m;
 
 max_age :: [Fdecl] -> String -> Maybe Int;
 max_age fs f = (case find (\ x -> fd_name x == f) fs of {
@@ -1922,8 +1935,9 @@ btrace m pi =
   map (\ j -> (blockp m pi j, (time pi j, evt (nth pi j))))
     (upt zero_nat (size_list pi));
 
-run :: Spec -> [(Nd String Atom, (Int, Event [String] String Act))] -> [Line];
-run sp obs =
+evaluate ::
+  Spec -> [(Nd String Atom, (Int, Event [String] String Act))] -> [Line];
+evaluate sp obs =
   (case sp of {
     Spec fs blk invs ->
       let {
@@ -1951,6 +1965,18 @@ run sp obs =
                                Just e -> [LTypes (Just e)];
                              })));
   });
+
+fd_hidden :: Fdecl -> Bool;
+fd_hidden (Fdecl f t m h) = h;
+
+hidden :: [Fdecl] -> [String];
+hidden fs =
+  map_filter (\ x -> (if fd_hidden x then Just (fd_name x) else Nothing)) fs;
+
+run :: Spec -> [(Nd String Atom, (Int, Event [String] String Act))] -> [Line];
+run sp obs = (case sp of {
+               Spec fs _ _ -> evaluate sp (erase_obs (hidden fs) obs);
+             });
 
 divide_rat :: Rat -> Rat -> Rat;
 divide_rat p q =

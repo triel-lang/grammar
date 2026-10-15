@@ -1413,15 +1413,18 @@ fun num_of :: "atom \<Rightarrow> rat option" where
 | "num_of _ = None"
 type_synonym observation = "datum \<times> int \<times> cevent"
 
-text \<open>A factor declaration: the name, the declared type, and the maximum age if the factor
-  is under \<open>ON_STALE BLOCK\<close>. A specification: the factors, the TERMS block, and the named
-  invariants. The penalty amount of a breach handler is an opaque value.\<close>
+text \<open>A factor declaration: the name, the declared type, the maximum age if the factor
+  is under \<open>ON_STALE BLOCK\<close>, and whether the factor is hidden: a \<open>ZK<T>\<close> factor without
+  \<open>WITHOUT REVEALING ALL\<close> (TECHNICAL_REPORT.md section 2.7), whose declared type is \<open>T\<close>. A
+  specification: the factors, the TERMS block, and the named invariants. The penalty
+  amount of a breach handler is an opaque value.\<close>
 
-datatype fdecl = Fdecl name "(name, prim) ty" "int option"
+datatype fdecl = Fdecl name "(name, prim) ty" "int option" bool
 
-fun fd_name :: "fdecl \<Rightarrow> name" where "fd_name (Fdecl f t m) = f"
-fun fd_ty :: "fdecl \<Rightarrow> (name, prim) ty" where "fd_ty (Fdecl f t m) = t"
-fun fd_age :: "fdecl \<Rightarrow> int option" where "fd_age (Fdecl f t m) = m"
+fun fd_name :: "fdecl \<Rightarrow> name" where "fd_name (Fdecl f t m h) = f"
+fun fd_ty :: "fdecl \<Rightarrow> (name, prim) ty" where "fd_ty (Fdecl f t m h) = t"
+fun fd_age :: "fdecl \<Rightarrow> int option" where "fd_age (Fdecl f t m h) = m"
+fun fd_hidden :: "fdecl \<Rightarrow> bool" where "fd_hidden (Fdecl f t m h) = h"
 
 datatype spec = Spec "fdecl list" "cterm list" "(name \<times> (path, atom) sinv) list"
 
@@ -1432,6 +1435,194 @@ text \<open>The raw trace: the state of an entry is its data flattened to comple
 
 definition raw_trace :: "observation list \<Rightarrow> ctrace" where
   "raw_trace obs = map (\<lambda>(d, \<tau>, e). (flat d, \<tau>, e)) obs"
+
+
+subsection \<open>Hidden factors\<close>
+
+text \<open>The value of a hidden factor is checked by the proof system, not by the evaluator
+  (decision 25 of CORE.md). The evaluator removes every hidden factor from the data of
+  every entry before it does anything else. A complex name \<open>hides\<close> if it starts with a
+  hidden factor.\<close>
+
+definition hidden :: "fdecl list \<Rightarrow> name list" where
+  "hidden fs = map fd_name (filter fd_hidden fs)"
+
+fun erase :: "name list \<Rightarrow> datum \<Rightarrow> datum" where
+  "erase H (Nom m) = Nom (fmfilter (\<lambda>x. x \<notin> set H) m)"
+| "erase H (Atom b) = Atom b"
+
+definition erase_obs :: "name list \<Rightarrow> observation list \<Rightarrow> observation list" where
+  "erase_obs H obs = map (\<lambda>(d, \<tau>, e). (erase H d, \<tau>, e)) obs"
+
+fun hides :: "name list \<Rightarrow> path \<Rightarrow> bool" where
+  "hides H [] = False"
+| "hides H (x # p) = (x \<in> set H)"
+
+lemma hidden_iff: "x \<in> set (hidden fs) \<longleftrightarrow> (\<exists>y \<in> set fs. fd_hidden y \<and> fd_name y = x)"
+  by (auto simp: hidden_def)
+
+lemma erase_hidden: "x \<in> set H \<Longrightarrow> denaming x (erase H d) = None"
+  by (cases d) simp_all
+
+lemma erase_visible: "x \<notin> set H \<Longrightarrow> denaming x (erase H d) = denaming x d"
+  by (cases d) simp_all
+
+lemma erase_idem: "erase H (erase H d) = erase H d"
+  by (cases d) (auto intro!: fmap_ext)
+
+lemma length_erase_obs [simp]: "length (erase_obs H obs) = length obs"
+  by (simp add: erase_obs_def)
+
+lemma erase_obs_nth:
+  "j < length obs \<Longrightarrow> erase_obs H obs ! j = (erase H (fst (obs ! j)), fst (snd (obs ! j)), snd (snd (obs ! j)))"
+  by (simp add: erase_obs_def split: prod.splits)
+
+lemma erase_obs_idem: "erase_obs H (erase_obs H obs) = erase_obs H obs"
+  by (induction obs) (auto simp: erase_obs_def erase_idem split: prod.splits)
+
+text \<open>After the removal a complex name that starts with a hidden factor has no value, and
+  every other complex name keeps its value.\<close>
+
+theorem erase_flat: "flat (erase H d) p = (if hides H p then None else flat d p)"
+proof (cases p)
+  case Nil
+  then show ?thesis by (cases d) (simp_all add: flat_def)
+next
+  case (Cons x q)
+  then show ?thesis
+    by (cases "x \<in> set H") (simp_all add: flat_def erase_hidden erase_visible)
+qed
+
+text \<open>The trace the evaluator sees. Removing the hidden factors keeps the timestamps and the
+  events, so it keeps freshness; blocking stale factors and removing hidden ones commute.\<close>
+
+lemma raw_trace_erase_length [simp]: "length (raw_trace (erase_obs H obs)) = length (raw_trace obs)"
+  by (simp add: raw_trace_def)
+
+lemma erase_time_evt:
+  assumes "j < length obs"
+  shows "time (raw_trace (erase_obs H obs)) j = time (raw_trace obs) j"
+    and "evt (raw_trace (erase_obs H obs) ! j) = evt (raw_trace obs ! j)"
+proof -
+  obtain d \<tau> e where o: "obs ! j = (d, \<tau>, e)" by (cases "obs ! j") auto
+  show "time (raw_trace (erase_obs H obs)) j = time (raw_trace obs) j"
+    using assms o by (simp add: raw_trace_def erase_obs_def time_def)
+  show "evt (raw_trace (erase_obs H obs) ! j) = evt (raw_trace obs ! j)"
+    using assms o by (simp add: raw_trace_def erase_obs_def)
+qed
+
+lemma erase_st:
+  assumes "j < length obs"
+  shows "st (raw_trace (erase_obs H obs)) j p = (if hides H p then None else st (raw_trace obs) j p)"
+proof -
+  obtain d \<tau> e where o: "obs ! j = (d, \<tau>, e)" by (cases "obs ! j") auto
+  show ?thesis
+    using assms o by (simp add: raw_trace_def erase_obs_def st_def erase_flat)
+qed
+
+lemma erase_fresh:
+  assumes "j < length obs"
+  shows "fresh m x (raw_trace (erase_obs H obs)) j = fresh m x (raw_trace obs) j"
+proof -
+  have "i \<le> j \<Longrightarrow> evt (raw_trace (erase_obs H obs) ! i) = evt (raw_trace obs ! i) \<and>
+          time (raw_trace (erase_obs H obs)) i = time (raw_trace obs) i" for i
+    using assms erase_time_evt[of i obs H] by simp
+  then show ?thesis
+    using erase_time_evt(1)[OF assms] unfolding fresh_def by auto
+qed
+
+theorem erase_btrace:
+  assumes "j < length obs"
+  shows "st (btrace M (raw_trace (erase_obs H obs))) j p =
+           (if hides H p then None else st (btrace M (raw_trace obs)) j p)"
+    and "time (btrace M (raw_trace (erase_obs H obs))) j = time (btrace M (raw_trace obs)) j"
+    and "evt (btrace M (raw_trace (erase_obs H obs)) ! j) = evt (btrace M (raw_trace obs) ! j)"
+proof -
+  have j: "j < length (raw_trace obs)" "j < length (raw_trace (erase_obs H obs))"
+    using assms by (simp_all add: raw_trace_def)
+  show "st (btrace M (raw_trace (erase_obs H obs))) j p =
+          (if hides H p then None else st (btrace M (raw_trace obs)) j p)"
+    using j assms by (cases p) (auto simp: btrace_st blockp_def erase_st erase_fresh split: option.splits)
+  show "time (btrace M (raw_trace (erase_obs H obs))) j = time (btrace M (raw_trace obs)) j"
+    using j assms by (simp add: btrace_time erase_time_evt)
+  show "evt (btrace M (raw_trace (erase_obs H obs)) ! j) = evt (btrace M (raw_trace obs) ! j)"
+    using j assms by (simp add: btrace_evt erase_time_evt)
+qed
+
+text \<open>The flow rule (TECHNICAL_REPORT.md section 2.7), checked by the translator: a hidden
+  factor is not read in a condition, an invariant or a value. An expression reads the names
+  in \<open>names\<close> (operands of comparisons) and in \<open>pnames\<close> (PRESENT and the first argument
+  of DEFAULT). Two states that agree on these names give the expression the same value.\<close>
+
+lemma evalV_agree: "(\<forall>p \<in> vnames a \<union> vpnames a. \<sigma> p = \<sigma>' p) \<Longrightarrow> evalV a \<sigma> = evalV a \<sigma>'"
+proof (induction a)
+  case (VDefault x a)
+  have "evalV a \<sigma> = evalV a \<sigma>'"
+    by (rule VDefault.IH) (use VDefault.prems in auto)
+  moreover have "\<sigma> x = \<sigma>' x"
+    using VDefault.prems by auto
+  ultimately show ?case by (simp cong: option.case_cong)
+qed auto
+
+lemma eval_agree: "(\<forall>p \<in> names e \<union> pnames e. \<sigma> p = \<sigma>' p) \<Longrightarrow> eval e \<sigma> = eval e \<sigma>'"
+proof (induction e)
+  case (EEq a b)
+  have "evalV a \<sigma> = evalV a \<sigma>'" by (rule evalV_agree) (use EEq in auto)
+  moreover have "evalV b \<sigma> = evalV b \<sigma>'" by (rule evalV_agree) (use EEq in auto)
+  ultimately show ?case by (simp cong: option.case_cong)
+next
+  case (ELt a b)
+  have "evalV a \<sigma> = evalV a \<sigma>'" by (rule evalV_agree) (use ELt in auto)
+  moreover have "evalV b \<sigma> = evalV b \<sigma>'" by (rule evalV_agree) (use ELt in auto)
+  ultimately show ?case by (simp cong: option.case_cong)
+next
+  case (ELe a b)
+  have "evalV a \<sigma> = evalV a \<sigma>'" by (rule evalV_agree) (use ELe in auto)
+  moreover have "evalV b \<sigma> = evalV b \<sigma>'" by (rule evalV_agree) (use ELe in auto)
+  ultimately show ?case by (simp cong: option.case_cong)
+next
+  case (EAnd e\<^sub>1 e\<^sub>2)
+  have "eval e\<^sub>1 \<sigma> = eval e\<^sub>1 \<sigma>'" by (rule EAnd.IH(1)) (use EAnd.prems in auto)
+  moreover have "eval e\<^sub>2 \<sigma> = eval e\<^sub>2 \<sigma>'" by (rule EAnd.IH(2)) (use EAnd.prems in auto)
+  ultimately show ?case by simp
+next
+  case (EOr e\<^sub>1 e\<^sub>2)
+  have "eval e\<^sub>1 \<sigma> = eval e\<^sub>1 \<sigma>'" by (rule EOr.IH(1)) (use EOr.prems in auto)
+  moreover have "eval e\<^sub>2 \<sigma> = eval e\<^sub>2 \<sigma>'" by (rule EOr.IH(2)) (use EOr.prems in auto)
+  ultimately show ?case by simp
+next
+  case (EImp e\<^sub>1 e\<^sub>2)
+  have "eval e\<^sub>1 \<sigma> = eval e\<^sub>1 \<sigma>'" by (rule EImp.IH(1)) (use EImp.prems in auto)
+  moreover have "eval e\<^sub>2 \<sigma> = eval e\<^sub>2 \<sigma>'" by (rule EImp.IH(2)) (use EImp.prems in auto)
+  ultimately show ?case by simp
+next
+  case (EPresent x)
+  then show ?case by (simp add: domIff)
+qed simp_all
+
+text \<open>So a condition that passes the flow rule has the same value at every entry of the
+  trace the evaluator sees, with the hidden factors removed and with them left in, and so
+  does a value expression (an operand or a penalty amount).\<close>
+
+theorem flow_safe_eval:
+  assumes "\<forall>p \<in> names e \<union> pnames e. \<not> hides H p" and "j < length obs"
+  shows "eval e (st (btrace M (raw_trace (erase_obs H obs))) j) = eval e (st (btrace M (raw_trace obs)) j)"
+proof (rule eval_agree, intro ballI)
+  fix p assume "p \<in> names e \<union> pnames e"
+  with assms(1) have "\<not> hides H p" by blast
+  with erase_btrace(1)[OF assms(2), of M H p]
+  show "st (btrace M (raw_trace (erase_obs H obs))) j p = st (btrace M (raw_trace obs)) j p" by simp
+qed
+
+theorem flow_safe_evalV:
+  assumes "\<forall>p \<in> vnames a \<union> vpnames a. \<not> hides H p" and "j < length obs"
+  shows "evalV a (st (btrace M (raw_trace (erase_obs H obs))) j) = evalV a (st (btrace M (raw_trace obs)) j)"
+proof (rule evalV_agree, intro ballI)
+  fix p assume "p \<in> vnames a \<union> vpnames a"
+  with assms(1) have "\<not> hides H p" by blast
+  with erase_btrace(1)[OF assms(2), of M H p]
+  show "st (btrace M (raw_trace (erase_obs H obs))) j p = st (btrace M (raw_trace obs)) j p" by simp
+qed
 
 
 subsection \<open>Types of the data\<close>
@@ -1761,13 +1952,14 @@ definition term_line :: "int \<Rightarrow> (path, atom) state \<Rightarrow> cter
       | SOnBreach s acts \<Rightarrow> LOnBreach (Suc i) s (map_option Suc (bound_to blk i s))
       | _ \<Rightarrow> composite_line (Suc i) (benv blk ! i) \<pi>)"
 
-text \<open>The evaluator. Activation is checked first, in the blocked state of entry 0 at the
-  time of entry 0, for the deadlines of the TERMS block and of the invariants; then the well-formedness of the block, with only informational actions
-  in a handler bound to a prohibition; then the types of the data as given. The verdicts, the invariants and the membership of composite terms are computed
-  on the blocked trace.\<close>
+text \<open>The evaluator on data without hidden factors. Activation is checked first, in the
+  blocked state of entry 0 at the time of entry 0, for the deadlines of the TERMS block and
+  of the invariants; then the well-formedness of the block, with only informational actions
+  in a handler bound to a prohibition; then the types of the data as given. The verdicts,
+  the invariants and the membership of composite terms are computed on the blocked trace.\<close>
 
-definition run :: "spec \<Rightarrow> observation list \<Rightarrow> line list" where
-  "run sp obs =
+definition evaluate :: "spec \<Rightarrow> observation list \<Rightarrow> line list" where
+  "evaluate sp obs =
      (case sp of Spec fs blk invs \<Rightarrow>
         (let \<pi> = btrace (max_age fs) (raw_trace obs); \<tau>\<^sub>0 = time \<pi> 0; \<sigma>\<^sub>0 = st \<pi> 0 in
          if obs = [] \<or> \<not> activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<or> \<not> inv_activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 (map snd invs)
@@ -1780,6 +1972,37 @@ definition run :: "spec \<Rightarrow> observation list \<Rightarrow> line list" 
                  Some e \<Rightarrow> [LTypes (Some e)]
                | None \<Rightarrow> LTypes None # map (term_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi>) [0..<length blk]
                           @ map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> \<pi>)) invs))))"
+
+text \<open>The evaluator removes the hidden factors from the data of every entry, then evaluates.\<close>
+
+definition run :: "spec \<Rightarrow> observation list \<Rightarrow> line list" where
+  "run sp obs = (case sp of Spec fs blk invs \<Rightarrow> evaluate sp (erase_obs (hidden fs) obs))"
+
+text \<open>Noninterference (decision 25 of CORE.md): two traces that differ only in the values of
+  hidden factors get the same report, typing included. In particular the report is the
+  same whether the hidden values are in the data or not.\<close>
+
+theorem run_noninterference:
+  assumes "erase_obs (hidden fs) obs = erase_obs (hidden fs) obs'"
+  shows "run (Spec fs blk invs) obs = run (Spec fs blk invs) obs'"
+  using assms by (simp add: run_def)
+
+corollary run_erase: "run (Spec fs blk invs) (erase_obs (hidden fs) obs) = run (Spec fs blk invs) obs"
+  by (rule run_noninterference) (simp add: erase_obs_idem)
+
+text \<open>A hidden factor is never reported as ill-typed: after the removal it is absent from
+  every entry, and an absent factor is well typed.\<close>
+
+theorem hidden_well_typed:
+  assumes "x \<in> set fs" and "fd_hidden x" and "j < length obs"
+  shows "wt interp (TOptional (fd_ty x)) (denaming (fd_name x) (fst (erase_obs (hidden fs) obs ! j)))"
+proof -
+  have "fd_name x \<in> set (hidden fs)"
+    using assms(1,2) by (auto simp: hidden_iff)
+  then have "denaming (fd_name x) (fst (erase_obs (hidden fs) obs ! j)) = None"
+    using assms(3) by (simp add: erase_obs_nth erase_hidden)
+  then show ?thesis by (simp add: wt_none)
+qed
 
 text \<open>A composite line reports \<open>mem3\<close> on the blocked trace. By \<open>mem3_sound\<close> its definite
   answers are membership in the denotation of the term, for terms without AND, and by
