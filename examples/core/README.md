@@ -1,6 +1,6 @@
 # Examples inside the formal core
 
-The eight specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
+The nine specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
 
 - `core_deadline_cure.triel`: a deadline, its breach, and a cure;
 - `core_unless_records.triel`: a sequence under UNLESS, with the guard read from a nested record;
@@ -9,6 +9,7 @@ The eight specifications in this folder use only constructs that the translator 
 - `core_numbers.triel`: Integer and Decimal factors, ordering comparisons, and a comparison with an absent operand;
 - `core_conditional.triel`: `IF`/`ELIF`/`ELSE` and `WHEN` terms, a named term with `REF`, and `DEFAULT`, with a condition that is undefined where the term is reached;
 - `core_payment.triel`: actions with arguments, an obligation whose window opens with `FROM`, and penalties with arithmetic and `CAP`, computed in the state of the breach: capped, undefined and negative;
+- `core_fallback.triel`: `WITHIN … ELSE`, an obligation with a fallback that comes into force at the deadline instead of a breach;
 - `core_commitment.triel`: `EVENTUALLY … WITHIN` a duration and a factor (true at the deadline, false past it, undefined on missing data, rejected activation), and `POLARITY`, `THRESHOLD` and `SENSITIVITY_BOUND` printed as metadata.
 
 The evaluator exported from Isabelle runs them on the scenarios in `scenarios/`.
@@ -50,6 +51,7 @@ The polarity of an event is used only when a composite term is checked against t
 9. **FROM.** An obligation with `FROM f` is fulfilled only by an action at a time in [f, d], and a duration in `BY` counts from f. f is read at activation, like a deadline.
 10. **Penalties.** A `PENALTY` amount is computed once, in the state of the entry just before the entry that establishes the breach: for a prohibition the state before the forbidden action, for an obligation the last state not after the deadline. It is undefined if an operand is absent, reported as negative if it is negative, and otherwise capped by `CAP`.
 11. **`EVENTUALLY … WITHIN`.** The deadline is resolved at activation, like the deadline of an obligation. The invariant is `T` once its condition is true at an entry not after the deadline, an entry at the deadline included; `F` once an entry is strictly after the deadline and the condition was false at every entry not after it; `U` otherwise, so an entry where the condition is undefined prevents `F`.
+12. **`WITHIN … ELSE`.** If the first obligation is not met by its deadline d, it is not breached: the fallback is in force from d, with the window (d, d′], and is reported after `ELSE`. A duration in the deadline of the fallback counts from d. A handler bound to such an obligation is rejected.
 
 ## Output
 
@@ -64,6 +66,7 @@ ACTIVATION OK | ACTIVATION REJECTED
 BLOCK OK | BLOCK REJECTED
 TYPES OK | TYPES ILL-TYPED ENTRY J FACTOR F
 TERM I MUST S A DEADLINE (T | NONE) : STATUS                -- A is NAME or NAME(ARG, ...)
+TERM I MUST S A DEADLINE T ELSE S2 A2 DEADLINE (T | NONE) : FULFILLED | PENDING | ELSE V   -- V: FULFILLED, PENDING or BREACHED T
 TERM I MUST_NOT S A : PENDING | BREACHED T ACTION*
 TERM I MAY S A : FULFILLED | PENDING
 TERM I ON_BREACH S : BOUND J
