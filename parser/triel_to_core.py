@@ -45,7 +45,12 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
     (a path), which is not evaluated; anything else is rejected.
   * FROM s of an obligation is (at T) or (factor PATH 0), the start of its
     window; a duration in BY counts from it. Without FROM it is (none).
-    UNTIL is rejected, and so is FROM inside a composite term.
+    FROM inside a composite term is rejected. (UNTIL is no longer part of an
+    obligation: it is a syntax error.)
+  * s MUST a WITHIN d ELSE s2 MUST a2 BY d2, at the top level, is
+    (must_else S A DL S2 A2 DL2): an obligation with a fallback. The fallback
+    must be an obligation without FROM; ELSE in a composite term, FROM with
+    ELSE, and a handler bound to such an obligation are rejected.
   * The PENALTY amount is built from numeric literals, Integer and Decimal
     factors and DEFAULT with +, - and * (no division): (penalty P CAP) with
     P ::= (val V) | (add P P) | (sub P P) | (mul P P) | (neg P), and CAP the
@@ -615,8 +620,34 @@ class Translation:
         if "WITHIN" not in tokens(t):
             return self.base(p[0], top, None)
         if "ELSE" in tokens(t):
-            return self.reject("WITHIN ... ELSE")
+            return self.fallback(p, top)
         return self.base(p[0], top, p[1])
+
+    def fallback(self, p, top: bool):
+        """s MUST a WITHIN d ELSE s2 MUST a2 [BY d2] at the top level: an
+        obligation with a fallback (must_else S A DL S2 A2 DL2)."""
+        if not top:
+            return self.reject("WITHIN ... ELSE in a composite term")
+        first = self.base(p[0], True, p[1])
+        alt = self.else_obligation(p[2])
+        if first is None or alt is None:
+            return None
+        if first[0] != "must":
+            return self.reject("WITHIN (non-obligation)")
+        if first[4] != ["none"]:
+            return self.reject("FROM with ELSE")
+        self.top = ("else", first[1])
+        return ["must_else", first[1], first[2], first[3], alt[1], alt[2], alt[3]]
+
+    def else_obligation(self, t: Tree):
+        """The fallback after ELSE: an obligation without FROM."""
+        c = subtrees(t)[0]
+        m = subtrees(c)[0] if subtrees(c) else None
+        if c.data != "matched_term" or m is None or "(" in tokens(c) or m.data != "obligation_stmt":
+            return self.reject("ELSE (non-obligation)")
+        if "FROM" in tokens(m):
+            return self.reject("FROM in ELSE")
+        return self.obligation(m, True, None)
 
     def base(self, t: Tree, top: bool, within):
         return self.inner(subtrees(t)[0], top, within)
@@ -710,13 +741,16 @@ class Translation:
             self.top = None
 
     def check_binding(self, tops):
-        """Reject a continuation in a handler bound to a prohibition."""
+        """Reject a continuation in a handler bound to a prohibition, and any
+        handler bound to an obligation with a fallback (WITHIN ... ELSE)."""
         for i, x in enumerate(tops):
-            if x is None or x[0] != "breach_handler_stmt" or not x[2]:
+            if x is None or x[0] != "breach_handler_stmt":
                 continue
             bound = [y for y in tops[:i] if y is not None and y[0] != "breach_handler_stmt"
                      and y[1] == x[1]]
-            if bound and bound[-1][0] == "prohibition_stmt":
+            if bound and bound[-1][0] == "else":
+                self.reject("ON_BREACH bound to WITHIN ... ELSE")
+            elif x[2] and bound and bound[-1][0] == "prohibition_stmt":
                 self.reject(PROHIBITION_CONTINUATION)
 
     def action(self, t: Tree):
@@ -768,8 +802,6 @@ class Translation:
         s = ident(subtrees(t)[0])
         a = self.action(subtrees(t)[1])
         toks = tokens(t)
-        if "UNTIL" in toks:
-            return self.reject("UNTIL")
         dl = ["none"]
         if "BY" in toks:
             if within is not None:
@@ -938,7 +970,7 @@ def referable(x):
             return None
         if y[0] == "on_breach":
             return "REF to a breach handler"
-        if y[0] == "must" and y[3] != ["none"]:
+        if (y[0] == "must" and y[3] != ["none"]) or y[0] == "must_else":
             return "REF to a term with a deadline"
         if y[0] == "must" and y[4] != ["none"]:
             return "REF to a term with FROM"

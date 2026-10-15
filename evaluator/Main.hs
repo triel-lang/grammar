@@ -15,6 +15,7 @@
 --   T      ::= (must NAME ACT DL ST) | (must_not NAME ACT X) | (may NAME ACT X)
 --            | (then T T) | (or T T) | (and T T) | (unless T X T)
 --            | (if X T T) | (skip) | (ref INT) | (on_breach NAME A*)
+--            | (must_else NAME ACT DL NAME ACT DL)  -- WITHIN ... ELSE, first DL not (none)
 --   ACT    ::= NAME | (action NAME ARG*)    ARG ::= PATH | VAL
 --   DL     ::= (none) | (at INT) | (after INT) | (factor PATH INT)
 --   ST     ::= (none) | (at INT) | (factor PATH INT)       -- FROM
@@ -213,6 +214,11 @@ term (List [Sym "skip"]) = Right T.SSkip
 term (List [Sym "ref", k]) = integer k >>= \n ->
   if n >= 0 then Right (T.SRef (T.nat_of_integer n)) else bad "an element index" k
 term (List (Sym "on_breach" : s : as)) = T.SOnBreach <$> name s <*> mapM action as
+term (List [Sym "must_else", s, a, d, s', a', d']) = do
+  dl <- deadline d
+  case dl of
+    Just e -> T.SMustElse <$> name s <*> act a <*> pure e <*> name s' <*> act a' <*> deadline d'
+    Nothing -> bad "a deadline" d
 term x = bad "a term" x
 
 factor :: Conv T.Fdecl
@@ -363,6 +369,13 @@ line (T.LMust i s a d st acts) =
 line (T.LMustNot i s a v acts) =
   "TERM " ++ nat i ++ " MUST_NOT " ++ s ++ " " ++ showAct a ++ " : " ++ verdict v
     ++ concatMap ((' ' :) . ract) acts
+line (T.LMustElse i s a d s' a' d' st) =
+  "TERM " ++ nat i ++ " MUST " ++ s ++ " " ++ showAct a ++ " DEADLINE " ++ maybe "NONE" tm d
+    ++ " ELSE " ++ s' ++ " " ++ showAct a' ++ " DEADLINE " ++ maybe "NONE" tm d' ++ " : " ++ elseStatus st
+  where
+    elseStatus T.EFulfilled = "FULFILLED"
+    elseStatus T.EPending = "PENDING"
+    elseStatus (T.EElse _ v) = "ELSE " ++ verdict v
 line (T.LMay i s a v) = "TERM " ++ nat i ++ " MAY " ++ s ++ " " ++ showAct a ++ " : " ++ verdict v
 line (T.LOnBreach i s j) =
   "TERM " ++ nat i ++ " ON_BREACH " ++ s ++ " : " ++ maybe "UNBOUND" (("BOUND " ++) . nat) j

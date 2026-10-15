@@ -249,14 +249,41 @@ def test_from(terms, expected):
 
 
 @pytest.mark.parametrize("terms, why", [
-    ('a MUST b FROM DATETIME("2026-03-01T00:00:00Z") UNTIL DATETIME("2026-04-01T00:00:00Z")',
-     "UNTIL"),
     ('a MAY c THEN a MUST b FROM DATETIME("2026-03-01T00:00:00Z")', "FROM in a composite term"),
     ('d := a MUST b FROM DATETIME("2026-03-01T00:00:00Z"); a MAY c THEN REF d',
      "REF to a term with FROM"),
     ("a MUST b FROM u", "undeclared factor"),
 ])
 def test_from_rejections(terms, why):
+    assert rejected(spec(terms=terms)) == [why]
+
+
+def test_until_is_a_syntax_error():
+    with pytest.raises(UnexpectedInput):
+        translate(spec(terms='a MUST b FROM DATETIME("2026-03-01T00:00:00Z") UNTIL DATETIME("2026-04-01T00:00:00Z")'))
+
+
+@pytest.mark.parametrize("terms, expected", [
+    ("a MUST b WITHIN 2 DAYS ELSE b2 MUST c BY 1 DAYS",
+     '(must_else "a" "b" (after 172800) "b2" "c" (after 86400))'),
+    ('a MUST b WITHIN 2 DAYS ELSE a MUST c BY DATETIME("2026-03-20T00:00:00Z")',
+     '(must_else "a" "b" (after 172800) "a" "c" (at 1773964800))'),
+    ("a MUST b WITHIN 2 DAYS ELSE a MUST c", '(must_else "a" "b" (after 172800) "a" "c" (none))'),
+])
+def test_within_else(terms, expected):
+    assert f"(terms {expected})" in core(spec(terms=terms))
+
+
+@pytest.mark.parametrize("terms, why", [
+    ("a MAY c THEN a MUST b WITHIN 2 DAYS ELSE a MUST c", "WITHIN ... ELSE in a composite term"),
+    ("a MUST b WITHIN 2 DAYS ELSE a MAY c", "ELSE (non-obligation)"),
+    ('a MUST b WITHIN 2 DAYS ELSE a MUST c FROM DATETIME("2026-03-01T00:00:00Z")', "FROM in ELSE"),
+    ('a MUST b FROM DATETIME("2026-03-01T00:00:00Z") WITHIN 2 DAYS ELSE a MUST c', "FROM with ELSE"),
+    ("a MAY b WITHIN 2 DAYS ELSE a MUST c", "WITHIN (non-obligation)"),
+    ("a MUST b WITHIN 2 DAYS ELSE a MUST c; a ON_BREACH NOTIFY b2", "ON_BREACH bound to WITHIN ... ELSE"),
+    ("d := a MUST b WITHIN 2 DAYS ELSE a MUST c; a MAY e THEN REF d", "REF to a term with a deadline"),
+])
+def test_within_else_rejections(terms, why):
     assert rejected(spec(terms=terms)) == [why]
 
 
