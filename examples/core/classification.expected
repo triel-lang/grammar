@@ -2,6 +2,7 @@ examples/age_verification.triel: REJECTED: CURVE; PROOF_SYSTEM; ZK type
 examples/core/core_commitment.triel: ACCEPTED
 examples/core/core_conditional.triel: ACCEPTED
 examples/core/core_deadline_cure.triel: ACCEPTED
+examples/core/core_fallback.triel: ACCEPTED
 examples/core/core_numbers.triel: ACCEPTED
 examples/core/core_payment.triel: ACCEPTED
 examples/core/core_prohibition_handler.triel: ACCEPTED

@@ -1,0 +1,30 @@
+-- TRIEL example inside the formal core: WITHIN ... ELSE, an obligation with
+-- a fallback. If the first obligation is not met by its deadline, it is not
+-- breached: the fallback obligation comes into force at that deadline, and
+-- only the fallback can be breached. A duration in the deadline of the
+-- fallback counts from the first deadline; a DATETIME is that time. Every
+-- construct in this file is translated into the Isabelle/HOL core
+-- (formal/core) and evaluated by the exported evaluator (evaluator/).
+
+SPECIFICATION core_fallback VERSION 1.0.0
+    CURRENCY: "EUR"
+
+SUBJECTS {
+  tenant   : PARTY,
+  landlord : PARTY
+}
+
+TERMS {
+  tenant MUST pay(landlord, 1200) WITHIN 10 DAYS
+    ELSE tenant MUST pay(landlord, 1250) BY 5 DAYS;
+  landlord MUST issue_receipt WITHIN 2 DAYS
+    ELSE landlord MUST issue_receipt BY DATETIME("2026-03-20T00:00:00Z")
+}
+
+FACTORS {
+  rent : Decimal METADATA
+}
+
+INVARIANTS {
+  rent_positive : SAFETY : ALWAYS(rent > 0)
+}

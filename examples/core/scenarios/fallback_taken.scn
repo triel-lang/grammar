@@ -1,0 +1,11 @@
+; The tenant pays 1200 on 12 March, after the ten days: that payment fulfils
+; neither the first obligation nor the fallback, which asks for 1250. The
+; tenant pays 1250 on 14 March, inside the five days of the fallback. The
+; receipt comes on 10 March, after two days but before 20 March. Both
+; fallbacks are fulfilled, and nothing is breached.
+(scenario fallback_taken
+  (spec "examples/core/core_fallback.triel")
+  (entry "2026-03-01T00:00:00Z" (activate) (data (rent (dec 1200.00))))
+  (entry "2026-03-10T00:00:00Z" (act landlord issue_receipt must) (data (rent (dec 1200.00))))
+  (entry "2026-03-12T00:00:00Z" (act tenant (pay (name landlord) (int 1200)) must) (data (rent (dec 1200.00))))
+  (entry "2026-03-14T00:00:00Z" (act tenant (pay (name landlord) (int 1250)) must) (data (rent (dec 1200.00)))))

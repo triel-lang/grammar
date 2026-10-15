@@ -1,0 +1,7 @@
+; On 5 March the ten days for the payment are still running, so it is pending.
+; The two days for the receipt have passed, so its fallback is in force and
+; pending.
+(scenario fallback_pending
+  (spec "examples/core/core_fallback.triel")
+  (entry "2026-03-01T00:00:00Z" (activate) (data (rent (dec 1200.00))))
+  (entry "2026-03-05T00:00:00Z" (tick) (data (rent (dec 1200.00)))))

@@ -1,0 +1,7 @@
+; Nothing happens until 17 March. The fallback of the payment came into force
+; on 11 March and its five days ended on 16 March: it is breached. The fallback
+; of the receipt runs until 20 March, so it is still pending.
+(scenario fallback_breached
+  (spec "examples/core/core_fallback.triel")
+  (entry "2026-03-01T00:00:00Z" (activate) (data (rent (dec 1200.00))))
+  (entry "2026-03-17T00:00:00Z" (tick) (data (rent (dec 1200.00)))))
