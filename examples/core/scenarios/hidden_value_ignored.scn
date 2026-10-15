@@ -1,0 +1,17 @@
+; The trace of hidden_valid with other values of the hidden income: a string,
+; which does not have the declared type Integer, then 17, then no value. The
+; report is the same as for hidden_valid, TYPES OK included: no verdict can
+; depend on a hidden value (run_noninterference).
+(scenario hidden_value_ignored
+  (spec "examples/core/core_hidden.triel")
+  (entry "2026-05-01T00:00:00Z" (activate)
+    (data (income (str "forty-two thousand")) (residence (str "EU")) (loan_granted (bool false))
+          (session_nonce (str "0x9c1e")) (income_salt (str "0x77ab"))))
+  (entry "2026-05-03T00:00:00Z" (act holder (submit_proof (name income) (name session_nonce)) must)
+    (data (income (int 17)) (residence (str "EU")) (loan_granted (bool false))
+          (income_proof_valid (bool true))
+          (session_nonce (str "0x9c1e")) (income_salt (str "0x77ab"))))
+  (entry "2026-05-04T00:00:00Z" (act lender grant_loan must_not)
+    (data (residence (str "EU")) (loan_granted (bool true))
+          (income_proof_valid (bool true))
+          (session_nonce (str "0x9c1e")) (income_salt (str "0x77ab")))))

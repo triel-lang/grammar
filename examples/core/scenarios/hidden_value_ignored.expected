@@ -1,0 +1,24 @@
+SPEC core_hidden
+METADATA JURISDICTION "EU"
+METADATA PROOF_SYSTEM PLONK
+METADATA CURVE "BLS12-381"
+METADATA DID holder "did:example:holder-17"
+METADATA PROVES income self >= 30000
+METADATA PROVES income HASH(self, income_salt) == "0x5f3a"
+METADATA BOUND_TO income holder session_nonce
+METADATA SOURCE income holder
+METADATA PROVES residence self IN SET {"EU", "EEA"}
+METADATA BOUND_TO residence holder session_nonce
+METADATA SOURCE residence holder
+METADATA SOURCE income_proof_valid lender
+METADATA SOURCE loan_granted lender
+METADATA SOURCE session_nonce lender
+METADATA SOURCE income_salt holder
+ACTIVATION OK
+BLOCK OK
+TYPES OK
+TERM 1 MUST holder submit_proof(income, session_nonce) DEADLINE 1778371200 : FULFILLED
+TERM 2 ON_BREACH holder : BOUND 1
+TERM 3 MUST_NOT lender grant_loan : PENDING
+INVARIANT loan_requires_valid_proof : U
+INVARIANT loan_only_in_the_eu : U

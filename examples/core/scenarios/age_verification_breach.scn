@@ -1,0 +1,9 @@
+; examples/age_verification.triel: the applicant never submits the proof of
+; age. The obligation is breached at its deadline, 1 September; the handler
+; notifies the verifier and terminates. The hidden age is removed from the data.
+(scenario age_verification_breach
+  (spec "examples/age_verification.triel")
+  (entry "2026-08-20T00:00:00Z" (activate)
+    (data (age (int 16)) (access_granted (bool false))))
+  (entry "2026-09-02T00:00:00Z" (tick)
+    (data (age (int 16)) (access_granted (bool false)))))

@@ -1,0 +1,16 @@
+; The holder submits the proof on 3 May, the proof checks out, and the lender
+; grants the loan on 4 May. The hidden income is in the data, but the
+; evaluator removes it before typing and evaluation.
+(scenario hidden_valid
+  (spec "examples/core/core_hidden.triel")
+  (entry "2026-05-01T00:00:00Z" (activate)
+    (data (income (int 42000)) (residence (str "EU")) (loan_granted (bool false))
+          (session_nonce (str "0x9c1e")) (income_salt (str "0x77ab"))))
+  (entry "2026-05-03T00:00:00Z" (act holder (submit_proof (name income) (name session_nonce)) must)
+    (data (income (int 42000)) (residence (str "EU")) (loan_granted (bool false))
+          (income_proof_valid (bool true))
+          (session_nonce (str "0x9c1e")) (income_salt (str "0x77ab"))))
+  (entry "2026-05-04T00:00:00Z" (act lender grant_loan must_not)
+    (data (income (int 42000)) (residence (str "EU")) (loan_granted (bool true))
+          (income_proof_valid (bool true))
+          (session_nonce (str "0x9c1e")) (income_salt (str "0x77ab")))))

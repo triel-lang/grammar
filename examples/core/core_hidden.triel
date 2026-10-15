@@ -1,0 +1,47 @@
+-- TRIEL example inside the formal core: hidden ZK factors (TECHNICAL_REPORT.md
+-- sections 2.7 and 2.8). The income of the holder is hidden: the proof system
+-- checks PROVES, the evaluator removes the value from the data before anything
+-- else, and the specification reasons only about the public result
+-- income_proof_valid. The hidden factor may be named as an action argument,
+-- never read. The residence is a ZK factor WITHOUT REVEALING ALL, an ordinary
+-- factor. PROOF_SYSTEM, CURVE, DID, PROVES and BOUND_TO are metadata. Every
+-- construct in this file is translated into the Isabelle/HOL core
+-- (formal/core) and evaluated by the exported evaluator (evaluator/).
+
+SPECIFICATION core_hidden VERSION 1.0.0
+    JURISDICTION "EU"
+    PROOF_SYSTEM: PLONK
+    CURVE: "BLS12-381"
+
+SUBJECTS {
+  holder : PARTY DID "did:example:holder-17",
+  lender : PARTY
+}
+
+TERMS {
+  holder MUST submit_proof(income, session_nonce) BY DATETIME("2026-05-10T00:00:00Z");
+  holder ON_BREACH NOTIFY lender;
+  lender MUST_NOT grant_loan
+    WHEN NOT PRESENT(income_proof_valid) OR income_proof_valid == false
+}
+
+FACTORS {
+  income             : ZK<Integer> PROVES(self >= 30000, HASH(self, income_salt) == "0x5f3a")
+                       WITHOUT REVEALING self
+                       BOUND_TO(holder, session_nonce)
+                       METADATA SOURCE holder,
+  residence          : ZK<String> PROVES(self IN SET {"EU", "EEA"}) WITHOUT REVEALING ALL
+                       BOUND_TO(holder, session_nonce)
+                       METADATA SOURCE holder,
+  income_proof_valid : Boolean METADATA SOURCE lender,
+  loan_granted       : Boolean METADATA SOURCE lender,
+  session_nonce      : Hash    METADATA SOURCE lender,
+  income_salt        : Hash    METADATA SOURCE holder
+}
+
+INVARIANTS {
+  loan_requires_valid_proof : SAFETY :
+    ALWAYS(loan_granted IMPLIES income_proof_valid == true);
+  loan_only_in_the_eu : SAFETY :
+    ALWAYS(loan_granted IMPLIES residence == "EU" OR residence == "EEA")
+}

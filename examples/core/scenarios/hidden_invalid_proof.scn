@@ -1,0 +1,13 @@
+; The holder submits the proof on 3 May, but it does not check out; the lender
+; grants the loan on 4 May anyway. The prohibition is breached (its condition
+; is true in the data before the grant), and so is the invariant.
+(scenario hidden_invalid_proof
+  (spec "examples/core/core_hidden.triel")
+  (entry "2026-05-01T00:00:00Z" (activate)
+    (data (income (int 21000)) (residence (str "EU")) (loan_granted (bool false))))
+  (entry "2026-05-03T00:00:00Z" (act holder (submit_proof (name income) (name session_nonce)) must)
+    (data (income (int 21000)) (residence (str "EU")) (loan_granted (bool false))
+          (income_proof_valid (bool false))))
+  (entry "2026-05-04T00:00:00Z" (act lender grant_loan must_not)
+    (data (income (int 21000)) (residence (str "EU")) (loan_granted (bool true))
+          (income_proof_valid (bool false)))))

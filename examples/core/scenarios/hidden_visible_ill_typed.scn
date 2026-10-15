@@ -1,0 +1,8 @@
+; The residence is a ZK factor WITHOUT REVEALING ALL, an ordinary factor, so
+; its value is typed: the number 5 is not a String. The hidden income, declared
+; before it and also of the wrong type here, is removed before typing, so the
+; first ill-typed factor reported is the residence.
+(scenario hidden_visible_ill_typed
+  (spec "examples/core/core_hidden.triel")
+  (entry "2026-05-01T00:00:00Z" (activate)
+    (data (income (str "unknown")) (residence (int 5)) (loan_granted (bool false)))))
