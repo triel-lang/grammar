@@ -1,0 +1,8 @@
+; The contract starts on 17 March. The two days for the receipt end on 19
+; March, one day before the fallback ends on 20 March, so the activation is
+; accepted. The receipt comes at noon on 19 March, inside the fallback window:
+; the fallback is fulfilled. The ten days for the payment are still running.
+(scenario fallback_order_ok
+  (spec "examples/core/core_fallback.triel")
+  (entry "2026-03-17T00:00:00Z" (activate) (data (rent (dec 1200.00))))
+  (entry "2026-03-19T12:00:00Z" (act landlord issue_receipt must) (data (rent (dec 1200.00)))))

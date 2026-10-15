@@ -1,0 +1,8 @@
+; The contract starts on 19 March. The two days for the receipt end on 21
+; March, but its fallback ends on 20 March, before the fallback could come
+; into force. The fallback could never be fulfilled, so the activation is
+; rejected (decision 27).
+(scenario fallback_order_rejected
+  (spec "examples/core/core_fallback.triel")
+  (entry "2026-03-19T00:00:00Z" (activate) (data (rent (dec 1200.00))))
+  (entry "2026-03-22T00:00:00Z" (tick) (data (rent (dec 1200.00)))))
