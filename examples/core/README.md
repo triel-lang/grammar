@@ -1,6 +1,6 @@
 # Examples inside the formal core
 
-The nine specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
+The ten specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
 
 - `core_deadline_cure.triel`: a deadline, its breach, and a cure;
 - `core_unless_records.triel`: a sequence under UNLESS, with the guard read from a nested record;
@@ -10,7 +10,10 @@ The nine specifications in this folder use only constructs that the translator `
 - `core_conditional.triel`: `IF`/`ELIF`/`ELSE` and `WHEN` terms, a named term with `REF`, and `DEFAULT`, with a condition that is undefined where the term is reached;
 - `core_payment.triel`: actions with arguments, an obligation whose window opens with `FROM`, and penalties with arithmetic and `CAP`, computed in the state of the breach: capped, undefined and negative;
 - `core_fallback.triel`: `WITHIN … ELSE`, an obligation with a fallback that comes into force at the deadline instead of a breach;
-- `core_commitment.triel`: `EVENTUALLY … WITHIN` a duration and a factor (true at the deadline, false past it, undefined on missing data, rejected activation), and `POLARITY`, `THRESHOLD` and `SENSITIVITY_BOUND` printed as metadata.
+- `core_commitment.triel`: `EVENTUALLY … WITHIN` a duration and a factor (true at the deadline, false past it, undefined on missing data, rejected activation), and `POLARITY`, `THRESHOLD` and `SENSITIVITY_BOUND` printed as metadata;
+- `core_hidden.triel`: a hidden `ZK<Integer>` factor, named as an action argument and never read, a `ZK<String>` factor `WITHOUT REVEALING ALL` read like an ordinary factor, and `PROOF_SYSTEM`, `CURVE`, `DID`, `PROVES`, `HASH` with a salt and `BOUND_TO` printed as metadata.
+
+The scenario `age_verification_breach` runs `examples/age_verification.triel`, whose hidden `age` factor is accepted since stage 14.
 
 The evaluator exported from Isabelle runs them on the scenarios in `scenarios/`.
 
@@ -52,6 +55,7 @@ The polarity of an event is used only when a composite term is checked against t
 10. **Penalties.** A `PENALTY` amount is computed once, in the state of the entry just before the entry that establishes the breach: for a prohibition the state before the forbidden action, for an obligation the last state not after the deadline. It is undefined if an operand is absent, reported as negative if it is negative, and otherwise capped by `CAP`.
 11. **`EVENTUALLY … WITHIN`.** The deadline is resolved at activation, like the deadline of an obligation. The invariant is `T` once its condition is true at an entry not after the deadline, an entry at the deadline included; `F` once an entry is strictly after the deadline and the condition was false at every entry not after it; `U` otherwise, so an entry where the condition is undefined prevents `F`.
 12. **`WITHIN … ELSE`.** If the first obligation is not met by its deadline d, it is not breached: the fallback is in force from d, with the window (d, d′], and is reported after `ELSE`. A duration in the deadline of the fallback counts from d. A handler bound to such an obligation is rejected.
+13. **Hidden factors.** A `ZK<T>` factor without `WITHOUT REVEALING ALL` is hidden. Before anything else, the evaluator removes every hidden factor from the data of every entry, so its value, given or not, of the right type or not, changes nothing in the report (`hidden_valid` and `hidden_value_ignored` get the same report). A `ZK<T>` factor `WITHOUT REVEALING ALL` is an ordinary factor of type T, typed like any other (`hidden_visible_ill_typed`). `Hash` and `Address` values are strings.
 
 ## Output
 
@@ -59,9 +63,12 @@ The first lines come from the translator; the rest are printed by the evaluator.
 
 ```
 SPEC NAME
-METADATA KEY VALUE                  -- JURISDICTION, STANDARD, CURRENCY, PROVENANCE_REQUIRED, in source order
-METADATA SOURCE FACTOR SUBJECT      -- in FACTORS order, and for each factor in source order:
-METADATA POLARITY FACTOR NUMBER     -- POLARITY, THRESHOLD and SENSITIVITY_BOUND, as written
+METADATA KEY VALUE                  -- JURISDICTION, STANDARD, PROVENANCE_REQUIRED, PROOF_SYSTEM, CURVE, CURRENCY, in source order
+METADATA DID SUBJECT "DID"          -- in SUBJECTS order
+METADATA PROVES FACTOR CONSTRAINT   -- in FACTORS order, and for each factor in source order: PROVES (one line per
+METADATA BOUND_TO FACTOR S NONCE    --   constraint), BOUND_TO, SOURCE, and
+METADATA SOURCE FACTOR SUBJECT
+METADATA POLARITY FACTOR NUMBER     --   POLARITY, THRESHOLD and SENSITIVITY_BOUND, as written
 ACTIVATION OK | ACTIVATION REJECTED
 BLOCK OK | BLOCK REJECTED
 TYPES OK | TYPES ILL-TYPED ENTRY J FACTOR F
