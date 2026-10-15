@@ -85,6 +85,13 @@ sequence_expr      ::= unless_expr ("THEN" unless_expr)*
 unless_expr        ::= timeout_expr ("UNLESS" expr "DO" timeout_expr)?
 timeout_expr       ::= base_term ("WITHIN" deadline_expr ["ELSE" base_term])?
 
+(* NOTE ON WITHIN ... ELSE (freeze): "s MUST a WITHIN d ELSE s2 MUST a2
+   BY d2" is an obligation with a fallback: if a is not done by d, the
+   obligation is not breached and s2 MUST a2 comes into force at d, with
+   durations in d2 counted from d (TECHNICAL_REPORT.md §2.6). Only this
+   form, at the top level of a TERMS block, is given a meaning; the
+   grammar admits more. *)
+
 (* --- Disambiguation fix: base_term now routes through
    matched_term / unmatched_term instead of condition_stmt directly, so
    that ELSE-binding in nested IF chains is deterministic. --- *)
@@ -158,7 +165,13 @@ unmatched_condition  ::= "IF" expr "THEN" base_term
 obligation_stmt    ::= identifier "MUST" action_expr
                        ["BY" deadline_expr]
                        ["FROM" datetime_expr]
-                       ["UNTIL" datetime_expr]
+
+(* NOTE ON UNTIL (freeze): obligation_stmt previously ended with an
+   optional ["UNTIL" datetime_expr]. No semantics was ever given for it
+   (TECHNICAL_REPORT.md §2.6), and the end of an obligation's window is
+   already its BY deadline, so the clause is removed. UNTIL stays a
+   reserved keyword (§11a): "a MUST b UNTIL x" is a syntax error, not an
+   obligation with an ignored clause. *)
 
 permission_stmt    ::= identifier "MAY" action_expr
                        ["WHEN" expr]

@@ -94,8 +94,7 @@ unmatched_condition: "IF" expr "THEN" base_term
 
 obligation_stmt: identifier "MUST" action_expr \
                  ("BY" deadline_expr)? \
-                 ("FROM" datetime_expr)? \
-                 ("UNTIL" datetime_expr)?
+                 ("FROM" datetime_expr)?
 
 permission_stmt: identifier "MAY" action_expr \
                   ("WHEN" expr)?
