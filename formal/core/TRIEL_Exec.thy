@@ -177,6 +177,13 @@ lemma ew_eval_code [code]:
       else None)"
   unfolding ew_eval_def by auto
 
+lemma else_handlers_ok_code [code]:
+  "else_handlers_ok blk =
+     list_all (\<lambda>k. case blk ! k of
+                     SOnBreach s acts \<Rightarrow> (case bound_to blk k s of Some j \<Rightarrow> \<not> is_else (blk ! j) | None \<Rightarrow> True)
+                   | _ \<Rightarrow> True) [0..<length blk]"
+  unfolding else_handlers_ok_def list_all_iff by auto
+
 lemma inv_activates_code [code]:
   "inv_activates T \<tau>\<^sub>0 \<sigma>\<^sub>0 invs = list_all (\<lambda>\<iota>. list_all (\<lambda>d. resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 d \<noteq> None) (sinv_deadlines \<iota>)) invs"
   unfolding inv_activates_def by (simp add: list_all_iff)
@@ -1489,6 +1496,7 @@ fun to_tm_env ::
 | "to_tm_env \<Gamma> SSkip = Some TSkip"
 | "to_tm_env \<Gamma> (SRef k) = (if k < length \<Gamma> then \<Gamma> ! k else None)"
 | "to_tm_env \<Gamma> (SOnBreach s acts) = None"
+| "to_tm_env \<Gamma> (SMustElse s a d s' a' D') = Some (TOr (TMust s a) (TMust s' a'))"
 
 lemma to_tm_defined:
   "\<not> has_handler t \<Longrightarrow> (\<And>k. k \<in> refs t \<Longrightarrow> k < length \<Gamma> \<and> \<Gamma> ! k \<noteq> None) \<Longrightarrow> to_tm_env \<Gamma> t \<noteq> None"
@@ -1613,6 +1621,7 @@ fun sden :: "('n, 'v, 't, 's, 'a) den option list \<Rightarrow> ('n, 'v, 's, 'a,
 | "sden D SSkip = Some skip_d"
 | "sden D (SRef k) = (if k < length D then D ! k else None)"
 | "sden D (SOnBreach s acts) = None"
+| "sden D (SMustElse s a d s' a' D') = Some (or_d (must_d s a) (must_d s' a'))"
 
 text \<open>Substitution preserves the denotation: the term obtained by replacing every
   \<open>REF k\<close> by the term of the element \<open>k\<close> denotes what the reference semantics gives.\<close>
@@ -1643,6 +1652,7 @@ datatype line =
   | LMust nat name act "int option" "name status" "name ract list"
   | LMustNot nat name act verdict "name ract list"
   | LMay nat name act verdict
+  | LMustElse nat name act "int option" name act "int option" else_status
   | LOnBreach nat name "nat option"
   | LComposite nat "bool option" "bool option" "bool option"
   | LInvariant name "bool option"
@@ -1728,6 +1738,18 @@ definition must_line :: "int \<Rightarrow> (path, atom) state \<Rightarrow> cter
                (let st = handle_breach b (lo_of F b) s a d (handler_of blk i) \<pi> in
                 LMust (Suc i) s a (Some d) st (ob_report num_of d st (handler_of blk i) \<pi>))))"
 
+text \<open>The line of an obligation with a fallback: its deadline, the deadline of the
+  fallback (a duration counts from the first deadline), and \<open>else_verdict\<close>.\<close>
+
+definition else_line :: "int \<Rightarrow> (path, atom) state \<Rightarrow> ctrace \<Rightarrow> nat \<Rightarrow> name \<Rightarrow> act
+    \<Rightarrow> path deadline \<Rightarrow> name \<Rightarrow> act \<Rightarrow> path deadline option \<Rightarrow> line" where
+  "else_line \<tau>\<^sub>0 \<sigma>\<^sub>0 \<pi> i s a d s' a' D' =
+     (case resolve time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 d of
+        None \<Rightarrow> LMustElse (Suc i) s a None s' a' None EPending
+      | Some e \<Rightarrow>
+          (let e' = else_deadline time_of \<sigma>\<^sub>0 e D' in
+           LMustElse (Suc i) s a (Some e) s' a' e' (else_verdict s a e s' a' e' \<pi>)))"
+
 definition term_line :: "int \<Rightarrow> (path, atom) state \<Rightarrow> cterm list \<Rightarrow> ctrace \<Rightarrow> nat \<Rightarrow> line" where
   "term_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi> i =
      (case blk ! i of
@@ -1735,6 +1757,7 @@ definition term_line :: "int \<Rightarrow> (path, atom) state \<Rightarrow> cter
       | SMustNot s a c \<Rightarrow>
           LMustNot (Suc i) s a (pr_verdict s a c \<pi>) (pr_report num_of s a c (handler_of blk i) \<pi>)
       | SMay s a c \<Rightarrow> LMay (Suc i) s a (may_verdict s a c \<pi>)
+      | SMustElse s a d s' a' D' \<Rightarrow> else_line \<tau>\<^sub>0 \<sigma>\<^sub>0 \<pi> i s a d s' a' D'
       | SOnBreach s acts \<Rightarrow> LOnBreach (Suc i) s (map_option Suc (bound_to blk i s))
       | _ \<Rightarrow> composite_line (Suc i) (benv blk ! i) \<pi>)"
 
@@ -1750,7 +1773,8 @@ definition run :: "spec \<Rightarrow> observation list \<Rightarrow> line list" 
          if obs = [] \<or> \<not> activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<or> \<not> inv_activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 (map snd invs)
          then [LActivation False]
          else LActivation True #
-           (if \<not> wf_block blk \<or> \<not> cont_free_prohibitions blk \<or> \<not> refs_ok blk then [LBlock False]
+           (if \<not> wf_block blk \<or> \<not> cont_free_prohibitions blk \<or> \<not> else_handlers_ok blk \<or> \<not> refs_ok blk
+            then [LBlock False]
             else LBlock True #
               (case ill_typed fs obs of
                  Some e \<Rightarrow> [LTypes (Some e)]
@@ -1766,13 +1790,14 @@ subsection \<open>Export\<close>
 
 export_code run Spec Fdecl Act ArgName ArgVal Pen PVal PAdd PSub PMul PNeg num_of
   PAmount PUndefined PNegative RNotify RPenalty
-  SMust SMustNot SMay SThen SOr SAnd SUnless SOnBreach SIf SSkip SRef DAt DAfter DFactor
+  SMust SMustNot SMay SThen SOr SAnd SUnless SOnBreach SIf SSkip SRef SMustElse DAt DAfter DFactor
   Notify Penalty Terminate CureBy EscalateTo
   ETrue EFalse EEq ELt ELe ENot EAnd EOr EImp EPresent VConst VName VDefault
   Always Eventually Next SInv SEventuallyWithin TPrim TOptional TRecord PBool PInt PDec PStr PTime
   ABool ANum AStr ATime dec_atom quotient_of Atom Nom fmap_of_list Deontic Arrival Tick
   Must May MustNot
-  LActivation LBlock LTypes LMust LMustNot LMay LOnBreach LComposite LInvariant
+  LActivation LBlock LTypes LMust LMustNot LMay LMustElse LOnBreach LComposite LInvariant
+  EFulfilled EPending EElse
   SFulfilled SPending SBreached NoContinuation Terminated Cure Escalated
   Fulfilled Breached Pending
   integer_of_nat nat_of_integer int_of_integer integer_of_int

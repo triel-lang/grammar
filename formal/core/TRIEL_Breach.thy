@@ -506,7 +506,9 @@ text \<open>The surface terms of a TERMS block. A breach handler \<open>s ON_BRE
   or prohibition of the same subject at the top level. \<open>SMust s a D F\<close> is an obligation
   with the deadline \<open>D\<close> and the start \<open>F\<close> given by FROM. \<open>SIf c t u\<close> is a conditional
   term (IF/ELIF/ELSE and WHEN; a missing ELSE is \<open>SSkip\<close>), and \<open>SRef k\<close> is a reference
-  \<open>REF name\<close> to the named term declared as the element \<open>k\<close> of the block, counted from 0.\<close>
+  \<open>REF name\<close> to the named term declared as the element \<open>k\<close> of the block, counted from 0.
+  \<open>SMustElse s a d s' a' D'\<close> is \<open>s MUST a WITHIN d ELSE s' MUST a' BY D'\<close>, an obligation
+  with a fallback (see the section on fallbacks below).\<close>
 
 datatype ('n, 'v, 's, 'a, 'p) sterm =
     SMust 's 'a "'n deadline option" "'n deadline option"
@@ -520,6 +522,7 @@ datatype ('n, 'v, 's, 'a, 'p) sterm =
   | SIf "('n, 'v) expr" "('n, 'v, 's, 'a, 'p) sterm" "('n, 'v, 's, 'a, 'p) sterm"
   | SSkip
   | SRef nat
+  | SMustElse 's 'a "'n deadline" 's 'a "'n deadline option"
 
 fun has_handler :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> bool" where
   "has_handler (SOnBreach s acts) = True"
@@ -532,6 +535,7 @@ fun has_handler :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> bool" where
 
 fun binds :: "'s \<Rightarrow> ('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> bool" where
   "binds s (SMust s' a d f) = (s' = s)"
+| "binds s (SMustElse s' a d s'' a' d') = (s' = s)"
 | "binds s (SMustNot s' a c) = (s' = s)"
 | "binds s _ = False"
 
@@ -628,6 +632,7 @@ fun deadlines :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> 'n deadline list" whe
 | "deadlines (SAnd t u) = deadlines t @ deadlines u"
 | "deadlines (SUnless t c u) = deadlines t @ deadlines u"
 | "deadlines (SIf c t u) = deadlines t @ deadlines u"
+| "deadlines (SMustElse s a d s' a' D') = d # (case D' of Some d' \<Rightarrow> [d'] | None \<Rightarrow> [])"
 | "deadlines _ = []"
 
 text \<open>A block is activated at time \<open>\<tau>\<^sub>0\<close> in state \<open>\<sigma>\<^sub>0\<close> only if every deadline and every
@@ -680,6 +685,166 @@ proof -
     with b d show "deadline_of T \<tau>\<^sub>0 \<sigma>\<^sub>0 F D \<noteq> None" by (simp add: deadline_of_def)
   qed
   ultimately show ?thesis by blast
+qed
+
+
+section \<open>Fallbacks: WITHIN ... ELSE\<close>
+
+text \<open>\<open>s MUST a WITHIN d ELSE s' MUST a' BY d'\<close> at the top level of a TERMS block. An action
+  of \<open>s\<close> in \<open>(-\<infinity>, d]\<close> fulfils it. If the trace passes \<open>d\<close> without one, it is not
+  breached: the fallback \<open>s' MUST a'\<close> is in force from \<open>d\<close>, with the window \<open>(d, d']\<close>, and
+  only the fallback can be breached. A duration in \<open>d'\<close> counts from \<open>d\<close>; a DATETIME or a
+  factor is resolved at activation, like every deadline.\<close>
+
+datatype else_status = EFulfilled | EPending | EElse int verdict
+
+definition else_deadline :: "('v \<Rightarrow> int option) \<Rightarrow> ('n, 'v) state \<Rightarrow> int \<Rightarrow> 'n deadline option \<Rightarrow> int option" where
+  "else_deadline T \<sigma>\<^sub>0 d D' = Option.bind D' (resolve T d \<sigma>\<^sub>0)"
+
+definition else_verdict :: "'s \<Rightarrow> 'a \<Rightarrow> int \<Rightarrow> 's \<Rightarrow> 'a \<Rightarrow> int option \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> else_status" where
+  "else_verdict s a d s' a' D' \<pi> =
+     (if acted s a None d \<pi> then EFulfilled
+      else if passed d \<pi> then EElse d (ob_verdict s' a' (Some d) D' \<pi>)
+      else EPending)"
+
+theorem else_fulfilled: "acted s a None d \<pi> \<Longrightarrow> else_verdict s a d s' a' D' \<pi> = EFulfilled"
+  by (simp add: else_verdict_def)
+
+theorem else_pending: "\<not> acted s a None d \<pi> \<Longrightarrow> \<not> passed d \<pi> \<Longrightarrow> else_verdict s a d s' a' D' \<pi> = EPending"
+  by (simp add: else_verdict_def)
+
+text \<open>A missed deadline puts the fallback in force at \<open>d\<close>, instead of a breach.\<close>
+
+theorem else_taken:
+  "\<not> acted s a None d \<pi> \<Longrightarrow> passed d \<pi> \<Longrightarrow>
+     else_verdict s a d s' a' D' \<pi> = EElse d (ob_verdict s' a' (Some d) D' \<pi>)"
+  by (simp add: else_verdict_def)
+
+theorem else_no_breach:
+  "window s a None d \<pi> = Breached d \<Longrightarrow> else_verdict s a d s' a' D' \<pi> = EElse d (ob_verdict s' a' (Some d) D' \<pi>)"
+  unfolding window_def else_verdict_def by (auto split: if_splits)
+
+text \<open>An action at or before \<open>d\<close> does not fulfil the fallback: only an action of \<open>s'\<close>
+  strictly after \<open>d\<close> does.\<close>
+
+theorem else_alt_after:
+  assumes "else_verdict s a d s' a' D' \<pi> = EElse d Fulfilled"
+  shows "\<exists>j. 1 \<le> j \<and> j < length \<pi> \<and> does s' a' (evt (\<pi> ! j)) \<and> d < time \<pi> j"
+proof -
+  from assms have "ob_verdict s' a' (Some d) D' \<pi> = Fulfilled"
+    unfolding else_verdict_def by (auto split: if_splits)
+  then show ?thesis
+    unfolding ob_verdict_def window_def acted_def by (auto split: option.splits if_splits)
+qed
+
+text \<open>The fallback with deadline \<open>d'\<close>, missed, is a breach at \<open>d'\<close>.\<close>
+
+theorem else_alt_breached:
+  assumes "\<not> acted s a None d \<pi>" "passed d \<pi>" "\<not> acted s' a' (Some d) d' \<pi>" "passed d' \<pi>"
+  shows "else_verdict s a d s' a' (Some d') \<pi> = EElse d (Breached d')"
+  using assms by (simp add: else_verdict_def ob_verdict_def window_def)
+
+text \<open>A duration in the deadline of the fallback counts from \<open>d\<close>.\<close>
+
+theorem else_alt_duration: "else_deadline T \<sigma>\<^sub>0 d (Some (DAfter k)) = Some (d + k)"
+  by (simp add: else_deadline_def)
+
+lemma ob_verdict_None_final:
+  assumes "ob_verdict s a lo None \<pi> \<noteq> Pending"
+  shows "ob_verdict s a lo None (\<pi> @ \<rho>) = ob_verdict s a lo None \<pi>"
+proof -
+  from assms have "\<exists>j. 1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> after lo (time \<pi> j)"
+    unfolding ob_verdict_def by (auto split: if_splits)
+  then have "\<exists>j. 1 \<le> j \<and> j < length (\<pi> @ \<rho>) \<and> does s a (evt ((\<pi> @ \<rho>) ! j)) \<and> after lo (time (\<pi> @ \<rho>) j)"
+    by (metis length_append nth_append_left time_append trans_less_add1)
+  with assms show ?thesis unfolding ob_verdict_def by (auto split: if_splits)
+qed
+
+text \<open>Finality: once the fallback is in force and its verdict is reached, or the obligation
+  is fulfilled, later entries change nothing (non-decreasing timestamps).\<close>
+
+theorem else_final:
+  assumes tr: "is_trace (\<pi> @ \<rho>)"
+    and dec: "else_verdict s a d s' a' D' \<pi> \<noteq> EPending"
+    and alt: "\<And>v. else_verdict s a d s' a' D' \<pi> = EElse d v \<Longrightarrow> v \<noteq> Pending"
+  shows "else_verdict s a d s' a' D' (\<pi> @ \<rho>) = else_verdict s a d s' a' D' \<pi>"
+proof (cases "acted s a None d \<pi>")
+  case True
+  then show ?thesis by (simp add: else_verdict_def acted_append)
+next
+  case False
+  with dec have p: "passed d \<pi>" by (auto simp: else_verdict_def split: if_splits)
+  with False have w: "window s a None d \<pi> = Breached d" by (simp add: window_def)
+  have "window s a None d (\<pi> @ \<rho>) = Breached d"
+    using window_final[OF tr] w by simp
+  then have na: "\<not> acted s a None d (\<pi> @ \<rho>)" and p': "passed d (\<pi> @ \<rho>)"
+    by (auto simp: window_def split: if_splits)
+  have v: "ob_verdict s' a' (Some d) D' \<pi> \<noteq> Pending"
+    using alt[of "ob_verdict s' a' (Some d) D' \<pi>"] False p by (simp add: else_verdict_def)
+  have "ob_verdict s' a' (Some d) D' (\<pi> @ \<rho>) = ob_verdict s' a' (Some d) D' \<pi>"
+  proof (cases D')
+    case None
+    from v None have "ob_verdict s' a' (Some d) None \<pi> \<noteq> Pending" by simp
+    from ob_verdict_None_final[OF this] None show ?thesis by simp
+  next
+    case (Some d')
+    from v Some have "ob_verdict s' a' (Some d) (Some d') \<pi> \<noteq> Pending" by simp
+    from ob_verdict_final[OF tr this] Some show ?thesis by simp
+  qed
+  with False p na p' show ?thesis by (simp add: else_verdict_def)
+qed
+
+text \<open>Both deadlines are resolved at activation.\<close>
+
+theorem activation_rejected_else:
+  assumes "SMustElse s a d s' a' (Some (DFactor x k)) \<in> set blk \<or> SMustElse s a (DFactor x k) s' a' D' \<in> set blk"
+    and "\<sigma>\<^sub>0 x = None"
+  shows "\<not> activates T \<tau>\<^sub>0 \<sigma>\<^sub>0 blk"
+  using assms unfolding activates_def by (cases D') force+
+
+theorem activates_resolves_else:
+  assumes "activates T \<tau>\<^sub>0 \<sigma>\<^sub>0 blk" and "SMustElse s a d s' a' D' \<in> set blk"
+  shows "\<exists>e. resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 d = Some e \<and> (D' \<noteq> None \<longrightarrow> else_deadline T \<sigma>\<^sub>0 e D' \<noteq> None)"
+proof -
+  note all = bspec[OF assms(1)[unfolded activates_def] assms(2)]
+  from all obtain e where e: "resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 d = Some e" by auto
+  moreover have "D' \<noteq> None \<longrightarrow> else_deadline T \<sigma>\<^sub>0 e D' \<noteq> None"
+  proof
+    assume "D' \<noteq> None"
+    then obtain d' where d': "D' = Some d'" by auto
+    with all have "resolve T \<tau>\<^sub>0 \<sigma>\<^sub>0 d' \<noteq> None" by simp
+    then have "resolve T e \<sigma>\<^sub>0 d' \<noteq> None" using resolve_base[of T e \<sigma>\<^sub>0 d' \<tau>\<^sub>0] by simp
+    with d' show "else_deadline T \<sigma>\<^sub>0 e D' \<noteq> None" by (simp add: else_deadline_def)
+  qed
+  ultimately show ?thesis by blast
+qed
+
+text \<open>A handler bound to an obligation with a fallback would never fire: a fallback is what
+  happens instead of a breach. Such a handler is rejected.\<close>
+
+fun is_else :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> bool" where
+  "is_else (SMustElse s a d s' a' D') = True"
+| "is_else _ = False"
+
+definition else_handlers_ok :: "('n, 'v, 's, 'a, 'p) sterm list \<Rightarrow> bool" where
+  "else_handlers_ok blk \<longleftrightarrow>
+     (\<forall>k < length blk. case blk ! k of
+        SOnBreach s acts \<Rightarrow> (case bound_to blk k s of Some j \<Rightarrow> \<not> is_else (blk ! j) | None \<Rightarrow> True)
+      | _ \<Rightarrow> True)"
+
+theorem else_handler_rejected:
+  "\<not> else_handlers_ok [SMustElse s a d s' a' D', SOnBreach s acts]"
+proof -
+  let ?b = "[SMustElse s a d s' a' D', SOnBreach s acts]"
+  have g: "(GREATEST j::nat. j < Suc 0 \<and> binds s (?b ! j)) = 0"
+    by (rule Greatest_equality) auto
+  have b: "bound_to ?b (Suc 0) s = Some 0"
+    unfolding bound_to_def g by auto
+  show ?thesis
+  proof
+    assume "else_handlers_ok ?b"
+    from this[unfolded else_handlers_ok_def, rule_format, of "Suc 0"] show False by (simp add: b)
+  qed
 qed
 
 

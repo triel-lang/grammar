@@ -3,10 +3,11 @@
 module
   TRIEL(Int(..), integer_of_int, Nat, integer_of_nat, Num, Rat, quotient_of,
          Atom(..), Arg(..), Act(..), Fmap(..), Nd(..), Ty(..), Vexp(..),
-         Expr(..), Verdict(..), Continuation(..), Status(..), Amount(..),
-         Ract(..), Line(..), Prim(..), Deadline(..), Inv(..), Sinv(..),
-         Baction(..), Sterm(..), Pexp(..), Pen(..), Fdecl(..), Spec(..),
-         Polarity(..), Event(..), nat_of_integer, num_of, run, dec_atom)
+         Expr(..), Verdict(..), Else_status(..), Continuation(..), Status(..),
+         Amount(..), Ract(..), Line(..), Prim(..), Deadline(..), Inv(..),
+         Sinv(..), Baction(..), Sterm(..), Pexp(..), Pen(..), Fdecl(..),
+         Spec(..), Polarity(..), Event(..), nat_of_integer, num_of, run,
+         dec_atom)
   where {
 
 import Prelude ((==), (/=), (<), (<=), (>=), (>), (+), (-), (*), (/), (**),
@@ -624,6 +625,8 @@ data Tm a b c d = TMust c d | TMay c d (Expr a b) | TMustNot c d (Expr a b)
 
 data Verdict = Fulfilled | Breached Int | Pending;
 
+data Else_status = EFulfilled | EPending | EElse Int Verdict;
+
 data Continuation a = NoContinuation | Terminated | Cure Verdict
   | Escalated a Verdict;
 
@@ -636,6 +639,7 @@ data Ract a = RNotify a | RPenalty Amount;
 data Line = LActivation Bool | LBlock Bool | LTypes (Maybe (Nat, String))
   | LMust Nat String Act (Maybe Int) (Status String) [Ract String]
   | LMustNot Nat String Act Verdict [Ract String] | LMay Nat String Act Verdict
+  | LMustElse Nat String Act (Maybe Int) String Act (Maybe Int) Else_status
   | LOnBreach Nat String (Maybe Nat)
   | LComposite Nat (Maybe Bool) (Maybe Bool) (Maybe Bool)
   | LInvariant String (Maybe Bool);
@@ -657,7 +661,8 @@ data Sterm a b c d e = SMust c d (Maybe (Deadline a)) (Maybe (Deadline a))
   | SAnd (Sterm a b c d e) (Sterm a b c d e)
   | SUnless (Sterm a b c d e) (Expr a b) (Sterm a b c d e)
   | SOnBreach c [Baction c e]
-  | SIf (Expr a b) (Sterm a b c d e) (Sterm a b c d e) | SSkip | SRef Nat;
+  | SIf (Expr a b) (Sterm a b c d e) (Sterm a b c d e) | SSkip | SRef Nat
+  | SMustElse c d (Deadline a) c d (Maybe (Deadline a));
 
 data Pexp a b = PVal (Vexp a b) | PAdd (Pexp a b) (Pexp a b)
   | PSub (Pexp a b) (Pexp a b) | PMul (Pexp a b) (Pexp a b) | PNeg (Pexp a b);
@@ -793,6 +798,7 @@ size_list xs = length_tailrec xs zero_nat;
 
 binds :: forall a b c d e. (Eq a) => a -> Sterm b c a d e -> Bool;
 binds sa (SMust s a d f) = s == sa;
+binds sb (SMustElse sa aa da s a d) = sa == sb;
 binds sa (SMustNot s a c) = s == sa;
 binds s (SMay v va vb) = False;
 binds s (SThen v va) = False;
@@ -825,6 +831,7 @@ handler_of blk i =
                        SIf _ _ _ -> False;
                        SSkip -> False;
                        SRef _ -> False;
+                       SMustElse _ _ _ _ _ _ -> False;
                      }))
           (upt zero_nat (size_list blk))
     of {
@@ -841,6 +848,7 @@ handler_of blk i =
                 SIf _ _ _ -> [];
                 SSkip -> [];
                 SRef _ -> [];
+                SMustElse _ _ _ _ _ _ -> [];
               });
   });
 
@@ -866,6 +874,7 @@ cont_free_prohibitions blk =
           SIf _ _ _ -> True;
           SSkip -> True;
           SRef _ -> True;
+          SMustElse _ _ _ _ _ _ -> True;
         }))
     (upt zero_nat (size_list blk));
 
@@ -898,6 +907,41 @@ inv_activates t tau_0 sigma_0 invs =
         all (\ d -> not (is_none (resolve t tau_0 sigma_0 d)))
           (sinv_deadlines iota))
     invs;
+
+is_else :: forall a b c d e. Sterm a b c d e -> Bool;
+is_else (SMustElse sa aa da s a d) = True;
+is_else (SMust v va vb vc) = False;
+is_else (SMustNot v va vb) = False;
+is_else (SMay v va vb) = False;
+is_else (SThen v va) = False;
+is_else (SOr v va) = False;
+is_else (SAnd v va) = False;
+is_else (SUnless v va vb) = False;
+is_else (SOnBreach v va) = False;
+is_else (SIf v va vb) = False;
+is_else SSkip = False;
+is_else (SRef v) = False;
+
+else_handlers_ok :: forall a b c d e. (Eq c) => [Sterm a b c d e] -> Bool;
+else_handlers_ok blk =
+  all (\ k -> (case nth blk k of {
+                SMust _ _ _ _ -> True;
+                SMustNot _ _ _ -> True;
+                SMay _ _ _ -> True;
+                SThen _ _ -> True;
+                SOr _ _ -> True;
+                SAnd _ _ -> True;
+                SUnless _ _ _ -> True;
+                SOnBreach s _ -> (case bound_to blk k s of {
+                                   Nothing -> True;
+                                   Just j -> not (is_else (nth blk j));
+                                 });
+                SIf _ _ _ -> True;
+                SSkip -> True;
+                SRef _ -> True;
+                SMustElse _ _ _ _ _ _ -> True;
+              }))
+    (upt zero_nat (size_list blk));
 
 evalV :: forall a b. Vexp a b -> (a -> Maybe b) -> Maybe b;
 evalV (VConst v) sigma = Just v;
@@ -1028,6 +1072,10 @@ deadlines (SOr t u) = deadlines t ++ deadlines u;
 deadlines (SAnd t u) = deadlines t ++ deadlines u;
 deadlines (SUnless t c u) = deadlines t ++ deadlines u;
 deadlines (SIf c t u) = deadlines t ++ deadlines u;
+deadlines (SMustElse sa aa da s a d) = da : (case d of {
+      Nothing -> [];
+      Just db -> [db];
+    });
 deadlines (SMustNot v va vb) = [];
 deadlines (SMay v va vb) = [];
 deadlines (SOnBreach v va) = [];
@@ -1056,6 +1104,7 @@ handler_bound blk i = (case nth blk i of {
                         SIf _ _ _ -> Nothing;
                         SSkip -> Nothing;
                         SRef _ -> Nothing;
+                        SMustElse _ _ _ _ _ _ -> Nothing;
                       });
 
 has_handler :: forall a b c d e. Sterm a b c d e -> Bool;
@@ -1070,6 +1119,7 @@ has_handler (SMustNot v va vb) = False;
 has_handler (SMay v va vb) = False;
 has_handler SSkip = False;
 has_handler (SRef v) = False;
+has_handler (SMustElse v va vb vc vd ve) = False;
 
 wf_actions :: forall a b. [Baction a b] -> Bool;
 wf_actions acts =
@@ -1098,6 +1148,7 @@ wf_block blk =
           SIf _ _ _ -> not (has_handler (nth blk i));
           SSkip -> not (has_handler (nth blk i));
           SRef _ -> not (has_handler (nth blk i));
+          SMustElse _ _ _ _ _ _ -> not (has_handler (nth blk i));
         }))
     (upt zero_nat (size_list blk)) &&
     distinct
@@ -1585,6 +1636,43 @@ must_line tau_0 sigma_0 blk pi i s a d f =
       });
   });
 
+else_deadline ::
+  forall a b.
+    (a -> Maybe Int) ->
+      (b -> Maybe a) -> Int -> Maybe (Deadline b) -> Maybe Int;
+else_deadline t sigma_0 da d = bind d (resolve t da sigma_0);
+
+else_verdict ::
+  forall a b c d.
+    (Eq a,
+      Eq b) => a -> b -> Int ->
+                           a -> b -> Maybe Int ->
+                                       [(c -> Maybe d, (Int, Event c a b))] ->
+ Else_status;
+else_verdict sa aa da s a d pi =
+  (if acted sa aa Nothing da pi then EFulfilled
+    else (if passed da pi then EElse da (ob_verdict s a (Just da) d pi)
+           else EPending));
+
+else_line ::
+  Int ->
+    ([String] -> Maybe Atom) ->
+      [([String] -> Maybe Atom, (Int, Event [String] String Act))] ->
+        Nat ->
+          String ->
+            Act ->
+              Deadline [String] ->
+                String -> Act -> Maybe (Deadline [String]) -> Line;
+else_line tau_0 sigma_0 pi i sa aa da s a d =
+  (case resolve time_of tau_0 sigma_0 da of {
+    Nothing -> LMustElse (suc i) sa aa Nothing s a Nothing EPending;
+    Just e ->
+      let {
+        ea = else_deadline time_of sigma_0 e d;
+      } in LMustElse (suc i) sa aa (Just e) s a ea
+             (else_verdict sa aa e s a ea pi);
+  });
+
 to_tm_env ::
   forall a b c d e.
     [Maybe (Tm a b c d)] -> Sterm a b c d e -> Maybe (Tm a b c d);
@@ -1621,6 +1709,8 @@ to_tm_env gamma SSkip = Just TSkip;
 to_tm_env gamma (SRef k) =
   (if less_nat k (size_list gamma) then nth gamma k else Nothing);
 to_tm_env gamma (SOnBreach s acts) = Nothing;
+to_tm_env gamma (SMustElse sa aa da s a d) =
+  Just (TOr (TMust sa aa) (TMust s a));
 
 benv_from ::
   forall a b c d e.
@@ -1652,6 +1742,7 @@ term_line tau_0 sigma_0 blk pi i =
     SIf _ _ _ -> composite_line (suc i) (nth (benv blk) i) pi;
     SSkip -> composite_line (suc i) (nth (benv blk) i) pi;
     SRef _ -> composite_line (suc i) (nth (benv blk) i) pi;
+    SMustElse a b c d e f -> else_line tau_0 sigma_0 pi i a b c d e f;
   });
 
 raw_trace ::
@@ -1773,6 +1864,7 @@ refs (SMustNot v va vb) = bot_set;
 refs (SMay v va vb) = bot_set;
 refs (SOnBreach v va) = bot_set;
 refs SSkip = bot_set;
+refs (SMustElse v va vb vc vd ve) = bot_set;
 
 refs_ok :: forall a b c d e. [Sterm a b c d e] -> Bool;
 refs_ok blk =
@@ -1845,7 +1937,7 @@ run sp obs =
              else LActivation True :
                     (if not (wf_block blk) ||
                           (not (cont_free_prohibitions blk) ||
-                            not (refs_ok blk))
+                            (not (else_handlers_ok blk) || not (refs_ok blk)))
                       then [LBlock False]
                       else LBlock True :
                              (case ill_typed fs obs of {
