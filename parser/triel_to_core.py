@@ -50,7 +50,9 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
   * s MUST a WITHIN d ELSE s2 MUST a2 BY d2, at the top level, is
     (must_else S A DL S2 A2 DL2): an obligation with a fallback. The fallback
     must be an obligation without FROM; ELSE in a composite term, FROM with
-    ELSE, and a handler bound to such an obligation are rejected.
+    ELSE, and a handler bound to such an obligation are rejected. The fallback
+    must end after the first deadline: with two DATETIME deadlines this is
+    checked here, otherwise by the evaluator at activation.
   * The PENALTY amount is built from numeric literals, Integer and Decimal
     factors and DEFAULT with +, - and * (no division): (penalty P CAP) with
     P ::= (val V) | (add P P) | (sub P P) | (mul P P) | (neg P), and CAP the
@@ -741,6 +743,9 @@ class Translation:
             return self.reject("WITHIN (non-obligation)")
         if first[4] != ["none"]:
             return self.reject("FROM with ELSE")
+        if first[3][0] == "at" and alt[3][0] == "at" and alt[3][1] <= first[3][1]:
+            # Decision 27; with other deadlines the evaluator checks it at activation.
+            return self.reject("ELSE deadline not after the first deadline")
         self.top = ("else", first[1])
         return ["must_else", first[1], first[2], first[3], alt[1], alt[2], alt[3]]
 

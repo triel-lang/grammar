@@ -56,6 +56,46 @@ def test_classification_of_the_examples(monkeypatch):
     assert out == expected
 
 
+# --- the documents name only what the theories define ---------------------
+
+THEORY_DEF = re.compile(
+    r"(?:lemma|theorem|corollary|proposition|definition|fun|primrec|function|inductive|"
+    r"abbreviation|datatype|locale|type_synonym|lemmas|inductive_cases|class)\s+"
+    r"(?:\([^)]*\)\s*|'[a-z]+\s+)?([A-Za-z_][A-Za-z0-9_']*)")
+
+
+def theory_names():
+    names = set()
+    for f in (REPO / "formal/core").glob("*.thy"):
+        text = f.read_text(encoding="utf-8")
+        names.update(THEORY_DEF.findall(text))
+        names.update(re.findall(r"fixes\s+([a-z]\w*)", text))
+        names.update(re.findall(r"\n\s*and\s+([a-z]\w*)\s*::", text))
+        names.update(re.findall(r"\n\s*(?:\||and)?\s*([a-z]\w*)\s*:\s*\"", text))
+    return names
+
+
+# Lower-case words in backquotes in these documents that are not names of the theories:
+# HOL and Isabelle names, files and tools, and words of the examples.
+NOT_THEORY_NAMES = {"filter", "find", "fmap", "export_code", "sorry", "oops", "lualatex",
+                    "build.log", "false", "age", "pay", "num"}
+
+
+@pytest.mark.parametrize("doc", ["formal/core/CORE.md", "FOUNDATIONS.md"])
+def test_documents_cite_defined_names(doc):
+    """Every lower-case identifier of two or more letters in backquotes, such as
+    `run_noninterference` or `interleaving.total_and`, is a theorem, definition, type
+    or parameter of the theories in formal/core, or a rule of the grammar: the
+    documents cannot cite a theorem that is not there."""
+    names = theory_names() | set(RULES)
+    text = re.sub(r"```.*?```", "", (REPO / doc).read_text(encoding="utf-8"), flags=re.S)
+    cited = {w for w in re.findall(r"`([^`\n]+)`", text)
+             if re.fullmatch(r"[a-z][A-Za-z0-9_]+(\.[a-z][A-Za-z0-9_]*)?", w)}
+    missing = sorted(w for w in cited
+                     if w.split(".")[-1] not in names and w not in NOT_THEORY_NAMES)
+    assert missing == []
+
+
 # --- translation rules ----------------------------------------------------
 
 def test_boolean_factor_as_condition_is_visible():
@@ -269,6 +309,8 @@ def test_until_is_a_syntax_error():
     ('a MUST b WITHIN 2 DAYS ELSE a MUST c BY DATETIME("2026-03-20T00:00:00Z")',
      '(must_else "a" "b" (after 172800) "a" "c" (at 1773964800))'),
     ("a MUST b WITHIN 2 DAYS ELSE a MUST c", '(must_else "a" "b" (after 172800) "a" "c" (none))'),
+    ('a MUST b WITHIN DATETIME("2026-03-20T00:00:00Z") ELSE a MUST c BY DATETIME("2026-03-20T00:00:01Z")',
+     '(must_else "a" "b" (at 1773964800) "a" "c" (at 1773964801))'),
 ])
 def test_within_else(terms, expected):
     assert f"(terms {expected})" in core(spec(terms=terms))
@@ -282,6 +324,10 @@ def test_within_else(terms, expected):
     ("a MAY b WITHIN 2 DAYS ELSE a MUST c", "WITHIN (non-obligation)"),
     ("a MUST b WITHIN 2 DAYS ELSE a MUST c; a ON_BREACH NOTIFY b2", "ON_BREACH bound to WITHIN ... ELSE"),
     ("d := a MUST b WITHIN 2 DAYS ELSE a MUST c; a MAY e THEN REF d", "REF to a term with a deadline"),
+    ('a MUST b WITHIN DATETIME("2026-03-20T00:00:00Z") ELSE a MUST c BY DATETIME("2026-03-19T00:00:00Z")',
+     "ELSE deadline not after the first deadline"),
+    ('a MUST b WITHIN DATETIME("2026-03-20T00:00:00Z") ELSE a MUST c BY DATETIME("2026-03-20T00:00:00Z")',
+     "ELSE deadline not after the first deadline"),
 ])
 def test_within_else_rejections(terms, why):
     assert rejected(spec(terms=terms)) == [why]
