@@ -1,9 +1,9 @@
 (* =========================================================================
-   TRIEL v2.4 EBNF Grammar — Normative Specification (PUBLIC / OPEN-SOURCE)
+   TRIEL v2.5 EBNF Grammar — Normative Specification (PUBLIC / OPEN-SOURCE)
    Core Language Edition
    Author: Dmitri Chistyakov
    © 2026 Dmitri Chistyakov.
-   License: Open Web Foundation Agreement 1.0 (OWFa 1.0)
+   License: see LICENSE.md
    =========================================================================
 *)
 
@@ -221,9 +221,9 @@ breach_action      ::= "PENALTY" expr ["CAP" literal]
                      | "ESCALATE_TO" identifier
 
 (* NOTE ON PENALTY (C-16): expr still evaluates to a bare number — there
-   is no dedicated monetary type in v2.4, and fixing that fully (exact
-   decimal arithmetic, currency-typed values) is future work. Two things
-   ARE fixed here: (1) CAP literal sets a hard upper bound on the
+   is no dedicated monetary type in v2.5, and currency-typed values are
+   future work; numbers themselves are exact (§11, NOTE ON NUMBERS). Two
+   things ARE fixed here: (1) CAP literal sets a hard upper bound on the
    computed amount, closing the "no upper bound" half of C-16; (2) a
    semantic-analysis rule (see SEMANTIC RULES below) requires CURRENCY
    to be declared (§2) whenever any breach_action in the specification
@@ -267,8 +267,9 @@ stale_action       ::= "BLOCK"
                      | "ESCALATE_TO" identifier
 
 (* NOTE ON ORACLE TRUST (C-15): a factor's MAX_AGE says how old data is
-   allowed to get before it counts as stale, but v2.4 published no
-   grammar for what happens AT that point — this closes that gap.
+   allowed to get before it counts as stale, but v2.4 as first
+   published had no grammar for what happens AT that point — this
+   closes that gap.
    BLOCK treats the factor as absent once it is stale: an expression
    that cannot be decided without it evaluates to undefined, and the
    term depending on it waits for fresh data, while an expression
@@ -614,8 +615,8 @@ presence_expr      ::= "PRESENT" "(" factor_ref ")"
 default_expr       ::= "DEFAULT" "(" factor_ref "," expr ")"
 
 (* NOTE ON MISSING VALUES (D-29): Optional<T> (§6) had no operators —
-   nothing in v2.4 could ask whether an Optional factor holds a value,
-   or supply a fallback when it doesn't, so an invariant reading one
+   nothing in v2.4 as first published could ask whether an Optional
+   factor holds a value, or supply a fallback when it doesn't, so an invariant reading one
    was undefined the moment the factor was empty. PRESENT(f) evaluates
    to a Boolean: true if factor f currently holds a value, false if it
    is an empty Optional<T> OR has gone stale under its ON_STALE rule
@@ -861,7 +862,7 @@ hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
 
    =========================================================================
 
-   ZK CRYPTOGRAPHIC PARAMETERIZATION AND BINDING (v2.4, B-10/B-11/B-12)
+   ZK CRYPTOGRAPHIC PARAMETERIZATION AND BINDING (v2.5, B-10/B-11/B-12)
 
    PROOF_SYSTEM and CURVE (declaration_block, §2) are optional in the
    grammar but REQUIRED at semantic analysis whenever a specification's
@@ -888,7 +889,7 @@ hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
 
    =========================================================================
 
-   ORACLE TRUST, MONETARY VALUES, AND MISSING DATA (v2.4, C-15/C-16/D-29)
+   ORACLE TRUST, MONETARY VALUES, AND MISSING DATA (v2.5, C-15/C-16/D-29)
 
    ON_STALE (factor_decl, §5) is optional in the grammar but REQUIRED
    at semantic analysis whenever the same factor declares MAX_AGE: a
@@ -934,7 +935,7 @@ hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
 
    =========================================================================
 
-   IMPORT, EXECUTE, AND REPLACES CONTENT PINNING (v2.4, C-18)
+   IMPORT, EXECUTE, AND REPLACES CONTENT PINNING (v2.5, C-18)
 
    HASH (import_decl §2, contract_ref_stmt §4, and REPLACES §2) is
    optional in the grammar but REQUIRED at semantic analysis wherever
@@ -1049,7 +1050,7 @@ hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
    -- Modality names are placeholders here and are resolved by the
    -- compiler. The grammar accepts any identifier in this position.
 
-   Example 6: REPLACES for version chaining (v2.4, syntax updated for C-18)
+   Example 6: REPLACES for version chaining (v2.4; syntax updated in v2.5 for C-18)
    -----------------------------------------------------------
    SPECIFICATION project_task_distribution VERSION 2.0.0
        REPLACES project_task_distribution 1.0.0

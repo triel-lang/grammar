@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Translator from TRIEL v2.4 to the formal core of formal/core (TRIEL_Exec.thy).
+Translator from TRIEL v2.5 to the formal core of formal/core (TRIEL_Exec.thy).
 
 The input is parsed with the reference grammar parser/triel.lark. Every
 construct of the specification is either translated into the core, listed as

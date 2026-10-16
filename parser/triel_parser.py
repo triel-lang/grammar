@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Reference parser for TRIEL v2.4, built from the published EBNF
-(TRIEL-grammar-v2_4-core.ebnf, github.com/triel-lang/grammar).
+Reference parser for TRIEL v2.5, built from the published EBNF
+(TRIEL-grammar-v2_5-core.ebnf, github.com/triel-lang/grammar).
 
 Usage:
     python3 triel_parser.py FILE.triel [FILE2.triel ...]
@@ -84,7 +84,7 @@ def main() -> int:
 
     if not all_ok:
         print("\nOne or more files did not parse against "
-              "TRIEL-grammar-v2_4-core.ebnf.")
+              "TRIEL-grammar-v2_5-core.ebnf.")
         return 1
     print(f"\nAll {len(args.files)} file(s) parsed successfully.")
     return 0

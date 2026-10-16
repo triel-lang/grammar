@@ -1,6 +1,6 @@
 // ============================================================================
-// TRIEL v2.4 — Lark grammar, the reference parser for
-// TRIEL-grammar-v2_4-core.ebnf (github.com/triel-lang/grammar).
+// TRIEL v2.5 — Lark grammar, the reference parser for
+// TRIEL-grammar-v2_5-core.ebnf (github.com/triel-lang/grammar).
 //
 // This file and the normative EBNF are maintained as a pair. Any divergence
 // between them is a defect in this file, not a local variation: the EBNF is

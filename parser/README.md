@@ -1,7 +1,7 @@
 # TRIEL reference parser
 
-A reference parser for TRIEL v2.4, built from the published grammar
-(`TRIEL-grammar-v2_4-core.ebnf`) using [Lark](https://github.com/lark-parser/lark)
+A reference parser for TRIEL v2.5, built from the published grammar
+(`TRIEL-grammar-v2_5-core.ebnf`) using [Lark](https://github.com/lark-parser/lark)
 (Earley, dynamic lexer).
 
 ## What this is
