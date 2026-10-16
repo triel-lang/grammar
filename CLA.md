@@ -2,7 +2,7 @@
 
 Version 1.0, October 16, 2026
 
-This agreement is between you, the person or entity that submits a Contribution, and Dmitri Chistyakov (the "Maintainer"), the rights holder of the TRIEL repository at https://github.com/triel-lang/grammar (the "Repository"). It applies to every Contribution you submit to the Repository, now or later.
+This agreement is between you, the person or entity that submits a Contribution, and Dmitri Chistyakov, the rights holder of the TRIEL repository at https://github.com/triel-lang/grammar (the "Repository"), together with any successor or assignee of the rights under this agreement (together, the "Maintainer"). The Maintainer may assign this agreement and the rights granted under it. It applies to every Contribution you submit to the Repository, now or later.
 
 ## 1. Definitions
 

@@ -38,7 +38,9 @@ Copyright 2026 Dmitri Chistyakov.
 
 ## 3. Other files
 
-All other files, including `README.md`, `RELATED_WORK.md`, `FOUNDATIONS.md` and `TRIEL-grammar-v2.3.3-core.ebnf` (an earlier grammar kept for reference), are not licensed under this file. © 2026 Dmitri Chistyakov.
+`TRIEL-grammar-v2.3.3-core.ebnf`, an earlier grammar kept for reference, keeps the terms stated in its own header.
+
+All other files, including `README.md`, `RELATED_WORK.md` and `FOUNDATIONS.md`, are not licensed under this file. © 2026 Dmitri Chistyakov.
 
 ## 4. Patents and trademarks
 
