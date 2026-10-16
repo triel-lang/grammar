@@ -926,8 +926,11 @@ hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
    Optional<T> factor needs a fallback to be well-formed — omitting
    them is only a problem if the specification's INVARIANTS block goes
    on to read that factor's value directly without one, which is a
-   type-checking concern for the same future analysis pass already
-   noted for the information-flow rule of TECHNICAL_REPORT.md §2.7.
+   type-checking concern for semantic analysis, like the
+   information-flow rule of TECHNICAL_REPORT.md §2.7. The translator to
+   the formal core (TECHNICAL_REPORT.md §4) accepts such a read: where
+   the factor has no value, the read is undefined, never a silent
+   default.
 
    =========================================================================
 
