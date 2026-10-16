@@ -4,13 +4,13 @@
 [![Isabelle build of formal/core](https://github.com/triel-lang/grammar/actions/workflows/isabelle.yml/badge.svg)](https://github.com/triel-lang/grammar/actions/workflows/isabelle.yml)
 [![Evaluator exported from formal/core](https://github.com/triel-lang/grammar/actions/workflows/evaluator.yml/badge.svg)](https://github.com/triel-lang/grammar/actions/workflows/evaluator.yml)
 
-An open specification language for deterministic, verifiable compilation.
+An open specification language for rules with one precise, checkable meaning.
 
 Website: https://triel.dev
 
 Interactive demo: https://triel.ai (illustrative examples, not a live compiler)
 
-TRIEL is designed so that a single, human-readable specification can compile deterministically into multiple downstream artifacts — including executable code, formal proofs, and structured documentation — from one authoritative source. This repository contains the language definition; no compiler is published here (see `TECHNICAL_REPORT.md` §4).
+A TRIEL specification states who must, may or must not do what, by when, on which data, and what follows a breach. Its meaning is defined precisely: for the fragment covered by the formal core, the verdict of every obligation on a finite trace of events is computed mechanically. This repository contains the language definition and its formal core. Compilers are not part of this repository or of the specification (see `LICENSE.md` and `TECHNICAL_REPORT.md` §4).
 
 ## The problem
 
@@ -18,7 +18,7 @@ Software specifications and their implementations tend to drift apart over time.
 
 ## The approach
 
-TRIEL treats specification-to-implementation translation as the point where correctness evidence should be generated — not recovered afterward through separate testing or review.
+TRIEL gives the rules one authoritative meaning that a machine can check, so that an implementation and an audit are checked against the same text rather than against separate readings of it.
 
 ## Status
 
