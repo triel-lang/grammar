@@ -1,0 +1,8 @@
+TRIEL open code: formal core, evaluator, parser, examples and CI
+Copyright 2026 Dmitri Chistyakov
+
+This product includes software from https://github.com/triel-lang/grammar,
+licensed under the Apache License, Version 2.0 (see LICENSE-APACHE).
+
+The TRIEL Language Specification files in the same repository are licensed
+separately under OWFa 1.0; see LICENSE.md.
