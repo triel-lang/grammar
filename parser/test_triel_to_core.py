@@ -524,6 +524,8 @@ def test_heuristic_layer_is_metadata():
     ("a MUST b WITHIN 1 DAYS; a ON_BREACH ESCALATE_TO x", "f : Boolean METADATA",
      "undeclared subject"),
     ("a MUST b", "f : Boolean METADATA SOURCE x", "undeclared subject"),
+    ("a MUST pay(b2)", "f : Boolean METADATA, b2 : Integer METADATA",
+     "subject and factor with the same name"),
 ])
 def test_declarations(terms, factors, why):
     assert rejected(spec(terms=terms, factors=factors)) == [why]

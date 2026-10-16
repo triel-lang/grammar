@@ -65,8 +65,9 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
     the DID of a subject, and the POLARITY, THRESHOLD, SOURCE and
     SENSITIVITY_BOUND of each factor are metadata: they are printed and have no
     semantics in the core. CAUSED_BY is rejected. A subject or a factor declared
-    twice is rejected, and so is an undeclared subject of a term, a handler,
-    NOTIFY, ESCALATE_TO or SOURCE. By the rules of
+    twice is rejected, and so are a subject and a factor with the same name and
+    an undeclared subject of a term, a handler, NOTIFY, ESCALATE_TO or SOURCE.
+    By the rules of
     TECHNICAL_REPORT.md section 2.9, a factor whose SOURCE is an ORACLE
     requires PROVENANCE_REQUIRED: true, and a PENALTY requires CURRENCY.
   * A ZK<T> factor is a factor of type T; Hash and Address are strings. Without
@@ -425,6 +426,8 @@ class Translation:
             self.hidden.add(name)
         if name in self.factors:
             self.reject("duplicate factor")
+        if name in self.subject_names:
+            self.reject("subject and factor with the same name")
         self.factors[name] = ty
         toks = tokens(t)
         if "CAUSED_BY" in toks:
