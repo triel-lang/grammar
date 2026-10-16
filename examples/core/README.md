@@ -13,7 +13,7 @@ The ten specifications in this folder use only constructs that the translator `p
 - `core_commitment.triel`: `EVENTUALLY … WITHIN` a duration and a factor (true at the deadline, false past it, undefined on missing data, rejected activation), and `POLARITY`, `THRESHOLD` and `SENSITIVITY_BOUND` printed as metadata;
 - `core_hidden.triel`: a hidden `ZK<Integer>` factor, named as an action argument and never read, a `ZK<String>` factor `WITHOUT REVEALING ALL` read like an ordinary factor, and `PROOF_SYSTEM`, `CURVE`, `DID`, `PROVES`, `HASH` with a salt and `BOUND_TO` printed as metadata.
 
-The scenario `age_verification_breach` runs `examples/age_verification.triel`, whose hidden `age` factor is accepted since stage 14.
+The scenario `age_verification_breach` runs `examples/age_verification.triel`, whose hidden `age` factor the core accepts.
 
 The evaluator exported from Isabelle runs them on the scenarios in `scenarios/`.
 
