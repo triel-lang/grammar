@@ -4,7 +4,7 @@ The comparison of TRIEL with related languages is in `TECHNICAL_REPORT.md` §3: 
 
 This file adds a related line of research on information release in secure multiparty computation (MPC).
 
-**Declassification in MPC.** In practical MPC deployments, the logic that decides which data may be released is often hand-coded in a specific deployment. *Language-Based Security for Low-Level MPC* (Bogdanov et al., 2024) formalizes noninterference and declassification for low-level MPC code. TRIEL works at the level of the specification: conditions, obligations and deadlines are stated there, and the information-flow rule for zero-knowledge factors (`TECHNICAL_REPORT.md` §2.7) is checked on the specification itself. TRIEL does not define how such a specification is implemented.
+**Declassification in MPC.** In practical MPC deployments, the logic that decides which data may be released is often hand-coded in a specific deployment. *Language-Based Security for Low-Level MPC* (Bogdanov et al., 2024) formalizes noninterference and declassification for low-level MPC code. TRIEL works at the level of the specification: conditions, obligations and deadlines are stated there, and the information-flow rule for hidden zero-knowledge factors (`TECHNICAL_REPORT.md` §2.7) is checked on the specification by the translator to the formal core, for the constructs it accepts. TRIEL does not define how such a specification is implemented.
 
 ## References
 
