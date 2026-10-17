@@ -30,24 +30,36 @@ and prints a summary whose numbers are all computed by the run.
 - x86-64 Linux host (or any Docker host that runs `linux/amd64` images) with
   Docker 20.10 or later.
 - CPU: 4 cores recommended; Isabelle uses up to 4 threads.
-- Memory: 8 GB. Peak resident memory of a run, measured as the sum of the
-  resident set sizes of all processes in the container: about 6.5 GB, during
-  the Isabelle build. The measured run had a limit of 8 GB (`--memory=8g`).
-- Disk: about 10 GB for the image (3.1 GB compressed download), plus 1 GB
-  for a run.
-- Network: only to build the image (base images and Python wheels). Running
-  the image needs no network.
+- Memory: 8 GB. The memory peak is the clean Isabelle build of `TRIEL_Core`
+  with 4 threads (Poly/ML and the Isabelle/Scala process): the sum of the
+  resident set sizes of the processes in the container reached 7.5 GiB. With
+  the container limited to 8 GiB (`--memory=8g`) the run passes; at 6 GiB the
+  Isabelle build is killed for lack of memory. All other steps stay below
+  2 GiB.
+- Disk: 10 GB for the image (3.1 GB compressed download, the same size for
+  `docker save | gzip`), and about 0.2 GB inside the container for a run.
+- Network: only to build the image (base images, Ubuntu packages and Python
+  wheels). Running the image needs no network; the measured run used
+  `--network none`.
 
-Measured on a 4-core x86-64 virtual machine with 16 GB of memory:
+Measured on a 4-core x86-64 virtual machine with 16 GB of memory, with the
+container limited to 8 GiB:
 
 | Phase | Time |
 |---|---|
-| Download of the base images | 2 min |
-| Image build (`docker build`) | 3 min |
-| `run.sh`, all steps | 13 min |
-| of which: Isabelle build of `TRIEL_Core` (clean) | 1.5 min |
-| of which: translator and driver tests (pytest) | 7 min |
+| Download of the two base images | 2 min |
+| Image build (`docker build`), without cache | 3 min |
+| `run.sh`, all 10 steps | 16 min |
+| of which: clean Isabelle build of `TRIEL_Core` | 2 min |
 | of which: 35 scenarios | 2.5 min |
+| of which: translator and driver tests (pytest) | 6.5 min |
+| of which: parsing of the 25 examples with the ambiguity check | 3.5 min |
+| of which: ambiguity regression tests | 2 min |
+| of which: session `TRIEL_Paper` (on the heap of `TRIEL_Core`) | 11 s |
+
+On a GitHub-hosted runner (`ubuntu-latest`, workflow
+`.github/workflows/artifact.yml`) the image builds in 1.5 min, base images
+included, and `run.sh` takes 10 min.
 
 ## Running
 
@@ -81,6 +93,9 @@ paper theorems found, without oracles        34 of 34
 scenarios matching .expected                 35 of 35
 examples accepted by the core                23 of 25
 translator and driver tests (pytest)         243 passed in ...
+examples parsed with one derivation          25 of 25
+ambiguity regression checks passed           234
+wall-clock time                              ...
 ...
 RESULT: all 10 steps passed
 ```
@@ -190,8 +205,8 @@ docker load < triel-artifact.tar.gz                           # on the offline m
 docker run --rm --network none triel-artifact
 ```
 
-The compressed file is about 3.1 GB. `--network none` shows that the run uses
-no network.
+The compressed file is about 3.1 GB. With `--network none` the container has
+no network at all; the run passes.
 
 ## Versions
 
