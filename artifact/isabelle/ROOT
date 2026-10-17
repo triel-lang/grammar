@@ -1,0 +1,15 @@
+(* The theorems cited in the paper, listed by name. Built on top of the session
+   TRIEL_Core of formal/core, which is not changed:
+
+     isabelle build -e -d ../../formal/core -D .
+
+   -e writes the statements of the theorems to output/paper_theorems.txt.
+
+   The build fails if one of the names no longer denotes a theorem of TRIEL_Core,
+   or if one of the theorems depends on an oracle (an unfinished proof is one). *)
+
+session TRIEL_Paper = TRIEL_Core +
+  options [document = false]
+  theories
+    Paper_Theorems
+  export_files (in "output") [1] "*:paper_theorems.txt"
