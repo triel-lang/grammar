@@ -59,7 +59,7 @@ container limited to 8 GiB:
 
 On a GitHub-hosted runner (`ubuntu-latest`, workflow
 `.github/workflows/artifact.yml`) the image builds in 1.5 min, base images
-included, and `run.sh` takes 10 min.
+included, and `run.sh` took 10 min in one run and 16.5 min in another.
 
 ## Running
 
