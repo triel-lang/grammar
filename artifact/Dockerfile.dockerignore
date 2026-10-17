@@ -1,0 +1,7 @@
+# Build context: the repository root (docker build -f artifact/Dockerfile .).
+.git
+**/__pycache__
+**/*.pyc
+evaluator/triel-eval
+evaluator/build
+formal/core/output
