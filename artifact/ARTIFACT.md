@@ -225,7 +225,10 @@ from the Ubuntu 24.04 archive at build time and are not pinned.
 ## Anonymous archive
 
 `artifact/anonymize.sh WORDS_FILE [OUTPUT.tar.gz]` writes a source archive of
-the current commit for double-blind review, without `.git`, the contributor
-license agreement and its workflow, and with every word listed in `WORDS_FILE`
-replaced. It fails, and writes nothing, if any listed word is left in a file
-or a file name. The list of words is kept outside the repository.
+the current commit for double-blind review. It leaves out `.git`, the
+contributor license agreement with its workflow, and the script itself. Every
+word listed in `WORDS_FILE` is replaced, and so are the address of the
+repository and of the project's sites, which are built in. The name of the
+language is kept. The script fails, and writes nothing, if any of these words
+is left in a file or a file name. The list of words is kept outside the
+repository.

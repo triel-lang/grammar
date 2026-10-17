@@ -9,14 +9,19 @@
 #   word                  replaced by ANONYMOUS
 #   word => replacement   replaced by the given text
 #
-# Blank lines and lines starting with # are ignored. Matching is case-insensitive
-# and longer words are replaced first. WORDS_FILE must be outside the repository,
-# so that it is never committed.
+# Blank lines and lines starting with # are ignored. WORDS_FILE must be outside
+# the repository, so that it is never committed.
+#
+# Besides the words of WORDS_FILE, the address of the repository and of the
+# project's sites are always replaced by ANONYMIZED: github.com/triel-lang/grammar,
+# triel-lang, triel.dev and triel.ai. The name of the language, TRIEL, is kept.
+# Matching is case-insensitive and longer words are replaced first.
 #
 # The archive holds the files of the commit HEAD (or of $REF), without .git,
-# CLA.md, the signatures directory and .github/workflows/cla.yml. Tar owner names
+# CLA.md, the signatures directory, .github/workflows/cla.yml and this script
+# (which names the built-in words). Tar owner names
 # and timestamps are fixed, so they reveal nothing. The script fails, and writes
-# no archive, if any listed word is still found in a file or a file name, in
+# no archive, if any of these words is still found in a file or a file name, in
 # text or binary files.
 
 set -euo pipefail
@@ -36,14 +41,28 @@ case "$WORDS/" in
   "$REPO"/*) echo "error: the words file must be outside the repository" >&2; exit 2 ;;
 esac
 
-# The words and their replacements, longest word first.
-mapfile -t ENTRIES < <(
+# The words of WORDS_FILE as "word => replacement" lines.
+mapfile -t LISTED < <(
   sed -e 's/\r$//' -e '/^[[:space:]]*\(#\|$\)/d' "$WORDS" | awk '
     { i = index($0, "=>")
       if (i) { w = substr($0, 1, i - 1); r = substr($0, i + 2) } else { w = $0; r = "ANONYMOUS" }
       gsub(/^[ \t]+|[ \t]+$/, "", w); gsub(/^[ \t]+|[ \t]+$/, "", r)
-      if (w != "") print length(w) "\t" w "\t" r }' | sort -t "$(printf '\t')" -k1,1nr | cut -f2-)
-[ ${#ENTRIES[@]} -gt 0 ] || { echo "error: $WORDS lists no words" >&2; exit 2; }
+      if (w != "") print w " => " r }')
+[ ${#LISTED[@]} -gt 0 ] || { echo "error: $WORDS lists no words" >&2; exit 2; }
+
+# The repository and the sites of the project, replaced in every archive.
+BUILTIN=(
+  "github.com/triel-lang/grammar => ANONYMIZED"
+  "triel-lang => ANONYMIZED"
+  "triel.dev => ANONYMIZED"
+  "triel.ai => ANONYMIZED"
+)
+
+# All words as "word<TAB>replacement", longest word first.
+mapfile -t ENTRIES < <(
+  printf '%s\n' "${LISTED[@]}" "${BUILTIN[@]}" | awk '
+    { i = index($0, " => "); w = substr($0, 1, i - 1); r = substr($0, i + 4)
+      print length(w) "\t" w "\t" r }' | sort -t "$(printf '\t')" -k1,1nr | cut -f2-)
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -51,7 +70,7 @@ TREE="$TMP/triel"
 mkdir "$TREE"
 
 git -C "$REPO" archive --format=tar "$REF" | tar -C "$TREE" -xf -
-rm -rf "$TREE/CLA.md" "$TREE/signatures" "$TREE/.github/workflows/cla.yml"
+rm -rf "$TREE/CLA.md" "$TREE/signatures" "$TREE/.github/workflows/cla.yml" "$TREE/artifact/anonymize.sh"
 
 # Replace in every text file. The words and replacements are passed through the
 # environment, so no character in them is interpreted by the shell or by Perl.
@@ -82,4 +101,5 @@ fi
 
 tar -C "$TMP" --sort=name --mtime='2000-01-01 00:00:00Z' --owner=0 --group=0 --numeric-owner \
     -cf - triel | gzip -n > "$OUT"
-echo "anonymous archive: $OUT ($(tar -tzf "$OUT" | grep -vc '/$') files, ${#ENTRIES[@]} words checked)"
+echo "anonymous archive: $OUT ($(tar -tzf "$OUT" | grep -vc '/$') files, ${#ENTRIES[@]} words checked:" \
+     "${#LISTED[@]} from $(basename "$WORDS"), ${#BUILTIN[@]} built in)"
