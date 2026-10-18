@@ -8,9 +8,9 @@ An open specification language for rules with one precise, checkable meaning.
 
 Website: https://triel.dev
 
-Interactive demo: https://triel.ai (illustrative examples, not a live compiler)
+Interactive demo: https://triel.ai (illustrative examples only)
 
-A TRIEL specification states who must, may or must not do what, by when, on which data, and what follows a breach. Its meaning is defined precisely: for the fragment covered by the formal core, the verdict of every obligation on a finite trace of events is computed mechanically. This repository contains the language definition and its formal core. Compilers are not part of this repository or of the specification (see `LICENSE.md`, section 1).
+A TRIEL specification states who must, may or must not do what, by when, on which data, and what follows a breach. Its meaning is defined precisely: for the fragment covered by the formal core, the verdict of every obligation on a finite trace of events is computed mechanically. This repository contains the language and its machine-checked core; `TECHNICAL_REPORT.md` §4 states its scope.
 
 ## The problem
 
