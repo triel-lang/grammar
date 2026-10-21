@@ -1,0 +1,23 @@
+; Alice pays while flag is false, flag becomes true at entry 2, Alice refunds,
+; then Bob leaks. In the first term the payment at entry 1 completes the first
+; part, so a reading of that prefix has reached the prohibition, and only a
+; violation can end the observation: the refund at entry 3 completes the
+; interrupted reading but does not end it, and the leak is a violation at
+; entry 4 (formal/core/CORE.md, decision 34). In the second term the payment
+; completes the term at entry 1 before any reading reaches the prohibition of
+; the handler, so its status is DONE at entry 1, although the whole trace is a
+; violated trace in the reading where the guard interrupts the obligation: a
+; violation is missed only after such a completion. In the third and the
+; fourth term a branch of OR is a prohibition, and the leak is a violation.
+(scenario readings_guard_after_pay
+  (spec "examples/core/core_readings.triel")
+  (entry "2026-06-01T00:00:00Z" (activate)
+    (data (flag (bool false))))
+  (entry "2026-06-01T01:00:00Z" (act alice pay must)
+    (data (flag (bool false))))
+  (entry "2026-06-01T02:00:00Z" (tick)
+    (data (flag (bool true))))
+  (entry "2026-06-01T03:00:00Z" (act alice refund must)
+    (data (flag (bool true))))
+  (entry "2026-06-01T04:00:00Z" (act bob leak must_not)
+    (data (flag (bool true)))))

@@ -1,0 +1,13 @@
+; flag becomes true at the entry of the payment. The prefix up to the payment
+; has two readings for the second term: the obligation completed before the
+; guard fires (Done, by an executed action), and the guard interrupting it,
+; with the handler bob MUST_NOT leak reached (Interrupted). One reading has
+; reached a prohibition, so the status is conservative and stays OPEN
+; (formal/core/CORE.md, decision 34). The other terms also reach a prohibition
+; when Alice pays and stay OPEN while nothing violates it.
+(scenario readings_guard_at_pay
+  (spec "examples/core/core_readings.triel")
+  (entry "2026-06-01T00:00:00Z" (activate)
+    (data (flag (bool false))))
+  (entry "2026-06-01T01:00:00Z" (act alice pay must)
+    (data (flag (bool true)))))

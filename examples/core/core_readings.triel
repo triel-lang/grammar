@@ -1,0 +1,32 @@
+-- TRIEL example inside the formal core: composite terms whose prefixes have
+-- several readings. The denotation of an obligation does not fix which of its
+-- actions discharges it, and the guard of UNLESS may fire at the entry of the
+-- action itself, so one prefix can be a trace on which the term is completed by
+-- an executed action and, in another reading, a trace on which it has reached a
+-- prohibition. The status is conservative: once a reading of a prefix has
+-- reached a prohibition as the last element of the term, only a violation ends
+-- the observation (errata 2.5.1). Every construct in this file is translated
+-- into the Isabelle/HOL core (formal/core) and evaluated by the exported
+-- evaluator (evaluator/).
+
+SPECIFICATION core_readings VERSION 1.0.0
+
+SUBJECTS {
+  alice : PARTY,
+  bob   : PARTY
+}
+
+TERMS {
+  (alice MUST pay UNLESS flag DO alice MUST refund) THEN bob MUST_NOT leak;
+  alice MUST pay UNLESS flag DO bob MUST_NOT leak;
+  alice MUST pay THEN (bob MUST_NOT leak OR alice MAY ship);
+  alice MUST pay OR bob MUST_NOT leak
+}
+
+FACTORS {
+  flag : Boolean METADATA SOURCE alice
+}
+
+INVARIANTS {
+  flag_known : LIVENESS : EVENTUALLY(PRESENT(flag))
+}
