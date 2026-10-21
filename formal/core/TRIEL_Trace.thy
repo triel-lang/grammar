@@ -114,9 +114,11 @@ definition forbidden :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_orde
      1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> eval c (st \<pi> (j - 1)) = Some True"
 
 text \<open>A prohibition completes at once, with the one-entry trace and outcome Done, so it never
-  holds up what follows it. It is violated by a trace that ends with its first forbidden
-  action: the prohibition is in force from the entry where it is reached to the end of the
-  trace, as \<open>pr_verdict\<close> watches a top-level prohibition from activation on.\<close>
+  holds up what follows it. Its violated traces are those that end with its first forbidden
+  action, however late: as \<open>pr_verdict\<close> watches a top-level prohibition from activation on,
+  the violated traces of a prohibition are its breached traces cut at the breach. Because it
+  also completes at once, a term that continues after it does not watch its action: in
+  \<open>MUST_NOT a THEN t\<close> the traces of \<open>t\<close> may contain \<open>a\<close>.\<close>
 
 definition mustnot_d :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) den" where
   "mustnot_d s a c =

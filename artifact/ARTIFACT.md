@@ -14,7 +14,7 @@ behind the paper. It contains:
   prints the report.
 - `parser/`: the reference parser of TRIEL 2.5, and the translator
   `parser/triel_to_core.py` from TRIEL specifications to terms of the core.
-- `examples/`: 26 TRIEL specifications and 40 scenarios (implementation traces
+- `examples/`: 26 TRIEL specifications and 41 scenarios (implementation traces
   with hand-written expected reports).
 - `artifact/`: the Docker image (`Dockerfile`), the script that runs every check
   (`run.sh`), and the Isabelle session `TRIEL_Paper`
@@ -88,16 +88,17 @@ Expected end of the output:
 ```
 === Summary
 theories checked by Isabelle (TRIEL_Core)    12 (.thy files in formal/core: 12)
-proved statements (lemma/theorem/corollary)  563
-paper theorems found, without oracles        34 of 34
-scenarios matching .expected                 35 of 35
-examples accepted by the core                23 of 25
-translator and driver tests (pytest)         243 passed in ...
-examples parsed with one derivation          25 of 25
-ambiguity regression checks passed           234
+proved statements (lemma/theorem/corollary)  586
+paper theorems found, without oracles        41 of 41
+scenarios matching .expected                 41 of 41
+examples accepted by the core                24 of 26
+translator and driver tests (pytest)         292 passed in ...
+examples parsed with one derivation          26 of 26
+ambiguity regression checks passed           235
+document excerpts conforming to the grammar  15
 wall-clock time                              ...
 ...
-RESULT: all 10 steps passed
+RESULT: all 11 steps passed
 ```
 
 For a shell in the image, with Isabelle, GHC and Python on the `PATH`:
@@ -143,7 +144,7 @@ variables `?x`.
 |---|---|---|
 | The core is machine-checked: 12 theories, 586 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `12 (.thy files in formal/core: 12)`, `586`; `no sorry, oops or axiomatization ...` |
 | The evaluator is the code exported from the checked theories | `cat results/03-exported-code.log` | `evaluator/generated is the exported code` |
-| The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `40` |
+| The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `41` |
 | 24 of the 26 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `24`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
 | Every cited theorem exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 41` |
 | Finality of verdicts: on a trace (times that do not decrease) a definite verdict of an obligation, a prohibition or an invariant does not change when the trace is extended; the evaluator rejects a list of observations whose times decrease, so for `run` a decided line stays the same when observations are appended, unless the longer list is rejected for its time order or its types. A property of the design | `grep -A1 -E '\.(ob_verdict_final\|pr_verdict_final\|inv_final\|run_final\|time_order_rejected)$' results/paper_theorems.txt` | `TRIEL_Breach.ob_verdict_final`, `TRIEL_Breach.pr_verdict_final`, `TRIEL_Invariants.inv_final`, `TRIEL_Exec.run_final`, `TRIEL_Exec.time_order_rejected`, each with its statement, e.g. `inv_eval ?\<iota> ?\<pi> = Some ?b \<Longrightarrow> inv_eval ?\<iota> (?\<pi> @ ?\<rho>) = Some ?b` |
@@ -184,8 +185,8 @@ The results rest on the following, which are not proved here:
   specifications to terms of the core, written in Python. Nothing proves that it
   translates a specification into the core term with the intended meaning, or
   that it rejects exactly the constructs outside the core. It is checked only
-  by tests: the 291 tests of `parser/test_triel_to_core.py`, the classification
-  of the 26 examples, and the 40 scenarios. The same holds for
+  by tests: the 292 tests of `parser/test_triel_to_core.py`, the classification
+  of the 26 examples, and the 41 scenarios. The same holds for
   `parser/triel_eval.py`, which converts a scenario into the input of the
   evaluator, and for the grammar `parser/triel.lark` with the parser library
   lark 1.3.1.
