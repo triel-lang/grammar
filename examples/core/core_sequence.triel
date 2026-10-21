@@ -16,3 +16,11 @@ TERMS {
   alice MUST pay THEN bob MUST_NOT leak;
   alice MUST pay THEN alice MUST pay
 }
+
+FACTORS {
+  amount : Decimal METADATA SOURCE alice
+}
+
+INVARIANTS {
+  amount_known : LIVENESS : EVENTUALLY(PRESENT(amount))
+}
