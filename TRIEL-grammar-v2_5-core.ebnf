@@ -976,7 +976,8 @@ hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
    NOTE ON Progress<T> completion semantics (v2.4):
 
    Progress<T> desugars to:
-     Record { status: T, completion: Decimal CONSTRAINT(self >= 0.0 AND self <= 1.0) }
+     Record { status : T,
+              completion : Decimal CONSTRAINT(completion >= 0.0 AND completion <= 1.0) }
 
    If T resolves to the canonical status enum (NOT_STARTED, IN_PROGRESS,
    STABLE), the compiler's validation pass enforces:
@@ -1054,7 +1055,7 @@ hex_digit          ::= "0".."9" | "a".."f" | "A".."F"
    -----------------------------------------------------------
    SPECIFICATION project_task_distribution VERSION 2.0.0
        REPLACES project_task_distribution 1.0.0
-           HASH "sha256:4b6f...<64 hex digits>...c1a0"
+           HASH "sha256:f7f107e7d2ed5ca7bc9936fefe663b4bd28d0d849be5727b2b3ad44da7154991"
        JURISDICTION "INTERNAL"
 
    Example 7: EVENTUALLY with WITHIN deadline (v2.4)

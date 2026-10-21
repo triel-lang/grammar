@@ -25,6 +25,16 @@ section \<open>Finality of verdicts\<close>
 thm TRIEL_Breach.ob_verdict_final
 thm TRIEL_Breach.pr_verdict_final
 thm TRIEL_Invariants.inv_final
+thm TRIEL_Exec.run_final
+thm TRIEL_Exec.time_order_rejected
+
+section \<open>Actions and violations in composite terms\<close>
+
+thm TRIEL_Terms.term_semantics.must_then_must_two_actions
+thm TRIEL_Terms.term_semantics.violated_reachable
+thm TRIEL_Terms.term_semantics.then_mustnot_violated
+thm TRIEL_Breach.mustnot_violated_breach
+thm TRIEL_Breach.breach_mustnot_violated
 
 section \<open>Stability of verdicts and its limits\<close>
 
@@ -87,7 +97,11 @@ ML \<open>
 local
   val names =
    ["TRIEL_Breach.ob_verdict_final", "TRIEL_Breach.pr_verdict_final",
-    "TRIEL_Invariants.inv_final",
+    "TRIEL_Invariants.inv_final", "TRIEL_Exec.run_final", "TRIEL_Exec.time_order_rejected",
+    "TRIEL_Terms.term_semantics.must_then_must_two_actions",
+    "TRIEL_Terms.term_semantics.violated_reachable",
+    "TRIEL_Terms.term_semantics.then_mustnot_violated",
+    "TRIEL_Breach.mustnot_violated_breach", "TRIEL_Breach.breach_mustnot_violated",
     "TRIEL_Indicators.verdict_stable", "TRIEL_Indicators.verdict_stable_nd",
     "TRIEL_Indicators.cond_equitone", "TRIEL_Core.T3_present_not_monotone",
     "TRIEL_Indicators.Ex_breaks_stability", "TRIEL_Core.T3_default_not_monotone",

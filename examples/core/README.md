@@ -1,6 +1,6 @@
 # Examples inside the formal core
 
-The ten specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
+The eleven specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
 
 - `core_deadline_cure.triel`: a deadline, its breach, and a cure;
 - `core_unless_records.triel`: a sequence under UNLESS, with the guard read from a nested record;
@@ -11,13 +11,14 @@ The ten specifications in this folder use only constructs that the translator `p
 - `core_payment.triel`: actions with arguments, an obligation whose window opens with `FROM`, and penalties with arithmetic and `CAP`, computed in the state of the breach: capped, undefined and negative;
 - `core_fallback.triel`: `WITHIN … ELSE`, an obligation with a fallback that comes into force at the deadline instead of a breach;
 - `core_commitment.triel`: `EVENTUALLY … WITHIN` a duration and a factor (true at the deadline, false past it, undefined on missing data, rejected activation), and `POLARITY`, `THRESHOLD` and `SENSITIVITY_BOUND` printed as metadata;
+- `core_sequence.triel`: two obligations in sequence, which need two actions, and a prohibition inside a composite term, which its first forbidden action violates;
 - `core_hidden.triel`: a hidden `ZK<Integer>` factor, named as an action argument and never read, a `ZK<String>` factor `WITHOUT REVEALING ALL` read like an ordinary factor, and `PROOF_SYSTEM`, `CURVE`, `DID`, `PROVES`, `HASH` with a salt and `BOUND_TO` printed as metadata.
 
 The scenario `age_verification_breach` runs `examples/age_verification.triel`, whose hidden `age` factor the core accepts.
 
 The evaluator exported from Isabelle runs them on the scenarios in `scenarios/`.
 
-The expected outputs (`scenarios/*.expected`) and the expected classification of all examples (`classification.expected`) were written by hand from the text of the specifications. They were committed before the evaluator, so the evaluator is not checked against its own output.
+The expected outputs (`scenarios/*.expected`) and the expected classification of all examples (`classification.expected`) were written by hand from the text of the specifications. They were committed before the evaluator, so the evaluator is not checked against its own output. The scenarios added in version 2.5.1 (`sequence_*`, `deadline_cure_time_order`) were committed, with their expected outputs, before they were first run.
 
 ## Scenarios
 
@@ -30,20 +31,21 @@ A scenario is an implementation trace, written as an S-expression:
   ...)
 ```
 
-- `TIME` is an ISO-8601 time in UTC (`YYYY-MM-DDThh:mm:ssZ`). It is converted to seconds since 1970-01-01T00:00:00Z.
+- `PATH-TO-SPECIFICATION` is relative to the root of the repository.
+- `TIME` is an ISO-8601 time in UTC (`YYYY-MM-DDThh:mm:ssZ`, ASCII digits). It is converted to seconds since 1970-01-01T00:00:00Z. The driver does not reorder the entries or check their order: the evaluator does.
 - `EVENT` is one of:
   - `(activate)`: only for the first entry, the activation entry;
   - `(act SUBJECT ACTION POLARITY)`, where `POLARITY` is `must`, `may` or `must_not`, and `ACTION` is a name, or `(NAME ARG ...)` for an action with arguments; an argument is `(name X)`, the name of a subject or a factor (`X` may be a dotted path), or a `VALUE`;
   - `(arrive FACTOR)`;
   - `(tick)`.
-- `DATA` is `(data (FACTOR VALUE) ...)`: the complete data at that entry, as nominative data. A factor that is not listed is absent.
-- A `VALUE` is one of `(bool true)`, `(bool false)`, `(int N)`, `(dec D)`, `(str "...")`, `(time "TIME")` or `(record (FIELD VALUE) ...)`. `D` is a decimal literal such as `12.50` or `-0.5`; it denotes an exact number, and `(int N)` is the number `N`.
+- `DATA` is `(data (FACTOR VALUE) ...)`: the complete data at that entry, as nominative data. A factor that is not listed is absent. A factor, or a field of a record, may be listed only once.
+- A `VALUE` is one of `(bool true)`, `(bool false)`, `(int N)`, `(dec D)`, `(str "...")`, `(time "TIME")` or `(record (FIELD VALUE) ...)`. `D` is a decimal literal such as `12.50` or `-0.5`; it denotes an exact number, and `(int N)` is the number `N`, written with ASCII digits and an optional `-`. A string is written in double quotes, with the escapes `\n`, `\t`, `\"` and `\\`.
 
-The polarity of an event is used only when a composite term is checked against the trace of §2.5. Verdicts match events by subject and action alone (`formal/core/CORE.md`, 8.3, point 3).
+The polarity of an event is not used: verdicts and the membership of composite terms match events by subject and action alone (`formal/core/CORE.md`, 8.3, point 3, and section 9, decision 31). It is kept in the format for the events of `TECHNICAL_REPORT.md` §2.5 (`sequence_polarity`).
 
 ## Conventions of the evaluator
 
-1. **Order of checks.** Activation first (every deadline must resolve, in the `TERMS` block and in the invariants, and the deadline of every fallback must be after the first deadline), then well-formedness of the block (`wf_block`, and every `REF` names an earlier element without a handler: `refs_ok`), then the types of the data. The first failure is reported and evaluation stops.
+1. **Order of checks.** The order of the times first: a list of entries in which an entry is earlier than the entry before it is not an implementation trace, and the report is the single line `TIME ORDER REJECTED ENTRY J`, J the first such entry (`deadline_cure_time_order`). Then activation (every deadline must resolve, in the `TERMS` block and in the invariants, and the deadline of every fallback must be after the first deadline), then well-formedness of the block (`wf_block`, and every `REF` names an earlier element without a handler: `refs_ok`), then the types of the data. The first failure is reported and evaluation stops.
 2. **Types.** Each entry is checked against the declared factor types. A factor may be absent: data can be incomplete. A present factor must have its type, and inside a record every field whose type is not `Optional` must be present. Boolean, Integer, Decimal, String and DateTime are the primitive types. A number is exact: an Integer is a whole number, a Decimal a number with finitely many decimal places, and every Integer is a Decimal. DateTime values and DATETIME literals are seconds since the epoch.
 3. **Freshness.** A factor with `MAX_AGE m` and `ON_STALE BLOCK` is fresh at an entry if an `(arrive FACTOR)` entry at most `m` seconds earlier exists. Otherwise it is stale, and all of its complex names are absent. Data present at activation without an arrival entry counts as stale. Under `USE_LAST` the value is kept.
 4. **Blocked trace.** Verdicts, invariants and the membership of composite terms are computed on the trace in which stale factors are absent. Types are checked on the data as given.
@@ -56,6 +58,7 @@ The polarity of an event is used only when a composite term is checked against t
 11. **`EVENTUALLY … WITHIN`.** The deadline is resolved at activation, like the deadline of an obligation. The invariant is `T` once its condition is true at an entry not after the deadline, an entry at the deadline included; `F` once an entry is strictly after the deadline and the condition was false at every entry not after it; `U` otherwise, so an entry where the condition is undefined prevents `F`.
 12. **`WITHIN … ELSE`.** If the first obligation is not met by its deadline d, it is not breached: the fallback is in force from d, with the window (d, d′], and is reported after `ELSE`. A duration in the deadline of the fallback counts from d. A handler bound to such an obligation is rejected. If d′ is not after d, the activation is rejected (`fallback_order_rejected`, `fallback_order_equal`, `fallback_order_ok`).
 13. **Hidden factors.** A `ZK<T>` factor without `WITHOUT REVEALING ALL` is hidden. Before anything else, the evaluator removes every hidden factor from the data of every entry, so its value, given or not, of the right type or not, changes nothing in the report (`hidden_valid` and `hidden_value_ignored` get the same report). A `ZK<T>` factor `WITHOUT REVEALING ALL` is an ordinary factor of type T, typed like any other (`hidden_visible_ill_typed`). `Hash` and `Address` values are strings.
+14. **Composite terms.** A composite line says, for each outcome, whether the whole observed trace with that outcome is a trace of the term (`TECHNICAL_REPORT.md` §2.5). The actions of a term are the events of the entries after the one where it is reached, so `alice MUST pay THEN alice MUST pay` needs two payments (`sequence_one_payment`, `sequence_two_payments`). A prohibition completes at once and is violated by its first forbidden action (`sequence_prohibition_violated`). The answer is about the whole trace: a trace that goes on after the forbidden action is not a violated trace of the term, but its prefix that ends with the forbidden action is. Verdicts of top-level norms do not have this limit.
 
 ## Output
 
@@ -69,6 +72,7 @@ METADATA PROVES FACTOR CONSTRAINT   -- in FACTORS order, and for each factor in 
 METADATA BOUND_TO FACTOR S NONCE    --   constraint), BOUND_TO, SOURCE, and
 METADATA SOURCE FACTOR SUBJECT
 METADATA POLARITY FACTOR NUMBER     --   POLARITY, THRESHOLD and SENSITIVITY_BOUND, as written
+TIME ORDER REJECTED ENTRY J          -- the only evaluator line, when the times decrease at entry J
 ACTIVATION OK | ACTIVATION REJECTED
 BLOCK OK | BLOCK REJECTED
 TYPES OK | TYPES ILL-TYPED ENTRY J FACTOR F

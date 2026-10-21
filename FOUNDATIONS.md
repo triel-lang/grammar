@@ -4,7 +4,7 @@ TRIEL's semantics builds on the composition-nominative approach (CNA) to program
 
 ## References
 
-1. M. S. Nikitchenko, S. S. Shkilnyak. *Applied Logic* (Прикладна логіка). Textbook. Kyiv: Kyiv University Publishing Centre, 2013.
+1. M. S. Nikitchenko, S. S. Shkilniak. *Applied Logic* (Прикладна логіка). Textbook. Kyiv: Kyiv University Publishing Centre, 2013.
 2. M. Nikitchenko, S. Shkilniak. Algebras and logics of partial quasiary predicates. *Algebra and Discrete Mathematics*, 23(2), 2017, 263–278.
 3. M. Nikitchenko. Composition-Nominative Methods and Models in Program Development. *SN Computer Science*, 3, 507, 2022. https://doi.org/10.1007/s42979-022-01335-2
 4. M. Nikitchenko, O. Shkilniak, S. Shkilniak. Pure first-order logics of quasiary predicates. *Problems in Programming*, No. 2–3, 2016, 73–86 (in Ukrainian).

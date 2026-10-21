@@ -41,3 +41,9 @@ jobs:
       # same tree. TECHNICAL_REPORT.md §2.12.
       - name: Ambiguity regression tests
         run: python3 parser/test_ambiguity.py
+
+      # Every TRIEL excerpt of the documents, every grammar excerpt of
+      # TECHNICAL_REPORT.md and every usage example of the grammar file
+      # conforms to the grammar. The excerpts are extracted from the files.
+      - name: Excerpts in the documents
+        run: python3 parser/test_documents.py

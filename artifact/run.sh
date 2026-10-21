@@ -123,6 +123,12 @@ ambiguity_tests() {
   python3 parser/test_ambiguity.py
 }
 
+# parse-examples.yml: the excerpts of the documents and the usage examples of
+# the grammar file conform to the grammar.
+document_excerpts() {
+  python3 parser/test_documents.py
+}
+
 # The names listed by thm in Paper_Theorems.thy and the names of its oracle check
 # must be the same list; then the session is built on top of the heap of
 # TRIEL_Core, and the statements it exports are printed.
@@ -161,7 +167,8 @@ step 06-scenarios          scenarios
 step 07-pytest             tests
 step 08-parse-examples     parse_examples
 step 09-ambiguity-tests    ambiguity_tests
-step 10-paper-theorems     paper_theorems
+step 10-document-excerpts  document_excerpts
+step 11-paper-theorems     paper_theorems
 total_seconds=$(( $(date +%s) - total_start ))
 
 # --- Summary ---------------------------------------------------------------
@@ -180,6 +187,7 @@ ex_accepted=$(grep -c ': ACCEPTED$' "$RESULTS_DIR/classification.txt" 2>/dev/nul
 tests_line=$(grep -E '[0-9]+ (passed|failed)' "$RESULTS_DIR/07-pytest.log" 2>/dev/null | tail -1)
 parsed=$(sed -nE 's/^All ([0-9]+) file\(s\) parsed successfully\.$/\1/p' "$RESULTS_DIR/08-parse-examples.log" 2>/dev/null)
 ambiguity=$(sed -nE 's/^All ([0-9]+) checks passed\.$/\1/p' "$RESULTS_DIR/09-ambiguity-tests.log" 2>/dev/null)
+excerpts=$(sed -nE 's/^All ([0-9]+) excerpts conform to the grammar\.$/\1/p' "$RESULTS_DIR/10-document-excerpts.log" 2>/dev/null)
 
 {
   echo
@@ -192,6 +200,7 @@ ambiguity=$(sed -nE 's/^All ([0-9]+) checks passed\.$/\1/p' "$RESULTS_DIR/09-amb
   printf '%-44s %s\n' "translator and driver tests (pytest)" "${tests_line:-?}"
   printf '%-44s %s\n' "examples parsed with one derivation" "${parsed:-0} of $(ls "$WORK"/examples/*.triel "$WORK"/examples/{eudi,semantics,core}/*.triel | wc -l)"
   printf '%-44s %s\n' "ambiguity regression checks passed" "${ambiguity:-0}"
+  printf '%-44s %s\n' "document excerpts conforming to the grammar" "${excerpts:-0}"
   printf '%-44s %s\n' "wall-clock time" "$total_seconds s"
   for name in $(printf '%s\n' "${!seconds[@]}" | sort); do
     printf '  %-42s %s s\n' "$name" "${seconds[$name]}"

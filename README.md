@@ -51,14 +51,14 @@ The `examples/` directory contains sample TRIEL specifications:
 
 * `hello_triel.triel` — minimal valid specification
 * `delivery_agreement.triel` — obligations, deadlines, and breach handling
-* `age_verification.triel` — privacy-preserving verification using native zero-knowledge constraints
+* `age_verification.triel` — an age check whose `age` factor is declared hidden (`ZK<Integer> PROVES(self >= 18)`): the specification states what must be provable about it and, by the flow rule, may not read its value; the proof itself is produced and checked outside TRIEL
 * `eudi/eudi_driving_license.triel` — EUDI Wallet-style issuance and presentation policy for a driving license credential, combining conditional obligations and a zero-knowledge age predicate
 * `semantics/` — small specifications accompanying the semantics in `TECHNICAL_REPORT.md` §2.5 and §2.9: obligations and deadlines, `UNLESS` and its laws, missing and stale data, hierarchical names, and `EXECUTE` bindings
 * `core/` — specifications inside the formal core, with scenarios and expected reports
 
-Every example is parsed against the grammar, with an ambiguity check, on every push (`.github/workflows/parse-examples.yml`). The same workflow checks that the grammar is unambiguous: one derivation for every example and probe input, and an LALR(1) table whose only conflicts are four that are not ambiguities (`TECHNICAL_REPORT.md` §2.12).
+Every example is parsed against the grammar, with an ambiguity check, on every push (`.github/workflows/parse-examples.yml`). The same workflow checks the grammar for ambiguity: one derivation for every example and probe input (Earley, `lexer=dynamic`), and an LALR(1) table whose only conflicts are four that, by an argument made by hand, are not ambiguities (`TECHNICAL_REPORT.md` §2.12). It also checks that every TRIEL excerpt of the documents and of the grammar file conforms to the grammar (`parser/test_documents.py`).
 
-Of these, `age_verification.triel` and `eudi_driving_license.triel` — privacy-preserving identity and credential verification — are the most thoroughly worked through and tested; see `TECHNICAL_REPORT.md` §4 for the fuller scope statement.
+Of these, `age_verification.triel` and `eudi_driving_license.triel` — identity and credential checks with hidden zero-knowledge factors — are the most thoroughly worked through and tested; see `TECHNICAL_REPORT.md` §4 for the fuller scope statement.
 
 ## Foundations
 
