@@ -1,4 +1,4 @@
-Started at Wed Oct 21 13:27:25 GMT 2026 (polyml-5.9.2_x86_64_32-linux on df449a6f3cdd)
+Started at Wed Oct 21 14:06:01 GMT 2026 (polyml-5.9.2_x86_64_32-linux on 661a63e532ca)
 ISABELLE_TOOL_JAVA_OPTIONS="-Djava.awt.headless=true -Xms512m -Xmx4g -Xss16m"
 ISABELLE_BUILD_OPTIONS=""
 
@@ -14,56 +14,57 @@ Session HOL/HOL-Library (main timing)
 Session Unsorted/TRIEL_Core
 Running TRIEL_Core ...
 TRIEL_Core: theory HOL-Library.Conditional_Parametricity
-TRIEL_Core: theory HOL-Library.Code_Target_Int
 TRIEL_Core: theory HOL-Library.Code_Abstract_Nat
+TRIEL_Core: theory HOL-Library.Code_Target_Int
 TRIEL_Core: theory HOL-Library.AList
 TRIEL_Core: theory HOL-Library.Code_Target_Nat
 TRIEL_Core: theory HOL-Library.Nat_Bijection
 TRIEL_Core: theory HOL-Library.Code_Target_Numeral
 TRIEL_Core: theory HOL-Library.Old_Datatype
 TRIEL_Core: theory TRIEL_Core.TRIEL_Core
-TRIEL_Core: theory HOL-Library.Code_Target_Numeral 100% (0.200s cumulated time)
+TRIEL_Core: theory HOL-Library.Code_Target_Numeral 100% (0.194s cumulated time)
 TRIEL_Core: theory TRIEL_Core.TRIEL_Numbers
 TRIEL_Core: theory HOL-Library.Countable
-TRIEL_Core: theory HOL-Library.Code_Abstract_Nat 100% (0.376s cumulated time)
+TRIEL_Core: theory HOL-Library.Code_Abstract_Nat 100% (0.469s cumulated time)
 TRIEL_Core: theory HOL-Library.FSet
-TRIEL_Core: theory HOL-Library.Nat_Bijection 100% (1.823s cumulated time)
-TRIEL_Core: theory HOL-Library.Conditional_Parametricity 100% (1.324s cumulated time)
-TRIEL_Core: theory HOL-Library.Code_Target_Nat 100% (1.127s cumulated time)
-TRIEL_Core: theory HOL-Library.Code_Target_Int 100% (0.954s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Numbers 100% (1.396s cumulated time)
+TRIEL_Core: theory HOL-Library.Conditional_Parametricity 100% (1.374s cumulated time)
+TRIEL_Core: theory HOL-Library.Code_Target_Nat 100% (0.959s cumulated time)
+TRIEL_Core: theory HOL-Library.Code_Target_Int 100% (1.090s cumulated time)
+TRIEL_Core: theory HOL-Library.Nat_Bijection 100% (1.759s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Numbers 100% (1.035s cumulated time)
 TRIEL_Core: theory TRIEL_Core.TRIEL_Ex
 TRIEL_Core: theory TRIEL_Core.TRIEL_Trace
-TRIEL_Core: theory HOL-Library.Old_Datatype 100% (2.091s cumulated time)
-TRIEL_Core: theory HOL-Library.Countable 100% (2.239s cumulated time)
-TRIEL_Core: theory HOL-Library.AList 100% (9.706s cumulated time)
+TRIEL_Core: theory HOL-Library.Old_Datatype 100% (1.537s cumulated time)
+TRIEL_Core: theory HOL-Library.Countable 100% (2.916s cumulated time)
+TRIEL_Core: theory HOL-Library.AList 100% (10.914s cumulated time)
 TRIEL_Core: theory HOL-Library.Finite_Map
-TRIEL_Core: theory TRIEL_Core.TRIEL_Core 100% (9.517s cumulated time)
 TRIEL_Core: theory TRIEL_Core.TRIEL_Terms
 TRIEL_Core: theory TRIEL_Core.TRIEL_Breach
-TRIEL_Core: theory TRIEL_Core.TRIEL_Ex 100% (0.409s cumulated time)
-TRIEL_Core: theory HOL-Library.FSet 100% (19.701s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Trace 100% (10.731s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Core 100% (8.144s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Ex 100% (0.342s cumulated time)
+TRIEL_Core: theory HOL-Library.FSet 100% (19.745s cumulated time)
 TRIEL_Core: theory TRIEL_Core.TRIEL_ND
-TRIEL_Core: theory TRIEL_Core.TRIEL_Terms 100% (10.352s cumulated time)
-TRIEL_Core: theory HOL-Library.Finite_Map 100% (30.680s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_ND 100% (5.677s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Trace 100% (10.987s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Terms 100% (9.530s cumulated time)
+TRIEL_Core: theory HOL-Library.Finite_Map 100% (20.364s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_ND 100% (4.370s cumulated time)
 TRIEL_Core: theory TRIEL_Core.TRIEL_Invariants
 TRIEL_Core: theory TRIEL_Core.TRIEL_Penalty
-TRIEL_Core: theory TRIEL_Core.TRIEL_Breach 100% (31.544s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Breach 100% (25.821s cumulated time)
 TRIEL_Core: theory TRIEL_Core.TRIEL_Indicators
-TRIEL_Core: theory TRIEL_Core.TRIEL_Invariants 100% (4.955s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Invariants 100% (4.653s cumulated time)
 TRIEL_Core: theory TRIEL_Core.TRIEL_Exec
-TRIEL_Core: theory TRIEL_Core.TRIEL_Penalty 100% (8.731s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Penalty 100% (7.204s cumulated time)
 TRIEL_Core: theory TRIEL_Core.TRIEL_Compositions
-TRIEL_Core: theory TRIEL_Core.TRIEL_Indicators 100% (9.481s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Compositions 100% (15.537s cumulated time)
-TRIEL_Core: theory TRIEL_Core.TRIEL_Exec 100% (67.383s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Indicators 100% (12.388s cumulated time)
+TRIEL_Core: theory TRIEL_Core.TRIEL_Compositions 100% (16.315s cumulated time)
+TRIEL_Core: command "fun" running for 21.095s (line 814 of theory "TRIEL_Core.TRIEL_Exec")
+TRIEL_Core: theory TRIEL_Core.TRIEL_Exec 100% (83.382s cumulated time)
 Preparing TRIEL_Core/document ...
-Finished TRIEL_Core/document (0:00:25 elapsed time)
+Finished TRIEL_Core/document (0:00:12 elapsed time)
 Document at "/work/formal/core/output/document.pdf"
-Timing TRIEL_Core (4 threads, 102.356s elapsed time, 246.869s cpu time, 42.722s GC time, factor 2.41)
-Finished TRIEL_Core (0:01:45 elapsed time, 0:04:11 cpu time, factor 2.40)
+Timing TRIEL_Core (4 threads, 95.886s elapsed time, 235.421s cpu time, 33.794s GC time, factor 2.46)
+Finished TRIEL_Core (0:01:38 elapsed time, 0:04:00 cpu time, factor 2.44)
 
-Finished at Wed Oct 21 13:29:50 GMT 2026
-0:02:24 elapsed time, 0:04:11 cpu time, factor 1.74
+Finished at Wed Oct 21 14:07:59 GMT 2026
+0:01:58 elapsed time, 0:04:00 cpu time, factor 2.03
