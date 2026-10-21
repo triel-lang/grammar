@@ -1263,108 +1263,188 @@ next
   show ?case using TIf.IH(1)[OF ut ft, of \<pi> r] TIf.IH(2)[OF uu fu, of \<pi> r] by auto
 qed simp_all
 
-subsection \<open>Violation on a prefix\<close>
+subsection \<open>The status of a composite term on the observed trace\<close>
 
 text \<open>The membership of the whole observed trace says nothing about a violation in the middle
   of it: a trace that goes on after a forbidden action is not a violated trace of the term,
   and in \<open>MUST_NOT a THEN t\<close> the traces of \<open>t\<close> may contain \<open>a\<close>. The report therefore also
-  says whether some prefix of the observed trace, up to and including an entry \<open>k\<close>, is a
-  violated trace of the term. \<open>violation\<close> gives the first entry at which \<open>mem3\<close> answers
-  yes, \<open>PVNone\<close> if it answers no for every prefix, and \<open>PVUnknown\<close> otherwise. A violation
-  takes precedence over \<open>Done\<close>: a term whose observed trace has a violated prefix is
-  violated, even if the whole trace is a trace of the term with the outcome Done
-  (\<open>violation_over_done\<close>).\<close>
+  gives the status of the term: the prefixes of the observed trace are examined in order,
+  and the first prefix that is a trace of the term with some outcome ends the observation.
+  Its status is the greatest of its outcomes in the order \<open>Done < Interrupted < Violated\<close>
+  of \<open>ojoin\<close>, so a violation takes precedence over Done and Interrupted
+  (\<open>violation_over_done\<close>). A later entry does not change it: a prohibition inside a
+  composite term is watched until the term has been executed. If no prefix has an outcome,
+  the status is open; if \<open>mem3\<close> leaves the first prefix that matters undecided, unknown.\<close>
 
-datatype pviol = PVAt nat | PVNone | PVUnknown
+datatype cstatus = CAt outcome nat | COpen | CUnknown
 
-definition violation :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> pviol" where
-  "violation t \<pi> =
-     (case find (\<lambda>k. mem3 t (take (Suc k) \<pi>) Violated = Some True) [0..<length \<pi>] of
-        Some k \<Rightarrow> PVAt k
-      | None \<Rightarrow>
-          (if list_all (\<lambda>k. mem3 t (take (Suc k) \<pi>) Violated = Some False) [0..<length \<pi>]
-           then PVNone else PVUnknown))"
+text \<open>The answer for one prefix, from the three answers of \<open>mem3\<close>: \<open>None\<close> is unknown,
+  \<open>Some None\<close> no outcome, \<open>Some (Some r)\<close> the greatest outcome \<open>r\<close>.\<close>
 
-lemma violation_find:
-  "violation t \<pi> = PVAt k \<longleftrightarrow>
-     find (\<lambda>k. mem3 t (take (Suc k) \<pi>) Violated = Some True) [0..<length \<pi>] = Some k"
-  by (auto simp: violation_def split: option.splits)
+definition step :: "bool option \<Rightarrow> bool option \<Rightarrow> bool option \<Rightarrow> outcome option option" where
+  "step v i d =
+     (if v = Some True then Some (Some Violated)
+      else if v = Some False \<and> i = Some True then Some (Some Interrupted)
+      else if v = Some False \<and> i = Some False \<and> d = Some True then Some (Some Done)
+      else if v = Some False \<and> i = Some False \<and> d = Some False then Some None
+      else None)"
 
-lemma violation_At:
-  "violation t \<pi> = PVAt k \<longleftrightarrow>
-     k < length \<pi> \<and> mem3 t (take (Suc k) \<pi>) Violated = Some True
-     \<and> (\<forall>j < k. mem3 t (take (Suc j) \<pi>) Violated \<noteq> Some True)"
-  unfolding violation_find find_upt_Some by blast
+definition pstep :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> nat
+    \<Rightarrow> outcome option option" where
+  "pstep t \<pi> k =
+     step (mem3 t (take (Suc k) \<pi>) Violated) (mem3 t (take (Suc k) \<pi>) Interrupted)
+          (mem3 t (take (Suc k) \<pi>) Done)"
 
-lemma violation_None:
-  "violation t \<pi> = PVNone \<longleftrightarrow> (\<forall>k < length \<pi>. mem3 t (take (Suc k) \<pi>) Violated = Some False)"
-proof -
-  have "(\<forall>k < length \<pi>. mem3 t (take (Suc k) \<pi>) Violated = Some False) \<Longrightarrow>
-          find (\<lambda>k. mem3 t (take (Suc k) \<pi>) Violated = Some True) [0..<length \<pi>] = None"
-    by (auto simp: find_upt_None)
-  then show ?thesis
-    by (auto simp: violation_def list_all_iff split: option.splits)
-qed
+definition status :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> cstatus" where
+  "status t \<pi> =
+     (case find (\<lambda>k. pstep t \<pi> k \<noteq> Some None) [0..<length \<pi>] of
+        None \<Rightarrow> COpen
+      | Some k \<Rightarrow> (case pstep t \<pi> k of Some (Some r) \<Rightarrow> CAt r k | _ \<Rightarrow> CUnknown))"
 
-text \<open>A violation is final: once the observed trace has a violated prefix, every extension
-  reports the same entry.\<close>
+lemma step_none: "step v i d = Some None \<longleftrightarrow> v = Some False \<and> i = Some False \<and> d = Some False"
+  by (simp add: step_def)
 
-theorem violation_final:
-  assumes "violation t \<pi> = PVAt k"
-  shows "violation t (\<pi> @ \<rho>) = PVAt k"
-proof -
-  have tk: "take (Suc j) (\<pi> @ \<rho>) = take (Suc j) \<pi>" if "j < length \<pi>" for j
-    using that by simp
-  from assms have k: "k < length \<pi>" "mem3 t (take (Suc k) \<pi>) Violated = Some True"
-    and before: "\<forall>j < k. mem3 t (take (Suc j) \<pi>) Violated \<noteq> Some True"
-    by (simp_all add: violation_At)
-  show ?thesis
-    unfolding violation_At using k before tk by auto
-qed
+lemma step_Violated: "step v i d = Some (Some Violated) \<longleftrightarrow> v = Some True"
+  by (simp add: step_def)
 
-text \<open>For terms without UNLESS and AND the answer is always definite.\<close>
+lemma step_Interrupted: "step v i d = Some (Some Interrupted) \<longleftrightarrow> v = Some False \<and> i = Some True"
+  by (simp add: step_def)
 
-theorem violation_definite: "unless_free t \<Longrightarrow> and_free t \<Longrightarrow> violation t \<pi> \<noteq> PVUnknown"
+lemma step_Done:
+  "step v i d = Some (Some Done) \<longleftrightarrow> v = Some False \<and> i = Some False \<and> d = Some True"
+  by (simp add: step_def)
+
+lemma step_defined: "v \<noteq> None \<Longrightarrow> i \<noteq> None \<Longrightarrow> d \<noteq> None \<Longrightarrow> step v i d \<noteq> None"
+  by (auto simp: step_def)
+
+lemma status_CAt:
+  "status t \<pi> = CAt r k \<longleftrightarrow>
+     k < length \<pi> \<and> pstep t \<pi> k = Some (Some r) \<and> (\<forall>j < k. pstep t \<pi> j = Some None)"
 proof
-  assume u: "unless_free t" and a: "and_free t" and v: "violation t \<pi> = PVUnknown"
-  have d: "mem3 t (take (Suc k) \<pi>) Violated = Some True \<or> mem3 t (take (Suc k) \<pi>) Violated = Some False" for k
-    using mem3_complete[OF u a, of "take (Suc k) \<pi>" Violated] by auto
-  have "find (\<lambda>k. mem3 t (take (Suc k) \<pi>) Violated = Some True) [0..<length \<pi>] = None"
-    using v by (auto simp: violation_def split: option.splits)
-  then have nt: "\<forall>k < length \<pi>. mem3 t (take (Suc k) \<pi>) Violated \<noteq> Some True"
-    by (simp add: find_upt_None)
-  have "\<not> (\<forall>k < length \<pi>. mem3 t (take (Suc k) \<pi>) Violated = Some False)"
-    using v violation_None[of t \<pi>] by simp
-  then obtain k where "k < length \<pi>" "mem3 t (take (Suc k) \<pi>) Violated \<noteq> Some False" by blast
-  with nt d[of k] show False by blast
+  assume a: "status t \<pi> = CAt r k"
+  then obtain k' where f: "find (\<lambda>k. pstep t \<pi> k \<noteq> Some None) [0..<length \<pi>] = Some k'"
+    by (auto simp: status_def split: option.splits)
+  with a have "(case pstep t \<pi> k' of Some (Some r) \<Rightarrow> CAt r k' | _ \<Rightarrow> CUnknown) = CAt r k"
+    by (simp add: status_def)
+  then have "k' = k" and "pstep t \<pi> k' = Some (Some r)"
+    by (auto split: option.splits)
+  with f show "k < length \<pi> \<and> pstep t \<pi> k = Some (Some r) \<and> (\<forall>j < k. pstep t \<pi> j = Some None)"
+    by (simp add: find_upt_Some)
+next
+  assume "k < length \<pi> \<and> pstep t \<pi> k = Some (Some r) \<and> (\<forall>j < k. pstep t \<pi> j = Some None)"
+  then have f: "find (\<lambda>k. pstep t \<pi> k \<noteq> Some None) [0..<length \<pi>] = Some k"
+    and p: "pstep t \<pi> k = Some (Some r)"
+    by (simp_all add: find_upt_Some)
+  from f p show "status t \<pi> = CAt r k" by (simp add: status_def)
 qed
+
+lemma status_COpen: "status t \<pi> = COpen \<longleftrightarrow> (\<forall>k < length \<pi>. pstep t \<pi> k = Some None)"
+proof
+  assume a: "status t \<pi> = COpen"
+  show "\<forall>k < length \<pi>. pstep t \<pi> k = Some None"
+  proof (cases "find (\<lambda>k. pstep t \<pi> k \<noteq> Some None) [0..<length \<pi>]")
+    case None
+    then show ?thesis by (simp add: find_upt_None)
+  next
+    case (Some k)
+    with a show ?thesis by (auto simp: status_def split: option.splits)
+  qed
+next
+  assume "\<forall>k < length \<pi>. pstep t \<pi> k = Some None"
+  then have "find (\<lambda>k. pstep t \<pi> k \<noteq> Some None) [0..<length \<pi>] = None"
+    by (simp add: find_upt_None)
+  then show "status t \<pi> = COpen" by (simp add: status_def)
+qed
+
+text \<open>The status is final once an outcome is found: the prefixes up to it do not change when
+  the trace is extended.\<close>
+
+theorem status_final:
+  assumes "status t \<pi> = CAt r k"
+  shows "status t (\<pi> @ \<rho>) = CAt r k"
+proof -
+  have ps: "pstep t (\<pi> @ \<rho>) j = pstep t \<pi> j" if "j < length \<pi>" for j
+    using that by (simp add: pstep_def)
+  from assms have k: "k < length \<pi>" "pstep t \<pi> k = Some (Some r)"
+    and before: "\<forall>j < k. pstep t \<pi> j = Some None"
+    by (simp_all add: status_CAt)
+  show ?thesis
+    unfolding status_CAt using k before ps by auto
+qed
+
+text \<open>For terms without UNLESS and AND the status is never unknown.\<close>
+
+theorem status_definite: "unless_free t \<Longrightarrow> and_free t \<Longrightarrow> status t \<pi> \<noteq> CUnknown"
+proof
+  assume u: "unless_free t" and a: "and_free t" and c: "status t \<pi> = CUnknown"
+  have d: "pstep t \<pi> k \<noteq> None" for k
+    unfolding pstep_def by (rule step_defined) (rule mem3_complete[OF u a])+
+  from c obtain k where f: "find (\<lambda>k. pstep t \<pi> k \<noteq> Some None) [0..<length \<pi>] = Some k"
+    by (auto simp: status_def split: option.splits)
+  then have n: "pstep t \<pi> k \<noteq> Some None" by (simp add: find_upt_Some)
+  from c f have "(case pstep t \<pi> k of Some (Some r) \<Rightarrow> CAt r k | _ \<Rightarrow> CUnknown) = CUnknown"
+    by (simp add: status_def)
+  with n d[of k] show False by (auto split: option.splits)
+qed
+
+lemma rank_le: "rank r \<le> 2"
+  by (cases r) simp_all
 
 context term_semantics
 begin
 
-theorem violation_sound:
-  assumes "and_free t" and "violation t \<pi> = PVAt k"
-  shows "k < length \<pi>" and "(take (Suc k) \<pi>, Violated) \<in> den t"
-  using assms(2) mem3_sound[OF assms(1)] by (simp_all add: violation_At)
-
-theorem violation_none:
-  assumes "and_free t" and "violation t \<pi> = PVNone" and "k < length \<pi>"
-  shows "(take (Suc k) \<pi>, Violated) \<notin> den t"
+lemma pstep_none:
+  assumes "and_free t" and "pstep t \<pi> j = Some None"
+  shows "(take (Suc j) \<pi>, o') \<notin> den t"
 proof -
-  have "mem3 t (take (Suc k) \<pi>) Violated = Some False"
-    using assms(2,3) by (simp add: violation_None)
-  from mem3_sound[OF assms(1) this] show ?thesis by simp
+  from assms(2) have "mem3 t (take (Suc j) \<pi>) o' = Some False"
+    by (cases o') (simp_all add: pstep_def step_none)
+  with mem3_sound[OF assms(1)] show ?thesis by blast
 qed
 
-theorem violation_first:
-  assumes "unless_free t" and "and_free t" and "violation t \<pi> = PVAt k" and "j < k"
-  shows "(take (Suc j) \<pi>, Violated) \<notin> den t"
+text \<open>Soundness: the status names a prefix that is a trace of the term with the reported
+  outcome, which is the greatest of its outcomes, and no shorter prefix has any outcome.\<close>
+
+theorem status_sound:
+  assumes "and_free t" and "status t \<pi> = CAt r k"
+  shows "k < length \<pi>" and "(take (Suc k) \<pi>, r) \<in> den t"
+    and "\<And>o'. (take (Suc k) \<pi>, o') \<in> den t \<Longrightarrow> rank o' \<le> rank r"
+    and "\<And>j o'. j < k \<Longrightarrow> (take (Suc j) \<pi>, o') \<notin> den t"
 proof -
-  from assms(3,4) have "mem3 t (take (Suc j) \<pi>) Violated \<noteq> Some True" by (simp add: violation_At)
-  moreover have "mem3 t (take (Suc j) \<pi>) Violated \<noteq> None" by (rule mem3_complete[OF assms(1,2)])
-  ultimately have "mem3 t (take (Suc j) \<pi>) Violated = Some False" by auto
-  with mem3_sound[OF assms(2)] show ?thesis by blast
+  note snd = mem3_sound[OF assms(1)]
+  from assms(2) have k: "k < length \<pi>" and p: "pstep t \<pi> k = Some (Some r)"
+    and before: "\<forall>j < k. pstep t \<pi> j = Some None"
+    by (simp_all add: status_CAt)
+  show "k < length \<pi>" by (rule k)
+  let ?p = "take (Suc k) \<pi>"
+  have v: "mem3 t ?p Violated = Some True" if "r = Violated"
+    using p that by (simp add: pstep_def step_Violated)
+  have i: "mem3 t ?p Violated = Some False \<and> mem3 t ?p Interrupted = Some True" if "r = Interrupted"
+    using p that by (simp add: pstep_def step_Interrupted)
+  have d: "mem3 t ?p Violated = Some False \<and> mem3 t ?p Interrupted = Some False
+             \<and> mem3 t ?p Done = Some True" if "r = Done"
+    using p that by (simp add: pstep_def step_Done)
+  show "(?p, r) \<in> den t"
+    using v i d snd by (cases r) blast+
+  show "rank o' \<le> rank r" if "(?p, o') \<in> den t" for o'
+  proof (cases r)
+    case Done
+    with d snd that show ?thesis by (cases o') auto
+  next
+    case Interrupted
+    with i snd that show ?thesis by (cases o') auto
+  next
+    case Violated
+    then show ?thesis using rank_le[of o'] by simp
+  qed
+  show "(take (Suc j) \<pi>, o') \<notin> den t" if "j < k" for j o'
+    using pstep_none[OF assms(1)] before that by blast
 qed
+
+theorem status_open:
+  assumes "and_free t" and "status t \<pi> = COpen" and "k < length \<pi>"
+  shows "(take (Suc k) \<pi>, r) \<notin> den t"
+  using assms(2,3) pstep_none[OF assms(1)] by (simp add: status_COpen)
 
 text \<open>The precedence of a violation over Done is needed: in \<open>s MUST_NOT a THEN s' MUST a'\<close>,
   the trace activation, \<open>a\<close>, \<open>a'\<close> is a trace of the term with the outcome Done, and its
@@ -2099,7 +2179,7 @@ datatype line =
   | LMay nat name act verdict
   | LMustElse nat name act "int option" name act "int option" else_status
   | LOnBreach nat name "nat option"
-  | LComposite nat "bool option" "bool option" "bool option" pviol
+  | LComposite nat "bool option" "bool option" "bool option" cstatus
   | LInvariant name "bool option"
 
 text \<open>The handler bound to the element \<open>i\<close> of a block, if any.\<close>
@@ -2160,9 +2240,9 @@ lemma pr_report_actions:
 definition composite_line :: "nat \<Rightarrow> (path, atom, name, act) tm option \<Rightarrow> ctrace \<Rightarrow> line" where
   "composite_line n t \<pi> =
      (case t of
-        None \<Rightarrow> LComposite n None None None PVUnknown
+        None \<Rightarrow> LComposite n None None None CUnknown
       | Some u \<Rightarrow> LComposite n (mem3 u \<pi> Done) (mem3 u \<pi> Interrupted) (mem3 u \<pi> Violated)
-                                 (violation u \<pi>))"
+                                 (status u \<pi>))"
 
 text \<open>The line of the element \<open>i\<close> of the block, numbered from 1 in the report. An
   obligation without a deadline is never breached, so its handler plays no role. An
@@ -2292,8 +2372,8 @@ text \<open>The theorems of finality (\<open>window_final\<close>, \<open>handle
   assumption: a decided line of the report stays the same when observations are added at the
   end, unless the longer list is rejected for its time order or its types. In the line of a
   composite term, the answers for the whole observed trace are not verdicts and change when
-  the trace grows; its violation on a prefix is a verdict, and once found it stays
-  (\<open>violation_final\<close>).\<close>
+  the trace grows; its status is a verdict, and once an outcome is found it stays
+  (\<open>status_final\<close>).\<close>
 
 fun cont_decided :: "name continuation \<Rightarrow> bool" where
   "cont_decided (Cure v) = (v \<noteq> Pending)"
@@ -2311,10 +2391,10 @@ fun decided :: "line \<Rightarrow> bool" where
 | "decided (LMay i s a v) = (v = Fulfilled)"
 | "decided (LMustElse i s a d s' a' d' es) = (es \<noteq> EPending \<and> (\<forall>\<tau> v. es = EElse \<tau> v \<longrightarrow> v \<noteq> Pending))"
 | "decided (LInvariant n b) = (b \<noteq> None)"
-| "decided (LComposite n d it v p) = (\<exists>k. p = PVAt k)"
+| "decided (LComposite n d it v p) = (\<exists>r k. p = CAt r k)"
 | "decided _ = False"
 
-text \<open>A decided line stays the same, except a composite line: there only the violation is
+text \<open>A decided line stays the same, except a composite line: there only the status is
   decided, and the answers for the whole trace may change.\<close>
 
 fun same_verdict :: "line \<Rightarrow> line \<Rightarrow> bool" where
@@ -2455,8 +2535,8 @@ proof -
     with dec show ?thesis by (simp add: tl composite_line_def)
   next
     case (Some u)
-    from dec Some obtain k where k: "violation u \<pi> = PVAt k" by (auto simp: tl composite_line_def)
-    then have "violation u (\<pi> @ \<rho>) = PVAt k" by (rule violation_final)
+    from dec Some obtain r k where k: "status u \<pi> = CAt r k" by (auto simp: tl composite_line_def)
+    then have "status u (\<pi> @ \<rho>) = CAt r k" by (rule status_final)
     with Some k show ?thesis by (simp add: tl composite_line_def)
   qed
 qed
@@ -2628,7 +2708,7 @@ export_code run Spec Fdecl Act ArgName ArgVal Pen PVal PAdd PSub PMul PNeg num_o
   Always Eventually Next SInv SEventuallyWithin TPrim TOptional TRecord PBool PInt PDec PStr PTime
   ABool ANum AStr ATime dec_atom quotient_of Atom Nom fmap_of_list Deontic Arrival Tick
   Must May MustNot
-  LTimeOrder LActivation LBlock LTypes LMust LMustNot LMay LMustElse LOnBreach LComposite LInvariant PVAt PVNone PVUnknown
+  LTimeOrder LActivation LBlock LTypes LMust LMustNot LMay LMustElse LOnBreach LComposite LInvariant CAt COpen CUnknown Done Interrupted Violated
   EFulfilled EPending EElse
   SFulfilled SPending SBreached NoContinuation Terminated Cure Escalated
   Fulfilled Breached Pending

@@ -2,12 +2,12 @@
 
 module
   TRIEL(Int(..), integer_of_int, Nat, integer_of_nat, Num, Rat, quotient_of,
-         Atom(..), Arg(..), Act(..), Fmap(..), Nd(..), Ty(..), Vexp(..),
-         Expr(..), Verdict(..), Else_status(..), Continuation(..), Status(..),
-         Amount(..), Ract(..), Pviol(..), Line(..), Prim(..), Deadline(..),
-         Inv(..), Sinv(..), Baction(..), Sterm(..), Pexp(..), Pen(..),
-         Fdecl(..), Spec(..), Polarity(..), Event(..), nat_of_integer, num_of,
-         run, dec_atom)
+         Atom(..), Arg(..), Act(..), Outcome(..), Fmap(..), Nd(..), Ty(..),
+         Vexp(..), Expr(..), Verdict(..), Else_status(..), Continuation(..),
+         Status(..), Amount(..), Ract(..), Cstatus(..), Line(..), Prim(..),
+         Deadline(..), Inv(..), Sinv(..), Baction(..), Sterm(..), Pexp(..),
+         Pen(..), Fdecl(..), Spec(..), Polarity(..), Event(..), nat_of_integer,
+         num_of, run, dec_atom)
   where {
 
 import Prelude ((==), (/=), (<), (<=), (>=), (>), (+), (-), (*), (/), (**),
@@ -602,6 +602,23 @@ instance Value_order Atom where {
   vleq = vleq_atom;
 };
 
+data Outcome = Done | Interrupted | Violated;
+
+equal_outcome :: Outcome -> Outcome -> Bool;
+equal_outcome Interrupted Violated = False;
+equal_outcome Violated Interrupted = False;
+equal_outcome Done Violated = False;
+equal_outcome Violated Done = False;
+equal_outcome Done Interrupted = False;
+equal_outcome Interrupted Done = False;
+equal_outcome Violated Violated = True;
+equal_outcome Interrupted Interrupted = True;
+equal_outcome Done Done = True;
+
+instance Eq Outcome where {
+  a == b = equal_outcome a b;
+};
+
 data Set a = Set [a] | Coset [a];
 
 newtype Fmap a b = Fmap_of_list [(a, b)];
@@ -636,7 +653,7 @@ data Amount = PAmount Rat Bool | PUndefined | PNegative Rat;
 
 data Ract a = RNotify a | RPenalty Amount;
 
-data Pviol = PVAt Nat | PVNone | PVUnknown;
+data Cstatus = CAt Outcome Nat | COpen | CUnknown;
 
 data Line = LTimeOrder Nat | LActivation Bool | LBlock Bool
   | LTypes (Maybe (Nat, String))
@@ -644,7 +661,7 @@ data Line = LTimeOrder Nat | LActivation Bool | LBlock Bool
   | LMustNot Nat String Act Verdict [Ract String] | LMay Nat String Act Verdict
   | LMustElse Nat String Act (Maybe Int) String Act (Maybe Int) Else_status
   | LOnBreach Nat String (Maybe Nat)
-  | LComposite Nat (Maybe Bool) (Maybe Bool) (Maybe Bool) Pviol
+  | LComposite Nat (Maybe Bool) (Maybe Bool) (Maybe Bool) Cstatus
   | LInvariant String (Maybe Bool);
 
 data Prim = PBool | PInt | PDec | PStr | PTime;
@@ -681,8 +698,6 @@ data Spec =
 data Polarity = Must | May | MustNot;
 
 data Event a b c = Deontic b c Polarity | Arrival a | Tick;
-
-data Outcome = Done | Interrupted | Violated;
 
 nat_of_integer :: Integer -> Nat;
 nat_of_integer k = Nat (max (0 :: Integer) k);
@@ -1208,16 +1223,14 @@ wf_block blk =
             then Just (handler_bound blk x) else Nothing))
         (upt zero_nat (size_list blk)));
 
-equal_outcome :: Outcome -> Outcome -> Bool;
-equal_outcome Interrupted Violated = False;
-equal_outcome Violated Interrupted = False;
-equal_outcome Done Violated = False;
-equal_outcome Violated Done = False;
-equal_outcome Done Interrupted = False;
-equal_outcome Interrupted Done = False;
-equal_outcome Violated Violated = True;
-equal_outcome Interrupted Interrupted = True;
-equal_outcome Done Done = True;
+step :: Maybe Bool -> Maybe Bool -> Maybe Bool -> Maybe (Maybe Outcome);
+step v i d =
+  (if v == Just True then Just (Just Violated)
+    else (if v == Just False && i == Just True then Just (Just Interrupted)
+           else (if v == Just False && i == Just False && d == Just True
+                  then Just (Just Done)
+                  else (if v == Just False && i == Just False && d == Just False
+                         then Just Nothing else Nothing))));
 
 does :: forall a b c. (Eq a, Eq b) => a -> b -> Event c a b -> Bool;
 does s a e = (case e of {
@@ -1351,19 +1364,31 @@ ext3 (TIf c t u) rho =
   (if eval c (st rho zero_nat) == Just True then ext3 t rho else ext3 u rho);
 ext3 TSkip rho = Just False;
 
-violation ::
+pstep ::
   forall a b c d e.
     (Eq b, Value_order b, Eq c, Eq d,
-      Linorder e) => Tm a b c d -> [(a -> Maybe b, (e, Event a c d))] -> Pviol;
-violation t pi =
-  (case find (\ k -> mem3 t (take (suc k) pi) Violated == Just True)
+      Linorder e) => Tm a b c d ->
+                       [(a -> Maybe b, (e, Event a c d))] ->
+                         Nat -> Maybe (Maybe Outcome);
+pstep t pi k =
+  step (mem3 t (take (suc k) pi) Violated)
+    (mem3 t (take (suc k) pi) Interrupted) (mem3 t (take (suc k) pi) Done);
+
+status ::
+  forall a b c d e.
+    (Eq b, Value_order b, Eq c, Eq d,
+      Linorder e) => Tm a b c d ->
+                       [(a -> Maybe b, (e, Event a c d))] -> Cstatus;
+status t pi =
+  (case find (\ k -> not (pstep t pi k == Just Nothing))
           (upt zero_nat (size_list pi))
     of {
-    Nothing ->
-      (if all (\ k -> mem3 t (take (suc k) pi) Violated == Just False)
-            (upt zero_nat (size_list pi))
-        then PVNone else PVUnknown);
-    Just a -> PVAt a;
+    Nothing -> COpen;
+    Just k -> (case pstep t pi k of {
+                Nothing -> CUnknown;
+                Just Nothing -> CUnknown;
+                Just (Just r) -> CAt r k;
+              });
   });
 
 composite_line ::
@@ -1372,10 +1397,10 @@ composite_line ::
       [([String] -> Maybe Atom, (Int, Event [String] String Act))] -> Line;
 composite_line n t pi =
   (case t of {
-    Nothing -> LComposite n Nothing Nothing Nothing PVUnknown;
+    Nothing -> LComposite n Nothing Nothing Nothing CUnknown;
     Just u ->
       LComposite n (mem3 u pi Done) (mem3 u pi Interrupted) (mem3 u pi Violated)
-        (violation u pi);
+        (status u pi);
   });
 
 may_verdict ::

@@ -387,11 +387,14 @@ line (T.LOnBreach i s j) =
   "TERM " ++ nat i ++ " ON_BREACH " ++ s ++ " : " ++ maybe "UNBOUND" (("BOUND " ++) . nat) j
 line (T.LComposite i d n v p) =
   "TERM " ++ nat i ++ " COMPOSITE : DONE " ++ answer d ++ " INTERRUPTED " ++ answer n
-    ++ " VIOLATED " ++ answer v ++ " VIOLATION " ++ violation p
+    ++ " VIOLATED " ++ answer v ++ " STATUS " ++ termStatus p
   where
-    violation (T.PVAt k) = "ENTRY " ++ nat k
-    violation T.PVNone = "NONE"
-    violation T.PVUnknown = "UNKNOWN"
+    termStatus (T.CAt o k) = outcome o ++ " ENTRY " ++ nat k
+    termStatus T.COpen = "OPEN"
+    termStatus T.CUnknown = "UNKNOWN"
+    outcome T.Violated = "VIOLATED"
+    outcome T.Interrupted = "INTERRUPTED"
+    outcome T.Done = "DONE"
 line (T.LInvariant n b) = "INVARIANT " ++ n ++ " : " ++ truth b
 
 main :: IO ()

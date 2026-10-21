@@ -29,7 +29,7 @@ Current version: v2.5.1, errata to v2.5. The grammar is that of v2.5 (`TRIEL-gra
 Version 2.5.1 corrects errors in the semantics of v2.5 found by a third independent audit. The grammar does not change. The corrections:
 
 * an action is the event of an entry after the one where the term is reached, so `alice MUST pay THEN alice MUST pay` needs two payments; in v2.5 one was enough (`TECHNICAL_REPORT.md` §2.5)
-* a prohibition inside a composite term is violated by its first forbidden action; in v2.5 no term could end `Violated`. The report gives the first entry at which a prefix of the trace violates a composite term; that violation is final and takes precedence over `Done` (§2.5)
+* a prohibition inside a composite term is violated by its first forbidden action; in v2.5 no term could end `Violated`. The report gives the status of a composite term, read on the first prefix of the trace that has an outcome, with `Violated` before `Done`; it is final, and a prohibition is watched until the term has been executed (§2.5)
 * the polarity written in an event is ignored by the trace semantics, as it already was by the verdicts (§2.5, §2.6)
 * the evaluator rejects a trace whose times decrease, instead of giving verdicts on it, and the finality of verdicts is proved for the evaluator itself (§2.6; `formal/core/CORE.md`, section 9, decision 33)
 * the translator rejects what the evaluator would reject as an ill-formed block (handlers after `THEN` or after a permission, two handlers for one norm, two continuations), a record type with a duplicate field, and a deadline or `FROM` read from a factor that is not a `DateTime`; the scenario driver reads strings as the evaluator does
