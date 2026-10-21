@@ -364,6 +364,7 @@ truth (Just False) = "F"
 truth Nothing = "U"
 
 line :: T.Line -> String
+line (T.LTimeOrder j) = "TIME ORDER REJECTED ENTRY " ++ nat j
 line (T.LActivation b) = "ACTIVATION " ++ (if b then "OK" else "REJECTED")
 line (T.LBlock b) = "BLOCK " ++ (if b then "OK" else "REJECTED")
 line (T.LTypes Nothing) = "TYPES OK"

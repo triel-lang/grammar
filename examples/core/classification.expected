@@ -7,6 +7,7 @@ examples/core/core_hidden.triel: ACCEPTED
 examples/core/core_numbers.triel: ACCEPTED
 examples/core/core_payment.triel: ACCEPTED
 examples/core/core_prohibition_handler.triel: ACCEPTED
+examples/core/core_sequence.triel: ACCEPTED
 examples/core/core_stale_block.triel: ACCEPTED
 examples/core/core_unless_records.triel: ACCEPTED
 examples/delivery_agreement.triel: ACCEPTED

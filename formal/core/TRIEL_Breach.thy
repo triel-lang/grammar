@@ -17,12 +17,10 @@ text \<open>Section 2.6 distinguishes the specification trace of section 2.5 fro
   Implementation traces reuse the traces of TRIEL_Trace with integer timestamps. Entry 0
   is the activation entry: its timestamp is the activation time \<open>\<tau>\<^sub>0\<close> and its state the
   activation state. Actions are the events of the later entries. An event is matched by
-  subject and action only: the polarity belongs to the norm, not to the event.\<close>
+  subject and action only (\<open>does\<close> of TRIEL_Trace, as in the trace semantics): the polarity
+  belongs to the norm, not to the event.\<close>
 
 type_synonym ('n, 'v, 's, 'a) itrace = "('n, 'v, int, 's, 'a) trace"
-
-definition does :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 's, 'a) event \<Rightarrow> bool" where
-  "does s a e \<longleftrightarrow> (\<exists>p. e = Deontic s a p)"
 
 definition time :: "('n, 'v, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> int" where
   "time \<pi> j = tstamp (\<pi> ! j)"
@@ -262,23 +260,12 @@ theorem empty_window_breached:
 section \<open>Prohibitions and permissions\<close>
 
 text \<open>\<open>s MUST_NOT a WHEN c\<close> is breached at the first action \<open>a\<close> of \<open>s\<close> before which \<open>c\<close> is
-  true; \<open>c\<close> is evaluated in the state before the action. An undefined \<open>c\<close> is not a
-  breach.\<close>
-
-definition forbidden :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> bool" where
-  "forbidden s a c \<pi> j \<longleftrightarrow>
-     1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> eval c (st \<pi> (j - 1)) = Some True"
+  true (\<open>forbidden\<close> of TRIEL_Trace); \<open>c\<close> is evaluated in the state before the action. An
+  undefined \<open>c\<close> is not a breach.\<close>
 
 definition pr_verdict :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> verdict" where
   "pr_verdict s a c \<pi> =
      (if \<exists>j. forbidden s a c \<pi> j then Breached (time \<pi> (LEAST j. forbidden s a c \<pi> j)) else Pending)"
-
-lemma forbidden_append:
-  "j < length \<pi> \<Longrightarrow> forbidden s a c (\<pi> @ \<rho>) j \<longleftrightarrow> forbidden s a c \<pi> j"
-  unfolding forbidden_def by auto
-
-lemma forbidden_less: "forbidden s a c \<pi> j \<Longrightarrow> j < length \<pi>"
-  by (simp add: forbidden_def)
 
 theorem pr_verdict_final:
   assumes "pr_verdict s a c \<pi> \<noteq> Pending"
@@ -309,6 +296,47 @@ proof -
   also have "\<dots> = Breached (time \<pi> k)" using kl by simp
   also have "\<dots> = pr_verdict s a c \<pi>" using j by (auto simp: pr_verdict_def k_def)
   finally show ?thesis .
+qed
+
+text \<open>The verdict and the trace semantics of a prohibition agree. A violated trace of
+  \<open>s MUST_NOT a WHEN c\<close> (TRIEL_Trace, \<open>mustnot_d\<close>) is breached at its last entry, and every
+  breached trace has the prefix up to the breach as a violated trace. So the prohibition
+  watches the same entries in both layers: every entry after the one where it is reached.\<close>
+
+theorem mustnot_violated_breach:
+  assumes "(\<pi>, Violated) \<in> mustnot_d s a c"
+  shows "pr_verdict s a c \<pi> = Breached (time \<pi> (length \<pi> - 1))"
+proof -
+  from assms have f: "forbidden s a c \<pi> (length \<pi> - 1)"
+    and nf: "\<forall>j < length \<pi> - 1. \<not> forbidden s a c \<pi> j"
+    unfolding mustnot_d_def by auto
+  have "(LEAST j. forbidden s a c \<pi> j) = length \<pi> - 1"
+    by (rule Least_equality) (use f nf in \<open>auto simp: not_le[symmetric]\<close>)
+  with f show ?thesis by (auto simp: pr_verdict_def)
+qed
+
+theorem breach_mustnot_violated:
+  assumes tr: "is_trace \<pi>" and b: "pr_verdict s a c \<pi> = Breached \<tau>"
+  shows "\<exists>k < length \<pi>. (pre \<pi> k, Violated) \<in> mustnot_d s a c \<and> time \<pi> k = \<tau>"
+proof -
+  from b obtain j where j: "forbidden s a c \<pi> j" by (auto simp: pr_verdict_def split: if_splits)
+  define k where "k = (LEAST j. forbidden s a c \<pi> j)"
+  have fk: "forbidden s a c \<pi> k" unfolding k_def using j by (rule LeastI)
+  have kl: "k < length \<pi>" using fk by (rule forbidden_less)
+  have before: "\<not> forbidden s a c \<pi> i" if "i < k" for i
+    using that not_less_Least[of i "forbidden s a c \<pi>"] unfolding k_def by blast
+  have ex: "\<exists>j. forbidden s a c \<pi> j" using j by blast
+  have tau: "time \<pi> k = \<tau>" using b ex by (simp add: pr_verdict_def k_def)
+  have eq: "pre \<pi> k @ drop (Suc k) \<pi> = \<pi>" by (simp add: pre_def)
+  have lp: "length (pre \<pi> k) = Suc k" using kl by (rule length_pre)
+  have fp: "forbidden s a c (pre \<pi> k) i \<longleftrightarrow> forbidden s a c \<pi> i" if "i < Suc k" for i
+    using forbidden_append[of i "pre \<pi> k" s a c "drop (Suc k) \<pi>"] that lp by (simp only: eq)
+  have "is_trace (pre \<pi> k)" using tr by (rule is_trace_pre)
+  moreover have "forbidden s a c (pre \<pi> k) (length (pre \<pi> k) - 1)" using fp[of k] fk lp by simp
+  moreover have "\<forall>i < length (pre \<pi> k) - 1. \<not> forbidden s a c (pre \<pi> k) i"
+    using fp before lp by simp
+  ultimately have "(pre \<pi> k, Violated) \<in> mustnot_d s a c" unfolding mustnot_d_def by blast
+  with kl tau show ?thesis by blast
 qed
 
 text \<open>Enforcement and verdict are separate roles. A monitor enforces a prohibition

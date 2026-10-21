@@ -14,8 +14,8 @@ import pytest
 from lark import UnexpectedInput
 
 sys.path.insert(0, str(Path(__file__).parent))
-from triel_to_core import RULES, classify, sexp, translate  # noqa: E402
-from triel_eval import default_evaluator  # noqa: E402
+from triel_to_core import RULES, classify, iso_seconds, sexp, translate  # noqa: E402
+from triel_eval import ScenarioError, default_evaluator, find_spec, read_sexp, scenario_input  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 PARSER = REPO / "parser"
@@ -651,6 +651,131 @@ def test_proof_system_without_zk_is_metadata():
     assert tr.metadata == ["METADATA PROOF_SYSTEM GROTH16", 'METADATA CURVE "BN254"']
 
 
+# --- the checks of wf_block in the translator (errata 2.5.1) ---------------
+
+@pytest.mark.parametrize("terms, why", [
+    ("a MUST b THEN a ON_BREACH TERMINATE", "ON_BREACH in a composite term"),
+    ("a MUST b OR a ON_BREACH NOTIFY b2", "ON_BREACH in a composite term"),
+    ("a MAY b; a ON_BREACH NOTIFY b2", "ON_BREACH bound to no obligation or prohibition"),
+    ("a MUST b THEN a MUST c; a ON_BREACH NOTIFY b2", "ON_BREACH bound to no obligation or prohibition"),
+    ("a ON_BREACH NOTIFY b2; a MUST b WITHIN 1 DAYS", "ON_BREACH bound to no obligation or prohibition"),
+    ("a MUST b WITHIN 1 DAYS; a ON_BREACH NOTIFY b2; a ON_BREACH TERMINATE",
+     "two ON_BREACH bound to one norm"),
+    ("a MUST b WITHIN 1 DAYS; a ON_BREACH TERMINATE, CURE_BY 1 DAYS",
+     "two continuation-determining actions"),
+    ("a MUST b WITHIN 1 DAYS; a ON_BREACH CURE_BY 1 DAYS, ESCALATE_TO b2",
+     "two continuation-determining actions"),
+])
+def test_wf_block_rejections(terms, why):
+    assert rejected(spec(terms=terms)) == [why]
+
+
+@pytest.mark.parametrize("terms", [
+    "a MUST b WITHIN 1 DAYS; a MAY c; a ON_BREACH TERMINATE",
+    "a MUST b WITHIN 1 DAYS; a ON_BREACH NOTIFY b2; a MUST c WITHIN 2 DAYS; a ON_BREACH TERMINATE",
+    "a MUST b WITHIN 1 DAYS; b2 MUST c WITHIN 1 DAYS; a ON_BREACH NOTIFY b2; b2 ON_BREACH TERMINATE",
+])
+def test_wf_block_accepted(terms):
+    core(spec(terms=terms))
+
+
+def test_two_obligations_one_handler_binds_to_the_second():
+    c = core(spec(terms="a MUST b WITHIN 1 DAYS; a MUST c WITHIN 2 DAYS; a ON_BREACH TERMINATE"))
+    assert '(on_breach "a" (terminate))' in c
+
+
+def test_duplicate_record_field_is_rejected():
+    assert rejected(spec(factors="f : Boolean METADATA, r : Record { x : Integer, x : String } METADATA")) == \
+        ["duplicate field"]
+
+
+@pytest.mark.parametrize("terms, factors, why", [
+    ("a MUST b BY g", "f : Boolean METADATA, g : Boolean METADATA", "deadline of a non-DateTime factor"),
+    ("a MUST b BY g + 1 DAYS", "f : Boolean METADATA, g : String METADATA",
+     "deadline of a non-DateTime factor"),
+    ("a MUST b BY g", "f : Boolean METADATA, g : Integer METADATA", "deadline of a non-DateTime factor"),
+    ("a MUST b BY r.x", "f : Boolean METADATA, r : Record { x : String } METADATA",
+     "deadline of a non-DateTime factor"),
+    ("a MUST b FROM g", "f : Boolean METADATA, g : String METADATA", "FROM of a non-DateTime factor"),
+    ("a MUST b FROM g", "f : Boolean METADATA, g : Boolean METADATA", "FROM of a non-DateTime factor"),
+])
+def test_time_from_a_non_datetime_factor_is_rejected(terms, factors, why):
+    assert rejected(spec(terms=terms, factors=factors)) == [why]
+
+
+def test_time_from_a_datetime_factor():
+    c = core(spec(terms="a MUST b BY g FROM r.t",
+                  factors="f : Boolean METADATA, g : DateTime METADATA, r : Record { t : Optional<DateTime> } METADATA"))
+    assert '(must "a" "b" (factor (path "g") 0) (factor (path "r" "t") 0))' in c
+    assert rejected(spec(factors="f : Boolean METADATA, g : Boolean METADATA",
+                         invariants="i : EVENTUALLY(f) WITHIN g")) == ["deadline of a non-DateTime factor"]
+
+
+def test_iso_times_need_ascii_digits():
+    assert iso_seconds("2026-01-01T00:00:00Z") == 1767225600
+    assert iso_seconds("\uff12026-01-01T00:00:00Z") is None
+    assert iso_seconds("2026-01-01T00:00:00Z\n") is None
+
+
+# --- the scenario driver (errata 2.5.1) ------------------------------------
+
+@pytest.mark.parametrize("text, expected", [
+    (r'(str "a\nb")', ["str", "a\nb"]),
+    (r'(str "a\tb")', ["str", "a\tb"]),
+    (r'(str "a\\b")', ["str", "a\\b"]),
+    (r'(str "a\"b")', ["str", 'a"b']),
+    (r'(str "a\qb")', ["str", "aqb"]),
+])
+def test_scenario_strings_are_read_like_the_evaluator(text, expected):
+    assert read_sexp(text) == expected
+
+
+@pytest.mark.parametrize("text", ['(str "ab', '(str "ab\\', '"'])
+def test_unterminated_string_is_an_error(text):
+    with pytest.raises(ScenarioError):
+        read_sexp(text)
+
+
+def scenario(data='(data (f (bool true)))', time="2026-01-01T00:00:00Z"):
+    return read_sexp(f'(scenario s (spec "examples/core/core_sequence.triel") '
+                     f'(entry "{time}" (activate) {data}))')
+
+
+@pytest.mark.parametrize("data", [
+    "(data (f (int 1_000)))",
+    "(data (f (int \u0661)))",
+    "(data (f (int +1)))",
+    "(data (f (bool true)) (f (bool false)))",
+    "(data (r (record (x (int 1)) (x (int 2)))))",
+])
+def test_bad_scenario_data_is_rejected(data):
+    with pytest.raises(ScenarioError):
+        scenario_input(scenario(data))
+
+
+def test_scenario_integers():
+    _, trace = scenario_input(scenario("(data (f (int -12)))"))
+    assert trace[1][3] == ["data", ["f", ["int", -12]]]
+
+
+def test_spec_path_is_relative_to_the_repository(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "examples/core").mkdir(parents=True)
+    (tmp_path / "examples/core/core_sequence.triel").write_text("not TRIEL")
+    assert find_spec(read_sexp('"examples/core/core_sequence.triel"')) == \
+        REPO / "examples/core/core_sequence.triel"
+    with pytest.raises(ScenarioError):
+        find_spec(read_sexp('"examples/core/missing.triel"'))
+
+
+def test_times_are_not_reordered_by_the_driver():
+    scn = read_sexp('(scenario s (spec "examples/core/core_sequence.triel") '
+                    '(entry "2026-01-02T00:00:00Z" (activate) (data)) '
+                    '(entry "2026-01-01T00:00:00Z" (tick) (data)))')
+    _, trace = scenario_input(scn)
+    assert [e[1] for e in trace[1:]] == [1767312000, 1767225600]
+
+
 # --- command-line behaviour ----------------------------------------------
 
 def run(args, **kw):
@@ -667,6 +792,17 @@ def test_exit_codes(tmp_path):
     r = run([t2c, str(bad)])
     assert r.returncode == 2 and "REJECTED: AND (term)" in r.stdout
     assert run([t2c, str(broken)]).returncode == 1
+
+
+def test_deep_nesting_is_an_error_not_a_crash(tmp_path):
+    deep = tmp_path / "deep.triel"
+    deep.write_text(spec(invariants="i : ALWAYS(" + "(" * 400 + "f" + ")" * 400 + ")"))
+    r = run([str(PARSER / "triel_to_core.py"), str(deep)])
+    assert r.returncode == 1 and "nested too deeply" in r.stderr and "Traceback" not in r.stderr
+    scn = tmp_path / "deep.scn"
+    scn.write_text("(scenario s " + "(" * 5000 + ")" * 5000 + ")")
+    r = run([str(PARSER / "triel_eval.py"), str(scn)])
+    assert r.returncode == 1 and "nested too deeply" in r.stderr and "Traceback" not in r.stderr
 
 
 # --- scenarios ------------------------------------------------------------

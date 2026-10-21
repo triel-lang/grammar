@@ -71,15 +71,23 @@ def read_sexp(text: str):
         if c == ")":
             raise ScenarioError("unexpected )")
         if c == '"':
+            # The escapes of evaluator/Main.hs: \n and \t, and \c is c.
             pos += 1
             out = []
-            while pos < len(text) and text[pos] != '"':
+            while True:
+                if pos >= len(text):
+                    raise ScenarioError("unterminated string")
+                if text[pos] == '"':
+                    pos += 1
+                    return Str("".join(out))
                 if text[pos] == "\\":
                     pos += 1
-                out.append(text[pos])
+                    if pos >= len(text):
+                        raise ScenarioError("unterminated string")
+                    out.append({"n": "\n", "t": "\t"}.get(text[pos], text[pos]))
+                else:
+                    out.append(text[pos])
                 pos += 1
-            pos += 1
-            return Str("".join(out))
         start = pos
         while pos < len(text) and not text[pos].isspace() and text[pos] not in '()";':
             pos += 1
@@ -101,11 +109,9 @@ def time_of(x) -> int:
 def value(x):
     if isinstance(x, list) and len(x) == 2 and x[0] == "bool" and x[1] in ("true", "false"):
         return ["bool", Sym(x[1])]
-    if isinstance(x, list) and len(x) == 2 and x[0] == "int":
-        try:
-            return ["int", int(x[1])]
-        except ValueError:
-            pass
+    if isinstance(x, list) and len(x) == 2 and x[0] == "int" and isinstance(x[1], Sym) \
+            and re.fullmatch(r"-?[0-9]+", x[1]):
+        return ["int", int(x[1])]
     if isinstance(x, list) and len(x) == 2 and x[0] == "dec" and isinstance(x[1], Sym):
         m = re.fullmatch(r"(-?)([0-9]+)\.([0-9]+)", x[1])
         if m:
@@ -115,7 +121,7 @@ def value(x):
     if isinstance(x, list) and len(x) == 2 and x[0] == "time":
         return ["time", time_of(x[1])]
     if isinstance(x, list) and x and x[0] == "record":
-        return ["record"] + [field(f) for f in x[1:]]
+        return ["record"] + fields(x[1:])
     raise ScenarioError(f"not a value: {sexp(x)}")
 
 
@@ -123,6 +129,16 @@ def field(f):
     if isinstance(f, list) and len(f) == 2 and isinstance(f[0], Sym):
         return [Str(f[0]), value(f[1])]
     raise ScenarioError(f"not a field: {sexp(f)}")
+
+
+def fields(fs):
+    """The fields of (data ...) or (record ...); a name may be given only once."""
+    out = [field(f) for f in fs]
+    names = [f[0] for f in out]
+    for n in names:
+        if names.count(n) > 1:
+            raise ScenarioError(f"{n} is given twice")
+    return out
 
 
 def event(x, first: bool):
@@ -165,30 +181,34 @@ def scenario_input(scn):
     spec = scn[2]
     if not (isinstance(spec, list) and len(spec) == 2 and spec[0] == "spec"):
         raise ScenarioError("expected (spec PATH)")
+    # The order of the times is not checked here: the evaluator rejects a list of
+    # entries whose times decrease (TIME ORDER REJECTED, TRIEL_Exec.thy).
     entries = []
-    last = None
     for i, e in enumerate(scn[3:]):
         if not (isinstance(e, list) and len(e) == 4 and e[0] == "entry"):
             raise ScenarioError(f"not an entry: {sexp(e)}")
         t = time_of(e[1])
-        if last is not None and t < last:
-            raise ScenarioError(f"entry {i} is earlier than the entry before it")
-        last = t
         data = e[3]
         if not (isinstance(data, list) and data and data[0] == "data"):
             raise ScenarioError(f"expected (data ...) in entry {i}")
-        entries.append(["entry", t, event(e[2], i == 0), ["data"] + [field(f) for f in data[1:]]])
+        try:
+            fs = fields(data[1:])
+        except ScenarioError as err:
+            raise ScenarioError(f"entry {i}: {err}") from None
+        entries.append(["entry", t, event(e[2], i == 0), ["data"] + fs])
     if not entries:
         raise ScenarioError("a scenario needs the activation entry")
     return spec[1], ["trace"] + entries
 
 
-def find_spec(path: str) -> Path:
+def find_spec(path) -> Path:
+    """The specification of (spec PATH): PATH is relative to the root of the
+    repository, whatever the current directory."""
+    if not isinstance(path, Str):
+        raise ScenarioError("expected (spec \"PATH\")")
     p = Path(path)
-    if p.exists():
-        return p
-    q = REPO / path
-    if q.exists():
+    q = p if p.is_absolute() else REPO / p
+    if q.is_file():
         return q
     raise ScenarioError(f"specification not found: {path}")
 
@@ -216,6 +236,9 @@ def main() -> int:
     except UnexpectedInput as e:
         print(f"{args.scenario}: the specification does not parse "
               f"(line {e.line}, column {e.column})", file=sys.stderr)
+        return 1
+    except RecursionError:
+        print(f"{args.scenario}: nested too deeply", file=sys.stderr)
         return 1
     lines = header(tr)
     if tr.rejected:

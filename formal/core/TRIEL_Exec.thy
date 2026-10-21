@@ -634,23 +634,56 @@ next
   let ?y = "(sta (last \<rho>), tstamp (last \<rho>), Deontic s a Must)"
   have "tstamp ?y = tstamp (last \<rho>)" by simp
   with tr have tr': "is_trace (\<rho> @ [?y])" by (rule is_trace_snoc)
-  have ev: "evt (last (\<rho> @ [?y])) = Deontic s a Must" by simp
-  have m: "(\<rho> @ [?y], Done) \<in> must_d s a" unfolding must_d_def using tr' ev by blast
+  have ev: "does s a (evt (last (\<rho> @ [?y])))" by (simp add: does_def)
+  have l2: "2 \<le> length (\<rho> @ [?y])" using ne by (cases \<rho>) simp_all
+  have m: "(\<rho> @ [?y], Done) \<in> must_d s a" unfolding must_d_def using tr' l2 ev by blast
   have "length \<rho> < length (\<rho> @ [?y])" by simp
   moreover have "take (length \<rho>) (\<rho> @ [?y]) = \<rho>" by simp
   ultimately show "ext (must_d s a) \<rho>" unfolding ext_def using m by blast
 qed
 
-lemma ext_mustnot:
-  assumes ne: "\<rho> \<noteq> []"
-  shows "\<not> ext (mustnot_d s a c) \<rho>"
+text \<open>A proper prefix of a violated trace of a prohibition is a trace with no forbidden
+  action yet. It can be continued to a violation at once if the condition is true in its
+  last state.\<close>
+
+lemma ext_mustnot_forbidden:
+  assumes "ext (mustnot_d s a c) \<rho>" and "j < length \<rho>"
+  shows "\<not> forbidden s a c \<rho> j"
 proof
-  assume "ext (mustnot_d s a c) \<rho>"
-  then obtain \<pi>\<^sub>0 r\<^sub>0 where m: "(\<pi>\<^sub>0, r\<^sub>0) \<in> mustnot_d s a c" and len: "length \<rho> < length \<pi>\<^sub>0"
-    and "take (length \<rho>) \<pi>\<^sub>0 = \<rho>"
+  assume f: "forbidden s a c \<rho> j"
+  from assms(1) obtain \<pi>\<^sub>0 r\<^sub>0 where m: "(\<pi>\<^sub>0, r\<^sub>0) \<in> mustnot_d s a c" and len: "length \<rho> < length \<pi>\<^sub>0"
+    and tk: "take (length \<rho>) \<pi>\<^sub>0 = \<rho>"
     unfolding ext_def by blast
-  from m obtain x where "\<pi>\<^sub>0 = [x]" unfolding mustnot_d_def by blast
-  with len ne show False by simp
+  have l2: "2 \<le> length \<pi>\<^sub>0" using len assms(2) by linarith
+  have nf: "\<forall>i < length \<pi>\<^sub>0 - 1. \<not> forbidden s a c \<pi>\<^sub>0 i"
+    using m l2 unfolding mustnot_d_def by auto
+  have sp: "\<rho> @ drop (length \<rho>) \<pi>\<^sub>0 = \<pi>\<^sub>0" using tk by (metis append_take_drop_id)
+  have "forbidden s a c (\<rho> @ drop (length \<rho>) \<pi>\<^sub>0) j"
+    using forbidden_append[OF assms(2)] f by blast
+  then have f0: "forbidden s a c \<pi>\<^sub>0 j" by (simp only: sp)
+  have "j < length \<pi>\<^sub>0 - 1" using assms(2) len by linarith
+  with nf f0 show False by blast
+qed
+
+lemma ext_mustnot:
+  assumes tr: "is_trace \<rho>" and nf: "\<forall>j < length \<rho>. \<not> forbidden s a c \<rho> j"
+    and c: "eval c (st \<rho> (length \<rho> - 1)) = Some True"
+  shows "ext (mustnot_d s a c) \<rho>"
+proof -
+  let ?y = "(sta (last \<rho>), tstamp (last \<rho>), Deontic s a MustNot)"
+  have lp: "0 < length \<rho>" using tr by (simp add: is_trace_def)
+  have "tstamp ?y = tstamp (last \<rho>)" by simp
+  with tr have tr': "is_trace (\<rho> @ [?y])" by (rule is_trace_snoc)
+  have st_eq: "st (\<rho> @ [?y]) (length \<rho> - 1) = st \<rho> (length \<rho> - 1)"
+    using lp by (simp add: st_def nth_append)
+  have f: "forbidden s a c (\<rho> @ [?y]) (length (\<rho> @ [?y]) - 1)"
+    using lp c st_eq by (cases \<rho>) (auto simp: forbidden_def does_def)
+  have nf': "\<forall>j < length (\<rho> @ [?y]) - 1. \<not> forbidden s a c (\<rho> @ [?y]) j"
+    using nf forbidden_append[of _ \<rho> s a c "[?y]"] by simp
+  have m: "(\<rho> @ [?y], Violated) \<in> mustnot_d s a c" unfolding mustnot_d_def using tr' f nf' by blast
+  have "length \<rho> < length (\<rho> @ [?y])" by simp
+  moreover have "take (length \<rho>) (\<rho> @ [?y]) = \<rho>" by simp
+  ultimately show ?thesis unfolding ext_def using m by blast
 qed
 
 lemma ext_may:
@@ -661,7 +694,7 @@ proof -
   have lp: "0 < length \<rho>" using tr by (simp add: is_trace_def)
   have "tstamp ?y = tstamp (last \<rho>)" by simp
   with tr have tr': "is_trace (\<rho> @ [?y])" by (rule is_trace_snoc)
-  have ev: "evt (last (\<rho> @ [?y])) = Deontic s a May" by simp
+  have ev: "does s a (evt (last (\<rho> @ [?y])))" by (simp add: does_def)
   have e1: "length (\<rho> @ [?y]) - 1 = length \<rho>" by simp
   have l1: "1 \<le> length (\<rho> @ [?y]) - 1" unfolding e1 using lp by linarith
   have i: "length (\<rho> @ [?y]) - 2 = length \<rho> - 1" by (simp only: length_append_singleton)
@@ -676,7 +709,8 @@ proof -
   ultimately show ?thesis unfolding ext_def using m by blast
 qed
 
-lemma mem_must: "(\<pi>, r) \<in> must_d s a \<longleftrightarrow> is_trace \<pi> \<and> evt (last \<pi>) = Deontic s a Must \<and> r = Done"
+lemma mem_must:
+  "(\<pi>, r) \<in> must_d s a \<longleftrightarrow> is_trace \<pi> \<and> 2 \<le> length \<pi> \<and> does s a (evt (last \<pi>)) \<and> r = Done"
   by (auto simp: must_d_def)
 
 lemma len1: "(\<exists>x. \<pi> = [x]) \<longleftrightarrow> length \<pi> = 1"
@@ -684,11 +718,15 @@ lemma len1: "(\<exists>x. \<pi> = [x]) \<longleftrightarrow> length \<pi> = 1"
 
 lemma mem_may:
   "(\<pi>, r) \<in> may_d s a c \<longleftrightarrow>
-     r = Done \<and> ((is_trace \<pi> \<and> evt (last \<pi>) = Deontic s a May \<and> 1 \<le> length \<pi> - 1
+     r = Done \<and> ((is_trace \<pi> \<and> does s a (evt (last \<pi>)) \<and> 1 \<le> length \<pi> - 1
                    \<and> eval c (st \<pi> (length \<pi> - 2)) = Some True) \<or> length \<pi> = 1)"
   unfolding may_d_def len1[symmetric] by auto
 
-lemma mem_mustnot: "(\<pi>, r) \<in> mustnot_d s a c \<longleftrightarrow> r = Done \<and> length \<pi> = 1"
+lemma mem_mustnot:
+  "(\<pi>, r) \<in> mustnot_d s a c \<longleftrightarrow>
+     (if r = Done then length \<pi> = 1
+      else r = Violated \<and> is_trace \<pi> \<and> forbidden s a c \<pi> (length \<pi> - 1)
+           \<and> (\<forall>j \<in> set [0..<length \<pi> - 1]. \<not> forbidden s a c \<pi> j))"
   unfolding mustnot_d_def len1[symmetric] by auto
 
 lemma mem_skip: "(\<pi>, r) \<in> skip_d \<longleftrightarrow> r = Done \<and> length \<pi> = 1"
@@ -775,11 +813,14 @@ text \<open>\<open>mem3 t \<pi> r\<close> decides whether \<open>(\<pi>, r)\<clo
 
 fun mem3 :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> outcome \<Rightarrow> bool option"
 and ext3 :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> bool option" where
-  "mem3 (TMust s a) \<pi> r = Some (is_trace \<pi> \<and> evt (last \<pi>) = Deontic s a Must \<and> r = Done)"
+  "mem3 (TMust s a) \<pi> r = Some (is_trace \<pi> \<and> 2 \<le> length \<pi> \<and> does s a (evt (last \<pi>)) \<and> r = Done)"
 | "mem3 (TMay s a c) \<pi> r =
-     Some (r = Done \<and> ((is_trace \<pi> \<and> evt (last \<pi>) = Deontic s a May \<and> 1 \<le> length \<pi> - 1
+     Some (r = Done \<and> ((is_trace \<pi> \<and> does s a (evt (last \<pi>)) \<and> 1 \<le> length \<pi> - 1
                          \<and> eval c (st \<pi> (length \<pi> - 2)) = Some True) \<or> length \<pi> = 1))"
-| "mem3 (TMustNot s a c) \<pi> r = Some (r = Done \<and> length \<pi> = 1)"
+| "mem3 (TMustNot s a c) \<pi> r =
+     Some (if r = Done then length \<pi> = 1
+           else r = Violated \<and> is_trace \<pi> \<and> forbidden s a c \<pi> (length \<pi> - 1)
+                \<and> (\<forall>j \<in> set [0..<length \<pi> - 1]. \<not> forbidden s a c \<pi> j))"
 | "mem3 (TOr t u) \<pi> r = kor (mem3 t \<pi> r) (mem3 u \<pi> r)"
 | "mem3 (TThen t u) \<pi> r =
      kor (kors (map (\<lambda>k. kand (mem3 t (take (Suc k) \<pi>) Done) (mem3 u (drop k \<pi>) r)) [0..<length \<pi>]))
@@ -801,7 +842,9 @@ and ext3 :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: lin
 | "ext3 (TMay s a c) \<rho> =
      (if \<not> is_trace \<rho> then Some False
       else if eval c (st \<rho> (length \<rho> - 1)) = Some True then Some True else None)"
-| "ext3 (TMustNot s a c) \<rho> = Some False"
+| "ext3 (TMustNot s a c) \<rho> =
+     (if \<not> is_trace \<rho> \<or> (\<exists>j \<in> set [0..<length \<rho>]. forbidden s a c \<rho> j) then Some False
+      else if eval c (st \<rho> (length \<rho> - 1)) = Some True then Some True else None)"
 | "ext3 (TOr t u) \<rho> = kor (ext3 t \<rho>) (ext3 u \<rho>)"
 | "ext3 (TThen t u) \<rho> =
      kor (ext3 t \<rho>)
@@ -875,7 +918,24 @@ next
     by (auto simp: mem_may e1 e2 split: if_splits)
 next
   case (TMustNot s a c)
-  then show ?case by (auto simp: mem_mustnot ext_mustnot)
+  have e1: "\<not> ext (mustnot_d s a c) \<rho>" if "\<rho> \<noteq> []" "\<not> is_trace \<rho>"
+    using ext_wf[OF wf_mustnot that(1)] that(2) by blast
+  have e2: "\<not> ext (mustnot_d s a c) \<rho>" if "j < length \<rho>" "forbidden s a c \<rho> j" for j
+    using ext_mustnot_forbidden[of s a c \<rho> j] that by blast
+  have e3: "ext (mustnot_d s a c) \<rho>"
+    if "is_trace \<rho>" "\<forall>j < length \<rho>. \<not> forbidden s a c \<rho> j"
+       "eval c (st \<rho> (length \<rho> - 1)) = Some True"
+    using ext_mustnot[OF that] .
+  show ?case
+  proof (intro conjI impI)
+    assume "mem3 (TMustNot s a c) \<pi> r = Some b"
+    then show "(\<pi>, r) \<in> den (TMustNot s a c) \<longleftrightarrow> b"
+      by (simp only: mem3.simps den.simps mem_mustnot) auto
+  next
+    assume ne: "\<rho> \<noteq> []" and e: "ext3 (TMustNot s a c) \<rho> = Some b'"
+    show "ext (den (TMustNot s a c)) \<rho> \<longleftrightarrow> b'"
+      using e e1[OF ne] e2 e3 by (auto split: if_splits)
+  qed
 next
   case (TOr t u)
   from TOr.prems have ft: "and_free t" and fu: "and_free u" by simp_all
@@ -1834,10 +1894,69 @@ theorem benv_total: "benv blk ! i = Some u \<Longrightarrow> total (den u)"
 end
 
 
+subsection \<open>Time order\<close>
+
+text \<open>A list of observations is an implementation trace only if its times do not decrease
+  (\<open>is_trace\<close>). Every verdict depends on this: a breach is final only because no later
+  entry can be earlier than the entry past the deadline (\<open>window_final\<close>). The evaluator
+  checks it before anything else, and \<open>time_order\<close> is the first entry that is earlier than
+  the entry before it.\<close>
+
+definition obs_time :: "observation \<Rightarrow> int" where
+  "obs_time x = fst (snd x)"
+
+definition time_order :: "observation list \<Rightarrow> nat option" where
+  "time_order obs = find (\<lambda>j. 0 < j \<and> obs_time (obs ! j) < obs_time (obs ! (j - 1))) [0..<length obs]"
+
+lemma map_tstamp_raw_trace: "map tstamp (raw_trace obs) = map obs_time obs"
+  by (induction obs) (auto simp: raw_trace_def obs_time_def split: prod.splits)
+
+lemma time_order_None: "time_order obs = None \<longleftrightarrow> sorted (map obs_time obs)"
+proof -
+  have "time_order obs = None \<longleftrightarrow>
+          (\<forall>j < length obs. \<not> (0 < j \<and> obs_time (obs ! j) < obs_time (obs ! (j - 1))))"
+    by (simp add: time_order_def find_upt_None)
+  also have "\<dots> \<longleftrightarrow> (\<forall>i. Suc i < length obs \<longrightarrow> obs_time (obs ! i) \<le> obs_time (obs ! Suc i))"
+  proof
+    assume a: "\<forall>j < length obs. \<not> (0 < j \<and> obs_time (obs ! j) < obs_time (obs ! (j - 1)))"
+    show "\<forall>i. Suc i < length obs \<longrightarrow> obs_time (obs ! i) \<le> obs_time (obs ! Suc i)"
+    proof (intro allI impI)
+      fix i assume "Suc i < length obs"
+      with a have "\<not> (0 < Suc i \<and> obs_time (obs ! Suc i) < obs_time (obs ! (Suc i - 1)))" by blast
+      then show "obs_time (obs ! i) \<le> obs_time (obs ! Suc i)" by simp
+    qed
+  next
+    assume a: "\<forall>i. Suc i < length obs \<longrightarrow> obs_time (obs ! i) \<le> obs_time (obs ! Suc i)"
+    show "\<forall>j < length obs. \<not> (0 < j \<and> obs_time (obs ! j) < obs_time (obs ! (j - 1)))"
+    proof (intro allI impI)
+      fix j assume j: "j < length obs"
+      show "\<not> (0 < j \<and> obs_time (obs ! j) < obs_time (obs ! (j - 1)))"
+      proof (cases j)
+        case (Suc i)
+        with a j have "obs_time (obs ! i) \<le> obs_time (obs ! Suc i)" by blast
+        with Suc show ?thesis by simp
+      qed simp
+    qed
+  qed
+  also have "\<dots> \<longleftrightarrow> sorted (map obs_time obs)" by (simp add: sorted_iff_nth_Suc)
+  finally show ?thesis .
+qed
+
+theorem time_order_is_trace: "obs \<noteq> [] \<Longrightarrow> time_order obs = None \<longleftrightarrow> is_trace (raw_trace obs)"
+  by (simp add: is_trace_def time_order_None map_tstamp_raw_trace) (simp add: raw_trace_def)
+
+lemma obs_time_erase: "j < length obs \<Longrightarrow> obs_time (erase_obs H obs ! j) = obs_time (obs ! j)"
+  by (simp add: erase_obs_def obs_time_def split: prod.splits)
+
+lemma time_order_erase: "time_order (erase_obs H obs) = time_order obs"
+  unfolding time_order_def by (rule find_cong) (auto simp: obs_time_erase)
+
+
 subsection \<open>The report\<close>
 
 datatype line =
-    LActivation bool
+    LTimeOrder nat
+  | LActivation bool
   | LBlock bool
   | LTypes "(nat \<times> name) option"
   | LMust nat name act "int option" "name status" "name ract list"
@@ -1958,8 +2077,8 @@ text \<open>The evaluator on data without hidden factors. Activation is checked 
   in a handler bound to a prohibition; then the types of the data as given. The verdicts,
   the invariants and the membership of composite terms are computed on the blocked trace.\<close>
 
-definition evaluate :: "spec \<Rightarrow> observation list \<Rightarrow> line list" where
-  "evaluate sp obs =
+definition evaluate_trace :: "spec \<Rightarrow> observation list \<Rightarrow> line list" where
+  "evaluate_trace sp obs =
      (case sp of Spec fs blk invs \<Rightarrow>
         (let \<pi> = btrace (max_age fs) (raw_trace obs); \<tau>\<^sub>0 = time \<pi> 0; \<sigma>\<^sub>0 = st \<pi> 0 in
          if obs = [] \<or> \<not> activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<or> \<not> inv_activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 (map snd invs)
@@ -1973,6 +2092,30 @@ definition evaluate :: "spec \<Rightarrow> observation list \<Rightarrow> line l
                  Some e \<Rightarrow> [LTypes (Some e)]
                | None \<Rightarrow> LTypes None # map (term_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi>) [0..<length blk]
                           @ map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> \<pi>)) invs))))"
+
+text \<open>A list of observations whose times decrease is rejected before anything else, with the
+  first entry that is earlier than the entry before it.\<close>
+
+definition evaluate :: "spec \<Rightarrow> observation list \<Rightarrow> line list" where
+  "evaluate sp obs = (case time_order obs of Some j \<Rightarrow> [LTimeOrder j] | None \<Rightarrow> evaluate_trace sp obs)"
+
+theorem evaluate_time_order:
+  "time_order obs = Some j \<Longrightarrow> evaluate sp obs = [LTimeOrder j]"
+  by (simp add: evaluate_def)
+
+theorem time_order_rejected:
+  assumes "j < length obs" and "0 < j" and "obs_time (obs ! j) < obs_time (obs ! (j - 1))"
+  shows "\<exists>k \<le> j. evaluate sp obs = [LTimeOrder k]"
+proof -
+  have "time_order obs \<noteq> None"
+    using assms by (auto simp: time_order_def find_upt_None)
+  then obtain k where k: "time_order obs = Some k" by blast
+  then have "\<forall>i < k. \<not> (0 < i \<and> obs_time (obs ! i) < obs_time (obs ! (i - 1)))"
+    by (simp add: time_order_def find_upt_Some)
+  then have "\<not> j < k" using assms(2,3) by blast
+  then have "k \<le> j" by simp
+  with k show ?thesis by (auto simp: evaluate_def)
+qed
 
 text \<open>The evaluator removes the hidden factors from the data of every entry, then evaluates.\<close>
 
@@ -2005,6 +2148,285 @@ proof -
   then show ?thesis by (simp add: wt_none)
 qed
 
+subsection \<open>Verdicts are final in the report\<close>
+
+text \<open>The theorems of finality (\<open>window_final\<close>, \<open>handle_breach_final\<close>, \<open>else_final\<close>,
+  \<open>sinv_final\<close>) assume a trace, with non-decreasing times. The evaluator checks the order of
+  the times itself, so finality holds for \<open>run\<close> on every list of observations, with no such
+  assumption: a decided line of the report stays the same when observations are added at the
+  end, unless the longer list is rejected for its time order or its types. The lines of
+  composite terms are not verdicts: they say whether the whole observed trace is a trace of
+  the term, and that changes when the trace grows.\<close>
+
+fun cont_decided :: "name continuation \<Rightarrow> bool" where
+  "cont_decided (Cure v) = (v \<noteq> Pending)"
+| "cont_decided (Escalated s v) = (v \<noteq> Pending)"
+| "cont_decided _ = True"
+
+fun status_decided :: "name status \<Rightarrow> bool" where
+  "status_decided SFulfilled = True"
+| "status_decided (SBreached \<tau> c) = cont_decided c"
+| "status_decided SPending = False"
+
+fun decided :: "line \<Rightarrow> bool" where
+  "decided (LMust i s a d sts acts) = status_decided sts"
+| "decided (LMustNot i s a v acts) = (v \<noteq> Pending)"
+| "decided (LMay i s a v) = (v = Fulfilled)"
+| "decided (LMustElse i s a d s' a' d' es) = (es \<noteq> EPending \<and> (\<forall>\<tau> v. es = EElse \<tau> v \<longrightarrow> v \<noteq> Pending))"
+| "decided (LInvariant n b) = (b \<noteq> None)"
+| "decided _ = False"
+
+lemma handle_breach_decided_final:
+  assumes tr: "is_trace (\<pi> @ \<rho>)" and dec: "status_decided (handle_breach \<tau>\<^sub>0 lo s a d acts \<pi>)"
+  shows "handle_breach \<tau>\<^sub>0 lo s a d acts (\<pi> @ \<rho>) = handle_breach \<tau>\<^sub>0 lo s a d acts \<pi>"
+proof (cases "window s a lo d \<pi>")
+  case Fulfilled
+  then have "window s a lo d (\<pi> @ \<rho>) = Fulfilled" using window_final[OF tr] by simp
+  with Fulfilled show ?thesis by (simp add: handle_breach_def)
+next
+  case Pending
+  with dec show ?thesis by (simp add: handle_breach_def)
+next
+  case (Breached \<tau>\<^sub>b)
+  then have tb: "\<tau>\<^sub>b = d" by (rule window_breached_at)
+  show ?thesis
+  proof (rule handle_breach_final[OF tr])
+    show "window s a lo d \<pi> \<noteq> Pending" using Breached by simp
+  next
+    fix k assume "cont_of acts = Some (CureBy k)"
+    with dec Breached tb show "window s a (Some d) (d + k) \<pi> \<noteq> Pending"
+      by (simp add: handle_breach_def)
+  next
+    fix s' assume "cont_of acts = Some (EscalateTo s')"
+    with dec Breached tb show "window s' a (Some d) (d + (d - \<tau>\<^sub>0)) \<pi> \<noteq> Pending"
+      by (simp add: handle_breach_def)
+  qed
+qed
+
+lemma may_verdict_final:
+  assumes "may_verdict s a c \<pi> = Fulfilled"
+  shows "may_verdict s a c (\<pi> @ \<rho>) = Fulfilled"
+proof -
+  from assms obtain j where j: "1 \<le> j" "j < length \<pi>" "does s a (evt (\<pi> ! j))"
+    "eval c (st \<pi> (j - 1)) = Some True"
+    unfolding may_verdict_def by (auto split: if_splits)
+  then have "1 \<le> j \<and> j < length (\<pi> @ \<rho>) \<and> does s a (evt ((\<pi> @ \<rho>) ! j))
+               \<and> eval c (st (\<pi> @ \<rho>) (j - 1)) = Some True"
+    by (simp add: nth_append)
+  then show ?thesis unfolding may_verdict_def by auto
+qed
+
+lemma ob_report_status_final:
+  assumes tr: "is_trace (\<pi> @ \<rho>)" and dec: "status_decided (handle_breach \<tau>\<^sub>0 lo s a d acts \<pi>)"
+  shows "ob_report num d (handle_breach \<tau>\<^sub>0 lo s a d acts (\<pi> @ \<rho>)) acts (\<pi> @ \<rho>)
+           = ob_report num d (handle_breach \<tau>\<^sub>0 lo s a d acts \<pi>) acts \<pi>"
+proof (cases "handle_breach \<tau>\<^sub>0 lo s a d acts \<pi>")
+  case (SBreached \<tau> c)
+  then show ?thesis by (rule ob_report_final[OF tr])
+qed (use handle_breach_decided_final[OF tr dec] in \<open>simp_all add: ob_report_def\<close>)
+
+lemma term_line_final:
+  assumes tr: "is_trace (\<pi> @ \<rho>)" and ne: "\<pi> \<noteq> []" and dec: "decided (term_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi> i)"
+  shows "term_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk (\<pi> @ \<rho>) i = term_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi> i"
+proof (cases "blk ! i")
+  case (SMust s a D F)
+  show ?thesis
+  proof (cases "start_of time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 F")
+    case None
+    with SMust show ?thesis by (simp add: term_line_def must_line_def)
+  next
+    case (Some b)
+    note sb = Some
+    show ?thesis
+    proof (cases "deadline_of time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 F D")
+      case None
+      with SMust sb dec have "ob_verdict s a (lo_of F b) None \<pi> = Fulfilled"
+        by (auto simp: term_line_def must_line_def split: verdict.splits)
+      then have "ob_verdict s a (lo_of F b) None (\<pi> @ \<rho>) = Fulfilled"
+        using ob_verdict_None_final[of s a "lo_of F b" \<pi> \<rho>] by simp
+      with SMust sb None \<open>ob_verdict s a (lo_of F b) None \<pi> = Fulfilled\<close> show ?thesis
+        by (simp add: term_line_def must_line_def)
+    next
+      case (Some d)
+      note sd' = Some
+      let ?h = "handler_of blk i"
+      from SMust sb sd' dec
+      have sd: "status_decided (handle_breach b (lo_of F b) s a d ?h \<pi>)"
+        by (simp add: term_line_def must_line_def Let_def)
+      note h = handle_breach_decided_final[OF tr sd]
+      note r = ob_report_status_final[OF tr sd, of num_of]
+      from SMust sb sd' h r show ?thesis
+        by (simp add: term_line_def must_line_def Let_def)
+    qed
+  qed
+next
+  case (SMustNot s a c)
+  with dec have v: "pr_verdict s a c \<pi> \<noteq> Pending" by (simp add: term_line_def)
+  with SMustNot show ?thesis
+    by (simp add: term_line_def pr_verdict_final[OF v] pr_report_final[OF v])
+next
+  case (SMay s a c)
+  with dec have "may_verdict s a c \<pi> = Fulfilled" by (simp add: term_line_def)
+  with SMay may_verdict_final[OF this] show ?thesis by (simp add: term_line_def)
+next
+  case (SMustElse s a d s' a' D')
+  show ?thesis
+  proof (cases "resolve time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 d")
+    case None
+    with SMustElse show ?thesis by (simp add: term_line_def else_line_def)
+  next
+    case (Some e)
+    let ?e' = "else_deadline time_of \<sigma>\<^sub>0 e D'"
+    from SMustElse Some dec
+    have d1: "else_verdict s a e s' a' ?e' \<pi> \<noteq> EPending"
+      and d2: "\<And>v. else_verdict s a e s' a' ?e' \<pi> = EElse e v \<Longrightarrow> v \<noteq> Pending"
+      by (auto simp: term_line_def else_line_def Let_def)
+    from else_final[OF tr d1 d2] SMustElse Some show ?thesis
+      by (simp add: term_line_def else_line_def Let_def)
+  qed
+qed (use dec in \<open>simp_all add: term_line_def composite_line_def split: option.splits\<close>)
+
+lemma btrace_prefix:
+  "take (length \<pi>) (btrace M (\<pi> @ \<rho>)) = btrace M \<pi>"
+proof (rule nth_equalityI)
+  show "length (take (length \<pi>) (btrace M (\<pi> @ \<rho>))) = length (btrace M \<pi>)" by simp
+next
+  fix j assume "j < length (take (length \<pi>) (btrace M (\<pi> @ \<rho>)))"
+  then have j: "j < length \<pi>" by simp
+  have e: "evt ((\<pi> @ \<rho>) ! i) = evt (\<pi> ! i) \<and> time (\<pi> @ \<rho>) i = time \<pi> i" if "i \<le> j" for i
+    using that j by (simp add: nth_append)
+  have fr: "fresh m x (\<pi> @ \<rho>) j \<longleftrightarrow> fresh m x \<pi> j" for m x
+    unfolding fresh_def
+  proof
+    assume "\<exists>i \<le> j. evt ((\<pi> @ \<rho>) ! i) = Arrival x \<and> time (\<pi> @ \<rho>) j - time (\<pi> @ \<rho>) i \<le> m"
+    then obtain i where "i \<le> j" "evt ((\<pi> @ \<rho>) ! i) = Arrival x" "time (\<pi> @ \<rho>) j - time (\<pi> @ \<rho>) i \<le> m"
+      by blast
+    with e[of i] e[OF order_refl] show "\<exists>i \<le> j. evt (\<pi> ! i) = Arrival x \<and> time \<pi> j - time \<pi> i \<le> m"
+      by auto
+  next
+    assume "\<exists>i \<le> j. evt (\<pi> ! i) = Arrival x \<and> time \<pi> j - time \<pi> i \<le> m"
+    then obtain i where "i \<le> j" "evt (\<pi> ! i) = Arrival x" "time \<pi> j - time \<pi> i \<le> m"
+      by blast
+    with e[of i] e[OF order_refl]
+    show "\<exists>i \<le> j. evt ((\<pi> @ \<rho>) ! i) = Arrival x \<and> time (\<pi> @ \<rho>) j - time (\<pi> @ \<rho>) i \<le> m"
+      by auto
+  qed
+  have "blockp M (\<pi> @ \<rho>) j = blockp M \<pi> j"
+    using j by (auto simp: blockp_def fr split: list.splits option.splits)
+  with j show "take (length \<pi>) (btrace M (\<pi> @ \<rho>)) ! j = btrace M \<pi> ! j"
+    by (simp add: btrace_def nth_append)
+qed
+
+lemma btrace_append: "\<exists>\<rho>'. btrace M (\<pi> @ \<rho>) = btrace M \<pi> @ \<rho>'"
+  using btrace_prefix[of \<pi> M \<rho>] by (metis append_take_drop_id)
+
+theorem run_final:
+  assumes i: "i < length (run sp obs)" and dec: "decided (run sp obs ! i)"
+  shows "run sp (obs @ more) ! i = run sp obs ! i
+         \<or> (\<exists>j. run sp (obs @ more) = [LTimeOrder j])
+         \<or> (\<exists>e. LTypes (Some e) \<in> set (run sp (obs @ more)))"
+proof -
+  obtain fs blk invs where sp: "sp = Spec fs blk invs" by (cases sp)
+  let ?H = "hidden fs"
+  let ?O = "erase_obs ?H obs" and ?O' = "erase_obs ?H (obs @ more)"
+  have O': "?O' = ?O @ erase_obs ?H more" by (simp add: erase_obs_def)
+  have run: "run sp obs = evaluate sp ?O" "run sp (obs @ more) = evaluate sp ?O'"
+    by (simp_all add: run_def sp)
+  show ?thesis
+  proof (cases "time_order ?O'")
+    case (Some j)
+    then show ?thesis by (simp add: run evaluate_def)
+  next
+    case None
+    note None' = None
+    have to: "time_order ?O = None"
+    proof (rule ccontr)
+      assume "time_order ?O \<noteq> None"
+      then obtain j where "time_order ?O = Some j" by blast
+      then have "run sp obs = [LTimeOrder j]" by (simp add: run evaluate_def)
+      with i dec show False by simp
+    qed
+    define M where "M = max_age fs"
+    define \<pi> where "\<pi> = btrace M (raw_trace ?O)"
+    define \<pi>' where "\<pi>' = btrace M (raw_trace ?O')"
+    have ne: "obs \<noteq> []"
+    proof
+      assume "obs = []"
+      then have "run sp obs = [LActivation False]"
+        by (simp add: run_def evaluate_def time_order_def evaluate_trace_def sp erase_obs_def)
+      with i dec show False by simp
+    qed
+    then have neO: "?O \<noteq> []" and neO': "?O' \<noteq> []" by (simp_all add: erase_obs_def)
+    obtain \<rho> where pr: "\<pi>' = \<pi> @ \<rho>"
+      using btrace_append[of M "raw_trace ?O" "raw_trace (erase_obs ?H more)"]
+      unfolding \<pi>_def \<pi>'_def O' by (auto simp: raw_trace_def)
+    have tr': "is_trace \<pi>'"
+      unfolding \<pi>'_def by (rule btrace_is_trace) (use None neO' time_order_is_trace in blast)
+    have lp: "0 < length \<pi>" using ne by (simp add: \<pi>_def raw_trace_def erase_obs_def)
+    then have nep: "\<pi> \<noteq> []" by auto
+    have t0: "time \<pi>' 0 = time \<pi> 0" and s0: "st \<pi>' 0 = st \<pi> 0"
+      using lp pr by simp_all
+    have ev: "evaluate sp ?O = evaluate_trace sp ?O" "evaluate sp ?O' = evaluate_trace sp ?O'"
+      using to None by (simp_all add: evaluate_def)
+    let ?act = "activates time_of (time \<pi> 0) (st \<pi> 0) blk
+                \<and> inv_activates time_of (time \<pi> 0) (st \<pi> 0) (map snd invs)
+                \<and> else_order_ok time_of (time \<pi> 0) (st \<pi> 0) blk"
+    let ?blk = "wf_block blk \<and> cont_free_prohibitions blk \<and> else_handlers_ok blk \<and> refs_ok blk"
+    let ?lines = "\<lambda>p. map (term_line (time \<pi> 0) (st \<pi> 0) blk p) [0..<length blk]
+                     @ map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> p)) invs"
+    have E: "evaluate_trace sp ?O =
+               (if \<not> ?act then [LActivation False]
+                else LActivation True # (if \<not> ?blk then [LBlock False] else LBlock True #
+                  (case ill_typed fs ?O of Some e \<Rightarrow> [LTypes (Some e)]
+                   | None \<Rightarrow> LTypes None # ?lines \<pi>)))"
+      using neO by (simp add: evaluate_trace_def sp Let_def flip: \<pi>_def M_def)
+    have E': "evaluate_trace sp ?O' =
+               (if \<not> ?act then [LActivation False]
+                else LActivation True # (if \<not> ?blk then [LBlock False] else LBlock True #
+                  (case ill_typed fs ?O' of Some e \<Rightarrow> [LTypes (Some e)]
+                   | None \<Rightarrow> LTypes None # ?lines \<pi>')))"
+      using neO' by (simp add: evaluate_trace_def sp Let_def t0 s0 flip: \<pi>'_def M_def
+                         split: option.split)
+    have act: "?act" and blk: "?blk" and ty: "ill_typed fs ?O = None"
+      using i dec unfolding run ev E by (auto split: if_splits option.splits simp: nth_Cons')
+    then have R: "run sp obs = LActivation True # LBlock True # LTypes None # ?lines \<pi>"
+      unfolding run ev E by simp
+    show ?thesis
+    proof (cases "ill_typed fs ?O'")
+      case (Some e)
+      with act blk have "LTypes (Some e) \<in> set (run sp (obs @ more))"
+        unfolding run ev E' by simp
+      then show ?thesis by blast
+    next
+      case None
+      with act blk have R': "run sp (obs @ more) = LActivation True # LBlock True # LTypes None # ?lines \<pi>'"
+        unfolding run ev E' by simp
+      have "3 \<le> i" using i dec unfolding R by (cases i; cases "i - 1"; cases "i - 2") auto
+      define k where "k = i - 3"
+      with \<open>3 \<le> i\<close> have k: "i = Suc (Suc (Suc k))" by arith
+      have kl: "k < length (?lines \<pi>)" using i unfolding R k by simp
+      have dk: "decided (?lines \<pi> ! k)" using dec unfolding R k by simp
+      have "?lines \<pi>' ! k = ?lines \<pi> ! k"
+      proof (cases "k < length blk")
+        case True
+        have "decided (term_line (time \<pi> 0) (st \<pi> 0) blk \<pi> k)" using dk True by (simp add: nth_append)
+        from term_line_final[OF tr'[unfolded pr] nep this] True show ?thesis
+          by (simp add: nth_append pr)
+      next
+        case False
+        define n where "n = k - length blk"
+        have nl: "n < length invs" using kl False by (simp add: n_def)
+        obtain nm \<iota> where inv: "invs ! n = (nm, \<iota>)" by (cases "invs ! n")
+        have l: "?lines p ! k = LInvariant nm (sinv_eval time_of \<iota> p)" for p
+          using False nl inv by (simp add: nth_append n_def)
+        from dk obtain b where b: "sinv_eval time_of \<iota> \<pi> = Some b" by (auto simp: l)
+        from sinv_final[OF tr'[unfolded pr] nep b] show ?thesis by (simp add: l pr b)
+      qed
+      then show ?thesis unfolding R R' k by simp
+    qed
+  qed
+qed
+
 text \<open>A composite line reports \<open>mem3\<close> on the blocked trace. By \<open>mem3_sound\<close> its definite
   answers are membership in the denotation of the term, for terms without AND, and by
   \<open>mem3_complete\<close> they are always definite for terms without UNLESS and AND.\<close>
@@ -2020,7 +2442,7 @@ export_code run Spec Fdecl Act ArgName ArgVal Pen PVal PAdd PSub PMul PNeg num_o
   Always Eventually Next SInv SEventuallyWithin TPrim TOptional TRecord PBool PInt PDec PStr PTime
   ABool ANum AStr ATime dec_atom quotient_of Atom Nom fmap_of_list Deontic Arrival Tick
   Must May MustNot
-  LActivation LBlock LTypes LMust LMustNot LMay LMustElse LOnBreach LComposite LInvariant
+  LTimeOrder LActivation LBlock LTypes LMust LMustNot LMay LMustElse LOnBreach LComposite LInvariant
   EFulfilled EPending EElse
   SFulfilled SPending SBreached NoContinuation Terminated Cure Escalated
   Fulfilled Breached Pending

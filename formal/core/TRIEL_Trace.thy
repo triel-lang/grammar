@@ -86,21 +86,50 @@ fun kappa :: "outcome \<Rightarrow> outcome" where
 
 subsection \<open>Deontic primitives\<close>
 
-text \<open>\<open>\<pi>\<close> ends with \<open>(subject, action, polarity)\<close> when that is the event of its last entry.
-  For MAY, \<open>eval(c, \<sigma>\<^sub>n\<^sub>-\<^sub>1)\<close> with \<open>n = |\<pi>| - 1\<close> refers to the entry before the last
-  one, so the action trace has at least two entries.\<close>
+text \<open>An event is matched to a norm by subject and action only: the polarity in the event
+  is ignored, here and in the verdicts of TRIEL_Breach (\<open>does\<close>). The polarity belongs to the
+  norm. The first entry of a trace is the entry at which the term is reached; actions are
+  the events of the later entries (indices \<open>\<ge> 1\<close>). So a taken action gives a trace of at
+  least two entries, and for MAY and MUST_NOT, \<open>eval(c, \<sigma>\<^sub>n\<^sub>-\<^sub>1)\<close> with \<open>n = |\<pi>| - 1\<close>
+  refers to the state of the entry before the action.\<close>
+
+definition does :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 's, 'a) event \<Rightarrow> bool" where
+  "does s a e \<longleftrightarrow> (\<exists>p. e = Deontic s a p)"
 
 definition must_d :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) den" where
-  "must_d s a = {(\<pi>, Done) | \<pi>. is_trace \<pi> \<and> evt (last \<pi>) = Deontic s a Must}"
+  "must_d s a = {(\<pi>, Done) | \<pi>. is_trace \<pi> \<and> 2 \<le> length \<pi> \<and> does s a (evt (last \<pi>))}"
 
 definition may_d :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) den" where
   "may_d s a c =
-     {(\<pi>, Done) | \<pi>. is_trace \<pi> \<and> evt (last \<pi>) = Deontic s a May
+     {(\<pi>, Done) | \<pi>. is_trace \<pi> \<and> does s a (evt (last \<pi>))
                      \<and> 1 \<le> length \<pi> - 1 \<and> eval c (st \<pi> (length \<pi> - 2)) = Some True}
      \<union> {([x], Done) | x. True}"
 
-definition mustnot_d :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v) expr \<Rightarrow> ('n, 'v, 't, 's, 'a) den" where
-  "mustnot_d s a c = {([x], Done) | x. True}"
+text \<open>The entry \<open>j\<close> of \<open>\<pi>\<close> is a forbidden action of \<open>s MUST_NOT a WHEN c\<close> when it is a later
+  entry (\<open>j \<ge> 1\<close>), its event is the action \<open>a\<close> of \<open>s\<close>, and \<open>c\<close> is true in the state of the
+  entry before it. This is the predicate of the verdict \<open>pr_verdict\<close> of TRIEL_Breach.\<close>
+
+definition forbidden :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 't, 's, 'a) trace \<Rightarrow> nat \<Rightarrow> bool" where
+  "forbidden s a c \<pi> j \<longleftrightarrow>
+     1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> eval c (st \<pi> (j - 1)) = Some True"
+
+text \<open>A prohibition completes at once, with the one-entry trace and outcome Done, so it never
+  holds up what follows it. It is violated by a trace that ends with its first forbidden
+  action: the prohibition is in force from the entry where it is reached to the end of the
+  trace, as \<open>pr_verdict\<close> watches a top-level prohibition from activation on.\<close>
+
+definition mustnot_d :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) den" where
+  "mustnot_d s a c =
+     {([x], Done) | x. True}
+     \<union> {(\<pi>, Violated) | \<pi>. is_trace \<pi> \<and> forbidden s a c \<pi> (length \<pi> - 1)
+                         \<and> (\<forall>j < length \<pi> - 1. \<not> forbidden s a c \<pi> j)}"
+
+lemma forbidden_append:
+  "j < length \<pi> \<Longrightarrow> forbidden s a c (\<pi> @ \<rho>) j \<longleftrightarrow> forbidden s a c \<pi> j"
+  unfolding forbidden_def st_def by (auto simp: nth_append)
+
+lemma forbidden_less: "forbidden s a c \<pi> j \<Longrightarrow> j < length \<pi>"
+  by (simp add: forbidden_def)
 
 subsection \<open>Composite terms\<close>
 
@@ -780,7 +809,7 @@ proof (rule totalI)
   obtain \<sigma> \<tau> e where x: "x = (\<sigma>, \<tau>, e)" by (cases x) blast
   let ?\<pi> = "[x, (\<sigma>, \<tau>, Deontic s a Must)]"
   have "is_trace ?\<pi>" by (simp add: is_trace_def x)
-  then have "(?\<pi>, Done) \<in> must_d s a" by (simp add: must_d_def)
+  then have "(?\<pi>, Done) \<in> must_d s a" by (simp add: must_d_def does_def)
   then show "\<exists>\<pi> r. (\<pi>, r) \<in> must_d s a \<and> \<pi> \<noteq> [] \<and> hd \<pi> = x" by fastforce
 qed
 

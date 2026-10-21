@@ -44,7 +44,8 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
     argument is a literal (a value) or the name of a subject or a factor
     (a path), which is not evaluated; anything else is rejected.
   * FROM s of an obligation is (at T) or (factor PATH 0), the start of its
-    window; a duration in BY counts from it. Without FROM it is (none).
+    window; a duration in BY counts from it. A factor in a deadline or in FROM
+    must be a DateTime. A record type with a field declared twice is rejected. Without FROM it is (none).
     FROM inside a composite term is rejected. (UNTIL is no longer part of an
     obligation: it is a syntax error.)
   * s MUST a WITHIN d ELSE s2 MUST a2 BY d2, at the top level, is
@@ -58,9 +59,14 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
     P ::= (val V) | (add P P) | (sub P P) | (mul P P) | (neg P), and CAP the
     literal of CAP, a number, or (none).
   * A handler binds to the nearest preceding obligation or prohibition of its
-    subject at the top level (bound_to in TRIEL_Breach.thy). Section 2.6
-    defines continuations only for obligations, so TERMINATE, CURE_BY and
-    ESCALATE_TO in a handler bound to a prohibition are rejected.
+    subject at the top level (bound_to in TRIEL_Breach.thy). The checks of
+    wf_block are made here too, so that the evaluator never reports BLOCK
+    REJECTED for a translated specification: a handler inside a composite term,
+    a handler bound to nothing (for example after a permission only), two
+    handlers bound to one norm, and a handler with two continuation-determining
+    actions are rejected. Section 2.6 defines continuations only for
+    obligations, so TERMINATE, CURE_BY and ESCALATE_TO in a handler bound to a
+    prohibition are rejected.
   * JURISDICTION, STANDARD, CURRENCY, PROVENANCE_REQUIRED, PROOF_SYSTEM, CURVE,
     the DID of a subject, and the POLARITY, THRESHOLD, SOURCE and
     SENSITIVITY_BOUND of each factor are metadata: they are printed and have no
@@ -162,7 +168,7 @@ CALENDAR_UNITS = {"BUSINESS_DAY", "BUSINESS_DAYS", "MONTH", "MONTHS", "YEAR", "Y
 PRIMITIVES = {"Integer": "int", "Decimal": "decimal", "Boolean": "bool", "String": "string",
               "DateTime": "datetime", "Hash": "string", "Address": "string"}
 NUMERIC = (["prim", "int"], ["prim", "decimal"])
-ISO_UTC = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+ISO_UTC = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
 
 
 class Str(str):
@@ -187,7 +193,7 @@ def pretty(x, indent: int = 0) -> str:
 
 
 def iso_seconds(text: str):
-    if not ISO_UTC.match(text):
+    if not ISO_UTC.fullmatch(text):
         return None
     try:
         dt = datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
@@ -361,9 +367,13 @@ class Translation:
                     self.reject("field DEFAULT")
                     ok = False
                     continue
+                fn = ident(subtrees(f)[0])
+                if fn in [x[0] for x in fields]:
+                    self.reject("duplicate field")
+                    ok = False
                 ft = self.type_expr(subtrees(f)[1])
                 ok = ok and ft is not None
-                fields.append([ident(subtrees(f)[0]), ft])
+                fields.append([fn, ft])
             return ["record"] + fields if ok else None
         if c.data == "zk_type":
             return self.reject("nested ZK type")
@@ -532,7 +542,7 @@ class Translation:
             if base.data == "datetime_literal":
                 s = self.datetime(base)
                 return None if s is None else ["at", s + sign * d]
-            return None if self.path_type(base) is None else ["factor", self.path(base), sign * d]
+            return None if self.time_factor(base, "deadline") is None else ["factor", self.path(base), sign * d]
         c = c[0]
         if c.data == "datetime_literal":
             s = self.datetime(c)
@@ -540,7 +550,18 @@ class Translation:
         if c.data == "duration_literal":
             d = self.duration(c)
             return None if d is None else ["after", d]
-        return None if self.path_type(c) is None else ["factor", self.path(c), 0]
+        return None if self.time_factor(c, "deadline") is None else ["factor", self.path(c), 0]
+
+    def time_factor(self, t: Tree, what: str):
+        """A factor read as a time, in a deadline or FROM: it must be a DateTime
+        (time_of in TRIEL_Exec.thy reads only times, so any other value would
+        reject the activation)."""
+        ty = self.path_type(t)
+        if ty is None:
+            return None
+        if ty != "unknown" and ty != ["prim", "datetime"]:
+            return self.reject(f"{what} of a non-DateTime factor")
+        return ty
 
     # --- expressions --------------------------------------------------------
 
@@ -830,6 +851,9 @@ class Translation:
                 return None
             return ["may" if m.data == "permission_stmt" else "must_not", s, a, c]
         if m.data == "breach_handler_stmt":
+            if not top:
+                # Handlers only at the top level (wf_block, decision 9).
+                return self.reject("ON_BREACH in a composite term")
             return self.handler(m)
         return self.reject(RULES[m.data])
 
@@ -878,22 +902,37 @@ class Translation:
         if m.data in ("obligation_stmt", "prohibition_stmt"):
             self.top = (m.data, ident(subtrees(m)[0]))
         elif m.data == "breach_handler_stmt":
-            cont = any(tokens(b)[0] in CONTINUATIONS for b in subtrees(m)[1:])
-            self.top = (m.data, ident(subtrees(m)[0]), cont)
+            conts = sum(tokens(b)[0] in CONTINUATIONS for b in subtrees(m)[1:])
+            self.top = (m.data, ident(subtrees(m)[0]), conts > 0, conts)
         else:
             self.top = None
 
     def check_binding(self, tops):
-        """Reject a continuation in a handler bound to a prohibition, and any
-        handler bound to an obligation with a fallback (WITHIN ... ELSE)."""
+        """The checks of wf_block (TRIEL_Breach.thy, decisions 8 and 9) and of
+        the binding rules: every handler is bound to a preceding obligation or
+        prohibition of its subject at the top level, at most one handler is bound
+        to each, a handler has at most one continuation-determining action, a
+        continuation is not bound to a prohibition, and no handler is bound to an
+        obligation with a fallback (WITHIN ... ELSE)."""
+        targets = set()
         for i, x in enumerate(tops):
             if x is None or x[0] != "breach_handler_stmt":
                 continue
-            bound = [y for y in tops[:i] if y is not None and y[0] != "breach_handler_stmt"
-                     and y[1] == x[1]]
-            if bound and bound[-1][0] == "else":
+            if x[3] > 1:
+                self.reject("two continuation-determining actions")
+            if x[1] not in self.subject_names:
+                continue  # rejected as "undeclared subject"
+            bound = [j for j, y in enumerate(tops[:i]) if y is not None
+                     and y[0] != "breach_handler_stmt" and y[1] == x[1]]
+            if not bound:
+                self.reject("ON_BREACH bound to no obligation or prohibition")
+                continue
+            if bound[-1] in targets:
+                self.reject("two ON_BREACH bound to one norm")
+            targets.add(bound[-1])
+            if tops[bound[-1]][0] == "else":
                 self.reject("ON_BREACH bound to WITHIN ... ELSE")
-            elif x[2] and bound and bound[-1][0] == "prohibition_stmt":
+            elif x[2] and tops[bound[-1]][0] == "prohibition_stmt":
                 self.reject(PROHIBITION_CONTINUATION)
 
     def action(self, t: Tree):
@@ -942,7 +981,7 @@ class Translation:
         if c.data == "datetime_literal":
             s = self.datetime(c)
             return None if s is None else ["at", s]
-        return None if self.path_type(c) is None else ["factor", self.path(c), 0]
+        return None if self.time_factor(c, "FROM") is None else ["factor", self.path(c), 0]
 
     def obligation(self, t: Tree, top: bool, within):
         s = self.subject(subtrees(t)[0])
@@ -1167,6 +1206,10 @@ def classify(paths):
             ok = False
             out.append(f"{f.as_posix()}: PARSE ERROR at line {e.line}, column {e.column}")
             continue
+        except RecursionError:
+            ok = False
+            out.append(f"{f.as_posix()}: NESTED TOO DEEPLY")
+            continue
         if tr.rejected:
             out.append(f"{f.as_posix()}: REJECTED: " + "; ".join(sorted(tr.rejected)))
         else:
@@ -1193,6 +1236,9 @@ def main() -> int:
         tr = translate(path.read_text(encoding="utf-8"))
     except UnexpectedInput as e:
         print(f"{path}: parse error at line {e.line}, column {e.column}", file=sys.stderr)
+        return 1
+    except RecursionError:
+        print(f"{path}: nested too deeply", file=sys.stderr)
         return 1
     print("\n".join(header(tr)))
     if tr.rejected:

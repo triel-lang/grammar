@@ -636,7 +636,8 @@ data Amount = PAmount Rat Bool | PUndefined | PNegative Rat;
 
 data Ract a = RNotify a | RPenalty Amount;
 
-data Line = LActivation Bool | LBlock Bool | LTypes (Maybe (Nat, String))
+data Line = LTimeOrder Nat | LActivation Bool | LBlock Bool
+  | LTypes (Maybe (Nat, String))
   | LMust Nat String Act (Maybe Int) (Status String) [Ract String]
   | LMustNot Nat String Act Verdict [Ract String] | LMay Nat String Act Verdict
   | LMustElse Nat String Act (Maybe Int) String Act (Maybe Int) Else_status
@@ -1216,29 +1217,27 @@ equal_outcome Violated Violated = True;
 equal_outcome Interrupted Interrupted = True;
 equal_outcome Done Done = True;
 
-equal_polarity :: Polarity -> Polarity -> Bool;
-equal_polarity May MustNot = False;
-equal_polarity MustNot May = False;
-equal_polarity Must MustNot = False;
-equal_polarity MustNot Must = False;
-equal_polarity Must May = False;
-equal_polarity May Must = False;
-equal_polarity MustNot MustNot = True;
-equal_polarity May May = True;
-equal_polarity Must Must = True;
+does :: forall a b c. (Eq a, Eq b) => a -> b -> Event c a b -> Bool;
+does s a e = (case e of {
+               Deontic sa aa _ -> sa == s && aa == a;
+               Arrival _ -> False;
+               Tick -> False;
+             });
 
-equal_event ::
-  forall a b c. (Eq a, Eq b, Eq c) => Event a b c -> Event a b c -> Bool;
-equal_event (Arrival x2) Tick = False;
-equal_event Tick (Arrival x2) = False;
-equal_event (Deontic x11 x12 x13) Tick = False;
-equal_event Tick (Deontic x11 x12 x13) = False;
-equal_event (Deontic x11 x12 x13) (Arrival x2) = False;
-equal_event (Arrival x2) (Deontic x11 x12 x13) = False;
-equal_event (Arrival x2) (Arrival y2) = x2 == y2;
-equal_event (Deontic x11 x12 x13) (Deontic y11 y12 y13) =
-  x11 == y11 && x12 == y12 && equal_polarity x13 y13;
-equal_event Tick Tick = True;
+evt :: forall a b c d e. (a -> Maybe b, (c, Event a d e)) -> Event a d e;
+evt (sigma, (tau, e)) = e;
+
+forbidden ::
+  forall a b c d e.
+    (Eq a, Eq b, Eq d,
+      Value_order d) => a -> b -> Expr c d ->
+                                    [(c -> Maybe d, (e, Event c a b))] ->
+                                      Nat -> Bool;
+forbidden s a c pi j =
+  less_eq_nat one_nat j &&
+    less_nat j (size_list pi) &&
+      does s a (evt (nth pi j)) &&
+        eval c (st pi (minus_nat j one_nat)) == Just True;
 
 sorted_wrt :: forall a. (a -> a -> Bool) -> [a] -> Bool;
 sorted_wrt p [] = True;
@@ -1262,26 +1261,23 @@ kappa Done = Interrupted;
 kappa Interrupted = Interrupted;
 kappa Violated = Violated;
 
-evt :: forall a b c d e. (a -> Maybe b, (c, Event a d e)) -> Event a d e;
-evt (sigma, (tau, e)) = e;
-
 kors :: [Maybe Bool] -> Maybe Bool;
 kors xs = foldr kor xs (Just False);
 
 mem3 ::
   forall a b c d e.
-    (Eq a, Eq b, Value_order b, Eq c, Eq d,
+    (Eq b, Value_order b, Eq c, Eq d,
       Linorder e) => Tm a b c d ->
                        [(a -> Maybe b, (e, Event a c d))] ->
                          Outcome -> Maybe Bool;
 mem3 (TMust s a) pi r =
   Just (is_trace pi &&
-         equal_event (evt (last pi)) (Deontic s a Must) &&
-           equal_outcome r Done);
+         less_eq_nat (nat_of_integer (2 :: Integer)) (size_list pi) &&
+           does s a (evt (last pi)) && equal_outcome r Done);
 mem3 (TMay s a c) pi r =
   Just (equal_outcome r Done &&
          (is_trace pi &&
-            equal_event (evt (last pi)) (Deontic s a May) &&
+            does s a (evt (last pi)) &&
               less_eq_nat one_nat (minus_nat (size_list pi) one_nat) &&
                 eval c
                   (st pi
@@ -1290,7 +1286,12 @@ mem3 (TMay s a c) pi r =
                   Just True ||
            equal_nat (size_list pi) one_nat));
 mem3 (TMustNot s a c) pi r =
-  Just (equal_outcome r Done && equal_nat (size_list pi) one_nat);
+  Just (if equal_outcome r Done then equal_nat (size_list pi) one_nat
+         else equal_outcome r Violated &&
+                is_trace pi &&
+                  forbidden s a c pi (minus_nat (size_list pi) one_nat) &&
+                    all (\ j -> not (forbidden s a c pi j))
+                      (upt zero_nat (minus_nat (size_list pi) one_nat)));
 mem3 (TOr t u) pi r = kor (mem3 t pi r) (mem3 u pi r);
 mem3 (TThen t u) pi r =
   kor (kors (map (\ k ->
@@ -1322,7 +1323,7 @@ mem3 TSkip pi r =
 
 ext3 ::
   forall a b c d e.
-    (Eq a, Eq b, Value_order b, Eq c, Eq d,
+    (Eq b, Value_order b, Eq c, Eq d,
       Linorder e) => Tm a b c d ->
                        [(a -> Maybe b, (e, Event a c d))] -> Maybe Bool;
 ext3 (TMust s a) rho = Just (is_trace rho);
@@ -1330,7 +1331,12 @@ ext3 (TMay s a c) rho =
   (if not (is_trace rho) then Just False
     else (if eval c (st rho (minus_nat (size_list rho) one_nat)) == Just True
            then Just True else Nothing));
-ext3 (TMustNot s a c) rho = Just False;
+ext3 (TMustNot s a c) rho =
+  (if not (is_trace rho) ||
+        any (forbidden s a c rho) (upt zero_nat (size_list rho))
+    then Just False
+    else (if eval c (st rho (minus_nat (size_list rho) one_nat)) == Just True
+           then Just True else Nothing));
 ext3 (TOr t u) rho = kor (ext3 t rho) (ext3 u rho);
 ext3 (TThen t u) rho =
   kor (ext3 t rho)
@@ -1354,13 +1360,6 @@ composite_line n t pi =
       LComposite n (mem3 u pi Done) (mem3 u pi Interrupted)
         (mem3 u pi Violated);
   });
-
-does :: forall a b c. (Eq a, Eq b) => a -> b -> Event c a b -> Bool;
-does s a e = (case e of {
-               Deontic sa aa _ -> sa == s && aa == a;
-               Arrival _ -> False;
-               Tick -> False;
-             });
 
 may_verdict ::
   forall a b c d.
@@ -1451,18 +1450,6 @@ report_actions ::
   forall a b c.
     (a -> Maybe Rat) -> (b -> Maybe a) -> [Baction c (Pen b a)] -> [Ract c];
 report_actions num sigma acts = concatMap (ract_of num sigma) acts;
-
-forbidden ::
-  forall a b c d.
-    (Eq a, Eq b, Eq d,
-      Value_order d) => a -> b -> Expr c d ->
-                                    [(c -> Maybe d, (Int, Event c a b))] ->
-                                      Nat -> Bool;
-forbidden s a c pi j =
-  less_eq_nat one_nat j &&
-    less_nat j (size_list pi) &&
-      does s a (evt (nth pi j)) &&
-        eval c (st pi (minus_nat j one_nat)) == Just True;
 
 first_forbidden ::
   forall a b c d.
@@ -1928,6 +1915,30 @@ max_age fs f = (case find (\ x -> fd_name x == f) fs of {
                  Just a -> fd_age a;
                });
 
+equal_polarity :: Polarity -> Polarity -> Bool;
+equal_polarity May MustNot = False;
+equal_polarity MustNot May = False;
+equal_polarity Must MustNot = False;
+equal_polarity MustNot Must = False;
+equal_polarity Must May = False;
+equal_polarity May Must = False;
+equal_polarity MustNot MustNot = True;
+equal_polarity May May = True;
+equal_polarity Must Must = True;
+
+equal_event ::
+  forall a b c. (Eq a, Eq b, Eq c) => Event a b c -> Event a b c -> Bool;
+equal_event (Arrival x2) Tick = False;
+equal_event Tick (Arrival x2) = False;
+equal_event (Deontic x11 x12 x13) Tick = False;
+equal_event Tick (Deontic x11 x12 x13) = False;
+equal_event (Deontic x11 x12 x13) (Arrival x2) = False;
+equal_event (Arrival x2) (Deontic x11 x12 x13) = False;
+equal_event (Arrival x2) (Arrival y2) = x2 == y2;
+equal_event (Deontic x11 x12 x13) (Deontic y11 y12 y13) =
+  x11 == y11 && x12 == y12 && equal_polarity x13 y13;
+equal_event Tick Tick = True;
+
 fresh ::
   forall a b c d.
     (Eq a, Eq c,
@@ -1963,9 +1974,9 @@ btrace m pi =
   map (\ j -> (blockp m pi j, (time pi j, evt (nth pi j))))
     (upt zero_nat (size_list pi));
 
-evaluate ::
+evaluate_trace ::
   Spec -> [(Nd String Atom, (Int, Event [String] String Act))] -> [Line];
-evaluate sp obs =
+evaluate_trace sp obs =
   (case sp of {
     Spec fs blk invs ->
       let {
@@ -1994,6 +2005,24 @@ evaluate sp obs =
                                Just e -> [LTypes (Just e)];
                              })));
   });
+
+obs_time :: (Nd String Atom, (Int, Event [String] String Act)) -> Int;
+obs_time x = fst (snd x);
+
+time_order :: [(Nd String Atom, (Int, Event [String] String Act))] -> Maybe Nat;
+time_order obs =
+  find (\ j ->
+         less_nat zero_nat j &&
+           less_int (obs_time (nth obs j))
+             (obs_time (nth obs (minus_nat j one_nat))))
+    (upt zero_nat (size_list obs));
+
+evaluate ::
+  Spec -> [(Nd String Atom, (Int, Event [String] String Act))] -> [Line];
+evaluate sp obs = (case time_order obs of {
+                    Nothing -> evaluate_trace sp obs;
+                    Just j -> [LTimeOrder j];
+                  });
 
 fd_hidden :: Fdecl -> Bool;
 fd_hidden (Fdecl f t m h) = h;

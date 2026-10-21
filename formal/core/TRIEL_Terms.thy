@@ -188,6 +188,81 @@ theorem if_undefined_branch_not_stable:
     and "eval (EEq (VName x) (VConst v)) [x \<mapsto> v] = Some True"
   by (simp_all add: info_le_def)
 
+
+section \<open>Actions and violations\<close>
+
+text \<open>An obligation is discharged by an action, and an action is the event of a later entry,
+  never of the entry where the obligation is reached. So two obligations in sequence need two
+  actions.\<close>
+
+theorem must_action:
+  assumes "(\<pi>, r) \<in> den (TMust s a)"
+  shows "r = Done" and "\<exists>j. 1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j))"
+proof -
+  from assms have r: "r = Done" and l: "2 \<le> length \<pi>" and d: "does s a (evt (last \<pi>))"
+    by (auto simp: must_d_def)
+  show "r = Done" by (rule r)
+  have ne: "\<pi> \<noteq> []" using l by auto
+  have j: "does s a (evt (\<pi> ! (length \<pi> - 1)))" using d last_conv_nth[OF ne] by simp
+  show "\<exists>j. 1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j))"
+  proof (intro exI[of _ "length \<pi> - 1"] conjI)
+    show "1 \<le> length \<pi> - 1" using l by linarith
+    show "length \<pi> - 1 < length \<pi>" using l by linarith
+  qed (rule j)
+qed
+
+theorem must_one_entry: "([x], r) \<notin> den (TMust s a)"
+  by (simp add: must_d_def)
+
+theorem must_then_must_two_actions:
+  "([x\<^sub>0, x\<^sub>1], r) \<notin> den (TThen (TMust s a) (TMust s a))"
+proof
+  assume "([x\<^sub>0, x\<^sub>1], r) \<in> den (TThen (TMust s a) (TMust s a))"
+  then consider (seq) \<pi>\<^sub>1 \<pi>\<^sub>2 where "(\<pi>\<^sub>1, Done) \<in> must_d s a" "(\<pi>\<^sub>2, r) \<in> must_d s a"
+      "fusable \<pi>\<^sub>1 \<pi>\<^sub>2" "[x\<^sub>0, x\<^sub>1] = fuse \<pi>\<^sub>1 \<pi>\<^sub>2"
+    | (left) "([x\<^sub>0, x\<^sub>1], r) \<in> must_d s a" "r \<noteq> Done"
+    unfolding den.simps then_d_iff by blast
+  then show False
+  proof cases
+    case seq
+    have "2 \<le> length \<pi>\<^sub>1" "2 \<le> length \<pi>\<^sub>2" using seq(1,2) by (auto simp: must_d_def)
+    then have "3 \<le> length (fuse \<pi>\<^sub>1 \<pi>\<^sub>2)" by (simp add: fuse_def)
+    moreover have "length [x\<^sub>0, x\<^sub>1] = length (fuse \<pi>\<^sub>1 \<pi>\<^sub>2)" using seq(4) by (rule arg_cong)
+    ultimately show False by simp
+  next
+    case left
+    then show False by (simp add: must_d_def)
+  qed
+qed
+
+text \<open>A prohibition is violated by its first forbidden action, also inside a composite term.\<close>
+
+theorem mustnot_violated:
+  assumes "eval c \<sigma> = Some True" and "\<tau> \<le> \<tau>'"
+  shows "([(\<sigma>, \<tau>, e), (\<sigma>', \<tau>', Deontic s a p)], Violated) \<in> den (TMustNot s a c)"
+  using assms by (auto simp: mustnot_d_def forbidden_def is_trace_def does_def st_def)
+
+corollary violated_reachable: "\<exists>\<pi>. (\<pi>, Violated) \<in> den (TMustNot s a ETrue)"
+  using mustnot_violated[of ETrue] by fastforce
+
+theorem then_mustnot_violated:
+  assumes c: "eval c \<sigma>\<^sub>1 = Some True" and t: "\<tau>\<^sub>0 \<le> \<tau>\<^sub>1" "\<tau>\<^sub>1 \<le> \<tau>\<^sub>2"
+  shows "([(\<sigma>\<^sub>0, \<tau>\<^sub>0, e), (\<sigma>\<^sub>1, \<tau>\<^sub>1, Deontic s a p), (\<sigma>\<^sub>2, \<tau>\<^sub>2, Deontic s' a' p')], Violated)
+           \<in> den (TThen (TMust s a) (TMustNot s' a' c))"
+proof -
+  let ?x\<^sub>1 = "(\<sigma>\<^sub>1, \<tau>\<^sub>1, Deontic s a p)"
+  have m: "([(\<sigma>\<^sub>0, \<tau>\<^sub>0, e), ?x\<^sub>1], Done) \<in> must_d s a"
+    using t(1) by (simp add: must_d_def is_trace_def does_def)
+  have n: "([?x\<^sub>1, (\<sigma>\<^sub>2, \<tau>\<^sub>2, Deontic s' a' p')], Violated) \<in> mustnot_d s' a' c"
+    using mustnot_violated[OF c t(2)] by simp
+  have "fusable [(\<sigma>\<^sub>0, \<tau>\<^sub>0, e), ?x\<^sub>1] [?x\<^sub>1, (\<sigma>\<^sub>2, \<tau>\<^sub>2, Deontic s' a' p')]"
+    by (simp add: fusable_def)
+  with m n have "(fuse [(\<sigma>\<^sub>0, \<tau>\<^sub>0, e), ?x\<^sub>1] [?x\<^sub>1, (\<sigma>\<^sub>2, \<tau>\<^sub>2, Deontic s' a' p')], Violated)
+                   \<in> then_d (must_d s a) (mustnot_d s' a' c)"
+    unfolding then_d_def by blast
+  then show ?thesis by (simp add: fuse_def)
+qed
+
 end
 
 text \<open>\<open>term_semantics\<close> adds no assumptions to \<open>interleaving\<close>, so it has models
