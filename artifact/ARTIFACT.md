@@ -51,17 +51,17 @@ Measured on a 4-core x86-64 virtual machine with 16 GB of memory:
 |---|---|
 | Download of the two base images | 2 min |
 | Image build (`docker build`), without cache | 3 min |
-| `run.sh`, all 11 steps | 18 min |
+| `run.sh`, all 11 steps | 21 min |
 | of which: clean Isabelle build of `TRIEL_Core` | 2 min |
-| of which: 47 scenarios | 3 min |
-| of which: translator and driver tests (pytest) | 7.5 min |
-| of which: parsing of the 27 examples with the ambiguity check | 3.5 min |
+| of which: 47 scenarios | 3.5 min |
+| of which: translator and driver tests (pytest) | 8.5 min |
+| of which: parsing of the 27 examples with the ambiguity check | 4 min |
 | of which: ambiguity regression tests | 2 min |
-| of which: excerpts of the documents | 11 s |
-| of which: session `TRIEL_Paper` (on the heap of `TRIEL_Core`) | 10 s |
+| of which: excerpts of the documents | 14 s |
+| of which: session `TRIEL_Paper` (on the heap of `TRIEL_Core`) | 12 s |
 
-The times of `run.sh` are those of version 2.5.1; the download and the image
-build were measured for version 2.5, with the same `Dockerfile`. On a
+The times of `run.sh` are those of version 2.5.1, measured with the container
+limited to 10 GiB; the download and the image build were measured for version 2.5, with the same `Dockerfile`. On a
 GitHub-hosted runner (`ubuntu-latest`, workflow `.github/workflows/artifact.yml`)
 the image of version 2.5 built in 1.5 min, base images included, and `run.sh`
 took 10 min in one run and 16.5 min in another.
@@ -99,7 +99,7 @@ scenarios matching .expected                 47 of 47
 examples accepted by the core                25 of 27
 translator and driver tests (pytest)         305 passed in ...
 examples parsed with one derivation          27 of 27
-ambiguity regression checks passed           235
+ambiguity regression checks passed           236
 document excerpts conforming to the grammar  15
 wall-clock time                              ...
 ...
