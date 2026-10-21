@@ -1440,14 +1440,34 @@ mem3m TSkip pi r m =
   Just (equal_outcome r Done &&
          equal_nat (size_list pi) one_nat && equal_mode m Inst);
 
-step :: Maybe Bool -> Maybe Bool -> Maybe Bool -> Maybe (Maybe Outcome);
-step v i d =
+hstep ::
+  forall a b c d e.
+    (Eq b, Value_order b, Eq c, Eq d,
+      Linorder e) => Tm a b c d ->
+                       [(a -> Maybe b, (e, Event a c d))] -> Maybe Bool;
+hstep t rho = kor (mem3m t rho Done Held) (mem3m t rho Interrupted Held);
+
+held_upto ::
+  forall a b c d e.
+    (Eq b, Value_order b, Eq c, Eq d,
+      Linorder e) => Tm a b c d ->
+                       [(a -> Maybe b, (e, Event a c d))] -> Nat -> Maybe Bool;
+held_upto t pi k =
+  kors (map (\ j -> hstep t (take (suc j) pi)) (upt zero_nat (suc k)));
+
+step ::
+  Maybe Bool -> Maybe Bool -> Maybe Bool -> Maybe Bool -> Maybe (Maybe Outcome);
+step v h i d =
   (if v == Just True then Just (Just Violated)
-    else (if v == Just False && i == Just True then Just (Just Interrupted)
-           else (if v == Just False && i == Just False && d == Just True
-                  then Just (Just Done)
-                  else (if v == Just False && i == Just False && d == Just False
-                         then Just Nothing else Nothing))));
+    else (if v == Just False && i == Just False && d == Just False
+           then Just Nothing
+           else (if v == Just False && h == Just True then Just Nothing
+                  else (if v == Just False && h == Just False && i == Just True
+                         then Just (Just Interrupted)
+                         else (if v == Just False &&
+                                    h == Just False &&
+                                      i == Just False && d == Just True
+                                then Just (Just Done) else Nothing)))));
 
 pstep ::
   forall a b c d e.
@@ -1456,7 +1476,7 @@ pstep ::
                        [(a -> Maybe b, (e, Event a c d))] ->
                          Nat -> Maybe (Maybe Outcome);
 pstep t pi k =
-  step (mem3 t (take (suc k) pi) Violated)
+  step (mem3 t (take (suc k) pi) Violated) (held_upto t pi k)
     (mem3m t (take (suc k) pi) Interrupted Exec)
     (mem3m t (take (suc k) pi) Done Exec);
 

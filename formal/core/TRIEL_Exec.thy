@@ -1279,7 +1279,16 @@ text \<open>The membership of the whole observed trace says nothing about a viol
   if its last step is an executed action, \<open>Inst\<close> if the term completed at once without a
   prohibition at the last entry, and \<open>Held\<close> if a prohibition reached at the last entry
   completed at once there (\<open>fden\<close>). Forgetting the mode gives the denotation \<open>den\<close>
-  (\<open>fden_den\<close>).\<close>
+  (\<open>fden_den\<close>).
+
+  A prefix can have several readings: the denotation of an obligation does not fix which of
+  its actions discharges it, and the guard of UNLESS may fire at the entry of an action. When
+  one reading completes the term by an executed action and another has reached a prohibition,
+  the status is conservative: once a reading of some prefix has reached a prohibition as the
+  last element of the term, only a violation ends the observation. So the status does not
+  miss a violation that a reading of a prefix admits, unless the observation has ended
+  before, on a completion by an executed action, when no reading had reached a prohibition
+  (\<open>status_no_missed_violation\<close>).\<close>
 
 datatype mode = Inst | Exec | Held
 
@@ -1439,25 +1448,41 @@ subsubsection \<open>The status\<close>
 
 datatype cstatus = CAt outcome nat | COpen | CUnknown
 
-text \<open>The answer for one prefix, from the answers for a violation, a completion by
-  interruption with mode \<open>Exec\<close>, and a completion with mode \<open>Exec\<close>: \<open>None\<close> is unknown,
-  \<open>Some None\<close> no end of the observation, \<open>Some (Some r)\<close> the end, with the outcome \<open>r\<close>.
-  A violation takes precedence over Interrupted, and Interrupted over Done, as in the
-  order \<open>Done < Interrupted < Violated\<close> of \<open>ojoin\<close>.\<close>
+text \<open>The answer for one prefix, from the answers for a violation, for a reading of this or an
+  earlier prefix that has reached a prohibition, for a completion by interruption with mode
+  \<open>Exec\<close>, and for a completion with mode \<open>Exec\<close>: \<open>None\<close> is unknown, \<open>Some None\<close> no end
+  of the observation, \<open>Some (Some r)\<close> the end, with the outcome \<open>r\<close>. A violation ends the
+  observation at once; a completion ends it only if no reading of this prefix or of an
+  earlier one has reached a prohibition. A violation takes precedence over Interrupted, and
+  Interrupted over Done, as in the order \<open>Done < Interrupted < Violated\<close> of \<open>ojoin\<close>.\<close>
 
-definition step :: "bool option \<Rightarrow> bool option \<Rightarrow> bool option \<Rightarrow> outcome option option" where
-  "step v i d =
+definition step :: "bool option \<Rightarrow> bool option \<Rightarrow> bool option \<Rightarrow> bool option \<Rightarrow> outcome option option"
+  where
+  "step v h i d =
      (if v = Some True then Some (Some Violated)
-      else if v = Some False \<and> i = Some True then Some (Some Interrupted)
-      else if v = Some False \<and> i = Some False \<and> d = Some True then Some (Some Done)
       else if v = Some False \<and> i = Some False \<and> d = Some False then Some None
+      else if v = Some False \<and> h = Some True then Some None
+      else if v = Some False \<and> h = Some False \<and> i = Some True then Some (Some Interrupted)
+      else if v = Some False \<and> h = Some False \<and> i = Some False \<and> d = Some True then Some (Some Done)
       else None)"
+
+text \<open>\<open>hstep t \<rho>\<close> decides whether a reading of \<open>\<rho>\<close> has reached a prohibition as the last
+  element of \<open>t\<close>, that is, whether \<open>\<rho>\<close> is a trace of \<open>t\<close> with the mode \<open>Held\<close>;
+  \<open>held_upto t \<pi> k\<close> decides it for some prefix of \<open>\<pi>\<close> that ends at entry \<open>k\<close> or before.\<close>
+
+definition hstep :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace
+    \<Rightarrow> bool option" where
+  "hstep t \<rho> = kor (mem3m t \<rho> Done Held) (mem3m t \<rho> Interrupted Held)"
+
+definition held_upto :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace
+    \<Rightarrow> nat \<Rightarrow> bool option" where
+  "held_upto t \<pi> k = kors (map (\<lambda>j. hstep t (take (Suc j) \<pi>)) [0..<Suc k])"
 
 definition pstep :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> nat
     \<Rightarrow> outcome option option" where
   "pstep t \<pi> k =
-     step (mem3 t (take (Suc k) \<pi>) Violated) (mem3m t (take (Suc k) \<pi>) Interrupted Exec)
-          (mem3m t (take (Suc k) \<pi>) Done Exec)"
+     step (mem3 t (take (Suc k) \<pi>) Violated) (held_upto t \<pi> k)
+          (mem3m t (take (Suc k) \<pi>) Interrupted Exec) (mem3m t (take (Suc k) \<pi>) Done Exec)"
 
 definition status :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> cstatus" where
   "status t \<pi> =
@@ -1465,21 +1490,38 @@ definition status :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 
         None \<Rightarrow> COpen
       | Some k \<Rightarrow> (case pstep t \<pi> k of Some (Some r) \<Rightarrow> CAt r k | _ \<Rightarrow> CUnknown))"
 
-lemma step_none: "step v i d = Some None \<longleftrightarrow> v = Some False \<and> i = Some False \<and> d = Some False"
-  by (simp add: step_def)
+lemma step_none:
+  "step v h i d = Some None \<longleftrightarrow> v = Some False \<and> (i = Some False \<and> d = Some False \<or> h = Some True)"
+  by (auto simp: step_def)
 
-lemma step_Violated: "step v i d = Some (Some Violated) \<longleftrightarrow> v = Some True"
-  by (simp add: step_def)
+lemma step_Violated: "step v h i d = Some (Some Violated) \<longleftrightarrow> v = Some True"
+  by (auto simp: step_def)
 
-lemma step_Interrupted: "step v i d = Some (Some Interrupted) \<longleftrightarrow> v = Some False \<and> i = Some True"
-  by (simp add: step_def)
+lemma step_Interrupted:
+  "step v h i d = Some (Some Interrupted) \<longleftrightarrow> v = Some False \<and> h = Some False \<and> i = Some True"
+  by (auto simp: step_def)
 
 lemma step_Done:
-  "step v i d = Some (Some Done) \<longleftrightarrow> v = Some False \<and> i = Some False \<and> d = Some True"
-  by (simp add: step_def)
-
-lemma step_defined: "v \<noteq> None \<Longrightarrow> i \<noteq> None \<Longrightarrow> d \<noteq> None \<Longrightarrow> step v i d \<noteq> None"
+  "step v h i d = Some (Some Done) \<longleftrightarrow> v = Some False \<and> h = Some False \<and> i = Some False \<and> d = Some True"
   by (auto simp: step_def)
+
+lemma step_defined:
+  "v \<noteq> None \<Longrightarrow> h \<noteq> None \<Longrightarrow> i \<noteq> None \<Longrightarrow> d \<noteq> None \<Longrightarrow> step v h i d \<noteq> None"
+  by (cases v; cases h; cases i; cases d) (auto simp: step_def)
+
+lemma held_upto_append: "k < length \<pi> \<Longrightarrow> held_upto t (\<pi> @ \<rho>) k = held_upto t \<pi> k"
+  unfolding held_upto_def by (rule arg_cong[where f = kors], rule map_cong) auto
+
+lemma held_upto_defined:
+  assumes u: "unless_free t" and a: "and_free t"
+  shows "held_upto t \<pi> k \<noteq> None"
+  unfolding held_upto_def
+proof (rule kors_defined)
+  fix x assume "x \<in> set (map (\<lambda>j. hstep t (take (Suc j) \<pi>)) [0..<Suc k])"
+  then obtain j where x: "x = hstep t (take (Suc j) \<pi>)" by auto
+  show "x \<noteq> None" unfolding x hstep_def
+    by (rule kor_defined) (rule mem3m_complete[OF u a])+
+qed
 
 lemma status_CAt:
   "status t \<pi> = CAt r k \<longleftrightarrow>
@@ -1528,7 +1570,7 @@ theorem status_final:
   shows "status t (\<pi> @ \<rho>) = CAt r k"
 proof -
   have ps: "pstep t (\<pi> @ \<rho>) j = pstep t \<pi> j" if "j < length \<pi>" for j
-    using that by (simp add: pstep_def)
+    using that by (simp add: pstep_def held_upto_append)
   from assms have k: "k < length \<pi>" "pstep t \<pi> k = Some (Some r)"
     and before: "\<forall>j < k. pstep t \<pi> j = Some None"
     by (simp_all add: status_CAt)
@@ -1543,7 +1585,8 @@ proof
   assume u: "unless_free t" and a: "and_free t" and c: "status t \<pi> = CUnknown"
   have d: "pstep t \<pi> k \<noteq> None" for k
     unfolding pstep_def
-    by (rule step_defined) (simp_all add: mem3_complete[OF u a] mem3m_complete[OF u a])
+    by (rule step_defined)
+      (simp_all add: mem3_complete[OF u a] mem3m_complete[OF u a] held_upto_defined[OF u a])
   from c obtain k where f: "find (\<lambda>k. pstep t \<pi> k \<noteq> Some None) [0..<length \<pi>] = Some k"
     by (auto simp: status_def split: option.splits)
   then have n: "pstep t \<pi> k \<noteq> Some None" by (simp add: find_upt_Some)
@@ -1811,67 +1854,189 @@ qed
 theorem must_exec: "(\<pi>, r, m) \<in> fden (TMust s a) \<Longrightarrow> m = Exec"
   by simp
 
-lemma pstep_none:
-  assumes "and_free t" and "pstep t \<pi> j = Some None"
-  shows "(take (Suc j) \<pi>, Violated) \<notin> den t" and "(take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t"
-    and "(take (Suc j) \<pi>, Done, Exec) \<notin> fden t"
+text \<open>A reading of a prefix has reached a prohibition as the last element of the term: the
+  prefix is a trace of the term, completed or interrupted, with the mode \<open>Held\<close>.\<close>
+
+definition reached_prohibition :: "('n, 'v, 's, 'a) tm \<Rightarrow> ('n, 'v, 't, 's, 'a) trace \<Rightarrow> bool" where
+  "reached_prohibition t \<rho> \<longleftrightarrow> (\<rho>, Done, Held) \<in> fden t \<or> (\<rho>, Interrupted, Held) \<in> fden t"
+
+lemma hstep_dec:
+  assumes "and_free t"
+  shows "dec (hstep t \<rho>) (reached_prohibition t \<rho>)"
+  unfolding hstep_def reached_prohibition_def by (intro dec_kor mem3m_dec assms)
+
+lemma held_upto_dec:
+  assumes "and_free t"
+  shows "dec (held_upto t \<pi> k) (\<exists>j \<le> k. reached_prohibition t (take (Suc j) \<pi>))"
 proof -
-  from assms(2) have v: "mem3 t (take (Suc j) \<pi>) Violated = Some False"
-    and i: "mem3m t (take (Suc j) \<pi>) Interrupted Exec = Some False"
-    and d: "mem3m t (take (Suc j) \<pi>) Done Exec = Some False"
-    by (simp_all add: pstep_def step_none)
-  show "(take (Suc j) \<pi>, Violated) \<notin> den t" using mem3_sound[OF assms(1) v] by simp
-  show "(take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t" using mem3m_sound[OF assms(1) i] by simp
-  show "(take (Suc j) \<pi>, Done, Exec) \<notin> fden t" using mem3m_sound[OF assms(1) d] by simp
+  have "dec (held_upto t \<pi> k) (\<exists>j \<in> set [0..<Suc k]. reached_prohibition t (take (Suc j) \<pi>))"
+    unfolding held_upto_def by (rule dec_kors) (rule hstep_dec[OF assms])
+  then show ?thesis by (rule dec_cong) (auto simp del: upt_Suc simp: less_Suc_eq_le)
 qed
 
-text \<open>Soundness of the status: at the reported entry the prefix is a violated trace of the
-  term, or a trace that completes it by an executed action, with Violated before
-  Interrupted before Done; and no shorter prefix is either.\<close>
+lemma pstep_none:
+  assumes "and_free t" and "pstep t \<pi> j = Some None"
+  shows "(take (Suc j) \<pi>, Violated) \<notin> den t"
+    and "(take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t \<and> (take (Suc j) \<pi>, Done, Exec) \<notin> fden t
+           \<or> (\<exists>i \<le> j. reached_prohibition t (take (Suc i) \<pi>))"
+proof -
+  from assms(2) have v: "mem3 t (take (Suc j) \<pi>) Violated = Some False"
+    and r: "mem3m t (take (Suc j) \<pi>) Interrupted Exec = Some False
+              \<and> mem3m t (take (Suc j) \<pi>) Done Exec = Some False
+            \<or> held_upto t \<pi> j = Some True"
+    by (simp_all add: pstep_def step_none)
+  show "(take (Suc j) \<pi>, Violated) \<notin> den t" using mem3_sound[OF assms(1) v] by simp
+  from r show "(take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t \<and> (take (Suc j) \<pi>, Done, Exec) \<notin> fden t
+           \<or> (\<exists>i \<le> j. reached_prohibition t (take (Suc i) \<pi>))"
+  proof
+    assume c: "mem3m t (take (Suc j) \<pi>) Interrupted Exec = Some False
+                 \<and> mem3m t (take (Suc j) \<pi>) Done Exec = Some False"
+    have "(take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t"
+      using mem3m_sound[OF assms(1) conjunct1[OF c]] by simp
+    moreover have "(take (Suc j) \<pi>, Done, Exec) \<notin> fden t"
+      using mem3m_sound[OF assms(1) conjunct2[OF c]] by simp
+    ultimately show ?thesis by blast
+  next
+    assume "held_upto t \<pi> j = Some True"
+    then show ?thesis using held_upto_dec[OF assms(1), of \<pi> j] by (auto simp: dec_def)
+  qed
+qed
+
+text \<open>Soundness of the status. At the reported entry the prefix is a violated trace of the term,
+  or a trace that completes it by an executed action, with Violated before Interrupted before
+  Done; a completion is reported only if no reading of this prefix or of an earlier one has
+  reached a prohibition. No shorter prefix is a violated trace, and none is completed by an
+  executed action unless a reading of it or of an earlier prefix has reached a prohibition.\<close>
 
 theorem status_sound:
   assumes "and_free t" and "status t \<pi> = CAt r k"
   shows "k < length \<pi>"
     and "r = Violated \<Longrightarrow> (take (Suc k) \<pi>, Violated) \<in> den t"
-    and "r \<noteq> Violated \<Longrightarrow> (take (Suc k) \<pi>, r, Exec) \<in> fden t \<and> (take (Suc k) \<pi>, Violated) \<notin> den t"
+    and "r \<noteq> Violated \<Longrightarrow> (take (Suc k) \<pi>, r, Exec) \<in> fden t \<and> (take (Suc k) \<pi>, Violated) \<notin> den t
+           \<and> (\<forall>i \<le> k. \<not> reached_prohibition t (take (Suc i) \<pi>))"
     and "r = Done \<Longrightarrow> (take (Suc k) \<pi>, Interrupted, Exec) \<notin> fden t"
-    and "j < k \<Longrightarrow> (take (Suc j) \<pi>, Violated) \<notin> den t \<and> (take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t
-                   \<and> (take (Suc j) \<pi>, Done, Exec) \<notin> fden t"
+    and "j < k \<Longrightarrow> (take (Suc j) \<pi>, Violated) \<notin> den t
+           \<and> ((take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t \<and> (take (Suc j) \<pi>, Done, Exec) \<notin> fden t
+              \<or> (\<exists>i \<le> j. reached_prohibition t (take (Suc i) \<pi>)))"
 proof -
   from assms(2) have k: "k < length \<pi>" and p: "pstep t \<pi> k = Some (Some r)"
     and before: "\<forall>j < k. pstep t \<pi> j = Some None"
     by (simp_all add: status_CAt)
   let ?p = "take (Suc k) \<pi>"
+  have hk: "\<forall>i \<le> k. \<not> reached_prohibition t (take (Suc i) \<pi>)" if "held_upto t \<pi> k = Some False"
+    using that held_upto_dec[OF assms(1), of \<pi> k] by (auto simp: dec_def)
   show "k < length \<pi>" by (rule k)
   show "(?p, Violated) \<in> den t" if "r = Violated"
     using p that mem3_sound[OF assms(1)] by (simp add: pstep_def step_Violated)
-  show "(?p, r, Exec) \<in> fden t \<and> (?p, Violated) \<notin> den t" if "r \<noteq> Violated"
+  show "(?p, r, Exec) \<in> fden t \<and> (?p, Violated) \<notin> den t
+          \<and> (\<forall>i \<le> k. \<not> reached_prohibition t (take (Suc i) \<pi>))" if "r \<noteq> Violated"
   proof (cases r)
     case Interrupted
-    with p have "mem3 t ?p Violated = Some False" "mem3m t ?p Interrupted Exec = Some True"
+    with p have "mem3 t ?p Violated = Some False" "held_upto t \<pi> k = Some False"
+      "mem3m t ?p Interrupted Exec = Some True"
       by (simp_all add: pstep_def step_Interrupted)
-    with Interrupted show ?thesis using mem3_sound[OF assms(1)] mem3m_sound[OF assms(1)] by blast
+    with Interrupted hk show ?thesis using mem3_sound[OF assms(1)] mem3m_sound[OF assms(1)] by blast
   next
     case Done
-    with p have "mem3 t ?p Violated = Some False" "mem3m t ?p Done Exec = Some True"
+    with p have "mem3 t ?p Violated = Some False" "held_upto t \<pi> k = Some False"
+      "mem3m t ?p Done Exec = Some True"
       by (simp_all add: pstep_def step_Done)
-    with Done show ?thesis using mem3_sound[OF assms(1)] mem3m_sound[OF assms(1)] by blast
+    with Done hk show ?thesis using mem3_sound[OF assms(1)] mem3m_sound[OF assms(1)] by blast
   qed (use that in simp)
   show "(?p, Interrupted, Exec) \<notin> fden t" if "r = Done"
   proof -
     from p that have "mem3m t ?p Interrupted Exec = Some False" by (simp add: pstep_def step_Done)
     then show ?thesis using mem3m_sound[OF assms(1)] by blast
   qed
-  show "(take (Suc j) \<pi>, Violated) \<notin> den t \<and> (take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t
-          \<and> (take (Suc j) \<pi>, Done, Exec) \<notin> fden t" if "j < k"
-    using pstep_none[OF assms(1)] before that by blast
+  show "(take (Suc j) \<pi>, Violated) \<notin> den t
+          \<and> ((take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t \<and> (take (Suc j) \<pi>, Done, Exec) \<notin> fden t
+             \<or> (\<exists>i \<le> j. reached_prohibition t (take (Suc i) \<pi>)))" if "j < k"
+  proof -
+    from before that have "pstep t \<pi> j = Some None" by blast
+    from pstep_none[OF assms(1) this] show ?thesis by blast
+  qed
 qed
 
 theorem status_open:
   assumes "and_free t" and "status t \<pi> = COpen" and "k < length \<pi>"
-  shows "(take (Suc k) \<pi>, Violated) \<notin> den t" and "(take (Suc k) \<pi>, Interrupted, Exec) \<notin> fden t"
-    and "(take (Suc k) \<pi>, Done, Exec) \<notin> fden t"
-  using assms(2,3) pstep_none[OF assms(1)] by (simp_all add: status_COpen)
+  shows "(take (Suc k) \<pi>, Violated) \<notin> den t"
+    and "(take (Suc k) \<pi>, Interrupted, Exec) \<notin> fden t \<and> (take (Suc k) \<pi>, Done, Exec) \<notin> fden t
+           \<or> (\<exists>i \<le> k. reached_prohibition t (take (Suc i) \<pi>))"
+proof -
+  from assms(2,3) have "pstep t \<pi> k = Some None" by (simp add: status_COpen)
+  from pstep_none[OF assms(1) this]
+  show "(take (Suc k) \<pi>, Violated) \<notin> den t"
+    and "(take (Suc k) \<pi>, Interrupted, Exec) \<notin> fden t \<and> (take (Suc k) \<pi>, Done, Exec) \<notin> fden t
+           \<or> (\<exists>i \<le> k. reached_prohibition t (take (Suc i) \<pi>))"
+    by blast+
+qed
+
+text \<open>The status does not miss a violation that a reading of a prefix admits. If a prefix of
+  the observed trace is a violated trace of the term, the status is a violation at that entry
+  or before it, unless it is unknown, or the observation has ended before, at an entry where
+  the term is completed by an executed action and no reading of that prefix or of an earlier
+  one has reached a prohibition. This is the strongest form that holds: in
+  \<open>s MUST_NOT a THEN s' MUST a'\<close> a violation after the action \<open>a'\<close> is not reported.\<close>
+
+theorem status_no_missed_violation:
+  assumes "and_free t" and "k < length \<pi>" and "(take (Suc k) \<pi>, Violated) \<in> den t"
+  shows "(\<exists>k' \<le> k. status t \<pi> = CAt Violated k') \<or> status t \<pi> = CUnknown
+    \<or> (\<exists>r k'. k' < k \<and> r \<noteq> Violated \<and> status t \<pi> = CAt r k' \<and> (take (Suc k') \<pi>, r, Exec) \<in> fden t
+              \<and> (\<forall>i \<le> k'. \<not> reached_prohibition t (take (Suc i) \<pi>)))"
+proof (cases "status t \<pi>")
+  case (CAt r k')
+  have kk: "\<not> k < k'"
+  proof
+    assume "k < k'"
+    with status_sound(5)[OF assms(1) CAt, of k] have "(take (Suc k) \<pi>, Violated) \<notin> den t" by blast
+    with assms(3) show False by simp
+  qed
+  show ?thesis
+  proof (cases "r = Violated")
+    case True
+    with CAt kk show ?thesis by auto
+  next
+    case False
+    from status_sound(3)[OF assms(1) CAt False]
+    have m: "(take (Suc k') \<pi>, r, Exec) \<in> fden t" and nv: "(take (Suc k') \<pi>, Violated) \<notin> den t"
+      and nh: "\<forall>i \<le> k'. \<not> reached_prohibition t (take (Suc i) \<pi>)"
+      by blast+
+    from nv assms(3) have "k' \<noteq> k" by auto
+    with kk have "k' < k" by simp
+    with CAt False m nh show ?thesis by blast
+  qed
+next
+  case COpen
+  with status_open(1)[OF assms(1) COpen assms(2)] assms(3) show ?thesis by simp
+qed simp
+
+text \<open>The same principle from the side of the readings: once a reading of a prefix has reached
+  a prohibition, every later violation is reported, unless the status is unknown or the
+  observation ended at an earlier entry.\<close>
+
+corollary reached_prohibition_watched:
+  assumes "and_free t" and "reached_prohibition t (take (Suc j) \<pi>)"
+    and "k < length \<pi>" and "(take (Suc k) \<pi>, Violated) \<in> den t"
+  shows "(\<exists>k' \<le> k. status t \<pi> = CAt Violated k') \<or> status t \<pi> = CUnknown
+    \<or> (\<exists>r k'. k' < j \<and> r \<noteq> Violated \<and> status t \<pi> = CAt r k')"
+proof -
+  from status_no_missed_violation[OF assms(1,3,4)]
+  consider (v) "\<exists>k' \<le> k. status t \<pi> = CAt Violated k'" | (u) "status t \<pi> = CUnknown"
+    | (c) r k' where "k' < k" "r \<noteq> Violated" "status t \<pi> = CAt r k'"
+        "\<forall>i \<le> k'. \<not> reached_prohibition t (take (Suc i) \<pi>)"
+    by blast
+  then show ?thesis
+  proof cases
+    case c
+    have "k' < j"
+    proof (rule ccontr)
+      assume "\<not> k' < j"
+      then have "j \<le> k'" by simp
+      with c(4) assms(2) show False by blast
+    qed
+    with c(2,3) show ?thesis by blast
+  qed blast+
+qed
 
 text \<open>Without UNLESS and AND no trace is interrupted.\<close>
 
@@ -1887,11 +2052,56 @@ next
   then show ?case by (auto simp: if_d_def)
 qed (auto simp: must_d_def may_d_def mustnot_d_def skip_d_def)
 
-text \<open>A prohibition at the end of a sequence is watched to the end of the trace, as a
-  top-level prohibition is: if a prefix of the observed trace is a violated trace of
-  \<open>t THEN s MUST_NOT a\<close>, the status is a violation at that entry or before it. On the trace
-  activation, pay, leak, \<open>alice MUST pay THEN bob MUST_NOT leak\<close> is reported violated at
-  entry 2.\<close>
+text \<open>A prohibition at the end of a sequence is watched to the end of the trace. If a prefix
+  of the observed trace is a violated trace of \<open>t THEN s MUST_NOT a\<close> in a reading where
+  \<open>t\<close> is completed at entry \<open>k\<^sub>0\<close> and the prohibition is violated later, the status is a
+  violation at that entry or before it, unless it is unknown or the term was interrupted,
+  with an executed handler, before entry \<open>k\<^sub>0\<close>. Both exceptions need UNLESS in \<open>t\<close>.\<close>
+
+theorem then_mustnot_watched:
+  assumes "and_free t" and "k\<^sub>0 < k" and "k < length \<pi>"
+    and "(take (Suc k\<^sub>0) \<pi>, Done) \<in> den t"
+    and "(drop k\<^sub>0 (take (Suc k) \<pi>), Violated) \<in> mustnot_d s a c"
+  shows "(\<exists>k' \<le> k. status (TThen t (TMustNot s a c)) \<pi> = CAt Violated k')
+    \<or> status (TThen t (TMustNot s a c)) \<pi> = CUnknown
+    \<or> (\<exists>k' < k\<^sub>0. status (TThen t (TMustNot s a c)) \<pi> = CAt Interrupted k')"
+proof -
+  let ?T = "TThen t (TMustNot s a c)"
+  let ?p = "take (Suc k) \<pi>"
+  have f: "and_free ?T" using assms(1) by simp
+  have tk: "take (Suc k\<^sub>0) ?p = take (Suc k\<^sub>0) \<pi>" using assms(2) by (simp add: min_def)
+  have k0: "k\<^sub>0 < length ?p" using assms(2,3) by simp
+  have "\<exists>k' < length ?p. (take (Suc k') ?p, Done) \<in> den t \<and> (drop k' ?p, Violated) \<in> mustnot_d s a c"
+    by (intro exI[of _ k\<^sub>0]) (use k0 tk assms(4,5) in simp)
+  then have v: "(?p, Violated) \<in> den ?T" by (simp add: then_d_split)
+  have ne: "take (Suc k\<^sub>0) \<pi> \<noteq> []" using assms(3) by (cases \<pi>) auto
+  from assms(4) obtain m\<^sub>1 where m1: "(take (Suc k\<^sub>0) \<pi>, Done, m\<^sub>1) \<in> fden t"
+    using fden_den by blast
+  have "([last (take (Suc k\<^sub>0) \<pi>)], Done, Held) \<in> fden (TMustNot s a c)"
+    by (cases "last (take (Suc k\<^sub>0) \<pi>)") (simp add: mustnot_d_def)
+  with ne m1 have "(take (Suc k\<^sub>0) \<pi>, Done, mmax m\<^sub>1 Held) \<in> fden ?T"
+    by (simp only: fden.simps mem_Collect_eq prod.case) blast
+  then have h: "reached_prohibition ?T (take (Suc k\<^sub>0) \<pi>)"
+    by (simp add: reached_prohibition_def mmax_Held)
+  from reached_prohibition_watched[OF f h assms(3) v]
+  consider (v) "\<exists>k' \<le> k. status ?T \<pi> = CAt Violated k'" | (u) "status ?T \<pi> = CUnknown"
+    | (c) r k' where "k' < k\<^sub>0" "r \<noteq> Violated" "status ?T \<pi> = CAt r k'"
+    by blast
+  then show ?thesis
+  proof cases
+    case c
+    have "r = Interrupted"
+    proof (cases r)
+      case Done
+      with status_sound(3)[OF f c(3) c(2)] have "(take (Suc k') \<pi>, Done, Exec) \<in> fden ?T" by blast
+      from then_mustnot_held[OF this] show ?thesis by simp
+    qed (use c(2) in simp_all)
+    with c(1,3) show ?thesis by blast
+  qed blast+
+qed
+
+text \<open>Without UNLESS and AND in \<open>t\<close> there is no exception: on the trace activation, pay,
+  leak, \<open>alice MUST pay THEN bob MUST_NOT leak\<close> is reported violated at entry 2.\<close>
 
 theorem then_mustnot_status:
   assumes "unless_free t" and "and_free t" and "k < length \<pi>"
@@ -1935,6 +2145,26 @@ proof -
     case CUnknown
     from status_definite[OF u f, of \<pi>] CUnknown show ?thesis by simp
   qed
+qed
+
+text \<open>A prohibition in a branch of OR completes at once, so a reading of the first entry has
+  reached it, and every violation of the term is reported, whatever the other branch does:
+  on the trace activation, pay, leak, \<open>alice MUST pay OR bob MUST_NOT leak\<close> is reported
+  violated at entry 2. This is the conservative reading of OR.\<close>
+
+corollary or_mustnot_watched:
+  assumes "and_free t" and "k < length \<pi>"
+    and "(take (Suc k) \<pi>, Violated) \<in> den (TOr t (TMustNot s a c))"
+  shows "(\<exists>k' \<le> k. status (TOr t (TMustNot s a c)) \<pi> = CAt Violated k')
+    \<or> status (TOr t (TMustNot s a c)) \<pi> = CUnknown"
+proof -
+  let ?T = "TOr t (TMustNot s a c)"
+  have f: "and_free ?T" using assms(1) by simp
+  from assms(2) have "take (Suc 0) \<pi> = [hd \<pi>]" by (cases \<pi>) simp_all
+  moreover obtain \<sigma> \<tau> e where "hd \<pi> = (\<sigma>, \<tau>, e)" by (cases "hd \<pi>")
+  ultimately have h: "reached_prohibition ?T (take (Suc 0) \<pi>)"
+    by (simp add: reached_prohibition_def mustnot_d_def)
+  from reached_prohibition_watched[OF f h assms(2,3)] show ?thesis by simp
 qed
 
 text \<open>The precedence of a violation over Done is needed: in \<open>s MUST_NOT a THEN s' MUST a'\<close>,
