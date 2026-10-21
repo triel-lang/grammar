@@ -4,10 +4,10 @@ module
   TRIEL(Int(..), integer_of_int, Nat, integer_of_nat, Num, Rat, quotient_of,
          Atom(..), Arg(..), Act(..), Fmap(..), Nd(..), Ty(..), Vexp(..),
          Expr(..), Verdict(..), Else_status(..), Continuation(..), Status(..),
-         Amount(..), Ract(..), Line(..), Prim(..), Deadline(..), Inv(..),
-         Sinv(..), Baction(..), Sterm(..), Pexp(..), Pen(..), Fdecl(..),
-         Spec(..), Polarity(..), Event(..), nat_of_integer, num_of, run,
-         dec_atom)
+         Amount(..), Ract(..), Pviol(..), Line(..), Prim(..), Deadline(..),
+         Inv(..), Sinv(..), Baction(..), Sterm(..), Pexp(..), Pen(..),
+         Fdecl(..), Spec(..), Polarity(..), Event(..), nat_of_integer, num_of,
+         run, dec_atom)
   where {
 
 import Prelude ((==), (/=), (<), (<=), (>=), (>), (+), (-), (*), (/), (**),
@@ -636,13 +636,15 @@ data Amount = PAmount Rat Bool | PUndefined | PNegative Rat;
 
 data Ract a = RNotify a | RPenalty Amount;
 
+data Pviol = PVAt Nat | PVNone | PVUnknown;
+
 data Line = LTimeOrder Nat | LActivation Bool | LBlock Bool
   | LTypes (Maybe (Nat, String))
   | LMust Nat String Act (Maybe Int) (Status String) [Ract String]
   | LMustNot Nat String Act Verdict [Ract String] | LMay Nat String Act Verdict
   | LMustElse Nat String Act (Maybe Int) String Act (Maybe Int) Else_status
   | LOnBreach Nat String (Maybe Nat)
-  | LComposite Nat (Maybe Bool) (Maybe Bool) (Maybe Bool)
+  | LComposite Nat (Maybe Bool) (Maybe Bool) (Maybe Bool) Pviol
   | LInvariant String (Maybe Bool);
 
 data Prim = PBool | PInt | PDec | PStr | PTime;
@@ -1349,16 +1351,31 @@ ext3 (TIf c t u) rho =
   (if eval c (st rho zero_nat) == Just True then ext3 t rho else ext3 u rho);
 ext3 TSkip rho = Just False;
 
+violation ::
+  forall a b c d e.
+    (Eq b, Value_order b, Eq c, Eq d,
+      Linorder e) => Tm a b c d -> [(a -> Maybe b, (e, Event a c d))] -> Pviol;
+violation t pi =
+  (case find (\ k -> mem3 t (take (suc k) pi) Violated == Just True)
+          (upt zero_nat (size_list pi))
+    of {
+    Nothing ->
+      (if all (\ k -> mem3 t (take (suc k) pi) Violated == Just False)
+            (upt zero_nat (size_list pi))
+        then PVNone else PVUnknown);
+    Just a -> PVAt a;
+  });
+
 composite_line ::
   Nat ->
     Maybe (Tm [String] Atom String Act) ->
       [([String] -> Maybe Atom, (Int, Event [String] String Act))] -> Line;
 composite_line n t pi =
   (case t of {
-    Nothing -> LComposite n Nothing Nothing Nothing;
+    Nothing -> LComposite n Nothing Nothing Nothing PVUnknown;
     Just u ->
-      LComposite n (mem3 u pi Done) (mem3 u pi Interrupted)
-        (mem3 u pi Violated);
+      LComposite n (mem3 u pi Done) (mem3 u pi Interrupted) (mem3 u pi Violated)
+        (violation u pi);
   });
 
 may_verdict ::

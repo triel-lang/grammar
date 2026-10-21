@@ -28,6 +28,13 @@
 #
 # Matching is case-insensitive and longer words are replaced first.
 #
+# Two kinds of text that point to the history of the project are rewritten too:
+# the commit hash of the tag v2.5 (57c5410, in LICENSE.md: "(commit `57c5410`)"
+# is removed) and the stages of the development ("the independent review of
+# stage 13" becomes "an independent review", "in stage 9" and "until stage 15"
+# become "in an earlier revision" and "until an earlier revision"). The archive
+# is checked for both, as for the words.
+#
 # The archive holds the files of the commit HEAD (or of $REF), without .git,
 # CLA.md, the signatures directory, .github/workflows/cla.yml and this script
 # (which names the built-in words). Tar owner names
@@ -124,8 +131,23 @@ while IFS= read -r -d '' f; do
   done
 done < <(grep -rlIZ -e '' "$TREE")
 
+# The commit hash of the tag v2.5 and the stages of the development.
+HISTORY_HASH=57c5410
+while IFS= read -r -d '' f; do
+  H=$HISTORY_HASH perl -pi -e '
+    s/ \(commit `\Q$ENV{H}\E[0-9a-f]*`\)//g;
+    s/\b\Q$ENV{H}\E[0-9a-f]*\b/ANONYMIZED/g;
+    s/\bthe (?:independent )?review of stage \d+/an independent review/gi;
+    s/\b(in|until|since|after|before) stage \d+/$1 an earlier revision/gi;
+    s/\bstages? \d+/an earlier revision/gi;' "$f"
+done < <(grep -rlIZ -e '' "$TREE")
+
 # Nothing may be left: contents of every file (binary files included) and paths.
 left=0
+if hits=$(cd "$TREE" && grep -raliE -e "$HISTORY_HASH|stage ?[0-9]" .); then
+  printf 'error: a commit hash or a stage of the development is still in:\n%s\n' "$hits" >&2
+  left=1
+fi
 for entry in "${ENTRIES[@]}"; do
   w=${entry%%$'\t'*}
   if hits=$(cd "$TREE" && grep -raliF -e "$w" .); then

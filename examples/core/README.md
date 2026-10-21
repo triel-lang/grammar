@@ -11,7 +11,7 @@ The eleven specifications in this folder use only constructs that the translator
 - `core_payment.triel`: actions with arguments, an obligation whose window opens with `FROM`, and penalties with arithmetic and `CAP`, computed in the state of the breach: capped, undefined and negative;
 - `core_fallback.triel`: `WITHIN … ELSE`, an obligation with a fallback that comes into force at the deadline instead of a breach;
 - `core_commitment.triel`: `EVENTUALLY … WITHIN` a duration and a factor (true at the deadline, false past it, undefined on missing data, rejected activation), and `POLARITY`, `THRESHOLD` and `SENSITIVITY_BOUND` printed as metadata;
-- `core_sequence.triel`: two obligations in sequence, which need two actions, and a prohibition inside a composite term, which its first forbidden action violates;
+- `core_sequence.triel`: two obligations in sequence, which need two actions, and prohibitions inside composite terms, which their first forbidden action violates, with the violation reported on a prefix of the trace;
 - `core_hidden.triel`: a hidden `ZK<Integer>` factor, named as an action argument and never read, a `ZK<String>` factor `WITHOUT REVEALING ALL` read like an ordinary factor, and `PROOF_SYSTEM`, `CURVE`, `DID`, `PROVES`, `HASH` with a salt and `BOUND_TO` printed as metadata.
 
 The scenario `age_verification_breach` runs `examples/age_verification.triel`, whose hidden `age` factor the core accepts.
@@ -58,7 +58,7 @@ The polarity of an event is not used: verdicts and the membership of composite t
 11. **`EVENTUALLY … WITHIN`.** The deadline is resolved at activation, like the deadline of an obligation. The invariant is `T` once its condition is true at an entry not after the deadline, an entry at the deadline included; `F` once an entry is strictly after the deadline and the condition was false at every entry not after it; `U` otherwise, so an entry where the condition is undefined prevents `F`.
 12. **`WITHIN … ELSE`.** If the first obligation is not met by its deadline d, it is not breached: the fallback is in force from d, with the window (d, d′], and is reported after `ELSE`. A duration in the deadline of the fallback counts from d. A handler bound to such an obligation is rejected. If d′ is not after d, the activation is rejected (`fallback_order_rejected`, `fallback_order_equal`, `fallback_order_ok`).
 13. **Hidden factors.** A `ZK<T>` factor without `WITHOUT REVEALING ALL` is hidden. Before anything else, the evaluator removes every hidden factor from the data of every entry, so its value, given or not, of the right type or not, changes nothing in the report (`hidden_valid` and `hidden_value_ignored` get the same report). A `ZK<T>` factor `WITHOUT REVEALING ALL` is an ordinary factor of type T, typed like any other (`hidden_visible_ill_typed`). `Hash` and `Address` values are strings.
-14. **Composite terms.** A composite line says, for each outcome, whether the whole observed trace with that outcome is a trace of the term (`TECHNICAL_REPORT.md` §2.5). The actions of a term are the events of the entries after the one where it is reached, so `alice MUST pay THEN alice MUST pay` needs two payments (`sequence_one_payment`, `sequence_two_payments`). A prohibition completes at once and is violated by its first forbidden action (`sequence_prohibition_violated`). The answer is about the whole trace (`sequence_violation_not_last`): a trace that goes on after the forbidden action is not a violated trace of the term, but its prefix that ends with the forbidden action is. Verdicts of top-level norms do not have this limit.
+14. **Composite terms.** A composite line says, for each outcome, whether the whole observed trace with that outcome is a trace of the term (`TECHNICAL_REPORT.md` §2.5), and then where the term is violated. The actions of a term are the events of the entries after the one where it is reached, so `alice MUST pay THEN alice MUST pay` needs two payments (`sequence_one_payment`, `sequence_two_payments`). A prohibition completes at once and is violated by its first forbidden action (`sequence_prohibition_violated`). The answers for the whole trace do not show a violation followed by more entries (`sequence_violation_not_last`), so the line also reports `VIOLATION ENTRY k`, the first entry k such that the trace up to k is a violated trace of the term, or `NONE`, or `UNKNOWN`. A violation takes precedence over `DONE YES`: the term is violated, even if the whole trace also completes it (`sequence_violation_then_done`). A violation is final: it stays at entry k whatever entries follow. `NONE` is not final.
 
 ## Output
 
@@ -81,7 +81,8 @@ TERM I MUST S A DEADLINE T ELSE S2 A2 DEADLINE (T | NONE) : FULFILLED | PENDING 
 TERM I MUST_NOT S A : PENDING | BREACHED T ACTION*
 TERM I MAY S A : FULFILLED | PENDING
 TERM I ON_BREACH S : BOUND J
-TERM I COMPOSITE : DONE X INTERRUPTED X VIOLATED X        -- X is YES, NO or UNKNOWN; also IF, WHEN and REF
+TERM I COMPOSITE : DONE X INTERRUPTED X VIOLATED X VIOLATION (ENTRY K | NONE | UNKNOWN)
+                                                          -- X is YES, NO or UNKNOWN; also IF, WHEN and REF
 INVARIANT NAME : T | F | U
 ```
 

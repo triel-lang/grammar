@@ -385,9 +385,13 @@ line (T.LMustElse i s a d s' a' d' st) =
 line (T.LMay i s a v) = "TERM " ++ nat i ++ " MAY " ++ s ++ " " ++ showAct a ++ " : " ++ verdict v
 line (T.LOnBreach i s j) =
   "TERM " ++ nat i ++ " ON_BREACH " ++ s ++ " : " ++ maybe "UNBOUND" (("BOUND " ++) . nat) j
-line (T.LComposite i d n v) =
+line (T.LComposite i d n v p) =
   "TERM " ++ nat i ++ " COMPOSITE : DONE " ++ answer d ++ " INTERRUPTED " ++ answer n
-    ++ " VIOLATED " ++ answer v
+    ++ " VIOLATED " ++ answer v ++ " VIOLATION " ++ violation p
+  where
+    violation (T.PVAt k) = "ENTRY " ++ nat k
+    violation T.PVNone = "NONE"
+    violation T.PVUnknown = "UNKNOWN"
 line (T.LInvariant n b) = "INVARIANT " ++ n ++ " : " ++ truth b
 
 main :: IO ()

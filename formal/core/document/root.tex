@@ -62,7 +62,8 @@ Terms form an inductive type with a compositional denotation. Proved: every term
 (\texttt{den\_total}), and therefore all four laws of \texttt{UNLESS}, including
 distributivity over \texttt{THEN}, hold for every term without side conditions. Two
 obligations in sequence need two actions, and a prohibition inside a composite term can
-end it \texttt{Violated}.
+end it \texttt{Violated}; the evaluator reports the first prefix of a trace that violates
+a composite term, and this violation is final.
 
 \paragraph{Nominative data (theory \texttt{TRIEL\_ND}).}
 Following the Mizar formalisation of simple-named complex-valued nominative data by
