@@ -1,0 +1,15 @@
+; Bob leaks after Alice pays, and the trace goes on. The composite line answers
+; for the whole trace: a trace that continues after the forbidden action is not
+; a violated trace of the sequence (only its prefix that ends with the leak is,
+; see sequence_prohibition_violated). This is the limit of reading A of
+; formal/core/CORE.md, decision 32.
+(scenario sequence_violation_not_last
+  (spec "examples/core/core_sequence.triel")
+  (entry "2026-06-01T09:00:00Z" (activate)
+    (data))
+  (entry "2026-06-01T10:00:00Z" (act alice pay must)
+    (data))
+  (entry "2026-06-01T11:00:00Z" (act bob leak must_not)
+    (data))
+  (entry "2026-06-01T12:00:00Z" (tick)
+    (data)))
