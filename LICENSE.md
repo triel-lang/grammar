@@ -2,15 +2,15 @@
 
 This repository contains material under different terms: the TRIEL Language Specification (section 1), code (section 2), and other files (section 3). This file governs; the summary in `README.md` does not.
 
-## 1. TRIEL Language Specification, version 2.5: OWFa 1.0
+## 1. TRIEL Language Specification, version 2.5.1: OWFa 1.0
 
 The TRIEL Language Specification is made available under the Open Web Foundation Final Specification Agreement 1.0 (OWFa 1.0).
 
 Bound Entity: Dmitri Chistyakov
-Specification: TRIEL Language Specification, version 2.5 (Core Language Edition)
-Date: October 16, 2026
+Specification: TRIEL Language Specification, version 2.5.1 (Core Language Edition), errata to version 2.5
+Date: October 21, 2026
 
-The Specification consists of exactly these files, in the state of tag `v2.5` (commit `57c5410`):
+The Specification consists of exactly these files, in the state of tag `v2.5.1`:
 
 - `TRIEL-grammar-v2_5-core.ebnf`
 - `TECHNICAL_REPORT.md`
@@ -22,7 +22,7 @@ No other file in this repository is part of the Specification.
 
 Full text of the agreement: https://www.openwebfoundation.org/the-agreements/the-owf-1-0-agreements-granted-claims/owfa-1-0
 
-**Earlier version.** The OWFa 1.0 statement made on July 17, 2026 for the TRIEL Language Specification, version 2.4 (Core Language Edition), remains in effect for that version.
+**Earlier versions.** The OWFa 1.0 statements made on July 17, 2026 for the TRIEL Language Specification, version 2.4 (Core Language Edition), and on October 16, 2026 for version 2.5 (Core Language Edition), which consists of the same three files in the state of tag `v2.5` (commit `57c5410`), remain in effect for those versions.
 
 ## 2. Code: Apache License 2.0
 
@@ -49,3 +49,4 @@ No patent rights are granted other than those stated in OWFa 1.0 for the Specifi
 ## 5. Contributions
 
 Contributions are accepted under the TRIEL Contributor License Agreement (`CLA.md`). How to sign it is described in `CONTRIBUTING.md`.
+
