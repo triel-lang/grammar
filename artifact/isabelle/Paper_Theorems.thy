@@ -38,6 +38,9 @@ thm TRIEL_Breach.breach_mustnot_violated
 thm TRIEL_Exec.status_final
 thm TRIEL_Exec.term_semantics.status_sound
 thm TRIEL_Exec.term_semantics.violation_over_done
+thm TRIEL_Exec.term_semantics.fden_den
+thm TRIEL_Exec.term_semantics.then_mustnot_held
+thm TRIEL_Exec.term_semantics.then_mustnot_status
 
 section \<open>Stability of verdicts and its limits\<close>
 
@@ -107,6 +110,8 @@ local
     "TRIEL_Breach.mustnot_violated_breach", "TRIEL_Breach.breach_mustnot_violated",
     "TRIEL_Exec.status_final", "TRIEL_Exec.term_semantics.status_sound",
     "TRIEL_Exec.term_semantics.violation_over_done",
+    "TRIEL_Exec.term_semantics.fden_den", "TRIEL_Exec.term_semantics.then_mustnot_held",
+    "TRIEL_Exec.term_semantics.then_mustnot_status",
     "TRIEL_Indicators.verdict_stable", "TRIEL_Indicators.verdict_stable_nd",
     "TRIEL_Indicators.cond_equitone", "TRIEL_Core.T3_present_not_monotone",
     "TRIEL_Indicators.Ex_breaks_stability", "TRIEL_Core.T3_default_not_monotone",
