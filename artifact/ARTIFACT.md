@@ -49,17 +49,20 @@ container limited to 8 GiB:
 |---|---|
 | Download of the two base images | 2 min |
 | Image build (`docker build`), without cache | 3 min |
-| `run.sh`, all 10 steps | 16 min |
+| `run.sh`, all 11 steps | 18 min |
 | of which: clean Isabelle build of `TRIEL_Core` | 2 min |
-| of which: 35 scenarios | 2.5 min |
-| of which: translator and driver tests (pytest) | 6.5 min |
-| of which: parsing of the 25 examples with the ambiguity check | 3.5 min |
+| of which: 41 scenarios | 3 min |
+| of which: translator and driver tests (pytest) | 7.5 min |
+| of which: parsing of the 26 examples with the ambiguity check | 3.5 min |
 | of which: ambiguity regression tests | 2 min |
-| of which: session `TRIEL_Paper` (on the heap of `TRIEL_Core`) | 11 s |
+| of which: excerpts of the documents | 11 s |
+| of which: session `TRIEL_Paper` (on the heap of `TRIEL_Core`) | 10 s |
 
-On a GitHub-hosted runner (`ubuntu-latest`, workflow
-`.github/workflows/artifact.yml`) the image builds in 1.5 min, base images
-included, and `run.sh` took 10 min in one run and 16.5 min in another.
+The times of `run.sh` are those of version 2.5.1; the download and the image
+build were measured for version 2.5, with the same `Dockerfile`. On a
+GitHub-hosted runner (`ubuntu-latest`, workflow `.github/workflows/artifact.yml`)
+the image of version 2.5 built in 1.5 min, base images included, and `run.sh`
+took 10 min in one run and 16.5 min in another.
 
 ## Running
 
@@ -92,7 +95,7 @@ proved statements (lemma/theorem/corollary)  586
 paper theorems found, without oracles        41 of 41
 scenarios matching .expected                 41 of 41
 examples accepted by the core                24 of 26
-translator and driver tests (pytest)         292 passed in ...
+translator and driver tests (pytest)         293 passed in ...
 examples parsed with one derivation          26 of 26
 ambiguity regression checks passed           235
 document excerpts conforming to the grammar  15
@@ -185,7 +188,7 @@ The results rest on the following, which are not proved here:
   specifications to terms of the core, written in Python. Nothing proves that it
   translates a specification into the core term with the intended meaning, or
   that it rejects exactly the constructs outside the core. It is checked only
-  by tests: the 292 tests of `parser/test_triel_to_core.py`, the classification
+  by tests: the 293 tests of `parser/test_triel_to_core.py`, the classification
   of the 26 examples, and the 41 scenarios. The same holds for
   `parser/triel_eval.py`, which converts a scenario into the input of the
   evaluator, and for the grammar `parser/triel.lark` with the parser library
