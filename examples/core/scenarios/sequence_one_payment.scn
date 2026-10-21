@@ -1,5 +1,8 @@
-; One payment: the first sequence is done (the prohibition completes at once),
-; the second, which needs two payments, is not.
+; One payment: the whole trace is a run of the first sequence with the outcome
+; Done (the prohibition completes at once), but its status is OPEN: a sequence
+; that has reached a prohibition stays under observation to the end of the
+; trace. The second sequence, which needs two payments, is not done; the third
+; is done at entry 1, when Alice pays after the prohibition.
 (scenario sequence_one_payment
   (spec "examples/core/core_sequence.triel")
   (entry "2026-06-01T09:00:00Z" (activate)

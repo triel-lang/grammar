@@ -1,4 +1,6 @@
-; Two payments: both sequences are done.
+; Two payments: the whole trace is a run of each sequence with the outcome Done.
+; The first sequence ends in a prohibition, so its status stays OPEN; the second
+; is done at entry 2, the third at entry 1.
 (scenario sequence_two_payments
   (spec "examples/core/core_sequence.triel")
   (entry "2026-06-01T09:00:00Z" (activate)

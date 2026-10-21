@@ -1,8 +1,11 @@
 ; Alice pays, then Bob does what the prohibition forbids. The whole trace is a
-; violated trace of "alice MUST pay THEN bob MUST_NOT leak". Its status is DONE
-; at entry 1: the prohibition completes at once, so the term has been executed
-; when Alice pays, and the observation of the term ends there (formal/core/CORE.md,
-; decision 34). Two obligations in sequence are not discharged by one payment.
+; violated trace of "alice MUST pay THEN bob MUST_NOT leak". When Alice pays, the
+; term reaches the prohibition, whose outcome Done is immediate; that does not
+; end the observation, and the term stays under observation to the end of the
+; trace, like a prohibition at the top level. Its status is VIOLATED at entry 2,
+; the leak (formal/core/CORE.md, decision 34); this is the reproduction of
+; audit finding S-1. Two obligations in sequence are not discharged by one
+; payment.
 (scenario sequence_prohibition_violated
   (spec "examples/core/core_sequence.triel")
   (entry "2026-06-01T09:00:00Z" (activate)

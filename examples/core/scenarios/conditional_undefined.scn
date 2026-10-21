@@ -3,7 +3,10 @@
 ; ELSE buyer MAY cancel, not exercised, and the last IF, which has no ELSE,
 ; completes at once. Both are runs of one entry with outcome Done.
 ; DEFAULT(discount, 0) is 0 without discount, so the WHEN condition is false,
-; not undefined, and the WHEN term completes at once too.
+; not undefined, and the WHEN term completes at once too. The status of all
+; three is OPEN: an outcome Done reached without executing an obligation or
+; exercising a permission does not end the observation (formal/core/CORE.md,
+; decision 34).
 (scenario conditional_undefined
   (spec "examples/core/core_conditional.triel")
   (entry "2026-06-01T00:00:00Z" (activate)

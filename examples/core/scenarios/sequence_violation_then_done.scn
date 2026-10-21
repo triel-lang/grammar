@@ -2,8 +2,9 @@
 ; THEN alice MUST pay" with the outcome DONE, but its prefix up to the leak,
 ; entry 1, is a violated trace, and no shorter prefix has an outcome: the status
 ; is VIOLATED at entry 1, and it stays so (formal/core/CORE.md, decision 34).
-; "alice MUST pay THEN bob MUST_NOT leak" is executed only when Alice pays, at
-; entry 2, after the leak, so its status is DONE.
+; "alice MUST pay THEN bob MUST_NOT leak" reaches its prohibition only when Alice
+; pays, at entry 2, after the leak; nothing has violated it since, so its status
+; is OPEN.
 (scenario sequence_violation_then_done
   (spec "examples/core/core_sequence.triel")
   (entry "2026-06-01T09:00:00Z" (activate)
