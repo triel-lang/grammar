@@ -63,11 +63,13 @@ Terms form an inductive type with a compositional denotation. Proved: every term
 distributivity over \texttt{THEN}, hold for every term without side conditions. Two
 obligations in sequence need two actions, and a prohibition inside a composite term can
 end it \texttt{Violated}; the evaluator reports the status of a composite term, read on
-the first prefix of the trace that violates the term or completes it by an executed
-action, and this status is final. For a term without \texttt{AND}, a violated prefix is
-reported as a violation at that entry or before it, unless the status is unknown or the
-observation has already ended on a completion by an executed action, before any reading
-of a prefix had reached a prohibition (\texttt{status\_no\_missed\_violation}).
+the first prefix of the trace that violates the term, or that completes it by an executed
+action while no reading of it or of an earlier prefix has reached a prohibition, and this
+status is final. For a term without \texttt{AND}, a violated prefix is reported as a
+violation at that entry or before it, unless the status is unknown or the observation has
+already ended on a completion by an executed action, before any reading of a prefix had
+reached a prohibition (\texttt{status\_no\_missed\_violation}); this exception cannot be
+dropped (\texttt{violation\_after\_completion}).
 
 \paragraph{Nominative data (theory \texttt{TRIEL\_ND}).}
 Following the Mizar formalisation of simple-named complex-valued nominative data by

@@ -1975,13 +1975,14 @@ text \<open>The status does not miss a violation that a reading of a prefix admi
   the observed trace is a violated trace of the term, the status is a violation at that entry
   or before it, unless it is unknown, or the observation has ended before, at an entry where
   the term is completed by an executed action and no reading of that prefix or of an earlier
-  one has reached a prohibition. This is the strongest form that holds: in
-  \<open>s MUST_NOT a THEN s' MUST a'\<close> a violation after the action \<open>a'\<close> is not reported.\<close>
+  one has reached a prohibition. An unknown status needs UNLESS, and the exception for an
+  earlier completion cannot be dropped (\<open>violation_after_completion\<close>).\<close>
 
 theorem status_no_missed_violation:
   assumes "and_free t" and "k < length \<pi>" and "(take (Suc k) \<pi>, Violated) \<in> den t"
-  shows "(\<exists>k' \<le> k. status t \<pi> = CAt Violated k') \<or> status t \<pi> = CUnknown
+  shows "(\<exists>k' \<le> k. status t \<pi> = CAt Violated k') \<or> (status t \<pi> = CUnknown \<and> \<not> unless_free t)
     \<or> (\<exists>r k'. k' < k \<and> r \<noteq> Violated \<and> status t \<pi> = CAt r k' \<and> (take (Suc k') \<pi>, r, Exec) \<in> fden t
+              \<and> (take (Suc k') \<pi>, Violated) \<notin> den t
               \<and> (\<forall>i \<le> k'. \<not> reached_prohibition t (take (Suc i) \<pi>)))"
 proof (cases "status t \<pi>")
   case (CAt r k')
@@ -2003,12 +2004,15 @@ proof (cases "status t \<pi>")
       by blast+
     from nv assms(3) have "k' \<noteq> k" by auto
     with kk have "k' < k" by simp
-    with CAt False m nh show ?thesis by blast
+    with CAt False m nv nh show ?thesis by blast
   qed
 next
   case COpen
   with status_open(1)[OF assms(1) COpen assms(2)] assms(3) show ?thesis by simp
-qed simp
+next
+  case CUnknown
+  with status_definite[of t \<pi>] assms(1) show ?thesis by auto
+qed
 
 text \<open>The same principle from the side of the readings: once a reading of a prefix has reached
   a prohibition, every later violation is reported, unless the status is unknown or the
@@ -2165,6 +2169,79 @@ proof -
   ultimately have h: "reached_prohibition ?T (take (Suc 0) \<pi>)"
     by (simp add: reached_prohibition_def mustnot_d_def)
   from reached_prohibition_watched[OF f h assms(2,3)] show ?thesis by simp
+qed
+
+text \<open>Without UNLESS and AND the three answers are the memberships themselves.\<close>
+
+lemma mem3_eq: "unless_free t \<Longrightarrow> and_free t \<Longrightarrow> mem3 t \<rho> r = Some ((\<rho>, r) \<in> den t)"
+  using mem3_complete[of t \<rho> r] mem3_sound[of t \<rho> r] by (cases "mem3 t \<rho> r") auto
+
+lemma mem3m_eq:
+  "unless_free t \<Longrightarrow> and_free t \<Longrightarrow> mem3m t \<rho> r m = Some ((\<rho>, r, m) \<in> fden t)"
+  using mem3m_complete[of t \<rho> r m] mem3m_sound[of t \<rho> r m] by (cases "mem3m t \<rho> r m") auto
+
+lemma held_upto_eq:
+  "unless_free t \<Longrightarrow> and_free t
+     \<Longrightarrow> held_upto t \<pi> k = Some (\<exists>j \<le> k. reached_prohibition t (take (Suc j) \<pi>))"
+  using held_upto_defined[of t \<pi> k] held_upto_dec[of t \<pi> k]
+  by (cases "held_upto t \<pi> k") (auto simp: dec_def)
+
+text \<open>The exception of \<open>status_no_missed_violation\<close> for an earlier completion cannot be
+  dropped: on the trace activation, \<open>a'\<close>, \<open>a\<close>, the term \<open>s MUST_NOT a THEN s' MUST a'\<close> is
+  completed by the action \<open>a'\<close> at entry 1, when no reading has reached a prohibition, and its
+  status is Done there, although the whole trace is a violated trace of the term.\<close>
+
+theorem violation_after_completion:
+  assumes "(s, a) \<noteq> (s', a')" and "\<tau>\<^sub>0 \<le> \<tau>\<^sub>1" and "\<tau>\<^sub>1 \<le> \<tau>\<^sub>2"
+  shows "([(\<sigma>\<^sub>0, \<tau>\<^sub>0, e), (\<sigma>\<^sub>1, \<tau>\<^sub>1, Deontic s' a' p'), (\<sigma>\<^sub>2, \<tau>\<^sub>2, Deontic s a p)], Violated)
+           \<in> den (TThen (TMustNot s a ETrue) (TMust s' a'))"
+    and "status (TThen (TMustNot s a ETrue) (TMust s' a'))
+           [(\<sigma>\<^sub>0, \<tau>\<^sub>0, e), (\<sigma>\<^sub>1, \<tau>\<^sub>1, Deontic s' a' p'), (\<sigma>\<^sub>2, \<tau>\<^sub>2, Deontic s a p)] = CAt Done 1"
+proof -
+  define \<pi> where "\<pi> = [(\<sigma>\<^sub>0, \<tau>\<^sub>0, e), (\<sigma>\<^sub>1, \<tau>\<^sub>1, Deontic s' a' p'), (\<sigma>\<^sub>2, \<tau>\<^sub>2, Deontic s a p)]"
+  let ?T = "TThen (TMustNot s a ETrue) (TMust s' a')"
+  let ?\<rho>\<^sub>0 = "[(\<sigma>\<^sub>0, \<tau>\<^sub>0, e)]"
+  let ?\<rho>\<^sub>1 = "[(\<sigma>\<^sub>0, \<tau>\<^sub>0, e), (\<sigma>\<^sub>1, \<tau>\<^sub>1, Deontic s' a' p')]"
+  have u: "unless_free ?T" and f: "and_free ?T" by simp_all
+  have nd: "\<not> does s a (Deontic s' a' p')" using assms(1) by (auto simp: does_def)
+  have "(\<pi>, Violated) \<in> mustnot_d s a ETrue"
+    using assms(2,3) nd
+    by (auto simp: \<pi>_def mustnot_d_def forbidden_def is_trace_def does_def less_Suc_eq)
+  then have "(\<pi>, Violated) \<in> den ?T" by (simp add: then_d_split)
+  then show "([(\<sigma>\<^sub>0, \<tau>\<^sub>0, e), (\<sigma>\<^sub>1, \<tau>\<^sub>1, Deontic s' a' p'), (\<sigma>\<^sub>2, \<tau>\<^sub>2, Deontic s a p)], Violated)
+           \<in> den ?T" by (simp add: \<pi>_def)
+  have nI: "(\<rho>, Interrupted, m) \<notin> fden ?T" for \<rho> m
+    using no_interrupted[OF u f, of \<rho>] fden_den by blast
+  have nH: "(\<rho>, Done, Held) \<notin> fden ?T" for \<rho>
+    by (auto simp: must_d_def)
+  have nR: "\<not> reached_prohibition ?T \<rho>" for \<rho>
+    using nI nH by (simp add: reached_prohibition_def)
+  have t0: "take (Suc 0) \<pi> = ?\<rho>\<^sub>0" and t1: "take (Suc 1) \<pi> = ?\<rho>\<^sub>1"
+    by (simp_all add: \<pi>_def)
+  have v0: "(?\<rho>\<^sub>0, Violated) \<notin> den ?T"
+    by (simp add: then_d_split must_d_def mustnot_d_def forbidden_def)
+  have v1: "(?\<rho>\<^sub>1, Violated) \<notin> den ?T"
+    using nd by (auto simp: then_d_split must_d_def mustnot_d_def forbidden_def less_Suc_eq)
+  have d0: "(?\<rho>\<^sub>0, Done, Exec) \<notin> fden ?T"
+    by (auto simp: must_d_def)
+  have "Suc 0 < length ?\<rho>\<^sub>1 \<and> (take (Suc 0) ?\<rho>\<^sub>1, Done) \<in> den (TMustNot s a ETrue)
+        \<and> (drop 0 ?\<rho>\<^sub>1, Done, Exec) \<in> fden (TMust s' a')"
+    using assms(2) by (simp add: mustnot_d_def must_d_def is_trace_def does_def)
+  then have d1: "(?\<rho>\<^sub>1, Done, Exec) \<in> fden ?T"
+    by (simp only: fden.simps mem_Collect_eq prod.case) blast
+  have hF: "held_upto ?T \<pi> k = Some False" for k
+    using nR by (simp add: held_upto_eq[OF u f])
+  have p0: "pstep ?T \<pi> 0 = Some None"
+    unfolding pstep_def mem3_eq[OF u f] mem3m_eq[OF u f] hF t0
+    by (simp only: v0 d0 nI step_none simp_thms option.inject bool.distinct)
+  have p1: "pstep ?T \<pi> 1 = Some (Some Done)"
+    unfolding pstep_def mem3_eq[OF u f] mem3m_eq[OF u f] hF t1
+    by (simp only: v1 d1 nI step_Done simp_thms option.inject bool.distinct)
+  have "status ?T \<pi> = CAt Done 1"
+    unfolding status_CAt using p0 p1 by (simp add: \<pi>_def)
+  then show "status ?T
+      [(\<sigma>\<^sub>0, \<tau>\<^sub>0, e), (\<sigma>\<^sub>1, \<tau>\<^sub>1, Deontic s' a' p'), (\<sigma>\<^sub>2, \<tau>\<^sub>2, Deontic s a p)] = CAt Done 1"
+    by (simp add: \<pi>_def)
 qed
 
 text \<open>The precedence of a violation over Done is needed: in \<open>s MUST_NOT a THEN s' MUST a'\<close>,

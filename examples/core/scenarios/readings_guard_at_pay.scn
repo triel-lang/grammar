@@ -3,8 +3,9 @@
 ; guard fires (Done, by an executed action), and the guard interrupting it,
 ; with the handler bob MUST_NOT leak reached (Interrupted). One reading has
 ; reached a prohibition, so the status is conservative and stays OPEN
-; (formal/core/CORE.md, decision 34). The other terms also reach a prohibition
-; when Alice pays and stay OPEN while nothing violates it.
+; (formal/core/CORE.md, decision 34). The first and the third term also reach a
+; prohibition when Alice pays, and the fourth already at activation, through its
+; branch bob MUST_NOT leak; all stay OPEN while nothing violates it.
 (scenario readings_guard_at_pay
   (spec "examples/core/core_readings.triel")
   (entry "2026-06-01T00:00:00Z" (activate)
