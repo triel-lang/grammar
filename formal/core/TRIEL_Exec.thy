@@ -1285,9 +1285,10 @@ text \<open>The membership of the whole observed trace says nothing about a viol
   its actions discharges it, and the guard of UNLESS may fire at the entry of an action. When
   one reading completes the term by an executed action and another has reached a prohibition,
   the status is conservative: once a reading of some prefix has reached a prohibition as the
-  last element of the term, only a violation ends the observation. So the status does not
-  miss a violation that a reading of a prefix admits, unless the observation has ended
-  before, on a completion by an executed action, when no reading had reached a prohibition
+  last element of the term, only a violation ends the observation. So, for a term without
+  AND, the status does not miss a violation that a reading of a prefix admits, unless it is
+  unknown, which needs UNLESS, or the observation has ended before, on a completion by an
+  executed action, when no reading had reached a prohibition
   (\<open>status_no_missed_violation\<close>).\<close>
 
 datatype mode = Inst | Exec | Held

@@ -30,20 +30,20 @@ and prints a summary whose numbers are all computed by the run.
 - x86-64 Linux host (or any Docker host that runs `linux/amd64` images) with
   Docker 20.10 or later.
 - CPU: 4 cores recommended; Isabelle uses up to 4 threads.
-- Memory: 8 GB. The memory peak is the clean Isabelle build of `TRIEL_Core`
-  with 4 threads (Poly/ML and the Isabelle/Scala process): the sum of the
-  resident set sizes of the processes in the container reached 7.5 GiB. With
-  the container limited to 8 GiB (`--memory=8g`) the run passes; at 6 GiB the
-  Isabelle build is killed for lack of memory. All other steps stay below
-  2 GiB.
+- Memory: 10 GB. The memory peak is the clean Isabelle build of `TRIEL_Core`
+  with 4 threads (Poly/ML and the Isabelle/Scala process): the memory charged
+  to the container (its cgroup, page cache included) reached 8.2 GiB in a run
+  without a limit. With the container limited to 10 GiB (`--memory=10g`) the
+  build passed in each of three runs, with peaks of 7.0 to 7.8 GiB; at 8 GiB it
+  was killed for lack of memory in two of four runs. All other steps stay
+  below 2 GiB.
 - Disk: 10 GB for the image (3.1 GB compressed download, the same size for
   `docker save | gzip`), and about 0.2 GB inside the container for a run.
 - Network: only to build the image (base images, Ubuntu packages and Python
   wheels). Running the image needs no network; the measured run used
   `--network none`.
 
-Measured on a 4-core x86-64 virtual machine with 16 GB of memory, with the
-container limited to 8 GiB:
+Measured on a 4-core x86-64 virtual machine with 16 GB of memory:
 
 | Phase | Time |
 |---|---|
@@ -151,7 +151,7 @@ variables `?x`.
 | 25 of the 27 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `25`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
 | Every cited theorem exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 52` |
 | Finality of verdicts: on a trace (times that do not decrease) a definite verdict of an obligation, a prohibition or an invariant does not change when the trace is extended; the evaluator rejects a list of observations whose times decrease, so for `run` a decided line stays the same when observations are appended, unless the longer list is rejected for its time order or its types. A property of the design | `grep -A1 -E '\.(ob_verdict_final\|pr_verdict_final\|inv_final\|run_final\|time_order_rejected)$' results/paper_theorems.txt` | `TRIEL_Breach.ob_verdict_final`, `TRIEL_Breach.pr_verdict_final`, `TRIEL_Invariants.inv_final`, `TRIEL_Exec.run_final`, `TRIEL_Exec.time_order_rejected`, each with its statement, e.g. `inv_eval ?\<iota> ?\<pi> = Some ?b \<Longrightarrow> inv_eval ?\<iota> (?\<pi> @ ?\<rho>) = Some ?b` |
-| Two obligations in sequence need two actions; a prohibition in a composite term can be violated, and its trace semantics agrees with its verdict; the status of a composite term (read on the first prefix that violates the term or completes it by an executed action; conservative when a prefix has several readings) is sound and final, Violated before Done is needed, and the modes of the traces refine the denotation; for a term without AND, a violated prefix is reported as a violation at that entry or before it unless the status is unknown or the observation ended earlier on a completion by an executed action before any reading had reached a prohibition, and this exception cannot be dropped; consequences for a prohibition after a reading has reached one, at the end of a sequence (no exception when the first part has no UNLESS and no AND) and in a branch of OR (no exception but an unknown status) | `grep -A1 -E '\.(must_then_must_two_actions\|violated_reachable\|then_mustnot_violated\|mustnot_violated_breach\|breach_mustnot_violated\|status_final\|status_sound\|violation_over_done\|fden_den\|then_mustnot_held\|then_mustnot_status\|status_no_missed_violation\|reached_prohibition_watched\|then_mustnot_watched\|or_mustnot_watched\|violation_after_completion)$' results/paper_theorems.txt` | the sixteen theorems with their statements |
+| Two obligations in sequence need two actions; a prohibition in a composite term can be violated, and its trace semantics agrees with its verdict; the status of a composite term (read on the first prefix that violates the term or completes it by an executed action; conservative when a prefix has several readings) is sound and final, Violated before Done is needed, and the modes of the traces refine the denotation; for a term without AND, a violated prefix is reported as a violation at that entry or before it unless the status is unknown or the observation ended earlier on a completion by an executed action before any reading had reached a prohibition, and the exception for an earlier completion cannot be dropped; consequences for a prohibition after a reading has reached one, at the end of a sequence (no exception when the first part has no UNLESS and no AND) and in a branch of OR (no exception but an unknown status) | `grep -A1 -E '\.(must_then_must_two_actions\|violated_reachable\|then_mustnot_violated\|mustnot_violated_breach\|breach_mustnot_violated\|status_final\|status_sound\|violation_over_done\|fden_den\|then_mustnot_held\|then_mustnot_status\|status_no_missed_violation\|reached_prohibition_watched\|then_mustnot_watched\|or_mustnot_watched\|violation_after_completion)$' results/paper_theorems.txt` | the sixteen theorems with their statements |
 | Stability of the values of conditions: a definite value T or F of a condition built from equitone atoms does not change when the data is extended. This is about conditions, not about the verdicts of norms over time | `grep -A1 -E '\.(verdict_stable\|verdict_stable_nd\|cond_equitone)$' results/paper_theorems.txt` | `TRIEL_Indicators.verdict_stable`, `TRIEL_Indicators.verdict_stable_nd`, `TRIEL_Indicators.cond_equitone` with their statements |
 | PRESENT, E and DEFAULT are the exceptions: each breaks monotonicity or stability | `grep -A1 -E '\.(T3_present_not_monotone\|Ex_breaks_stability\|T3_default_not_monotone\|default_breaks_stability\|T5_present)$' results/paper_theorems.txt` | the five theorems with their statements, e.g. `\<exists>\<sigma> \<sigma>' x. \<sigma> \<sqsubseteq> \<sigma>' \<and> eval (EPresent x) \<sigma> \<noteq> eval (EPresent x) \<sigma>'` |
 | IF: denotation, classical reading when the data is complete, stability of the branch; UNLESS distributes over IF | `grep -A1 -E '\.(den_if\|if_classical\|if_branch_stable\|unless_if)$' results/paper_theorems.txt` | `TRIEL_Terms.term_semantics.den_if`, `...if_classical`, `...if_branch_stable`, `TRIEL_Trace.unless_if` with their statements |

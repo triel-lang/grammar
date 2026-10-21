@@ -68,8 +68,8 @@ action while no reading of it or of an earlier prefix has reached a prohibition,
 status is final. For a term without \texttt{AND}, a violated prefix is reported as a
 violation at that entry or before it, unless the status is unknown or the observation has
 already ended on a completion by an executed action, before any reading of a prefix had
-reached a prohibition (\texttt{status\_no\_missed\_violation}); this exception cannot be
-dropped (\texttt{violation\_after\_completion}).
+reached a prohibition (\texttt{status\_no\_missed\_violation}); the exception for an earlier
+completion cannot be dropped (\texttt{violation\_after\_completion}).
 
 \paragraph{Nominative data (theory \texttt{TRIEL\_ND}).}
 Following the Mizar formalisation of simple-named complex-valued nominative data by
