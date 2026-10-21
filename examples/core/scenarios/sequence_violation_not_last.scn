@@ -1,8 +1,7 @@
-; Bob leaks after Alice pays, and the trace goes on. The composite line answers
-; for the whole trace: a trace that continues after the forbidden action is not
-; a violated trace of the sequence (only its prefix that ends with the leak is,
-; see sequence_prohibition_violated). This is the limit of reading A of
-; formal/core/CORE.md, decision 32.
+; Bob leaks after Alice pays, and the trace goes on. The answers for the whole
+; trace say that it is not a violated trace of the sequence; the violation on a
+; prefix says that its prefix up to the leak, entry 2, is, and that violation
+; is final and takes precedence over DONE (formal/core/CORE.md, decision 34).
 (scenario sequence_violation_not_last
   (spec "examples/core/core_sequence.triel")
   (entry "2026-06-01T09:00:00Z" (activate)
