@@ -37,6 +37,8 @@ and prints a summary whose numbers are all computed by the run.
   build passed in each of three runs, with peaks of 7.0 to 7.8 GiB; at 8 GiB it
   was killed for lack of memory in two of four runs. All other steps stay
   below 2 GiB.
+- Docker Desktop (macOS, Windows): set Memory to at least 10 GB in
+  Settings → Resources.
 - Disk: 10 GB for the image (3.1 GB compressed download, the same size for
   `docker save | gzip`), and about 0.2 GB inside the container for a run.
 - Network: only to build the image (base images, Ubuntu packages and Python
