@@ -41,6 +41,10 @@ thm TRIEL_Exec.term_semantics.violation_over_done
 thm TRIEL_Exec.term_semantics.fden_den
 thm TRIEL_Exec.term_semantics.then_mustnot_held
 thm TRIEL_Exec.term_semantics.then_mustnot_status
+thm TRIEL_Exec.term_semantics.status_no_missed_violation
+thm TRIEL_Exec.term_semantics.reached_prohibition_watched
+thm TRIEL_Exec.term_semantics.then_mustnot_watched
+thm TRIEL_Exec.term_semantics.or_mustnot_watched
 
 section \<open>Stability of verdicts and its limits\<close>
 
@@ -112,6 +116,9 @@ local
     "TRIEL_Exec.term_semantics.violation_over_done",
     "TRIEL_Exec.term_semantics.fden_den", "TRIEL_Exec.term_semantics.then_mustnot_held",
     "TRIEL_Exec.term_semantics.then_mustnot_status",
+    "TRIEL_Exec.term_semantics.status_no_missed_violation",
+    "TRIEL_Exec.term_semantics.reached_prohibition_watched",
+    "TRIEL_Exec.term_semantics.then_mustnot_watched", "TRIEL_Exec.term_semantics.or_mustnot_watched",
     "TRIEL_Indicators.verdict_stable", "TRIEL_Indicators.verdict_stable_nd",
     "TRIEL_Indicators.cond_equitone", "TRIEL_Core.T3_present_not_monotone",
     "TRIEL_Indicators.Ex_breaks_stability", "TRIEL_Core.T3_default_not_monotone",
