@@ -24,7 +24,16 @@ TRIEL gives the rules one authoritative meaning that a machine can check, so tha
 
 This repository contains the core language grammar (EBNF), released as an open specification, together with a formal semantics of its core in Isabelle/HOL.
 
-Current version: v2.5 (`TRIEL-grammar-v2_5-core.ebnf`). Version 2.5 is frozen: the grammar and the semantics of the formal core change only in a new version. Earlier versions are in the history of this repository; `TRIEL-grammar-v2.3.3-core.ebnf` is kept for reference.
+Current version: v2.5.1, errata to v2.5. The grammar is that of v2.5 (`TRIEL-grammar-v2_5-core.ebnf`); the grammar and the semantics of the formal core change only in a new version. Earlier versions are in the history of this repository; `TRIEL-grammar-v2.3.3-core.ebnf` is kept for reference.
+
+Version 2.5.1 corrects errors in the semantics of v2.5 found by a third independent audit. The grammar does not change. The corrections:
+
+* an action is the event of an entry after the one where the term is reached, so `alice MUST pay THEN alice MUST pay` needs two payments; in v2.5 one was enough (`TECHNICAL_REPORT.md` §2.5)
+* a prohibition inside a composite term is violated by its first forbidden action; in v2.5 no term could end `Violated` (§2.5)
+* the polarity written in an event is ignored by the trace semantics, as it already was by the verdicts (§2.5, §2.6)
+* the evaluator rejects a trace whose times decrease, instead of giving verdicts on it, and the finality of verdicts is proved for the evaluator itself (§2.6; `formal/core/CORE.md`, section 9, decision 33)
+* the translator rejects what the evaluator would reject as an ill-formed block (handlers after `THEN` or after a permission, two handlers for one norm, two continuations), a record type with a duplicate field, and a deadline or `FROM` read from a factor that is not a `DateTime`; the scenario driver reads strings as the evaluator does
+* the texts claim no more than is established: the scope of the formal core (§4), invariants on a finite prefix (§2.5), unambiguity (§2.12) and zero-knowledge factors (§1.3); every TRIEL excerpt of the documents is checked against the grammar in CI
 
 Version 2.5 is version 2.4, first published in July 2026, with the revisions made since in response to an independent technical audit and while formalising the core. Some of them are not backward-compatible:
 

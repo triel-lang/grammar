@@ -146,5 +146,5 @@ fi
 tar -C "$TMP" --sort=name --mtime='2000-01-01 00:00:00Z' --owner=0 --group=0 --numeric-owner \
     -cf - triel | gzip -n > "$OUT"
 echo "anonymous archive: $OUT ($(tar -tzf "$OUT" | grep -vc '/$') files, ${#ENTRIES[@]} words checked:" \
-     "${#AUTHOR_WORDS[@]} from the name of the author, ${#LISTED[@]} from ${WORDS:+$(basename "$WORDS")}${WORDS:-no words file}," \
+     "${#AUTHOR_WORDS[@]} from the name of the author, ${#LISTED[@]} from ${WORDS:+$(basename "$WORDS")}${WORDS:-a words file (none given)}," \
      "${#BUILTIN[@]} built in)"

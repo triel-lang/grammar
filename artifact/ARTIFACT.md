@@ -1,11 +1,11 @@
-# Artifact: the TRIEL 2.5 core in Isabelle/HOL
+# Artifact: the TRIEL 2.5.1 core in Isabelle/HOL
 
 ## What this is
 
 This artifact reproduces the machine-checked results and the executable checks
 behind the paper. It contains:
 
-- `formal/core/`: the core of TRIEL 2.5 in Isabelle/HOL, 12 theories (session
+- `formal/core/`: the core of TRIEL 2.5.1 (the errata to 2.5) in Isabelle/HOL, 12 theories (session
   `TRIEL_Core`). All theorems are proved; there is no `sorry`, `oops` or
   `axiomatization`.
 - `evaluator/`: an evaluator of the core. Its Haskell code
@@ -14,11 +14,11 @@ behind the paper. It contains:
   prints the report.
 - `parser/`: the reference parser of TRIEL 2.5, and the translator
   `parser/triel_to_core.py` from TRIEL specifications to terms of the core.
-- `examples/`: 25 TRIEL specifications and 35 scenarios (implementation traces
+- `examples/`: 26 TRIEL specifications and 40 scenarios (implementation traces
   with hand-written expected reports).
 - `artifact/`: the Docker image (`Dockerfile`), the script that runs every check
   (`run.sh`), and the Isabelle session `TRIEL_Paper`
-  (`isabelle/Paper_Theorems.thy`), which lists by name the 34 theorems cited in
+  (`isabelle/Paper_Theorems.thy`), which lists by name the 41 theorems cited in
   the paper.
 
 `artifact/run.sh` runs, in one command, every check of the repository's CI
@@ -119,7 +119,8 @@ docker run --rm -it --entrypoint bash triel-artifact
 | 07-pytest | the tests of the translator and the driver | evaluator.yml |
 | 08-parse-examples | every example parses with exactly one derivation | parse-examples.yml |
 | 09-ambiguity-tests | the ambiguity regression tests and the LALR(1) check of the grammar | parse-examples.yml |
-| 10-paper-theorems | the session `TRIEL_Paper` builds: each of the 34 names is a theorem of `TRIEL_Core` that depends on no oracle | — |
+| 10-document-excerpts | every TRIEL excerpt of the documents, every grammar excerpt of `TECHNICAL_REPORT.md` and every usage example of the grammar file conforms to the grammar | parse-examples.yml |
+| 11-paper-theorems | the session `TRIEL_Paper` builds: each of the 41 names is a theorem of `TRIEL_Core` that depends on no oracle | — |
 
 As in CI, the PDF document of `TRIEL_Core` is switched off (it needs LaTeX):
 step 02 applies the same `sed` to the scratch copy of `formal/core/ROOT` as the
@@ -140,20 +141,21 @@ variables `?x`.
 
 | Claim | Command | Expected output |
 |---|---|---|
-| The core is machine-checked: 12 theories, 563 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `12 (.thy files in formal/core: 12)`, `563`; `no sorry, oops or axiomatization ...` |
+| The core is machine-checked: 12 theories, 586 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `12 (.thy files in formal/core: 12)`, `586`; `no sorry, oops or axiomatization ...` |
 | The evaluator is the code exported from the checked theories | `cat results/03-exported-code.log` | `evaluator/generated is the exported code` |
-| The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `35` |
-| 23 of the 25 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `23`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
-| Every cited theorem exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 34` |
-| Finality of verdicts: a definite verdict of an obligation, a prohibition or an invariant does not change when the trace is extended | `grep -A1 -E '\.(ob_verdict_final\|pr_verdict_final\|inv_final)$' results/paper_theorems.txt` | `TRIEL_Breach.ob_verdict_final`, `TRIEL_Breach.pr_verdict_final`, `TRIEL_Invariants.inv_final`, each with its statement, e.g. `inv_eval ?\<iota> ?\<pi> = Some ?b \<Longrightarrow> inv_eval ?\<iota> (?\<pi> @ ?\<rho>) = Some ?b` |
-| Stability of verdicts under extension of the data, for conditions built from equitone atoms | `grep -A1 -E '\.(verdict_stable\|verdict_stable_nd\|cond_equitone)$' results/paper_theorems.txt` | `TRIEL_Indicators.verdict_stable`, `TRIEL_Indicators.verdict_stable_nd`, `TRIEL_Indicators.cond_equitone` with their statements |
+| The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `40` |
+| 24 of the 26 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `24`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
+| Every cited theorem exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 41` |
+| Finality of verdicts: on a trace (times that do not decrease) a definite verdict of an obligation, a prohibition or an invariant does not change when the trace is extended; the evaluator rejects a list of observations whose times decrease, so for `run` a decided line stays the same when observations are appended, unless the longer list is rejected for its time order or its types. A property of the design | `grep -A1 -E '\.(ob_verdict_final\|pr_verdict_final\|inv_final\|run_final\|time_order_rejected)$' results/paper_theorems.txt` | `TRIEL_Breach.ob_verdict_final`, `TRIEL_Breach.pr_verdict_final`, `TRIEL_Invariants.inv_final`, `TRIEL_Exec.run_final`, `TRIEL_Exec.time_order_rejected`, each with its statement, e.g. `inv_eval ?\<iota> ?\<pi> = Some ?b \<Longrightarrow> inv_eval ?\<iota> (?\<pi> @ ?\<rho>) = Some ?b` |
+| Two obligations in sequence need two actions; a prohibition in a composite term can be violated, and its trace semantics agrees with its verdict | `grep -A1 -E '\.(must_then_must_two_actions\|violated_reachable\|then_mustnot_violated\|mustnot_violated_breach\|breach_mustnot_violated)$' results/paper_theorems.txt` | the five theorems with their statements |
+| Stability of the values of conditions: a definite value T or F of a condition built from equitone atoms does not change when the data is extended. This is about conditions, not about the verdicts of norms over time | `grep -A1 -E '\.(verdict_stable\|verdict_stable_nd\|cond_equitone)$' results/paper_theorems.txt` | `TRIEL_Indicators.verdict_stable`, `TRIEL_Indicators.verdict_stable_nd`, `TRIEL_Indicators.cond_equitone` with their statements |
 | PRESENT, E and DEFAULT are the exceptions: each breaks monotonicity or stability | `grep -A1 -E '\.(T3_present_not_monotone\|Ex_breaks_stability\|T3_default_not_monotone\|default_breaks_stability\|T5_present)$' results/paper_theorems.txt` | the five theorems with their statements, e.g. `\<exists>\<sigma> \<sigma>' x. \<sigma> \<sqsubseteq> \<sigma>' \<and> eval (EPresent x) \<sigma> \<noteq> eval (EPresent x) \<sigma>'` |
 | IF: denotation, classical reading when the data is complete, stability of the branch; UNLESS distributes over IF | `grep -A1 -E '\.(den_if\|if_classical\|if_branch_stable\|unless_if)$' results/paper_theorems.txt` | `TRIEL_Terms.term_semantics.den_if`, `...if_classical`, `...if_branch_stable`, `TRIEL_Trace.unless_if` with their statements |
 | References between the elements of a block are acyclic, and resolving them preserves the denotation | `grep -A1 -E '\.(resolve_den\|block_den\|refs_ok_acyclic)$' results/paper_theorems.txt` | `TRIEL_Exec.term_semantics.resolve_den`, `TRIEL_Exec.term_semantics.block_den`, `TRIEL_Exec.refs_ok_acyclic` with their statements |
 | An undefined guard does not make a prohibition breached | `grep -A2 -E '\.(undefined_guard_blocks_not_breach\|enforced_no_breach)$' results/paper_theorems.txt` | `TRIEL_Breach.undefined_guard_blocks_not_breach` (two conclusions), `TRIEL_Breach.enforced_no_breach` |
 | Conditions are terms of the composition algebra, and equitonicity follows from closure under the base compositions | `grep -A1 -E '\.(comp_closure_equitone\|interp_equitone\|cond_fm_correct\|cond_equitone_from_closure\|Ex_R_is_not_eps)$' results/paper_theorems.txt` | the five theorems of `TRIEL_Compositions` with their statements |
 | A missed deadline with ELSE puts the fallback in force instead of a breach; the verdict is final | `grep -A1 -E '\.else_(taken\|no_breach\|alt_breached\|final)$' results/paper_theorems.txt` | `TRIEL_Breach.else_taken`, `...else_no_breach`, `...else_alt_breached`, `...else_final` with their statements |
-| Hidden data does not influence the report (noninterference) | `grep -A1 -E '\.(run_noninterference\|run_erase\|erase_flat\|flow_safe_eval\|flow_safe_evalV)$' results/paper_theorems.txt` | `TRIEL_Exec.run_noninterference`, e.g. `erase_obs (hidden ?fs) ?obs = erase_obs (hidden ?fs) ?obs' \<Longrightarrow> run (Spec ?fs ?blk ?invs) ?obs = run (Spec ?fs ?blk ?invs) ?obs'`, and the other four |
+| Hidden data does not influence the report (noninterference). A property of the design: the evaluator removes the hidden factors before it reads anything | `grep -A1 -E '\.(run_noninterference\|run_erase\|erase_flat\|flow_safe_eval\|flow_safe_evalV)$' results/paper_theorems.txt` | `TRIEL_Exec.run_noninterference`, e.g. `erase_obs (hidden ?fs) ?obs = erase_obs (hidden ?fs) ?obs' \<Longrightarrow> run (Spec ?fs ?blk ?invs) ?obs = run (Spec ?fs ?blk ?invs) ?obs'`, and the other four |
 
 `artifact/isabelle/Paper_Theorems.thy` names each theorem with its theory
 (`TRIEL_Breach.ob_verdict_final`). Theorems proved inside the locale
@@ -182,8 +184,8 @@ The results rest on the following, which are not proved here:
   specifications to terms of the core, written in Python. Nothing proves that it
   translates a specification into the core term with the intended meaning, or
   that it rejects exactly the constructs outside the core. It is checked only
-  by tests: the 243 tests of `parser/test_triel_to_core.py`, the classification
-  of the 25 examples, and the 35 scenarios. The same holds for
+  by tests: the 291 tests of `parser/test_triel_to_core.py`, the classification
+  of the 26 examples, and the 40 scenarios. The same holds for
   `parser/triel_eval.py`, which converts a scenario into the input of the
   evaluator, and for the grammar `parser/triel.lark` with the parser library
   lark 1.3.1.
@@ -224,11 +226,15 @@ from the Ubuntu 24.04 archive at build time and are not pinned.
 
 ## Anonymous archive
 
-`artifact/anonymize.sh WORDS_FILE [OUTPUT.tar.gz]` writes a source archive of
-the current commit for double-blind review. It leaves out `.git`, the
-contributor license agreement with its workflow, and the script itself. Every
-word listed in `WORDS_FILE` is replaced, and so are the address of the
-repository and of the project's sites, which are built in. The name of the
-language is kept. The script fails, and writes nothing, if any of these words
-is left in a file or a file name. The list of words is kept outside the
-repository.
+`artifact/anonymize.sh [-w WORDS_FILE] [OUTPUT.tar.gz]` writes a source archive
+of the current commit for double-blind review. It leaves out `.git`, the
+contributor license agreement with its workflow, and the script itself. The
+name of the author is found without a list of words: the script reads it from
+the places where the repository states it (`formal/core/document/root.tex`,
+`NOTICE`, `LICENSE.md`, the headers of both EBNF files and the Contact section
+of `README.md`) and replaces it, and each of its words, everywhere. The address
+of the repository and of the project's sites are replaced too, and so is every
+word listed in the optional `WORDS_FILE`, which is kept outside the repository.
+The name of the language is kept. The script fails, and writes nothing, if any
+of these words is left in a file or a file name, or if `root.tex` or `NOTICE`
+names no author.

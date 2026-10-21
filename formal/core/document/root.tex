@@ -18,7 +18,7 @@
 This document is a core of the semantics of the TRIEL specification language,
 formalised and checked in Isabelle/HOL. It is based only on the public description of
 the language (\texttt{TECHNICAL\_REPORT.md}, Sections 2.5 and 2.9, and
-\texttt{FOUNDATIONS.md}). All proofs are complete: there are no unproved lemmas and no
+\texttt{FOUNDATIONS.md}), in version 2.5.1, the errata to version 2.5. All proofs are complete: there are no unproved lemmas and no
 axioms beyond those of Isabelle/HOL.
 \end{abstract}
 
@@ -47,7 +47,11 @@ indicator predicate.
 Traces are non-empty sequences of (state, timestamp, event) entries with non-decreasing
 timestamps; executions end \texttt{Done}, \texttt{Interrupted} or \texttt{Violated}. The
 denotations of \texttt{MUST}, \texttt{MAY}, \texttt{MUST\_NOT}, \texttt{THEN},
-\texttt{AND}, \texttt{OR} and \texttt{UNLESS} follow Section~2.5. Proved: the laws of
+\texttt{AND}, \texttt{OR} and \texttt{UNLESS} follow Section~2.5. An event is matched by
+subject and action; the actions of a term are the events of the entries after the one
+where it is reached, so a trace of \texttt{MUST} has at least two entries; a prohibition
+completes at once and is violated by a trace that ends with its first forbidden action.
+Proved: the laws of
 \texttt{UNLESS} --- \texttt{t UNLESS false DO e = t}, distributivity over \texttt{OR},
 distributivity over \texttt{THEN} for a total right operand, and idempotence; a
 counterexample showing that distributivity over \texttt{THEN} fails without totality; the
@@ -56,7 +60,9 @@ inequality of nested \texttt{UNLESS} and \texttt{UNLESS} with a disjunctive guar
 \paragraph{Terms (theory \texttt{TRIEL\_Terms}).}
 Terms form an inductive type with a compositional denotation. Proved: every term is total
 (\texttt{den\_total}), and therefore all four laws of \texttt{UNLESS}, including
-distributivity over \texttt{THEN}, hold for every term without side conditions.
+distributivity over \texttt{THEN}, hold for every term without side conditions. Two
+obligations in sequence need two actions, and a prohibition inside a composite term can
+end it \texttt{Violated}.
 
 \paragraph{Nominative data (theory \texttt{TRIEL\_ND}).}
 Following the Mizar formalisation of simple-named complex-valued nominative data by
@@ -74,7 +80,8 @@ monotone with \texttt{Optional}.
 Following Section~2.6, implementation traces with integer timestamps are given verdicts:
 an obligation \texttt{BY} or \texttt{WITHIN} a deadline is fulfilled, breached or pending;
 a prohibition is breached when its condition is true before the action; a permission is
-never breached. Deadlines are fixed at activation. Proved: a missed deadline is a breach;
+never breached. Deadlines are fixed at activation. Proved: the violated traces of a
+prohibition are exactly the prefixes up to its breach; a missed deadline is a breach;
 verdicts are final once reached; fail-closed enforcement of prohibitions blocks every
 breach and also undefined conditions, which the verdict does not count as breaches; breach
 handlers bind to the nearest preceding obligation or prohibition of the same subject; at most one
@@ -132,7 +139,9 @@ sound for terms without \texttt{AND}, and are always given for terms without
 \texttt{UNLESS} and \texttt{AND}. Stale factors are blocked by factor, and the safety
 claim of Section~2.9 is proved again for this blocking. The function \texttt{run}
 computes the report of a specification on an implementation trace and is exported to
-Haskell. A breached prohibition is reported with the informational actions of the handler
+Haskell. It rejects a list of observations whose times decrease, and a decided verdict of
+its report stays the same when observations are appended, with no assumption on the
+input. A breached prohibition is reported with the informational actions of the handler
 bound to it; a continuation in such a handler is rejected, since Section~2.6 defines
 continuations only for obligations.
 
