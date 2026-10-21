@@ -1268,18 +1268,182 @@ subsection \<open>The status of a composite term on the observed trace\<close>
 text \<open>The membership of the whole observed trace says nothing about a violation in the middle
   of it: a trace that goes on after a forbidden action is not a violated trace of the term,
   and in \<open>MUST_NOT a THEN t\<close> the traces of \<open>t\<close> may contain \<open>a\<close>. The report therefore also
-  gives the status of the term: the prefixes of the observed trace are examined in order,
-  and the first prefix that is a trace of the term with some outcome ends the observation.
-  Its status is the greatest of its outcomes in the order \<open>Done < Interrupted < Violated\<close>
-  of \<open>ojoin\<close>, so a violation takes precedence over Done and Interrupted
-  (\<open>violation_over_done\<close>). A later entry does not change it: a prohibition inside a
-  composite term is watched until the term has been executed. If no prefix has an outcome,
-  the status is open; if \<open>mem3\<close> leaves the first prefix that matters undecided, unknown.\<close>
+  gives the status of the term, read on the prefixes of the observed trace in order.
+
+  The observation ends at the first prefix that is a violated trace of the term, or that
+  completes the term by an executed action: an action of an obligation, or an exercised
+  permission. A completion at once (a prohibition, a permission that is not exercised, the
+  term that completes at once) does not end the observation, and a term whose last reached
+  element is a prohibition stays under observation to the end of the trace, as a top-level
+  prohibition does. To tell the completions apart, each trace of a term carries a mode: \<open>Exec\<close>
+  if its last step is an executed action, \<open>Inst\<close> if the term completed at once without a
+  prohibition at the last entry, and \<open>Held\<close> if a prohibition reached at the last entry
+  completed at once there (\<open>fden\<close>). Forgetting the mode gives the denotation \<open>den\<close>
+  (\<open>fden_den\<close>).\<close>
+
+datatype mode = Inst | Exec | Held
+
+fun mrank :: "mode \<Rightarrow> nat" where
+  "mrank Inst = 0"
+| "mrank Exec = 1"
+| "mrank Held = 2"
+
+definition mmax :: "mode \<Rightarrow> mode \<Rightarrow> mode" where
+  "mmax m\<^sub>1 m\<^sub>2 = (if mrank m\<^sub>1 \<le> mrank m\<^sub>2 then m\<^sub>2 else m\<^sub>1)"
+
+definition modes :: "mode list" where
+  "modes = [Inst, Exec, Held]"
+
+lemma in_modes: "m \<in> set modes"
+  by (cases m) (simp_all add: modes_def)
+
+lemma mmax_Held: "mmax m Held = Held"
+  by (cases m) (simp_all add: mmax_def)
+
+lemma ex_mode_pairs:
+  "(\<exists>p \<in> set (filter (\<lambda>(m\<^sub>1, m\<^sub>2). mmax m\<^sub>1 m\<^sub>2 = m) (List.product modes modes)).
+       case p of (m\<^sub>1, m\<^sub>2) \<Rightarrow> P m\<^sub>1 m\<^sub>2)
+   \<longleftrightarrow> (\<exists>m\<^sub>1 m\<^sub>2. m = mmax m\<^sub>1 m\<^sub>2 \<and> P m\<^sub>1 m\<^sub>2)"
+proof
+  assume "\<exists>p \<in> set (filter (\<lambda>(m\<^sub>1, m\<^sub>2). mmax m\<^sub>1 m\<^sub>2 = m) (List.product modes modes)).
+            case p of (m\<^sub>1, m\<^sub>2) \<Rightarrow> P m\<^sub>1 m\<^sub>2"
+  then show "\<exists>m\<^sub>1 m\<^sub>2. m = mmax m\<^sub>1 m\<^sub>2 \<and> P m\<^sub>1 m\<^sub>2" by auto
+next
+  assume "\<exists>m\<^sub>1 m\<^sub>2. m = mmax m\<^sub>1 m\<^sub>2 \<and> P m\<^sub>1 m\<^sub>2"
+  then obtain m\<^sub>1 m\<^sub>2 where "m = mmax m\<^sub>1 m\<^sub>2" "P m\<^sub>1 m\<^sub>2" by blast
+  then show "\<exists>p \<in> set (filter (\<lambda>(m\<^sub>1, m\<^sub>2). mmax m\<^sub>1 m\<^sub>2 = m) (List.product modes modes)).
+               case p of (m\<^sub>1, m\<^sub>2) \<Rightarrow> P m\<^sub>1 m\<^sub>2"
+    by (intro bexI[of _ "(m\<^sub>1, m\<^sub>2)"]) (simp_all add: in_modes)
+qed
+
+subsubsection \<open>Decisions in three-valued logic\<close>
+
+text \<open>\<open>dec x P\<close>: a definite answer \<open>x\<close> is the truth value of \<open>P\<close>.\<close>
+
+definition dec :: "bool option \<Rightarrow> bool \<Rightarrow> bool" where
+  "dec x P \<longleftrightarrow> (\<forall>b. x = Some b \<longrightarrow> (P \<longleftrightarrow> b))"
+
+lemma dec_Some: "dec (Some P) P"
+  by (simp add: dec_def)
+
+lemma dec_cong: "dec x P \<Longrightarrow> (P \<longleftrightarrow> Q) \<Longrightarrow> dec x Q"
+  by simp
+
+lemma dec_kor: "dec x P \<Longrightarrow> dec y Q \<Longrightarrow> dec (kor x y) (P \<or> Q)"
+  by (cases x; cases y) (auto simp: dec_def kor_def)
+
+lemma dec_kand: "dec x P \<Longrightarrow> dec y Q \<Longrightarrow> dec (kand x y) (P \<and> Q)"
+  by (cases x; cases y) (auto simp: dec_def kand_def)
+
+lemma dec_kors: "(\<And>a. a \<in> set xs \<Longrightarrow> dec (f a) (P a)) \<Longrightarrow> dec (kors (map f xs)) (\<exists>a \<in> set xs. P a)"
+proof (induction xs)
+  case Nil
+  then show ?case by (simp add: kors_def dec_def)
+next
+  case (Cons a xs)
+  have "dec (kor (f a) (kors (map f xs))) (P a \<or> (\<exists>a \<in> set xs. P a))"
+    by (rule dec_kor) (use Cons in auto)
+  then show ?case by (simp add: kors_def)
+qed
+
+lemma dec_if: "(c \<Longrightarrow> dec x P) \<Longrightarrow> (\<not> c \<Longrightarrow> dec y Q) \<Longrightarrow> dec (if c then x else y) (if c then P else Q)"
+  by simp
+
+subsubsection \<open>Membership with a mode\<close>
+
+text \<open>\<open>mem3m t \<pi> r m\<close> decides whether \<open>(\<pi>, r)\<close> is a trace of \<open>t\<close> with the mode \<open>m\<close>.\<close>
+
+fun mem3m :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace
+    \<Rightarrow> outcome \<Rightarrow> mode \<Rightarrow> bool option" where
+  "mem3m (TMust s a) \<pi> r m = (if m = Exec then mem3 (TMust s a) \<pi> r else Some False)"
+| "mem3m (TMay s a c) \<pi> r m =
+     (if m = (if length \<pi> = 1 then Inst else Exec) then mem3 (TMay s a c) \<pi> r else Some False)"
+| "mem3m (TMustNot s a c) \<pi> r m =
+     (if m = (if r = Done then Held else Exec) then mem3 (TMustNot s a c) \<pi> r else Some False)"
+| "mem3m (TOr t u) \<pi> r m = kor (mem3m t \<pi> r m) (mem3m u \<pi> r m)"
+| "mem3m (TThen t u) \<pi> r m =
+     kor (kors (map (\<lambda>k. kand (mem3 t (take (Suc k) \<pi>) Done) (mem3m u (drop k \<pi>) r m))
+                    [0..<length \<pi> - 1]))
+         (kor (if \<pi> = [] then Some False
+               else kors (map (\<lambda>(m\<^sub>1, m\<^sub>2). kand (mem3m t \<pi> Done m\<^sub>1) (mem3m u [last \<pi>] r m\<^sub>2))
+                              (filter (\<lambda>(m\<^sub>1, m\<^sub>2). mmax m\<^sub>1 m\<^sub>2 = m) (List.product modes modes))))
+              (kand (mem3m t \<pi> r m) (Some (r \<noteq> Done))))"
+| "mem3m (TUnless t c u) \<pi> r m =
+     kor (kand (mem3m t \<pi> r m) (Some (\<forall>j \<in> set [0..<length \<pi> - 1]. eval c (st \<pi> j) \<noteq> Some True)))
+         (kors (map (\<lambda>k. if first_at c \<pi> k
+                         then kand (ext3 t (take (Suc k) \<pi>))
+                                   (kors (map (\<lambda>r'. mem3m u (drop k \<pi>) r' m)
+                                              (filter (\<lambda>r'. kappa r' = r) [Done, Interrupted, Violated])))
+                         else Some False)
+                    [0..<length \<pi>]))"
+| "mem3m (TAnd t u) \<pi> r m = None"
+| "mem3m (TIf c t u) \<pi> r m =
+     (if \<pi> = [] then Some False
+      else if eval c (st \<pi> 0) = Some True then mem3m t \<pi> r m else mem3m u \<pi> r m)"
+| "mem3m TSkip \<pi> r m = Some (r = Done \<and> length \<pi> = 1 \<and> m = Inst)"
+
+theorem mem3m_complete: "unless_free t \<Longrightarrow> and_free t \<Longrightarrow> mem3m t \<pi> r m \<noteq> None"
+proof (induction t arbitrary: \<pi> r m)
+  case (TMust s a)
+  then show ?case by auto
+next
+  case (TMay s a c)
+  then show ?case by auto
+next
+  case (TMustNot s a c)
+  then show ?case by auto
+next
+  case (TOr t u)
+  from TOr.prems have ut: "unless_free t" and ft: "and_free t"
+    and uu: "unless_free u" and fu: "and_free u" by simp_all
+  show ?case unfolding mem3m.simps by (rule kor_defined[OF TOr.IH(1)[OF ut ft] TOr.IH(2)[OF uu fu]])
+next
+  case (TThen t u)
+  from TThen.prems have ut: "unless_free t" and ft: "and_free t"
+    and uu: "unless_free u" and fu: "and_free u" by simp_all
+  note ht = TThen.IH(1)[OF ut ft] and hu = TThen.IH(2)[OF uu fu] and mt = mem3_complete[OF ut ft]
+  have a: "kors (map (\<lambda>k. kand (mem3 t (take (Suc k) \<pi>) Done) (mem3m u (drop k \<pi>) r m))
+                     [0..<length \<pi> - 1]) \<noteq> None"
+  proof (rule kors_defined)
+    fix x assume "x \<in> set (map (\<lambda>k. kand (mem3 t (take (Suc k) \<pi>) Done) (mem3m u (drop k \<pi>) r m))
+                                 [0..<length \<pi> - 1])"
+    then obtain k where "x = kand (mem3 t (take (Suc k) \<pi>) Done) (mem3m u (drop k \<pi>) r m)" by auto
+    with kand_defined[OF mt hu] show "x \<noteq> None" by blast
+  qed
+  have b: "(if \<pi> = [] then Some False
+            else kors (map (\<lambda>(m\<^sub>1, m\<^sub>2). kand (mem3m t \<pi> Done m\<^sub>1) (mem3m u [last \<pi>] r m\<^sub>2))
+                           (filter (\<lambda>(m\<^sub>1, m\<^sub>2). mmax m\<^sub>1 m\<^sub>2 = m) (List.product modes modes)))) \<noteq> None"
+  proof (cases "\<pi> = []")
+    case False
+    have "kors (map (\<lambda>(m\<^sub>1, m\<^sub>2). kand (mem3m t \<pi> Done m\<^sub>1) (mem3m u [last \<pi>] r m\<^sub>2))
+                    (filter (\<lambda>(m\<^sub>1, m\<^sub>2). mmax m\<^sub>1 m\<^sub>2 = m) (List.product modes modes))) \<noteq> None"
+    proof (rule kors_defined)
+      fix x assume "x \<in> set (map (\<lambda>(m\<^sub>1, m\<^sub>2). kand (mem3m t \<pi> Done m\<^sub>1) (mem3m u [last \<pi>] r m\<^sub>2))
+                         (filter (\<lambda>(m\<^sub>1, m\<^sub>2). mmax m\<^sub>1 m\<^sub>2 = m) (List.product modes modes)))"
+      then obtain m\<^sub>1 m\<^sub>2 where "x = kand (mem3m t \<pi> Done m\<^sub>1) (mem3m u [last \<pi>] r m\<^sub>2)" by auto
+      with kand_defined[OF ht hu] show "x \<noteq> None" by blast
+    qed
+    with False show ?thesis by simp
+  qed simp
+  have c: "kand (mem3m t \<pi> r m) (Some (r \<noteq> Done)) \<noteq> None"
+    by (rule kand_defined[OF ht]) simp
+  show ?case unfolding mem3m.simps by (rule kor_defined[OF a kor_defined[OF b c]])
+next
+  case (TIf c t u)
+  from TIf.prems have ut: "unless_free t" and ft: "and_free t"
+    and uu: "unless_free u" and fu: "and_free u" by simp_all
+  show ?case using TIf.IH(1)[OF ut ft, of \<pi> r m] TIf.IH(2)[OF uu fu, of \<pi> r m] by auto
+qed simp_all
+
+subsubsection \<open>The status\<close>
 
 datatype cstatus = CAt outcome nat | COpen | CUnknown
 
-text \<open>The answer for one prefix, from the three answers of \<open>mem3\<close>: \<open>None\<close> is unknown,
-  \<open>Some None\<close> no outcome, \<open>Some (Some r)\<close> the greatest outcome \<open>r\<close>.\<close>
+text \<open>The answer for one prefix, from the answers for a violation, a completion by
+  interruption with mode \<open>Exec\<close>, and a completion with mode \<open>Exec\<close>: \<open>None\<close> is unknown,
+  \<open>Some None\<close> no end of the observation, \<open>Some (Some r)\<close> the end, with the outcome \<open>r\<close>.
+  A violation takes precedence over Interrupted, and Interrupted over Done, as in the
+  order \<open>Done < Interrupted < Violated\<close> of \<open>ojoin\<close>.\<close>
 
 definition step :: "bool option \<Rightarrow> bool option \<Rightarrow> bool option \<Rightarrow> outcome option option" where
   "step v i d =
@@ -1292,8 +1456,8 @@ definition step :: "bool option \<Rightarrow> bool option \<Rightarrow> bool opt
 definition pstep :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> nat
     \<Rightarrow> outcome option option" where
   "pstep t \<pi> k =
-     step (mem3 t (take (Suc k) \<pi>) Violated) (mem3 t (take (Suc k) \<pi>) Interrupted)
-          (mem3 t (take (Suc k) \<pi>) Done)"
+     step (mem3 t (take (Suc k) \<pi>) Violated) (mem3m t (take (Suc k) \<pi>) Interrupted Exec)
+          (mem3m t (take (Suc k) \<pi>) Done Exec)"
 
 definition status :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> cstatus" where
   "status t \<pi> =
@@ -1356,8 +1520,8 @@ next
   then show "status t \<pi> = COpen" by (simp add: status_def)
 qed
 
-text \<open>The status is final once an outcome is found: the prefixes up to it do not change when
-  the trace is extended.\<close>
+text \<open>The status is final once the observation has ended: the prefixes up to it do not change
+  when the trace is extended.\<close>
 
 theorem status_final:
   assumes "status t \<pi> = CAt r k"
@@ -1378,7 +1542,8 @@ theorem status_definite: "unless_free t \<Longrightarrow> and_free t \<Longright
 proof
   assume u: "unless_free t" and a: "and_free t" and c: "status t \<pi> = CUnknown"
   have d: "pstep t \<pi> k \<noteq> None" for k
-    unfolding pstep_def by (rule step_defined) (rule mem3_complete[OF u a])+
+    unfolding pstep_def
+    by (rule step_defined) (simp_all add: mem3_complete[OF u a] mem3m_complete[OF u a])
   from c obtain k where f: "find (\<lambda>k. pstep t \<pi> k \<noteq> Some None) [0..<length \<pi>] = Some k"
     by (auto simp: status_def split: option.splits)
   then have n: "pstep t \<pi> k \<noteq> Some None" by (simp add: find_upt_Some)
@@ -1387,64 +1552,390 @@ proof
   with n d[of k] show False by (auto split: option.splits)
 qed
 
-lemma rank_le: "rank r \<le> 2"
-  by (cases r) simp_all
-
 context term_semantics
 begin
 
-lemma pstep_none:
-  assumes "and_free t" and "pstep t \<pi> j = Some None"
-  shows "(take (Suc j) \<pi>, o') \<notin> den t"
-proof -
-  from assms(2) have "mem3 t (take (Suc j) \<pi>) o' = Some False"
-    by (cases o') (simp_all add: pstep_def step_none)
-  with mem3_sound[OF assms(1)] show ?thesis by blast
+subsubsection \<open>The traces of a term with their modes\<close>
+
+text \<open>The modes of the traces of a term, defined on the decomposition of the observed trace
+  that \<open>then_d_split\<close> and \<open>unless_d_split\<close> give. In a sequence, a trace whose second part
+  has one entry ends where the first part ends, so its mode is the greater of the two modes.
+  An interrupted trace has the mode of the handler.\<close>
+
+primrec fden :: "('n, 'v, 's, 'a) tm \<Rightarrow> (('n, 'v, 't, 's, 'a) trace \<times> outcome \<times> mode) set" where
+  "fden (TMust s a) = {(\<pi>, r, m). (\<pi>, r) \<in> must_d s a \<and> m = Exec}"
+| "fden (TMay s a c) = {(\<pi>, r, m). (\<pi>, r) \<in> may_d s a c \<and> m = (if length \<pi> = 1 then Inst else Exec)}"
+| "fden (TMustNot s a c) =
+     {(\<pi>, r, m). (\<pi>, r) \<in> mustnot_d s a c \<and> m = (if r = Done then Held else Exec)}"
+| "fden (TThen t u) =
+     {(\<pi>, r, m).
+        (\<exists>k. Suc k < length \<pi> \<and> (take (Suc k) \<pi>, Done) \<in> den t \<and> (drop k \<pi>, r, m) \<in> fden u)
+      \<or> (\<pi> \<noteq> [] \<and> (\<exists>m\<^sub>1 m\<^sub>2. m = mmax m\<^sub>1 m\<^sub>2 \<and> (\<pi>, Done, m\<^sub>1) \<in> fden t \<and> ([last \<pi>], r, m\<^sub>2) \<in> fden u))
+      \<or> ((\<pi>, r, m) \<in> fden t \<and> r \<noteq> Done)}"
+| "fden (TOr t u) = fden t \<union> fden u"
+| "fden (TUnless t c u) =
+     {(\<pi>, r, m).
+        ((\<pi>, r, m) \<in> fden t \<and> (\<forall>j < length \<pi> - 1. eval c (st \<pi> j) \<noteq> Some True))
+      \<or> (\<exists>k < length \<pi>. first_at c \<pi> k \<and> ext (den t) (take (Suc k) \<pi>)
+           \<and> (\<exists>r'. kappa r' = r \<and> (drop k \<pi>, r', m) \<in> fden u))}"
+| "fden (TAnd t u) = {(\<pi>, r, m). (\<pi>, r) \<in> and_d (den t) (den u) \<and> m = Exec}"
+| "fden (TIf c t u) =
+     {(\<pi>, r, m). \<pi> \<noteq> [] \<and> (if eval c (sta (hd \<pi>)) = Some True then (\<pi>, r, m) \<in> fden t
+                               else (\<pi>, r, m) \<in> fden u)}"
+| "fden TSkip = {(\<pi>, r, m). (\<pi>, r) \<in> skip_d \<and> m = Inst}"
+
+text \<open>Forgetting the mode gives the denotation.\<close>
+
+theorem fden_den: "(\<pi>, r) \<in> den t \<longleftrightarrow> (\<exists>m. (\<pi>, r, m) \<in> fden t)"
+proof (induction t arbitrary: \<pi> r)
+  case (TThen t u)
+  have split: "(\<pi>, r) \<in> den (TThen t u) \<longleftrightarrow>
+      (\<exists>k < length \<pi>. (take (Suc k) \<pi>, Done) \<in> den t \<and> (drop k \<pi>, r) \<in> den u)
+      \<or> ((\<pi>, r) \<in> den t \<and> r \<noteq> Done)"
+    by (simp add: then_d_split)
+  show ?case
+  proof
+    assume "(\<pi>, r) \<in> den (TThen t u)"
+    then consider (seq) k where "k < length \<pi>" "(take (Suc k) \<pi>, Done) \<in> den t" "(drop k \<pi>, r) \<in> den u"
+      | (left) "(\<pi>, r) \<in> den t" "r \<noteq> Done"
+      using split by blast
+    then show "\<exists>m. (\<pi>, r, m) \<in> fden (TThen t u)"
+    proof cases
+      case seq
+      show ?thesis
+      proof (cases "Suc k < length \<pi>")
+        case True
+        from seq(3) obtain m where "(drop k \<pi>, r, m) \<in> fden u" using TThen.IH(2) by blast
+        with True seq(2) show ?thesis by auto
+      next
+        case False
+        with seq(1) have k: "k = length \<pi> - 1" by simp
+        have ne: "\<pi> \<noteq> []" using seq(1) by auto
+        have tk: "take (Suc k) \<pi> = \<pi>" using k seq(1) by simp
+        have dk: "drop k \<pi> = [last \<pi>]" using drop_last_one[OF ne] k by simp
+        from seq(2) tk obtain m\<^sub>1 where m1: "(\<pi>, Done, m\<^sub>1) \<in> fden t" using TThen.IH(1) by fastforce
+        from seq(3) dk obtain m\<^sub>2 where m2: "([last \<pi>], r, m\<^sub>2) \<in> fden u" using TThen.IH(2) by fastforce
+        from ne m1 m2 show ?thesis by auto
+      qed
+    next
+      case left
+      then obtain m where "(\<pi>, r, m) \<in> fden t" using TThen.IH(1) by blast
+      with left(2) show ?thesis by auto
+    qed
+  next
+    assume "\<exists>m. (\<pi>, r, m) \<in> fden (TThen t u)"
+    then obtain m where m: "(\<pi>, r, m) \<in> fden (TThen t u)" by blast
+    then consider (seq) k where "Suc k < length \<pi>" "(take (Suc k) \<pi>, Done) \<in> den t" "(drop k \<pi>, r, m) \<in> fden u"
+      | (last) m\<^sub>1 m\<^sub>2 where "\<pi> \<noteq> []" "(\<pi>, Done, m\<^sub>1) \<in> fden t" "([last \<pi>], r, m\<^sub>2) \<in> fden u"
+      | (left) "(\<pi>, r, m) \<in> fden t" "r \<noteq> Done"
+      by auto
+    then show "(\<pi>, r) \<in> den (TThen t u)"
+    proof cases
+      case seq
+      then have "k < length \<pi>" "(drop k \<pi>, r) \<in> den u" using TThen.IH(2) by auto
+      with seq(2) split show ?thesis by blast
+    next
+      case last
+      define k where "k = length \<pi> - 1"
+      have kl: "k < length \<pi>" using last(1) by (simp add: k_def)
+      have tk: "take (Suc k) \<pi> = \<pi>" using last(1) by (simp add: k_def)
+      have dk: "drop k \<pi> = [last \<pi>]" using drop_last_one[OF last(1)] by (simp add: k_def)
+      have "(take (Suc k) \<pi>, Done) \<in> den t" using last(2) tk TThen.IH(1) by auto
+      moreover have "(drop k \<pi>, r) \<in> den u" using last(3) dk TThen.IH(2) by auto
+      ultimately show ?thesis using kl split by blast
+    next
+      case left
+      then show ?thesis using TThen.IH(1) split by blast
+    qed
+  qed
+next
+  case (TOr t u)
+  then show ?case by (auto simp: or_d_def)
+next
+  case (TUnless t c u)
+  have "(\<pi>, r) \<in> den (TUnless t c u) \<longleftrightarrow>
+          ((\<exists>m. (\<pi>, r, m) \<in> fden t) \<and> (\<forall>j < length \<pi> - 1. eval c (st \<pi> j) \<noteq> Some True))
+          \<or> (\<exists>k < length \<pi>. first_at c \<pi> k \<and> ext (den t) (take (Suc k) \<pi>)
+               \<and> (\<exists>r'. kappa r' = r \<and> (\<exists>m. (drop k \<pi>, r', m) \<in> fden u)))"
+    by (simp add: unless_d_split TUnless.IH)
+  then show ?case by auto
+next
+  case (TIf c t u)
+  then show ?case by (auto simp: if_d_def)
+qed auto
+
+lemma dec_mem3: "and_free t \<Longrightarrow> dec (mem3 t \<pi> r) ((\<pi>, r) \<in> den t)"
+  using mem3_sound by (simp add: dec_def)
+
+lemma dec_ext3: "and_free t \<Longrightarrow> \<rho> \<noteq> [] \<Longrightarrow> dec (ext3 t \<rho>) (ext (den t) \<rho>)"
+  using mem3_ext3_sound by (simp add: dec_def)
+
+text \<open>Soundness: a definite answer of \<open>mem3m\<close> is the truth.\<close>
+
+theorem mem3m_dec: "and_free t \<Longrightarrow> dec (mem3m t \<pi> r m) ((\<pi>, r, m) \<in> fden t)"
+proof (induction t arbitrary: \<pi> r m)
+  case (TMust s a)
+  then show ?case using dec_mem3[of "TMust s a" \<pi> r] by (simp add: dec_def)
+next
+  case (TMay s a c)
+  then show ?case using dec_mem3[of "TMay s a c" \<pi> r] by (simp add: dec_def)
+next
+  case (TMustNot s a c)
+  then show ?case using dec_mem3[of "TMustNot s a c" \<pi> r] by (simp add: dec_def)
+next
+  case TSkip
+  then show ?case by (auto simp: dec_def mem_skip)
+next
+  case (TOr t u)
+  from TOr.prems have ft: "and_free t" and fu: "and_free u" by simp_all
+  have "dec (kor (mem3m t \<pi> r m) (mem3m u \<pi> r m)) ((\<pi>, r, m) \<in> fden t \<or> (\<pi>, r, m) \<in> fden u)"
+    by (rule dec_kor[OF TOr.IH(1)[OF ft] TOr.IH(2)[OF fu]])
+  then show ?case by simp
+next
+  case (TIf c t u)
+  from TIf.prems have ft: "and_free t" and fu: "and_free u" by simp_all
+  show ?case
+  proof (cases "\<pi> = []")
+    case True
+    then show ?thesis by (simp add: dec_def)
+  next
+    case False
+    then have s0: "st \<pi> 0 = sta (hd \<pi>)" by (rule st_0)
+    show ?thesis
+      using TIf.IH(1)[OF ft, of \<pi> r m] TIf.IH(2)[OF fu, of \<pi> r m] False s0
+      by (cases "eval c (sta (hd \<pi>)) = Some True") (simp_all add: dec_def)
+  qed
+next
+  case (TThen t u)
+  from TThen.prems have ft: "and_free t" and fu: "and_free u" by simp_all
+  note IHt = TThen.IH(1)[OF ft] and IHu = TThen.IH(2)[OF fu]
+  have A: "dec (kors (map (\<lambda>k. kand (mem3 t (take (Suc k) \<pi>) Done) (mem3m u (drop k \<pi>) r m))
+                    [0..<length \<pi> - 1]))
+             (\<exists>k \<in> set [0..<length \<pi> - 1]. (take (Suc k) \<pi>, Done) \<in> den t \<and> (drop k \<pi>, r, m) \<in> fden u)"
+    by (rule dec_kors) (rule dec_kand[OF dec_mem3[OF ft] IHu])
+  have B: "dec (if \<pi> = [] then Some False
+                else kors (map (\<lambda>(m\<^sub>1, m\<^sub>2). kand (mem3m t \<pi> Done m\<^sub>1) (mem3m u [last \<pi>] r m\<^sub>2))
+                               (filter (\<lambda>(m\<^sub>1, m\<^sub>2). mmax m\<^sub>1 m\<^sub>2 = m) (List.product modes modes))))
+             (if \<pi> = [] then False
+              else \<exists>p \<in> set (filter (\<lambda>(m\<^sub>1, m\<^sub>2). mmax m\<^sub>1 m\<^sub>2 = m) (List.product modes modes)).
+                     (case p of (m\<^sub>1, m\<^sub>2) \<Rightarrow> (\<pi>, Done, m\<^sub>1) \<in> fden t \<and> ([last \<pi>], r, m\<^sub>2) \<in> fden u))"
+  proof (rule dec_if)
+    show "dec (Some False) False" by (rule dec_Some)
+  next
+    show "dec (kors (map (\<lambda>(m\<^sub>1, m\<^sub>2). kand (mem3m t \<pi> Done m\<^sub>1) (mem3m u [last \<pi>] r m\<^sub>2))
+                         (filter (\<lambda>(m\<^sub>1, m\<^sub>2). mmax m\<^sub>1 m\<^sub>2 = m) (List.product modes modes))))
+              (\<exists>p \<in> set (filter (\<lambda>(m\<^sub>1, m\<^sub>2). mmax m\<^sub>1 m\<^sub>2 = m) (List.product modes modes)).
+                 (case p of (m\<^sub>1, m\<^sub>2) \<Rightarrow> (\<pi>, Done, m\<^sub>1) \<in> fden t \<and> ([last \<pi>], r, m\<^sub>2) \<in> fden u))"
+      by (rule dec_kors) (auto intro!: dec_kand IHt IHu split: prod.splits)
+  qed
+  have C: "dec (kand (mem3m t \<pi> r m) (Some (r \<noteq> Done))) ((\<pi>, r, m) \<in> fden t \<and> r \<noteq> Done)"
+    by (rule dec_kand[OF IHt dec_Some])
+  have eq: "((\<exists>k \<in> set [0..<length \<pi> - 1]. (take (Suc k) \<pi>, Done) \<in> den t \<and> (drop k \<pi>, r, m) \<in> fden u)
+            \<or> ((if \<pi> = [] then False
+                else \<exists>p \<in> set (filter (\<lambda>(m\<^sub>1, m\<^sub>2). mmax m\<^sub>1 m\<^sub>2 = m) (List.product modes modes)).
+                       (case p of (m\<^sub>1, m\<^sub>2) \<Rightarrow> (\<pi>, Done, m\<^sub>1) \<in> fden t \<and> ([last \<pi>], r, m\<^sub>2) \<in> fden u))
+               \<or> ((\<pi>, r, m) \<in> fden t \<and> r \<noteq> Done)))
+          \<longleftrightarrow> (\<pi>, r, m) \<in> fden (TThen t u)"
+    using ex_mode_pairs[of m "\<lambda>m\<^sub>1 m\<^sub>2. (\<pi>, Done, m\<^sub>1) \<in> fden t \<and> ([last \<pi>], r, m\<^sub>2) \<in> fden u"]
+    by auto
+  show ?case unfolding mem3m.simps
+    by (rule dec_cong[OF dec_kor[OF A dec_kor[OF B C]] eq])
+next
+  case (TUnless t c u)
+  from TUnless.prems have ft: "and_free t" and fu: "and_free u" by simp_all
+  note IHt = TUnless.IH(1)[OF ft] and IHu = TUnless.IH(2)[OF fu]
+  define R where "R = filter (\<lambda>r'. kappa r' = r) [Done, Interrupted, Violated]"
+  have A: "dec (kand (mem3m t \<pi> r m) (Some (\<forall>j \<in> set [0..<length \<pi> - 1]. eval c (st \<pi> j) \<noteq> Some True)))
+             ((\<pi>, r, m) \<in> fden t \<and> (\<forall>j \<in> set [0..<length \<pi> - 1]. eval c (st \<pi> j) \<noteq> Some True))"
+    by (rule dec_kand[OF IHt dec_Some])
+  have B: "dec (kors (map (\<lambda>k. if first_at c \<pi> k
+                               then kand (ext3 t (take (Suc k) \<pi>)) (kors (map (\<lambda>r'. mem3m u (drop k \<pi>) r' m) R))
+                               else Some False) [0..<length \<pi>]))
+             (\<exists>k \<in> set [0..<length \<pi>]. if first_at c \<pi> k
+                then ext (den t) (take (Suc k) \<pi>) \<and> (\<exists>r' \<in> set R. (drop k \<pi>, r', m) \<in> fden u)
+                else False)"
+  proof (rule dec_kors)
+    fix k assume k: "k \<in> set [0..<length \<pi>]"
+    then have ne: "take (Suc k) \<pi> \<noteq> []" by (cases \<pi>) auto
+    show "dec (if first_at c \<pi> k
+               then kand (ext3 t (take (Suc k) \<pi>)) (kors (map (\<lambda>r'. mem3m u (drop k \<pi>) r' m) R))
+               else Some False)
+              (if first_at c \<pi> k
+               then ext (den t) (take (Suc k) \<pi>) \<and> (\<exists>r' \<in> set R. (drop k \<pi>, r', m) \<in> fden u)
+               else False)"
+      by (rule dec_if) (auto intro!: dec_kand dec_ext3[OF ft ne] dec_kors IHu dec_Some)
+  qed
+  have eq: "(((\<pi>, r, m) \<in> fden t \<and> (\<forall>j \<in> set [0..<length \<pi> - 1]. eval c (st \<pi> j) \<noteq> Some True))
+             \<or> (\<exists>k \<in> set [0..<length \<pi>]. if first_at c \<pi> k
+                  then ext (den t) (take (Suc k) \<pi>) \<and> (\<exists>r' \<in> set R. (drop k \<pi>, r', m) \<in> fden u)
+                  else False))
+            \<longleftrightarrow> (\<pi>, r, m) \<in> fden (TUnless t c u)"
+  proof -
+    have "(\<exists>r' \<in> set R. (drop k \<pi>, r', m) \<in> fden u) \<longleftrightarrow> (\<exists>r'. kappa r' = r \<and> (drop k \<pi>, r', m) \<in> fden u)" for k
+      unfolding R_def using kappa_exists[of r "\<lambda>r'. (drop k \<pi>, r', m) \<in> fden u"] by simp
+    then show ?thesis by auto
+  qed
+  show ?case unfolding mem3m.simps R_def[symmetric]
+    by (rule dec_cong[OF dec_kor[OF A B] eq])
+next
+  case (TAnd t u)
+  then show ?case by simp
 qed
 
-text \<open>Soundness: the status names a prefix that is a trace of the term with the reported
-  outcome, which is the greatest of its outcomes, and no shorter prefix has any outcome.\<close>
+corollary mem3m_sound:
+  "and_free t \<Longrightarrow> mem3m t \<pi> r m = Some b \<Longrightarrow> ((\<pi>, r, m) \<in> fden t \<longleftrightarrow> b)"
+  using mem3m_dec by (simp add: dec_def)
+
+text \<open>A sequence that ends with a prohibition is never completed by an executed action: every
+  Done trace of it has the mode \<open>Held\<close>, so it stays under observation to the end of the
+  trace. An obligation completes only by an executed action.\<close>
+
+theorem then_mustnot_held:
+  assumes "(\<pi>, Done, m) \<in> fden (TThen t (TMustNot s a c))"
+  shows "m = Held"
+proof -
+  from assms consider (seq) k where "Suc k < length \<pi>" "(drop k \<pi>, Done) \<in> mustnot_d s a c"
+    | (last) m\<^sub>1 m\<^sub>2 where "m = mmax m\<^sub>1 m\<^sub>2" "m\<^sub>2 = Held"
+    by auto
+  then show ?thesis
+  proof cases
+    case seq
+    then have "length (drop k \<pi>) = 1" by (simp add: mem_mustnot)
+    with seq(1) show ?thesis by simp
+  next
+    case last
+    then show ?thesis by (simp add: mmax_Held)
+  qed
+qed
+
+theorem must_exec: "(\<pi>, r, m) \<in> fden (TMust s a) \<Longrightarrow> m = Exec"
+  by simp
+
+lemma pstep_none:
+  assumes "and_free t" and "pstep t \<pi> j = Some None"
+  shows "(take (Suc j) \<pi>, Violated) \<notin> den t" and "(take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t"
+    and "(take (Suc j) \<pi>, Done, Exec) \<notin> fden t"
+proof -
+  from assms(2) have v: "mem3 t (take (Suc j) \<pi>) Violated = Some False"
+    and i: "mem3m t (take (Suc j) \<pi>) Interrupted Exec = Some False"
+    and d: "mem3m t (take (Suc j) \<pi>) Done Exec = Some False"
+    by (simp_all add: pstep_def step_none)
+  show "(take (Suc j) \<pi>, Violated) \<notin> den t" using mem3_sound[OF assms(1) v] by simp
+  show "(take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t" using mem3m_sound[OF assms(1) i] by simp
+  show "(take (Suc j) \<pi>, Done, Exec) \<notin> fden t" using mem3m_sound[OF assms(1) d] by simp
+qed
+
+text \<open>Soundness of the status: at the reported entry the prefix is a violated trace of the
+  term, or a trace that completes it by an executed action, with Violated before
+  Interrupted before Done; and no shorter prefix is either.\<close>
 
 theorem status_sound:
   assumes "and_free t" and "status t \<pi> = CAt r k"
-  shows "k < length \<pi>" and "(take (Suc k) \<pi>, r) \<in> den t"
-    and "\<And>o'. (take (Suc k) \<pi>, o') \<in> den t \<Longrightarrow> rank o' \<le> rank r"
-    and "\<And>j o'. j < k \<Longrightarrow> (take (Suc j) \<pi>, o') \<notin> den t"
+  shows "k < length \<pi>"
+    and "r = Violated \<Longrightarrow> (take (Suc k) \<pi>, Violated) \<in> den t"
+    and "r \<noteq> Violated \<Longrightarrow> (take (Suc k) \<pi>, r, Exec) \<in> fden t \<and> (take (Suc k) \<pi>, Violated) \<notin> den t"
+    and "r = Done \<Longrightarrow> (take (Suc k) \<pi>, Interrupted, Exec) \<notin> fden t"
+    and "j < k \<Longrightarrow> (take (Suc j) \<pi>, Violated) \<notin> den t \<and> (take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t
+                   \<and> (take (Suc j) \<pi>, Done, Exec) \<notin> fden t"
 proof -
-  note snd = mem3_sound[OF assms(1)]
   from assms(2) have k: "k < length \<pi>" and p: "pstep t \<pi> k = Some (Some r)"
     and before: "\<forall>j < k. pstep t \<pi> j = Some None"
     by (simp_all add: status_CAt)
-  show "k < length \<pi>" by (rule k)
   let ?p = "take (Suc k) \<pi>"
-  have v: "mem3 t ?p Violated = Some True" if "r = Violated"
-    using p that by (simp add: pstep_def step_Violated)
-  have i: "mem3 t ?p Violated = Some False \<and> mem3 t ?p Interrupted = Some True" if "r = Interrupted"
-    using p that by (simp add: pstep_def step_Interrupted)
-  have d: "mem3 t ?p Violated = Some False \<and> mem3 t ?p Interrupted = Some False
-             \<and> mem3 t ?p Done = Some True" if "r = Done"
-    using p that by (simp add: pstep_def step_Done)
-  show "(?p, r) \<in> den t"
-    using v i d snd by (cases r) blast+
-  show "rank o' \<le> rank r" if "(?p, o') \<in> den t" for o'
+  show "k < length \<pi>" by (rule k)
+  show "(?p, Violated) \<in> den t" if "r = Violated"
+    using p that mem3_sound[OF assms(1)] by (simp add: pstep_def step_Violated)
+  show "(?p, r, Exec) \<in> fden t \<and> (?p, Violated) \<notin> den t" if "r \<noteq> Violated"
   proof (cases r)
-    case Done
-    with d snd that show ?thesis by (cases o') auto
-  next
     case Interrupted
-    with i snd that show ?thesis by (cases o') auto
+    with p have "mem3 t ?p Violated = Some False" "mem3m t ?p Interrupted Exec = Some True"
+      by (simp_all add: pstep_def step_Interrupted)
+    with Interrupted show ?thesis using mem3_sound[OF assms(1)] mem3m_sound[OF assms(1)] by blast
   next
-    case Violated
-    then show ?thesis using rank_le[of o'] by simp
+    case Done
+    with p have "mem3 t ?p Violated = Some False" "mem3m t ?p Done Exec = Some True"
+      by (simp_all add: pstep_def step_Done)
+    with Done show ?thesis using mem3_sound[OF assms(1)] mem3m_sound[OF assms(1)] by blast
+  qed (use that in simp)
+  show "(?p, Interrupted, Exec) \<notin> fden t" if "r = Done"
+  proof -
+    from p that have "mem3m t ?p Interrupted Exec = Some False" by (simp add: pstep_def step_Done)
+    then show ?thesis using mem3m_sound[OF assms(1)] by blast
   qed
-  show "(take (Suc j) \<pi>, o') \<notin> den t" if "j < k" for j o'
+  show "(take (Suc j) \<pi>, Violated) \<notin> den t \<and> (take (Suc j) \<pi>, Interrupted, Exec) \<notin> fden t
+          \<and> (take (Suc j) \<pi>, Done, Exec) \<notin> fden t" if "j < k"
     using pstep_none[OF assms(1)] before that by blast
 qed
 
 theorem status_open:
   assumes "and_free t" and "status t \<pi> = COpen" and "k < length \<pi>"
-  shows "(take (Suc k) \<pi>, r) \<notin> den t"
-  using assms(2,3) pstep_none[OF assms(1)] by (simp add: status_COpen)
+  shows "(take (Suc k) \<pi>, Violated) \<notin> den t" and "(take (Suc k) \<pi>, Interrupted, Exec) \<notin> fden t"
+    and "(take (Suc k) \<pi>, Done, Exec) \<notin> fden t"
+  using assms(2,3) pstep_none[OF assms(1)] by (simp_all add: status_COpen)
+
+text \<open>Without UNLESS and AND no trace is interrupted.\<close>
+
+lemma no_interrupted: "unless_free t \<Longrightarrow> and_free t \<Longrightarrow> (\<pi>, Interrupted) \<notin> den t"
+proof (induction t arbitrary: \<pi>)
+  case (TThen t u)
+  then show ?case by (auto simp: then_d_split)
+next
+  case (TOr t u)
+  then show ?case by (auto simp: or_d_def)
+next
+  case (TIf c t u)
+  then show ?case by (auto simp: if_d_def)
+qed (auto simp: must_d_def may_d_def mustnot_d_def skip_d_def)
+
+text \<open>A prohibition at the end of a sequence is watched to the end of the trace, as a
+  top-level prohibition is: if a prefix of the observed trace is a violated trace of
+  \<open>t THEN s MUST_NOT a\<close>, the status is a violation at that entry or before it. On the trace
+  activation, pay, leak, \<open>alice MUST pay THEN bob MUST_NOT leak\<close> is reported violated at
+  entry 2.\<close>
+
+theorem then_mustnot_status:
+  assumes "unless_free t" and "and_free t" and "k < length \<pi>"
+    and "(take (Suc k) \<pi>, Violated) \<in> den (TThen t (TMustNot s a c))"
+  shows "\<exists>k' \<le> k. status (TThen t (TMustNot s a c)) \<pi> = CAt Violated k'"
+proof -
+  let ?T = "TThen t (TMustNot s a c)"
+  have u: "unless_free ?T" and f: "and_free ?T" using assms(1,2) by simp_all
+  show ?thesis
+  proof (cases "status ?T \<pi>")
+    case (CAt r k')
+    have "r = Violated"
+    proof (rule ccontr)
+      assume nv: "r \<noteq> Violated"
+      then have mem: "(take (Suc k') \<pi>, r, Exec) \<in> fden ?T"
+        using status_sound(3)[OF f CAt nv] by blast
+      show False
+      proof (cases r)
+        case Done
+        with mem have "(take (Suc k') \<pi>, Done, Exec) \<in> fden ?T" by simp
+        from then_mustnot_held[OF this] show False by simp
+      next
+        case Interrupted
+        with mem have "(take (Suc k') \<pi>, Interrupted) \<in> den ?T"
+          unfolding fden_den by blast
+        with no_interrupted[OF u f] show False by blast
+      qed (use nv in simp)
+    qed
+    moreover have "k' \<le> k"
+    proof (rule ccontr)
+      assume "\<not> k' \<le> k"
+      then have "(take (Suc k) \<pi>, Violated) \<notin> den ?T"
+        using status_sound(5)[OF f CAt, of k] by simp
+      with assms(4) show False by simp
+    qed
+    ultimately show ?thesis using CAt by blast
+  next
+    case COpen
+    with status_open(1)[OF f COpen assms(3)] assms(4) show ?thesis by simp
+  next
+    case CUnknown
+    from status_definite[OF u f, of \<pi>] CUnknown show ?thesis by simp
+  qed
+qed
 
 text \<open>The precedence of a violation over Done is needed: in \<open>s MUST_NOT a THEN s' MUST a'\<close>,
   the trace activation, \<open>a\<close>, \<open>a'\<close> is a trace of the term with the outcome Done, and its

@@ -664,6 +664,8 @@ data Line = LTimeOrder Nat | LActivation Bool | LBlock Bool
   | LComposite Nat (Maybe Bool) (Maybe Bool) (Maybe Bool) Cstatus
   | LInvariant String (Maybe Bool);
 
+data Mode = Inst | Exec | Held;
+
 data Prim = PBool | PInt | PDec | PStr | PTime;
 
 data Deadline a = DAt Int | DAfter Int | DFactor a Int;
@@ -772,6 +774,10 @@ member x (Coset xs) = not (membera xs x);
 bind :: forall a b. Maybe a -> (a -> Maybe b) -> Maybe b;
 bind Nothing f = Nothing;
 bind (Just x) f = f x;
+
+product :: forall a b. [a] -> [b] -> [(a, b)];
+product [] uu = [];
+product (x : xs) ys = map (\ a -> (x, a)) ys ++ product xs ys;
 
 distinct :: forall a. (Eq a) => [a] -> Bool;
 distinct [] = True;
@@ -1223,14 +1229,41 @@ wf_block blk =
             then Just (handler_bound blk x) else Nothing))
         (upt zero_nat (size_list blk)));
 
-step :: Maybe Bool -> Maybe Bool -> Maybe Bool -> Maybe (Maybe Outcome);
-step v i d =
-  (if v == Just True then Just (Just Violated)
-    else (if v == Just False && i == Just True then Just (Just Interrupted)
-           else (if v == Just False && i == Just False && d == Just True
-                  then Just (Just Done)
-                  else (if v == Just False && i == Just False && d == Just False
-                         then Just Nothing else Nothing))));
+equal_mode :: Mode -> Mode -> Bool;
+equal_mode Exec Held = False;
+equal_mode Held Exec = False;
+equal_mode Inst Held = False;
+equal_mode Held Inst = False;
+equal_mode Inst Exec = False;
+equal_mode Exec Inst = False;
+equal_mode Held Held = True;
+equal_mode Exec Exec = True;
+equal_mode Inst Inst = True;
+
+first_at ::
+  forall a b c d e.
+    (Eq b,
+      Value_order b) => Expr a b ->
+                          [(a -> Maybe b, (c, Event a d e))] -> Nat -> Bool;
+first_at c pi k =
+  eval c (st pi k) == Just True &&
+    all (\ j -> not (eval c (st pi j) == Just True)) (upt zero_nat k);
+
+kappa :: Outcome -> Outcome;
+kappa Done = Interrupted;
+kappa Interrupted = Interrupted;
+kappa Violated = Violated;
+
+modes :: [Mode];
+modes = [Inst, Exec, Held];
+
+mrank :: Mode -> Nat;
+mrank Inst = zero_nat;
+mrank Exec = one_nat;
+mrank Held = nat_of_integer (2 :: Integer);
+
+mmax :: Mode -> Mode -> Mode;
+mmax m_1 m_2 = (if less_eq_nat (mrank m_1) (mrank m_2) then m_2 else m_1);
 
 does :: forall a b c. (Eq a, Eq b) => a -> b -> Event c a b -> Bool;
 does s a e = (case e of {
@@ -1261,20 +1294,6 @@ sorted_wrt p (x : ys) = all (p x) ys && sorted_wrt p ys;
 is_trace ::
   forall a b c d e. (Linorder c) => [(a -> Maybe b, (c, Event a d e))] -> Bool;
 is_trace pi = not (null pi) && sorted_wrt less_eq (map tstamp pi);
-
-first_at ::
-  forall a b c d e.
-    (Eq b,
-      Value_order b) => Expr a b ->
-                          [(a -> Maybe b, (c, Event a d e))] -> Nat -> Bool;
-first_at c pi k =
-  eval c (st pi k) == Just True &&
-    all (\ j -> not (eval c (st pi j) == Just True)) (upt zero_nat k);
-
-kappa :: Outcome -> Outcome;
-kappa Done = Interrupted;
-kappa Interrupted = Interrupted;
-kappa Violated = Violated;
 
 kors :: [Maybe Bool] -> Maybe Bool;
 kors xs = foldr kor xs (Just False);
@@ -1364,6 +1383,72 @@ ext3 (TIf c t u) rho =
   (if eval c (st rho zero_nat) == Just True then ext3 t rho else ext3 u rho);
 ext3 TSkip rho = Just False;
 
+mem3m ::
+  forall a b c d e.
+    (Eq b, Value_order b, Eq c, Eq d,
+      Linorder e) => Tm a b c d ->
+                       [(a -> Maybe b, (e, Event a c d))] ->
+                         Outcome -> Mode -> Maybe Bool;
+mem3m (TMust s a) pi r m =
+  (if equal_mode m Exec then mem3 (TMust s a) pi r else Just False);
+mem3m (TMay s a c) pi r m =
+  (if equal_mode m (if equal_nat (size_list pi) one_nat then Inst else Exec)
+    then mem3 (TMay s a c) pi r else Just False);
+mem3m (TMustNot s a c) pi r m =
+  (if equal_mode m (if equal_outcome r Done then Held else Exec)
+    then mem3 (TMustNot s a c) pi r else Just False);
+mem3m (TOr t u) pi r m = kor (mem3m t pi r m) (mem3m u pi r m);
+mem3m (TThen t u) pi r m =
+  kor (kors (map (\ k ->
+                   kand (mem3 t (take (suc k) pi) Done)
+                     (mem3m u (drop k pi) r m))
+              (upt zero_nat (minus_nat (size_list pi) one_nat))))
+    (kor (if null pi then Just False
+           else kors (map_filter
+                       (\ x ->
+                         (if (case x of {
+                               (m_1, m_2) -> equal_mode (mmax m_1 m_2) m;
+                             })
+                           then Just (case x of {
+                                       (m_1, m_2) ->
+ kand (mem3m t pi Done m_1) (mem3m u [last pi] r m_2);
+                                     })
+                           else Nothing))
+                       (product modes modes)))
+      (kand (mem3m t pi r m) (Just (not (equal_outcome r Done)))));
+mem3m (TUnless t c u) pi r m =
+  kor (kand (mem3m t pi r m)
+        (Just (all (\ j -> not (eval c (st pi j) == Just True))
+                (upt zero_nat (minus_nat (size_list pi) one_nat)))))
+    (kors (map (\ k ->
+                 (if first_at c pi k
+                   then kand (ext3 t (take (suc k) pi))
+                          (kors (map_filter
+                                  (\ x ->
+                                    (if equal_outcome (kappa x) r
+                                      then Just (mem3m u (drop k pi) x m)
+                                      else Nothing))
+                                  [Done, Interrupted, Violated]))
+                   else Just False))
+            (upt zero_nat (size_list pi))));
+mem3m (TAnd t u) pi r m = Nothing;
+mem3m (TIf c t u) pi r m =
+  (if null pi then Just False
+    else (if eval c (st pi zero_nat) == Just True then mem3m t pi r m
+           else mem3m u pi r m));
+mem3m TSkip pi r m =
+  Just (equal_outcome r Done &&
+         equal_nat (size_list pi) one_nat && equal_mode m Inst);
+
+step :: Maybe Bool -> Maybe Bool -> Maybe Bool -> Maybe (Maybe Outcome);
+step v i d =
+  (if v == Just True then Just (Just Violated)
+    else (if v == Just False && i == Just True then Just (Just Interrupted)
+           else (if v == Just False && i == Just False && d == Just True
+                  then Just (Just Done)
+                  else (if v == Just False && i == Just False && d == Just False
+                         then Just Nothing else Nothing))));
+
 pstep ::
   forall a b c d e.
     (Eq b, Value_order b, Eq c, Eq d,
@@ -1372,7 +1457,8 @@ pstep ::
                          Nat -> Maybe (Maybe Outcome);
 pstep t pi k =
   step (mem3 t (take (suc k) pi) Violated)
-    (mem3 t (take (suc k) pi) Interrupted) (mem3 t (take (suc k) pi) Done);
+    (mem3m t (take (suc k) pi) Interrupted Exec)
+    (mem3m t (take (suc k) pi) Done Exec);
 
 status ::
   forall a b c d e.
