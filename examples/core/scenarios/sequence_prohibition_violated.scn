@@ -1,0 +1,10 @@
+; Alice pays, then Bob does what the prohibition forbids: the sequence is
+; violated. Two obligations in sequence are not discharged by one payment.
+(scenario sequence_prohibition_violated
+  (spec "examples/core/core_sequence.triel")
+  (entry "2026-06-01T09:00:00Z" (activate)
+    (data))
+  (entry "2026-06-01T10:00:00Z" (act alice pay must)
+    (data))
+  (entry "2026-06-01T11:00:00Z" (act bob leak must_not)
+    (data)))

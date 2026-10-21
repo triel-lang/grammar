@@ -1,0 +1,9 @@
+; Two payments: both sequences are done.
+(scenario sequence_two_payments
+  (spec "examples/core/core_sequence.triel")
+  (entry "2026-06-01T09:00:00Z" (activate)
+    (data))
+  (entry "2026-06-01T10:00:00Z" (act alice pay must)
+    (data))
+  (entry "2026-06-02T10:00:00Z" (act alice pay must)
+    (data)))

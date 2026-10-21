@@ -1,0 +1,11 @@
+; The entries are not in time order: the delivery of 15 July is given after
+; an entry of 7 August. Such a list is not an implementation trace, and the
+; evaluator rejects it instead of giving verdicts.
+(scenario deadline_cure_time_order
+  (spec "examples/core/core_deadline_cure.triel")
+  (entry "2026-07-01T00:00:00Z" (activate)
+    (data (seal (record (id (str "S-1")) (checked (bool true))))))
+  (entry "2026-08-07T00:00:00Z" (tick)
+    (data (seal (record (id (str "S-1")) (checked (bool true))))))
+  (entry "2026-07-15T00:00:00Z" (act seller deliver_goods must)
+    (data (seal (record (id (str "S-1")) (checked (bool true)))))))

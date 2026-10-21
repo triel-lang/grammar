@@ -1,0 +1,8 @@
+; One payment: the first sequence is done (the prohibition completes at once),
+; the second, which needs two payments, is not.
+(scenario sequence_one_payment
+  (spec "examples/core/core_sequence.triel")
+  (entry "2026-06-01T09:00:00Z" (activate)
+    (data))
+  (entry "2026-06-01T10:00:00Z" (act alice pay must)
+    (data)))

@@ -1,0 +1,11 @@
+; The polarity written in an event is not part of the match: a payment
+; recorded as "may" discharges the obligation, and a leak recorded as "must"
+; violates the prohibition, in composite terms as in verdicts.
+(scenario sequence_polarity
+  (spec "examples/core/core_sequence.triel")
+  (entry "2026-06-01T09:00:00Z" (activate)
+    (data))
+  (entry "2026-06-01T10:00:00Z" (act alice pay may)
+    (data))
+  (entry "2026-06-01T11:00:00Z" (act bob leak must)
+    (data)))
