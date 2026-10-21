@@ -1,8 +1,8 @@
 -- TRIEL example inside the formal core: composite terms with two actions in
 -- sequence. An action is the event of a later entry, so two obligations in
 -- sequence need two actions, and a prohibition inside a composite term is
--- violated by its first forbidden action; a violation on a prefix of the trace
--- is reported, and takes precedence over DONE (errata 2.5.1). Every construct in
+-- violated by its first forbidden action; the status of a composite term is
+-- read on the first prefix with an outcome, VIOLATED before DONE (errata 2.5.1).
 -- this file is translated into the Isabelle/HOL core (formal/core) and
 -- evaluated by the exported evaluator (evaluator/).
 

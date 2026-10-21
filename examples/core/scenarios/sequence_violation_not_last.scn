@@ -1,7 +1,6 @@
-; Bob leaks after Alice pays, and the trace goes on. The answers for the whole
-; trace say that it is not a violated trace of the sequence; the violation on a
-; prefix says that its prefix up to the leak, entry 2, is, and that violation
-; is final and takes precedence over DONE (formal/core/CORE.md, decision 34).
+; Bob leaks after Alice pays, and the trace goes on. The whole trace is not a
+; violated trace of "alice MUST pay THEN bob MUST_NOT leak"; the status is DONE at
+; entry 1, where the term has been executed (formal/core/CORE.md, decision 34).
 (scenario sequence_violation_not_last
   (spec "examples/core/core_sequence.triel")
   (entry "2026-06-01T09:00:00Z" (activate)

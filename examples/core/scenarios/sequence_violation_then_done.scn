@@ -1,9 +1,9 @@
 ; Bob leaks, then Alice pays. The whole trace is a trace of "bob MUST_NOT leak
-; THEN alice MUST pay" with the outcome DONE, since the prohibition completes at
-; once; but its prefix up to the leak, entry 1, is a violated trace. The
-; violation takes precedence over DONE (formal/core/CORE.md, decision 34). The
-; leak comes before Alice pays, so "alice MUST pay THEN bob MUST_NOT leak" is
-; not violated.
+; THEN alice MUST pay" with the outcome DONE, but its prefix up to the leak,
+; entry 1, is a violated trace, and no shorter prefix has an outcome: the status
+; is VIOLATED at entry 1, and it stays so (formal/core/CORE.md, decision 34).
+; "alice MUST pay THEN bob MUST_NOT leak" is executed only when Alice pays, at
+; entry 2, after the leak, so its status is DONE.
 (scenario sequence_violation_then_done
   (spec "examples/core/core_sequence.triel")
   (entry "2026-06-01T09:00:00Z" (activate)
