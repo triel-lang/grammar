@@ -15,7 +15,9 @@
 #
 # The address of the repository and of the project's sites are always replaced
 # by ANONYMIZED: github.com/triel-lang/grammar, triel-lang, triel.dev and
-# triel.ai. The name of the language, TRIEL, is kept.
+# triel.ai. The account of the maintainer (Dichis) and the surname of the author
+# are always replaced by ANONYMOUS, also when no file states the name. The name
+# of the language, TRIEL, is kept.
 #
 # WORDS_FILE (optional) lists further words that may not appear in the archive,
 # one per line:
@@ -29,15 +31,19 @@
 # Matching is case-insensitive and longer words are replaced first.
 #
 # Two kinds of text that point to the history of the project are rewritten too:
-# the commit hash of the tag v2.5 (57c5410, in LICENSE.md: "(commit `57c5410`)"
-# is removed) and the stages of the development ("the independent review of
+# commit hashes and the stages of the development. The hashes are those of the
+# tag v2.5.1 (1b775ff), of the tag v2.5 (57c5410, which LICENSE.md of v2.5.1
+# still cites: "(commit `57c5410`)" is removed) and of the commit archived;
+# each is replaced by ANONYMIZED. The stages: "the independent review of
 # stage 13" becomes "an independent review", "in stage 9" and "until stage 15"
-# become "in an earlier revision" and "until an earlier revision"). The archive
-# is checked for both, as for the words.
+# become "in an earlier revision" and "until an earlier revision". The archive
+# is checked for both, as for the words, and in addition no hexadecimal string
+# in it may be the hash of a commit of the repository, and no e-mail address
+# may be left.
 #
 # The archive holds the files of the commit HEAD (or of $REF), without .git,
-# CLA.md, the signatures directory, .github/workflows/cla.yml and this script
-# (which names the built-in words). Tar owner names
+# CLA.md, the signatures directory, .github/workflows/cla.yml, this script and
+# check_anonymous.sh (both name the words searched for). Tar owner names
 # and timestamps are fixed, so they reveal nothing. The script fails, and writes
 # no archive, if any of these words is still found in a file or a file name, in
 # text or binary files.
@@ -81,6 +87,8 @@ BUILTIN=(
   "triel-lang => ANONYMIZED"
   "triel.dev => ANONYMIZED"
   "triel.ai => ANONYMIZED"
+  "Dichis => ANONYMOUS"
+  "Chistyakov => ANONYMOUS"
 )
 
 TMP=$(mktemp -d)
@@ -89,7 +97,8 @@ TREE="$TMP/triel"
 mkdir "$TREE"
 
 git -C "$REPO" archive --format=tar "$REF" | tar -C "$TREE" -xf -
-rm -rf "$TREE/CLA.md" "$TREE/signatures" "$TREE/.github/workflows/cla.yml" "$TREE/artifact/anonymize.sh"
+rm -rf "$TREE/CLA.md" "$TREE/signatures" "$TREE/.github/workflows/cla.yml" "$TREE/artifact/anonymize.sh" \
+       "$TREE/artifact/check_anonymous.sh"
 
 # The name of the author, from the places where the repository states it.
 author_lines() {
@@ -131,12 +140,13 @@ while IFS= read -r -d '' f; do
   done
 done < <(grep -rlIZ -e '' "$TREE")
 
-# The commit hash of the tag v2.5 and the stages of the development.
-HISTORY_HASH=57c5410
+# The commit hashes of the tags v2.5.1 and v2.5 and of the commit archived, and
+# the stages of the development.
+HISTORY_HASHES=$(printf '%s\n' 1b775ff 57c5410 "$(git -C "$REPO" rev-parse "$REF^{commit}" | cut -c1-7)" | sort -u | paste -sd '|')
 while IFS= read -r -d '' f; do
-  H=$HISTORY_HASH perl -pi -e '
-    s/ \(commit `\Q$ENV{H}\E[0-9a-f]*`\)//g;
-    s/\b\Q$ENV{H}\E[0-9a-f]*\b/ANONYMIZED/g;
+  H=$HISTORY_HASHES perl -pi -e '
+    s/ \(commit `(?:$ENV{H})[0-9a-f]*`\)//g;
+    s/\b(?:$ENV{H})[0-9a-f]*\b/ANONYMIZED/g;
     s/\bthe (?:independent )?review of stage \d+/an independent review/gi;
     s/\b(in|until|since|after|before) stage \d+/$1 an earlier revision/gi;
     s/\bstages? \d+/an earlier revision/gi;' "$f"
@@ -144,8 +154,20 @@ done < <(grep -rlIZ -e '' "$TREE")
 
 # Nothing may be left: contents of every file (binary files included) and paths.
 left=0
-if hits=$(cd "$TREE" && grep -raliE -e "$HISTORY_HASH|stage ?[0-9]" .); then
+if hits=$(cd "$TREE" && grep -raliE -e "$HISTORY_HASHES|stage ?[0-9]" .); then
   printf 'error: a commit hash or a stage of the development is still in:\n%s\n' "$hits" >&2
+  left=1
+fi
+# No hexadecimal string of 7 to 40 digits may name a commit of the repository.
+commits=$(cd "$TREE" && grep -rhoIE '\b[0-9a-f]{7,40}\b' . | sort -u | while read -r h; do
+  git -C "$REPO" cat-file -e "$h^{commit}" 2>/dev/null && echo "$h"
+done || true)
+if [ -n "$commits" ]; then
+  printf 'error: the hash of a commit of the repository is still in the archive:\n%s\n' "$commits" >&2
+  left=1
+fi
+if hits=$(cd "$TREE" && grep -raoE '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}' .); then
+  printf 'error: an e-mail address is still in:\n%s\n' "$hits" >&2
   left=1
 fi
 for entry in "${ENTRIES[@]}"; do

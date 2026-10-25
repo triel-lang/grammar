@@ -1,4 +1,4 @@
-# Artifact image for the TRIEL 2.5 core.
+# Artifact image for the TRIEL 2.5.1 core.
 #
 # Build from the repository root:
 #   docker build -f artifact/Dockerfile -t triel-artifact .

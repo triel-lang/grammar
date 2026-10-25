@@ -12,7 +12,8 @@ behind the paper. It contains:
   (`evaluator/generated/TRIEL.hs`) is exported by Isabelle from
   `formal/core/TRIEL_Exec.thy`; `evaluator/Main.hs` only reads the input and
   prints the report.
-- `parser/`: the reference parser of TRIEL 2.5, and the translator
+- `parser/`: the reference parser of the TRIEL 2.5 grammar (which 2.5.1 does
+  not change), and the translator
   `parser/triel_to_core.py` from TRIEL specifications to terms of the core.
 - `examples/`: 27 TRIEL specifications and 47 scenarios (implementation traces
   with hand-written expected reports).
@@ -233,18 +234,31 @@ from the Ubuntu 24.04 archive at build time and are not pinned.
 ## Anonymous archive
 
 `artifact/anonymize.sh [-w WORDS_FILE] [OUTPUT.tar.gz]` writes a source archive
-of the current commit for double-blind review. It leaves out `.git`, the
-contributor license agreement with its workflow, and the script itself. The
+of the current commit (or of the commit `REF`, e.g. `REF=v2.5.1`) for
+double-blind review. It leaves out `.git`, the contributor license agreement
+with its workflow, the script itself and `artifact/check_anonymous.sh`. The
 name of the author is found without a list of words: the script reads it from
 the places where the repository states it (`formal/core/document/root.tex`,
 `NOTICE`, `LICENSE.md`, the headers of both EBNF files and the Contact section
 of `README.md`) and replaces it, and each of its words, everywhere. The address
-of the repository and of the project's sites are replaced too, and so is every
-word listed in the optional `WORDS_FILE`, which is kept outside the repository.
-Text that points to the history of the project is rewritten as well: the commit
-hash of the tag v2.5 in `LICENSE.md` is removed, and the stages of the
-development named in `formal/core/CORE.md` ("the independent review of stage 13")
-become "an independent review" or "an earlier revision". The name of the
-language is kept. The script fails, and writes nothing, if any of these words,
-the hash or a stage is left in a file or a file name, or if `root.tex` or
-`NOTICE` names no author.
+of the repository and of the project's sites are replaced too, as are the
+account of the maintainer and the surname of the author, and every word listed
+in the optional `WORDS_FILE`, which is kept outside the repository. Text that
+points to the history of the project is rewritten as well: the commit hashes of
+the tags v2.5.1 and v2.5 and of the commit archived are removed (`LICENSE.md`
+of v2.5.1 cites the hash of v2.5), and the stages of the development named in
+`formal/core/CORE.md` ("the independent review of stage 13") become "an
+independent review" or "an earlier revision". The name of the language is kept.
+The script fails, and writes nothing, if any of these words, a hash of a commit
+of the repository, an e-mail address or a stage is left in a file or a file
+name, or if `root.tex` or `NOTICE` names no author.
+
+`artifact/check_anonymous.sh ARCHIVE.tar.gz` searches a written archive again,
+independently of the script that wrote it: the hashes of the tags, the name of
+the author, the account of the maintainer, the address of the repository, the
+sites of the project and e-mail addresses, in the file names, the tar headers
+and the contents of every file. The workflow `.github/workflows/artifact.yml`
+writes the archive of the tag v2.5.1 on every push, searches it, and keeps it
+as the artifact `triel-v2.5.1-anonymous` of the run; the result of the search
+is the separate artifact `anonymous-archive-check`. The archive is not
+committed.

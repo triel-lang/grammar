@@ -38,3 +38,45 @@ jobs:
         with:
           name: artifact-results
           path: results/
+
+  # The anonymous source archive of the tag v2.5.1 for double-blind review,
+  # written by artifact/anonymize.sh of this commit and searched by
+  # artifact/check_anonymous.sh. It is kept as an artifact of the run, never
+  # committed. The full history is fetched: the tag must be present, and the
+  # script checks that no commit hash of the repository is left in the archive.
+  anonymous-archive:
+    runs-on: ubuntu-latest
+    env:
+      ARCHIVE_REF: v2.5.1
+    # shell: bash runs with -o pipefail, so a failure is not hidden by tee.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The artifact with the archive holds the archive only; the result of the
+      # search names the words searched for, so it is kept apart.
+      - name: Write the anonymous archive
+        run: |
+          mkdir -p anonymous check
+          REF=$ARCHIVE_REF artifact/anonymize.sh "anonymous/triel-$ARCHIVE_REF-anonymous.tar.gz" | tee check/anonymize.txt
+          echo "source: $ARCHIVE_REF = $(git rev-parse "$ARCHIVE_REF^{commit}")" | tee -a check/anonymize.txt
+
+      - name: Search the archive
+        run: artifact/check_anonymous.sh "anonymous/triel-$ARCHIVE_REF-anonymous.tar.gz" | tee check/search.txt
+
+      - name: Keep the archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: triel-v2.5.1-anonymous
+          path: anonymous/
+
+      - name: Keep the result of the search
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anonymous-archive-check
+          path: check/
