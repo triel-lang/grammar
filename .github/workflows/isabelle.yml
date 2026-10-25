@@ -62,3 +62,40 @@ jobs:
 
       - name: Build session TRIEL_Core
         run: ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -v -D formal/core
+
+  # The copy of formal/core for the Archive of Formal Proofs, made by
+  # tools/make_afp_copy.sh and built as the AFP builds an entry, with the PDF
+  # document, in the Docker image of the Isabelle release that the current AFP
+  # release is for (afp-2026-10-16: Isabelle2025-2). The image with LaTeX is
+  # used for the document.
+  afp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make the AFP copy
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/afp"
+          tools/make_afp_copy.sh "$RUNNER_TEMP/afp" 2>&1 | tee "$RUNNER_TEMP/afp/copy.log"
+
+      - name: Build session TRIEL_Core in makarius/isabelle:${{ env.ISABELLE_VERSION }}_X11_Latex
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/afp/output"
+          chmod -R a+rwX "$RUNNER_TEMP/afp"
+          docker run --rm -v "$RUNNER_TEMP/afp:/work" "makarius/isabelle:${ISABELLE_VERSION}_X11_Latex" \
+            build -v -o browser_info -o document=pdf \
+            -o "document_variants=document:outline=/proof,/ML" \
+            -o document_output=/work/output -D /work/TRIEL_Core 2>&1 | tee "$RUNNER_TEMP/afp/build.log"
+
+      - name: Keep the copy, the logs and the documents
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: afp-TRIEL_Core
+          path: |
+            ${{ runner.temp }}/afp/TRIEL_Core/
+            ${{ runner.temp }}/afp/copy.log
+            ${{ runner.temp }}/afp/build.log
+            ${{ runner.temp }}/afp/output/*.pdf
