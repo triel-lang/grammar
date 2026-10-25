@@ -17,7 +17,7 @@
 \begin{abstract}
 This document is a core of the semantics of the TRIEL specification language,
 formalised and checked in Isabelle/HOL. It is based only on the public description of
-the language (\texttt{TECHNICAL\_REPORT.md}, Sections 2.5 and 2.9, and
+the language (\texttt{TECHNICAL\_REPORT.md}, Sections 2.5--2.9, and
 \texttt{FOUNDATIONS.md}), in version 2.5.1, the errata to version 2.5. All proofs are complete: there are no unproved lemmas and no
 axioms beyond those of Isabelle/HOL.
 \end{abstract}
@@ -151,7 +151,9 @@ read in the last state not after its deadline, and that of a prohibition in the 
 before the forbidden action, in which its condition is true. Proved: an amount is
 undefined when an operand is; without \texttt{DEFAULT} a defined amount is not changed by
 more data, and with \texttt{DEFAULT} it can be; the Decimals are closed under $+$, $-$
-and $\times$; a reported amount is never negative and never exceeds the cap; once a norm
+and $\times$; an amount reported for payment is never negative and, with a non-negative
+cap, never exceeds the cap (\texttt{pen\_amount\_bounds}), while a negative amount is
+reported as negative and not replaced by 0; once a norm
 is breached, later entries change neither the state of the breach nor the reported
 actions and amounts.
 
