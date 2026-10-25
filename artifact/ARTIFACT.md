@@ -63,9 +63,13 @@ Measured on a 4-core x86-64 virtual machine with 16 GB of memory:
 
 The times of `run.sh` are those of version 2.5.1, measured with the container
 limited to 10 GiB; the download and the image build were measured for version 2.5, with the same `Dockerfile`. On a
-GitHub-hosted runner (`ubuntu-latest`, workflow `.github/workflows/artifact.yml`)
-the image of version 2.5 built in 1.5 min, base images included, and `run.sh`
-took 10 min in one run and 16.5 min in another.
+GitHub-hosted runner (`ubuntu-latest`, 4 cores, 15.6 GiB, workflow
+`.github/workflows/artifact.yml`) the image of the tag v2.5.1 built in 1.7 min,
+base images included, and `run.sh` passed all 11 steps in 13.6 min (816 s; of
+which the clean Isabelle build 102 s, the scenarios 134 s, pytest 333 s, the
+parsing of the examples 149 s, the ambiguity regression tests 70 s). Earlier
+runs of version 2.5 on the same runner took 10 min and 16.5 min: the time on a
+shared runner varies from run to run.
 
 ## Running
 
