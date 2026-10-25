@@ -31,7 +31,9 @@ predicate \texttt{PRESENT(x)} is always defined, and a comparison $=$, $<$ or $\
 an operand that has no value is undefined. Proved: commutativity and associativity
 of \texttt{AND} and \texttt{OR}, De Morgan's laws and double negation (T1); monotonicity of
 every \texttt{PRESENT}-free expression under extension of the state, the claim of
-Section~2.9 (T2); non-monotonicity of \texttt{PRESENT} (T3); agreement with two-valued
+Section~2.9 (T2; cf.\ the strong Kleene connectives of the logic
+LPF~\cite{BarringerChengJones1984} and the monotone valuation schemes of
+Kripke~\cite{Kripke1975}); non-monotonicity of \texttt{PRESENT} (T3); agreement with two-valued
 logic when every name read is defined (T4); the meaning of \texttt{PRESENT} (T5).
 
 \paragraph{The indicator predicate (theory \texttt{TRIEL\_Ex}).}
@@ -92,7 +94,8 @@ a prohibition is breached when its condition is true before the action; a permis
 never breached. Deadlines are fixed at activation. Proved: the violated traces of a
 prohibition are exactly the prefixes up to its breach; a missed deadline is a breach;
 verdicts are final once reached; fail-closed enforcement of prohibitions blocks every
-breach and also undefined conditions, which the verdict does not count as breaches; breach
+breach and also undefined conditions, which the verdict does not count as breaches (cf.\
+the enforcement of security policies by execution monitors~\cite{Schneider2000}); breach
 handlers bind to the nearest preceding obligation or prohibition of the same subject; at most one
 continuation-determining action is allowed; a cure in time prevents a second breach, and a
 failed cure is final; a result computed with stale factors treated as absent is not
