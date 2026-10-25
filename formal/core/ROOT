@@ -16,5 +16,6 @@ session TRIEL_Core = HOL +
     TRIEL_Penalty
     TRIEL_Exec
   document_files
+    "root.bib"
     "root.tex"
   export_files (in "../../evaluator/generated") [3] "*:code/**"

@@ -26,7 +26,7 @@ axioms beyond those of Isabelle/HOL.
 
 \paragraph{Expressions (theory \texttt{TRIEL\_Core}).}
 States are partial maps from names to values, ordered by information (extension).
-Boolean expressions are evaluated in strong Kleene three-valued logic; the value-presence
+Boolean expressions are evaluated in strong Kleene three-valued logic~\cite{Kleene1938}; the value-presence
 predicate \texttt{PRESENT(x)} is always defined, and a comparison $=$, $<$ or $\le$ with
 an operand that has no value is undefined. Proved: commutativity and associativity
 of \texttt{AND} and \texttt{OR}, De Morgan's laws and double negation (T1); monotonicity of
@@ -35,7 +35,8 @@ Section~2.9 (T2); non-monotonicity of \texttt{PRESENT} (T3); agreement with two-
 logic when every name read is defined (T4); the meaning of \texttt{PRESENT} (T5).
 
 \paragraph{The indicator predicate (theory \texttt{TRIEL\_Ex}).}
-Following the logics of quasiary predicates of Nikitchenko and Shkilniak, a predicate is
+Following the logics of quasiary predicates of Nikitchenko and
+Shkilniak~\cite{NikitchenkoShkilniak2017,ShkilniakShkilniak2024}, a predicate is
 given by its truth and falsity domains, and the total indicator predicate $E_x$ is true
 where $x$ has a value and false where it has none. Proved: \texttt{PRESENT(x)} is $E_x$
 (\texttt{present\_is\_Ex}); $E_x$ is total and not equitone; $E_x$ holds exactly when the
@@ -72,8 +73,9 @@ reached a prohibition (\texttt{status\_no\_missed\_violation}); the exception fo
 completion cannot be dropped (\texttt{violation\_after\_completion}).
 
 \paragraph{Nominative data (theory \texttt{TRIEL\_ND}).}
-Following the Mizar formalisation of simple-named complex-valued nominative data by
-Ivanov, Nikitchenko, Kryvolap and Kornilowicz, a datum is a basic value or a finite partial
+Following the composition-nominative approach of Nikitchenko~\cite{Nikitchenko2022} and the
+Mizar formalisation of simple-named complex-valued nominative data by Ivanov, Nikitchenko,
+Kryvolap and Korni{\l}owicz~\cite{IvanovNikitchenkoKryvolapKornilowicz2017}, a datum is a basic value or a finite partial
 map from names to data; records and nested structures are such data, and an optional
 value is a name that may be absent. Expressions use complex names (paths), and
 \texttt{PRESENT(p)} is the total indicator predicate for a complex name. The information
@@ -98,14 +100,15 @@ overturned when they are refreshed.
 
 \paragraph{Invariants (theory \texttt{TRIEL\_Invariants}).}
 \texttt{ALWAYS}, \texttt{EVENTUALLY} and \texttt{NEXT} are evaluated on finite prefixes of
-implementation traces with the three verdicts of LTL3 (Bauer, Leucker and Schallhart).
+implementation traces with the three verdicts of LTL3 (Bauer, Leucker and
+Schallhart~\cite{BauerLeuckerSchallhart2011}).
 Proved: on a prefix \texttt{ALWAYS} is never true and \texttt{EVENTUALLY} never false; a
 definite verdict is final under extension; an entry where the formula is undefined for
 lack of data neither violates \texttt{ALWAYS} nor fulfils \texttt{EVENTUALLY}; definite
 verdicts survive more data.
 
 \paragraph{Indicator predicates (theory \texttt{TRIEL\_Indicators}).}
-Following Shkilniak (2024), an R-predicate is given by a truth domain and a falsity domain,
+Following Shkilniak (2024)~\cite{Shkilniak2024}, an R-predicate is given by a truth domain and a falsity domain,
 and a P-predicate is one whose two domains are disjoint. Besides the total indicator $E_z$
 (true where $z$ has a value, false where it has none) there is the partial indicator
 $\downarrow z$, true where $z$ has a value and never false. Proved: $E_z$ and
@@ -119,13 +122,15 @@ the counterexample for typing with \texttt{Optional}. The equitone P-predicates 
 closed under negation and disjunction.
 
 \paragraph{Compositions (theory \texttt{TRIEL\_Compositions}).}
-Following Nikitchenko and Shkilniak (2017) and Shkilniak (2024), the existential
+Following Nikitchenko and Shkilniak (2017)~\cite{NikitchenkoShkilniak2017} and Shkilniak
+(2024)~\cite{Shkilniak2024}, the existential
 quantifier and renomination are defined on R-predicates. Renomination is traditional or
 extended; an extended renomination may also delete names. Proved: the renomination
 operation is monotone; the classes of P-predicates, of monotone R-predicates and of
 equitone P-predicates are closed under all base compositions (negation, disjunction,
-renomination, the quantifier and $\downarrow z$), as stated by Shkilniak (2024); $E_z$ is
-the negation of the variable unassignment predicate of Nikitchenko and Shkilniak.
+renomination, the quantifier and $\downarrow z$), as stated by Shkilniak (2024)~\cite{Shkilniak2024}; $E_z$ is
+the negation of the variable unassignment predicate of Nikitchenko and
+Shkilniak~\cite{NikitchenkoShkilniak2017}.
 Formulas of the language are terms of the composition algebra, interpreted by the
 compositions. Every condition of \texttt{TRIEL\_Indicators} translates to such a term,
 with \texttt{AND} expressed by negation and disjunction, and the value of the condition is
@@ -137,6 +142,18 @@ is a rational number $m / 10^k$. Proved: every Integer is a Decimal; a rational 
 lowest terms is a Decimal if and only if its denominator divides a power of 10, that is,
 has no prime factor other than 2 and 5; $1/3$ is not a Decimal. Both types are decided by
 executable equations.
+
+\paragraph{Penalties (theory \texttt{TRIEL\_Penalty}).}
+Following Sections~2.6 and 2.9, the amount of \texttt{PENALTY e CAP c} is built from
+values with $+$, $-$ and $\times$, without division, and computed on exact numbers; it is
+undefined when an operand is undefined or not a number. The amount of an obligation is
+read in the last state not after its deadline, and that of a prohibition in the state
+before the forbidden action, in which its condition is true. Proved: an amount is
+undefined when an operand is; without \texttt{DEFAULT} a defined amount is not changed by
+more data, and with \texttt{DEFAULT} it can be; the Decimals are closed under $+$, $-$
+and $\times$; a reported amount is never negative and never exceeds the cap; once a norm
+is breached, later entries change neither the state of the breach nor the reported
+actions and amounts.
 
 \paragraph{The evaluator (theory \texttt{TRIEL\_Exec}).}
 Executable equations, each proved equal to a definition of the other theories, replace
@@ -152,12 +169,30 @@ input. A breached prohibition is reported with the informational actions of the 
 bound to it; a continuation in such a handler is rejected, since Section~2.6 defines
 continuations only for obligations.
 
+\paragraph{Hidden factors (theory \texttt{TRIEL\_Exec}).}
+A factor of type \texttt{ZK<T>} without \texttt{WITHOUT REVEALING ALL} is hidden, and
+\texttt{run} removes every hidden factor from the data of every entry before it
+evaluates. Proved: two lists of observations that are equal once the hidden factors are
+removed get the same report, typing included (\texttt{run\_noninterference}), so the
+report is the same with or without the hidden values in the data (\texttt{run\_erase}); a
+hidden factor is never reported as ill-typed; an expression has the same value in two
+states that agree on the names it reads, so a condition that reads no hidden factor, as
+the flow rule of Section~2.7 requires, has the same value at every entry with the hidden
+factors removed and with them left in (\texttt{flow\_safe\_eval}). The flow rule itself is
+checked by the translator.
+
 \paragraph{Not formalised.}
-Arithmetic, further comparisons, \texttt{List} and \texttt{Map} types, the calendar,
-\texttt{WITHIN \dots\ ELSE} and \texttt{FROM \dots\ UNTIL}, deadlines inside composite
-terms, the conditional and event-triggered terms, LTL and CTL formulas beyond
-\texttt{ALWAYS}, \texttt{EVENTUALLY} and \texttt{NEXT}, and the translator from TRIEL to
-the core, which is checked by tests.
+Arithmetic occurs only in the amount of a \texttt{PENALTY}; elsewhere the translator
+rejects it, as it rejects function calls, \texttt{LET} and the \texttt{IF} expression. A
+deadline or \texttt{FROM} inside a composite term is rejected, since the trace semantics
+of Section~2.5 has no time, and so is \texttt{WITHIN \dots\ ELSE} inside a composite term.
+The composition of terms by \texttt{AND} is defined with interleaving as a parameter, and
+neither the evaluator nor the translator accepts it. \texttt{EXECUTE} and event-triggered
+terms (\texttt{ON \dots\ DO}) are not accepted. Also outside the core: calendar units
+(\texttt{BUSINESS\_DAY}, \texttt{MONTH}, \texttt{YEAR}), the types \texttt{List} and
+\texttt{Map}, LTL formulas beyond \texttt{ALWAYS}, \texttt{EVENTUALLY} and \texttt{NEXT},
+and CTL formulas. The translator from TRIEL to the core is not verified; it is checked
+by tests.
 
 \newpage
 \tableofcontents
@@ -166,5 +201,8 @@ the core, which is checked by tests.
 \parindent 0pt\parskip 0.5ex
 
 \input{session}
+
+\bibliographystyle{abbrv}
+\bibliography{root}
 
 \end{document}
