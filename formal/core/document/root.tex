@@ -163,9 +163,10 @@ sound for terms without \texttt{AND}, and are always given for terms without
 \texttt{UNLESS} and \texttt{AND}. Stale factors are blocked by factor, and the safety
 claim of Section~2.9 is proved again for this blocking. The function \texttt{run}
 computes the report of a specification on an implementation trace and is exported to
-Haskell. It rejects a list of observations whose times decrease, and a decided verdict of
-its report stays the same when observations are appended, with no assumption on the
-input. A breached prohibition is reported with the informational actions of the handler
+Haskell. It rejects a list of observations whose times decrease, and for every list of
+observations a decided verdict of its report stays the same when observations are
+appended, unless the longer list is rejected for the order of its times or for the types
+of its data (\texttt{run\_final}). A breached prohibition is reported with the informational actions of the handler
 bound to it; a continuation in such a handler is rejected, since Section~2.6 defines
 continuations only for obligations.
 
