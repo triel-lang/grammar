@@ -11,18 +11,20 @@
 # The copy holds the files of formal/core in the commit HEAD (or $REF):
 #
 #   ROOT              chapter AFP, session TRIEL_Core with a timeout, the
-#                     theories of formal/core/ROOT in the same order, and the
-#                     document root.tex; no export_files, no document options
+#                     theories of formal/core/ROOT in the same order, and its
+#                     document files; no export_files, no document options
 #                     (the AFP sets them for all entries)
-#   *.thy             the theories of formal/core; in TRIEL_Exec.thy the
-#                     subsection "Export" with export_code is left out
-#   document/root.tex formal/core/document/root.tex, without the sentence on the
-#                     export to Haskell and with the address of the repository
+#   *.thy             the theories of formal/core, unchanged; export_code in
+#                     TRIEL_Exec.thy stays, so the AFP build checks the export of
+#                     the evaluator, which writes no file
+#   document/         the document files of formal/core/ROOT (root.bib and
+#                     root.tex); root.tex gives the address of the repository
 #
 # CORE.md, build.log and output/ are not copied. The script fails if the copy
 # contains sorry, oops, axiomatization, sledgehammer or smt_oracle, if it switches
-# proof checking off (quick_and_dirty, skip_proofs), or if any command exports
-# code or files.
+# proof checking off (quick_and_dirty, skip_proofs), if it writes files
+# (export_files, export_generated_files, code_reflect, or export_code with file
+# or file_prefix), or if it has no export_code.
 #
 # Build the copy as the AFP does:
 #   isabelle build -v -o browser_info -o document=pdf \
@@ -51,7 +53,7 @@ trap 'rm -rf "$TMP"' EXIT
 git -C "$REPO" archive --format=tar "$REF" formal/core | tar -C "$TMP" -xf -
 SRC="$TMP/formal/core"
 # Line ends as in the repository, whatever the checkout does.
-find "$SRC" -type f \( -name '*.thy' -o -name ROOT -o -name '*.tex' \) -exec perl -pi -e 's/\r$//' {} +
+find "$SRC" -type f \( -name '*.thy' -o -name ROOT -o -name '*.tex' -o -name '*.bib' \) -exec perl -pi -e 's/\r$//' {} +
 
 # The theories of the session, in the order of formal/core/ROOT.
 mapfile -t THEORIES < <(awk '
@@ -59,6 +61,13 @@ mapfile -t THEORIES < <(awk '
   /^[[:space:]]*(document_files|export_files|sessions|options)([[:space:](]|$)/ { on = 0 }
   on && NF { print $1 }' "$SRC/ROOT")
 [ ${#THEORIES[@]} -gt 0 ] || { echo "error: no theories found in formal/core/ROOT" >&2; exit 1; }
+
+# The document files, in the order of formal/core/ROOT.
+mapfile -t DOCFILES < <(awk '
+  /^[[:space:]]*document_files[[:space:]]*$/ { on = 1; next }
+  /^[[:space:]]*(theories|export_files|sessions|options)([[:space:](]|$)/ { on = 0 }
+  on && NF { gsub(/"/, "", $1); print $1 }' "$SRC/ROOT")
+[ ${#DOCFILES[@]} -gt 0 ] || { echo "error: no document files found in formal/core/ROOT" >&2; exit 1; }
 
 mkdir -p "$ENTRY/document"
 
@@ -71,17 +80,13 @@ for f in "$SRC"/*.thy; do
   [ -f "$ENTRY/$t.thy" ] || { echo "error: formal/core/$t.thy is in no session" >&2; exit 1; }
 done
 
-# TRIEL_Exec: no export of the evaluator. The subsection "Export" runs from its
-# heading to the "end" of the theory.
-perl -0pi -e '
-  s/\n\nsubsection \\<open>Export\\<close>\n.*?(?=\nend\s*\z)/\n/s or die "no subsection Export in TRIEL_Exec.thy\n";
-  s/ and its export to Haskell\././ or die "no header sentence on the export in TRIEL_Exec.thy\n";
-' "$ENTRY/TRIEL_Exec.thy"
+for f in "${DOCFILES[@]}"; do
+  [ -f "$SRC/document/$f" ] || { echo "error: formal/core/document/$f is in ROOT but not in $REF" >&2; exit 1; }
+  cp "$SRC/document/$f" "$ENTRY/document/$f"
+done
 
-# root.tex: the same document, without the export, with the repository address.
-cp "$SRC/document/root.tex" "$ENTRY/document/root.tex"
+# root.tex: the same document, with the address of the repository.
 U=$URL perl -0pi -e '
-  s/ and is exported to\s+Haskell\././ or die "no sentence on the export in root.tex\n";
   s/(\\texttt\{FOUNDATIONS\.md\}\))/$1 at \\url{$ENV{U}}/ or die "no reference to FOUNDATIONS.md in root.tex\n";
 ' "$ENTRY/document/root.tex"
 
@@ -95,7 +100,7 @@ U=$URL perl -0pi -e '
   echo "  theories"
   printf '    %s\n' "${THEORIES[@]}"
   echo "  document_files"
-  echo "    \"root.tex\""
+  printf '    "%s"\n' "${DOCFILES[@]}"
 } > "$ENTRY/ROOT"
 
 # Checks.
@@ -112,9 +117,22 @@ check() {  # check MESSAGE GREP-OPTIONS PATTERN
 check "sorry, oops or axiomatization" -w 'sorry|oops|axiomatization'
 check "sledgehammer or smt_oracle" -w 'sledgehammer|smt_oracle'
 check "quick_and_dirty or skip_proofs" -s 'quick_and_dirty|skip_proofs'
-check "export of code or files" -s \
-  'export_code|export_files|export_generated_files|code_reflect'
+check "export of files" -s 'export_files|export_generated_files|code_reflect'
+# export_code may not write files: no file or file_prefix up to the end of the
+# command (the next blank line).
+n_export=$(cd "$ENTRY" && cat -- *.thy | grep -c '^export_code' || true)
+hits=$(cd "$ENTRY" && awk '/^export_code/ { on = 1 } on && /^[[:space:]]*$/ { on = 0 }
+  on && /(^|[[:space:]])file(_prefix)?([[:space:]]|$)/ { print FILENAME ":" FNR ": " $0 }' *.thy)
+if [ "$n_export" -eq 0 ]; then
+  echo "error: no export_code; the AFP build would not check the export" >&2
+  fail=1
+elif [ -n "$hits" ]; then
+  printf 'error: export_code writes files:\n%s\n' "$hits" >&2
+  fail=1
+else
+  echo "ok: $n_export export_code without file or file_prefix"
+fi
 [ $fail -eq 0 ] || { echo "the copy in $ENTRY does not meet the AFP rules" >&2; exit 1; }
 
 echo "AFP copy of formal/core ($REF, $(git -C "$REPO" rev-parse --short "$REF")): $ENTRY"
-echo "  ${#THEORIES[@]} theories, document/root.tex, ROOT (chapter AFP, session TRIEL_Core)"
+echo "  ${#THEORIES[@]} theories, document: ${DOCFILES[*]}, ROOT (chapter AFP, session TRIEL_Core)"
