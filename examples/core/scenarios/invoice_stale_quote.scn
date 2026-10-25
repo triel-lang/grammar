@@ -1,0 +1,16 @@
+; The quote of 1500.00 EUR arrives at 09:30 and is stale from 10:30. The agent
+; pays at 11:00; the condition is read in the state before the payment, at
+; 10:45, where the quote is absent, so the condition is undefined. A monitor
+; that enforces the limit blocks this payment, since the condition is not
+; known to be false; the verdict records a breach only when the condition is
+; true, so the prohibition is not breached (formal/core/CORE.md,
+; undefined_guard_blocks_not_breach).
+(scenario invoice_stale_quote
+  (spec "examples/core/core_invoice_agent.triel")
+  (entry "2026-11-02T09:00:00Z" (activate) (data (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-02T09:30:00Z" (arrive amount_eur)
+    (data (amount_eur (dec 1500.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-02T10:45:00Z" (tick)
+    (data (amount_eur (dec 1500.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-02T11:00:00Z" (act agent (pay (name supplier)) must)
+    (data (amount_eur (dec 1500.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false)))))

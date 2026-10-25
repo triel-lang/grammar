@@ -1,0 +1,11 @@
+; The oracle quotes the invoice at 1500.00 EUR, over the limit of 1000.00,
+; the owner has not approved the payment, and the agent pays while the quote
+; is fresh. The payment discharges the obligation; the prohibition is breached
+; at the payment, and its handler notifies the owner.
+(scenario invoice_over_limit
+  (spec "examples/core/core_invoice_agent.triel")
+  (entry "2026-11-02T09:00:00Z" (activate) (data (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-02T09:30:00Z" (arrive amount_eur)
+    (data (amount_eur (dec 1500.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-02T10:00:00Z" (act agent (pay (name supplier)) must)
+    (data (amount_eur (dec 1500.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false)))))

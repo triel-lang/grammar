@@ -1,0 +1,10 @@
+; The oracle quotes the invoice at 800.00 EUR, under the limit of 1000.00, and
+; the agent pays half an hour later, while the quote is fresh: the obligation
+; is fulfilled and the limit is kept.
+(scenario invoice_within_limit
+  (spec "examples/core/core_invoice_agent.triel")
+  (entry "2026-11-02T09:00:00Z" (activate) (data (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-02T09:30:00Z" (arrive amount_eur)
+    (data (amount_eur (dec 800.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-02T10:00:00Z" (act agent (pay (name supplier)) must)
+    (data (amount_eur (dec 800.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false)))))

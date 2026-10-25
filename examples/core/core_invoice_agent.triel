@@ -1,0 +1,38 @@
+-- TRIEL example inside the formal core: an AI agent pays an invoice for its
+-- owner. The agent must pay within three days; if it has not paid by then,
+-- the owner must pay within two more days (WITHIN ... ELSE), so leaving the
+-- invoice to the owner is not a breach. The agent must not pay when the EUR
+-- value of the invoice exceeds the owner's limit, unless the owner has
+-- approved the payment. That value is quoted by an exchange-rate oracle
+-- (conditions compare values and do not compute them) and is absent once it
+-- is older than one hour (ON_STALE BLOCK). A breach notifies the owner. The data come from an ORACLE, so
+-- PROVENANCE_REQUIRED is true (TECHNICAL_REPORT.md section 2.9). Every
+-- construct in this file is translated into the Isabelle/HOL core
+-- (formal/core) and evaluated by the exported evaluator (evaluator/).
+
+SPECIFICATION core_invoice_agent VERSION 1.0.0
+    PROVENANCE_REQUIRED: true
+
+SUBJECTS {
+  owner     : PARTY,
+  agent     : SYSTEM,
+  supplier  : PARTY,
+  fx_oracle : ORACLE
+}
+
+TERMS {
+  agent MUST pay(supplier) WITHIN 3 DAYS
+    ELSE owner MUST pay(supplier) BY 2 DAYS;
+  agent MUST_NOT pay(supplier) WHEN amount_eur > limit_eur AND NOT owner_approved;
+  agent ON_BREACH NOTIFY owner
+}
+
+FACTORS {
+  amount_eur     : Decimal METADATA SOURCE fx_oracle MAX_AGE 1 HOURS ON_STALE BLOCK,
+  limit_eur      : Decimal METADATA,
+  owner_approved : Boolean METADATA
+}
+
+INVARIANTS {
+  limit_positive : SAFETY : ALWAYS(limit_eur > 0)
+}

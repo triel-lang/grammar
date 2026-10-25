@@ -1,0 +1,10 @@
+SPEC core_invoice_agent
+METADATA PROVENANCE_REQUIRED true
+METADATA SOURCE amount_eur fx_oracle
+ACTIVATION OK
+BLOCK OK
+TYPES OK
+TERM 1 MUST agent pay(supplier) DEADLINE 1793869200 ELSE owner pay(supplier) DEADLINE 1794042000 : ELSE FULFILLED
+TERM 2 MUST_NOT agent pay(supplier) : PENDING
+TERM 3 ON_BREACH agent : BOUND 2
+INVARIANT limit_positive : U

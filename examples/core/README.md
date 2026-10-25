@@ -1,6 +1,6 @@
 # Examples inside the formal core
 
-The eleven specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
+The thirteen specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
 
 - `core_deadline_cure.triel`: a deadline, its breach, and a cure;
 - `core_unless_records.triel`: a sequence under UNLESS, with the guard read from a nested record;
@@ -13,7 +13,8 @@ The eleven specifications in this folder use only constructs that the translator
 - `core_commitment.triel`: `EVENTUALLY … WITHIN` a duration and a factor (true at the deadline, false past it, undefined on missing data, rejected activation), and `POLARITY`, `THRESHOLD` and `SENSITIVITY_BOUND` printed as metadata;
 - `core_sequence.triel`: two obligations in sequence, which need two actions, and prohibitions inside composite terms, which their first forbidden action violates, and the status of each term, read on the first prefix of the trace with a violation or with a completion by an executed action;
 - `core_readings.triel`: composite terms whose prefixes have several readings (the guard of `UNLESS` after or at the entry of the payment, a prohibition in a branch of `OR`), for which the status is conservative;
-- `core_hidden.triel`: a hidden `ZK<Integer>` factor, named as an action argument and never read, a `ZK<String>` factor `WITHOUT REVEALING ALL` read like an ordinary factor, and `PROOF_SYSTEM`, `CURVE`, `DID`, `PROVES`, `HASH` with a salt and `BOUND_TO` printed as metadata.
+- `core_hidden.triel`: a hidden `ZK<Integer>` factor, named as an action argument and never read, a `ZK<String>` factor `WITHOUT REVEALING ALL` read like an ordinary factor, and `PROOF_SYSTEM`, `CURVE`, `DID`, `PROVES`, `HASH` with a salt and `BOUND_TO` printed as metadata;
+- `core_invoice_agent.triel`: an AI agent that pays an invoice for its owner: `WITHIN … ELSE` with the owner as the fallback, a prohibition whose condition compares a Decimal factor quoted by an oracle under `ON_STALE BLOCK` and reads an approval that may be absent, a breach handler that notifies the owner, and `PROVENANCE_REQUIRED`.
 
 The scenario `age_verification_breach` runs `examples/age_verification.triel`, whose hidden `age` factor the core accepts.
 

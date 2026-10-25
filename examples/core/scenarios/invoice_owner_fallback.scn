@@ -1,0 +1,11 @@
+; The invoice is quoted at 1500.00 EUR, over the limit, and the agent does not
+; pay. Its three days end on 5 November: the obligation is not breached, the
+; fallback comes into force, and the owner pays on 6 November, inside the two
+; days of the fallback.
+(scenario invoice_owner_fallback
+  (spec "examples/core/core_invoice_agent.triel")
+  (entry "2026-11-02T09:00:00Z" (activate) (data (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-02T09:30:00Z" (arrive amount_eur)
+    (data (amount_eur (dec 1500.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-06T10:00:00Z" (act owner (pay (name supplier)) must)
+    (data (amount_eur (dec 1500.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false)))))

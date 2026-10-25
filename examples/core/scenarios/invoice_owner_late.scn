@@ -1,0 +1,9 @@
+; Nobody pays. The fallback came into force on 5 November and its two days
+; ended on 7 November at 09:00: the entry at 12:00 establishes its breach.
+(scenario invoice_owner_late
+  (spec "examples/core/core_invoice_agent.triel")
+  (entry "2026-11-02T09:00:00Z" (activate) (data (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-02T09:30:00Z" (arrive amount_eur)
+    (data (amount_eur (dec 1500.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-07T12:00:00Z" (tick)
+    (data (amount_eur (dec 1500.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false)))))
