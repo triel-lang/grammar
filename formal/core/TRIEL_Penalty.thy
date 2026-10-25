@@ -3,6 +3,7 @@
                 arithmetic on numbers with +, - and *, the state in which the amount is
                 computed (the state in which the breach occurs), the cap, and the
                 informational actions reported after a breach.
+    SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
 theory TRIEL_Penalty

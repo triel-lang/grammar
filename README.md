@@ -76,7 +76,7 @@ TRIEL's semantics builds on the composition-nominative approach to program logic
 ## License
 
 - The TRIEL Language Specification, versions 2.5 and 2.5.1 (`TRIEL-grammar-v2_5-core.ebnf`, `TECHNICAL_REPORT.md`, `formal/core/CORE.md`), is made available under the Open Web Foundation Final Specification Agreement 1.0 (OWFa 1.0).
-- The code (the Isabelle theories in `formal/core/`, `evaluator/`, `parser/`, `examples/`, `.github/`) is licensed under the [Apache License 2.0](LICENSE-APACHE).
+- The Isabelle theories in `formal/core/` are available under the [Apache License 2.0](LICENSE-APACHE) or the [BSD 3-Clause License](LICENSE-BSD), at your option. The other code (`evaluator/`, `parser/`, `examples/`, `.github/`) is licensed under the [Apache License 2.0](LICENSE-APACHE).
 - Contributions are accepted under the [TRIEL Contributor License Agreement](CLA.md); see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 [LICENSE.md](LICENSE.md) governs, including what the specification does not cover.

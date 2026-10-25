@@ -11,6 +11,7 @@
                 whether a variable is defined. Problems in Programming, 2024, No. 4,
                 23-33 (in Ukrainian). DOI 10.15407/pp2024.04.023
                 (reference [8] of FOUNDATIONS.md).
+    SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
 theory TRIEL_Compositions

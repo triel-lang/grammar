@@ -4,6 +4,7 @@
                 (A. Bauer, M. Leucker, C. Schallhart. Runtime verification for LTL and
                 TLTL. ACM TOSEM 20(4), 2011), and strong Kleene evaluation of the state
                 formulas.
+    SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
 theory TRIEL_Invariants

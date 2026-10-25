@@ -4,6 +4,7 @@
                 rational with a finite decimal expansion. There is no floating point.
                 Both predicates are executable, with code equations proved equal to
                 the definitions.
+    SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
 theory TRIEL_Numbers

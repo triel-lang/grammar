@@ -6,6 +6,7 @@
                 about that semantics.
     Source:     Public description only (github.com/triel-lang/grammar,
                 TECHNICAL_REPORT.md section 2.9, FOUNDATIONS.md).
+    SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
 theory TRIEL_Core

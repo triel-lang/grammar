@@ -24,15 +24,18 @@ Full text of the agreement: https://www.openwebfoundation.org/the-agreements/the
 
 **Earlier versions.** The OWFa 1.0 statements made on July 17, 2026 for the TRIEL Language Specification, version 2.4 (Core Language Edition), and on October 16, 2026 for version 2.5 (Core Language Edition), which consists of the same three files in the state of tag `v2.5` (commit `57c5410`), remain in effect for those versions.
 
-## 2. Code: Apache License 2.0
+## 2. Code: Apache License 2.0, or BSD-3-Clause for `formal/core/`
 
-The following are licensed under the Apache License, Version 2.0. The full text is in `LICENSE-APACHE`; the notice to keep when redistributing is in `NOTICE`.
+The code in `formal/core/` is available, at your option, under the Apache License, Version 2.0, or under the BSD 3-Clause License (SPDX: `Apache-2.0 OR BSD-3-Clause`). It comprises the Isabelle theories, `ROOT`, `document/` and the build log. `formal/core/CORE.md` is not code; it is part of the Specification (section 1).
 
-- `formal/core/`: the Isabelle theories, `ROOT`, `document/` and the build log. `formal/core/CORE.md` is not code; it is part of the Specification (section 1).
+All other code is licensed under the Apache License, Version 2.0:
+
 - `evaluator/`: the evaluator, including the Haskell code exported from `formal/core/`.
 - `parser/`: the reference parser, the translator to the core and their tests.
 - `examples/`: example specifications, scenarios and expected results.
 - `.github/`: the CI workflows.
+
+The full text of the Apache License 2.0 is in `LICENSE-APACHE`; the notice to keep when redistributing under it is in `NOTICE`. The full text of the BSD 3-Clause License is in `LICENSE-BSD`.
 
 Copyright 2026 Dmitri Chistyakov.
 

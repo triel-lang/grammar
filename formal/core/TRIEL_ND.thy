@@ -6,6 +6,7 @@
                 I. Ivanov, M. Nikitchenko, A. Kryvolap, A. Kornilowicz. Simple-named
                 complex-valued nominative data -- definition and basic operations.
                 Formalized Mathematics 25(3), 2017, 205-216 (reference [7] of FOUNDATIONS.md).
+    SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
 theory TRIEL_ND

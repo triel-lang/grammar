@@ -5,6 +5,7 @@
                 this theory. Membership of a trace in the denotation of a composite term
                 is three-valued: definite answers are proved sound, and for terms without
                 UNLESS the answer is always definite.
+    SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
 theory TRIEL_Exec

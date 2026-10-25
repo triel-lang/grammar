@@ -5,6 +5,7 @@
                 predicates with equality and sequent calculi for these logics.
                 UkrPROG'2024, CEUR Workshop Proceedings 3806, 2024, section 2
                 (reference [5] of FOUNDATIONS.md).
+    SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
 theory TRIEL_Ex

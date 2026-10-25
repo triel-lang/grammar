@@ -4,6 +4,7 @@
                 permissions, binding of ON_BREACH, breach actions and their continuations,
                 and MAX_AGE with ON_STALE BLOCK. The trace semantics of TRIEL_Trace and
                 TRIEL_Terms is unchanged.
+    SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
 theory TRIEL_Breach

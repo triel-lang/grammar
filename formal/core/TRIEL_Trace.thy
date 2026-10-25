@@ -5,6 +5,7 @@
     Source:     Public description only (github.com/triel-lang/grammar,
                 TECHNICAL_REPORT.md section 2.5). Guards are expressions of
                 TRIEL_Core, evaluated by its strong Kleene semantics.
+    SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
 theory TRIEL_Trace

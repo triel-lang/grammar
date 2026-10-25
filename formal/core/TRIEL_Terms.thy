@@ -3,6 +3,7 @@
                 type, its denotation in the trace semantics of TRIEL_Trace, totality of
                 every term, the laws of UNLESS for terms (law 3 without side condition),
                 and the conditional terms IF and WHEN.
+    SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
 theory TRIEL_Terms
