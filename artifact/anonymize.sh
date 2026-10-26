@@ -30,6 +30,14 @@
 #
 # Matching is case-insensitive and longer words are replaced first.
 #
+# The names of other people listed in KEEP below contain one of these words and
+# are kept as they are: "Dmitriy Traytel", an author of the AFP entry
+# MFOTL_Monitor cited in formal/core/document/root.bib, would otherwise become
+# "ANONYMOUSy Traytel", which gives away the first name of the author. Each
+# name of KEEP is matched exactly, with its case; it is put aside before the
+# words are replaced and put back afterwards, and the checks at the end ignore
+# these names, and only these.
+#
 # Two kinds of text that point to the history of the project are rewritten too:
 # commit hashes and the stages of the development. The hashes are those of the
 # tag v2.5.1 (1b775ff), of the tag v2.5 (57c5410, which LICENSE.md of v2.5.1
@@ -91,6 +99,11 @@ BUILTIN=(
   "Chistyakov => ANONYMOUS"
 )
 
+# Names of other people kept as they are (see above).
+KEEP=(
+  "Dmitriy Traytel"
+)
+
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 TREE="$TMP/triel"
@@ -134,7 +147,16 @@ mapfile -t ENTRIES < <(
 
 # Replace in every text file. The words and replacements are passed through the
 # environment, so no character in them is interpreted by the shell or by Perl.
+# The names of KEEP are first put aside as placeholders of control characters,
+# which no word contains and no file of the repository may contain.
+if hits=$(cd "$TREE" && grep -rlI -e $'\001' .); then
+  printf 'error: a control character used as a placeholder is in:\n%s\n' "$hits" >&2
+  exit 1
+fi
 while IFS= read -r -d '' f; do
+  for i in "${!KEEP[@]}"; do
+    K=${KEEP[$i]} P=$'\001'"$i"$'\001' perl -pi -e 's/\Q$ENV{K}\E/$ENV{P}/g' "$f"
+  done
   for entry in "${ENTRIES[@]}"; do
     W=${entry%%$'\t'*} R=${entry#*$'\t'} perl -pi -e 's/\Q$ENV{W}\E/$ENV{R}/gi' "$f"
   done
@@ -152,31 +174,48 @@ while IFS= read -r -d '' f; do
     s/\bstages? \d+/an earlier revision/gi;' "$f"
 done < <(grep -rlIZ -e '' "$TREE")
 
+# The names of KEEP are put back.
+while IFS= read -r -d '' f; do
+  for i in "${!KEEP[@]}"; do
+    K=${KEEP[$i]} P=$'\001'"$i"$'\001' perl -pi -e 's/\Q$ENV{P}\E/$ENV{K}/g' "$f"
+  done
+done < <(grep -rlIZ -e '' "$TREE")
+
+# The checks below read a copy in which each name of KEEP is replaced by a line
+# break, so that it is neither found nor joins the text around it into a word.
+CHECK="$TMP/check"
+cp -a "$TREE" "$CHECK"
+for k in "${KEEP[@]}"; do
+  while IFS= read -r -d '' f; do
+    K=$k perl -pi -e 's/\Q$ENV{K}\E/\n/g' "$f"
+  done < <(grep -rlZF -e "$k" "$CHECK" || true)
+done
+
 # Nothing may be left: contents of every file (binary files included) and paths.
 left=0
-if hits=$(cd "$TREE" && grep -raliE -e "$HISTORY_HASHES|stage ?[0-9]" .); then
+if hits=$(cd "$CHECK" && grep -raliE -e "$HISTORY_HASHES|stage ?[0-9]" .); then
   printf 'error: a commit hash or a stage of the development is still in:\n%s\n' "$hits" >&2
   left=1
 fi
 # No hexadecimal string of 7 to 40 digits may name a commit of the repository.
-commits=$(cd "$TREE" && grep -rhoIE '\b[0-9a-f]{7,40}\b' . | sort -u | while read -r h; do
+commits=$(cd "$CHECK" && grep -rhoIE '\b[0-9a-f]{7,40}\b' . | sort -u | while read -r h; do
   git -C "$REPO" cat-file -e "$h^{commit}" 2>/dev/null && echo "$h"
 done || true)
 if [ -n "$commits" ]; then
   printf 'error: the hash of a commit of the repository is still in the archive:\n%s\n' "$commits" >&2
   left=1
 fi
-if hits=$(cd "$TREE" && grep -raoE '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}' .); then
+if hits=$(cd "$CHECK" && grep -raoE '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}' .); then
   printf 'error: an e-mail address is still in:\n%s\n' "$hits" >&2
   left=1
 fi
 for entry in "${ENTRIES[@]}"; do
   w=${entry%%$'\t'*}
-  if hits=$(cd "$TREE" && grep -raliF -e "$w" .); then
+  if hits=$(cd "$CHECK" && grep -raliF -e "$w" .); then
     printf 'error: a forbidden word is still in:\n%s\n' "$hits" >&2
     left=1
   fi
-  hits=$(cd "$TREE" && find . -iname "*$w*")
+  hits=$(cd "$CHECK" && find . -iname "*$w*")
   if [ -n "$hits" ]; then
     printf 'error: a forbidden word is in the file names:\n%s\n' "$hits" >&2
     left=1
@@ -191,4 +230,4 @@ tar -C "$TMP" --sort=name --mtime='2000-01-01 00:00:00Z' --owner=0 --group=0 --n
     -cf - triel | gzip -n > "$OUT"
 echo "anonymous archive: $OUT ($(tar -tzf "$OUT" | grep -vc '/$') files, ${#ENTRIES[@]} words checked:" \
      "${#AUTHOR_WORDS[@]} from the name of the author, ${#LISTED[@]} from ${WORDS:+$(basename "$WORDS")}${WORDS:-a words file (none given)}," \
-     "${#BUILTIN[@]} built in)"
+     "${#BUILTIN[@]} built in; ${#KEEP[@]} names of other people kept)"

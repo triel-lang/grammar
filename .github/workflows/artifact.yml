@@ -25,12 +25,34 @@ jobs:
         run: docker image ls triel-artifact
 
       # artifact/run.sh: every check of isabelle.yml and evaluator.yml, the
-      # session of the paper theorems, and the summary.
+      # session of the paper theorems, and the summary. The peak of the memory
+      # charged to the container is read from memory.peak of its cgroup (cgroup
+      # v2, page cache included) every 2 s while it runs; the value only grows,
+      # and the peak is in the clean Isabelle build, long before the end.
       - name: Run the artifact
         run: |
           mkdir -p results
           chmod 777 results
-          docker run --rm -e RESULTS_DIR=/results -v "$PWD/results:/results" triel-artifact
+          id=$(docker run -d -e RESULTS_DIR=/results -v "$PWD/results:/results" triel-artifact)
+          peak=
+          for f in "/sys/fs/cgroup/system.slice/docker-$id.scope/memory.peak" "/sys/fs/cgroup/docker/$id/memory.peak"; do
+            [ -r "$f" ] && peak=$f && break
+          done
+          sampler=
+          if [ -n "$peak" ]; then
+            ( while v=$(cat "$peak" 2>/dev/null); do echo "$v" > memory-peak.tmp && mv memory-peak.tmp memory-peak.bytes; sleep 2; done ) &
+            sampler=$!
+          fi
+          docker logs -f "$id"
+          status=$(docker wait "$id")
+          [ -z "$sampler" ] || kill "$sampler" 2>/dev/null || true
+          docker rm "$id" > /dev/null
+          if [ -s memory-peak.bytes ]; then
+            awk '{printf "memory peak of the container: %.2f GiB (%.0f bytes, cgroup memory.peak)\n", $1/1073741824, $1}' memory-peak.bytes | tee results/memory-peak.txt
+          else
+            echo "memory peak of the container: not measured (no memory.peak found)" | tee results/memory-peak.txt
+          fi
+          exit "$status"
 
       - name: Keep the logs
         if: always()
@@ -39,15 +61,16 @@ jobs:
           name: artifact-results
           path: results/
 
-  # The anonymous source archive of the tag v2.5.1 for double-blind review,
-  # written by artifact/anonymize.sh of this commit and searched by
-  # artifact/check_anonymous.sh. It is kept as an artifact of the run, never
-  # committed. The full history is fetched: the tag must be present, and the
-  # script checks that no commit hash of the repository is left in the archive.
+  # The anonymous source archive of this commit for double-blind review,
+  # written by artifact/anonymize.sh and searched by artifact/check_anonymous.sh.
+  # It is kept as an artifact of the run, never committed. The full history is
+  # fetched: the script checks that no commit hash of the repository is left in
+  # the archive.
   anonymous-archive:
     runs-on: ubuntu-latest
     env:
-      ARCHIVE_REF: v2.5.1
+      ARCHIVE_REF: HEAD
+      ARCHIVE: triel-artifact-anonymous.tar.gz
     # shell: bash runs with -o pipefail, so a failure is not hidden by tee.
     defaults:
       run:
@@ -62,16 +85,16 @@ jobs:
       - name: Write the anonymous archive
         run: |
           mkdir -p anonymous check
-          REF=$ARCHIVE_REF artifact/anonymize.sh "anonymous/triel-$ARCHIVE_REF-anonymous.tar.gz" | tee check/anonymize.txt
+          REF=$ARCHIVE_REF artifact/anonymize.sh "anonymous/$ARCHIVE" | tee check/anonymize.txt
           echo "source: $ARCHIVE_REF = $(git rev-parse "$ARCHIVE_REF^{commit}")" | tee -a check/anonymize.txt
 
       - name: Search the archive
-        run: artifact/check_anonymous.sh "anonymous/triel-$ARCHIVE_REF-anonymous.tar.gz" | tee check/search.txt
+        run: artifact/check_anonymous.sh "anonymous/$ARCHIVE" | tee check/search.txt
 
       - name: Keep the archive
         uses: actions/upload-artifact@v4
         with:
-          name: triel-v2.5.1-anonymous
+          name: triel-artifact-anonymous
           path: anonymous/
 
       - name: Keep the result of the search

@@ -10,6 +10,13 @@
 # file, binary files included). One line is printed per pattern with the number
 # of matches. The exit code is 0 if no pattern is found, 1 otherwise.
 #
+# The names of other people in ALLOWED are matched by a pattern but name someone
+# else: "Dmitriy Traytel", an author of the AFP entry MFOTL_Monitor cited in
+# formal/core/document/root.bib. Each is matched exactly, with its case; its
+# occurrences are counted and printed, and replaced by a line break before the
+# patterns are searched. The list is kept here independently of the list KEEP of
+# anonymize.sh.
+#
 # This script names the words it looks for, so anonymize.sh leaves it out of
 # the archive, as it leaves out itself.
 
@@ -33,12 +40,21 @@ PATTERNS=(
   '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'   # e-mail address
 )
 
+ALLOWED=(
+  'Dmitriy Traytel'                 # an author of the AFP entry MFOTL_Monitor
+)
+
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 gzip -dc "$1" > "$TMP/archive.tar"
 
 echo "archive: $1 ($(tar -tf "$TMP/archive.tar" | grep -vc '/$') files, sha256 $(sha256sum "$1" | cut -d' ' -f1))"
 echo "owners in the tar headers: $(tar -tvf "$TMP/archive.tar" | awk '{print $2}' | sort -u | paste -sd ' ')"
+for a in "${ALLOWED[@]}"; do
+  n=$({ grep -aoF -e "$a" "$TMP/archive.tar" || true; } | wc -l)
+  printf 'allowed, not counted below: %s, %s occurrences\n' "$a" "$n"
+  A=$a perl -pi -e 's/\Q$ENV{A}\E/\n/g' "$TMP/archive.tar"
+done
 found=0
 for p in "${PATTERNS[@]}"; do
   n=$({ grep -aoiE -e "$p" "$TMP/archive.tar" || true; } | wc -l)
