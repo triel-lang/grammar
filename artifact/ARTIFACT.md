@@ -15,7 +15,7 @@ behind the paper. It contains:
 - `parser/`: the reference parser of the TRIEL 2.5 grammar (which 2.5.1 does
   not change), and the translator
   `parser/triel_to_core.py` from TRIEL specifications to terms of the core.
-- `examples/`: 27 TRIEL specifications and 47 scenarios (implementation traces
+- `examples/`: 28 TRIEL specifications and 54 scenarios (implementation traces
   with hand-written expected reports).
 - `artifact/`: the Docker image (`Dockerfile`), the script that runs every check
   (`run.sh`), and the Isabelle session `TRIEL_Paper`
@@ -37,7 +37,10 @@ and prints a summary whose numbers are all computed by the run.
   without a limit. With the container limited to 10 GiB (`--memory=10g`) the
   build passed in each of three runs, with peaks of 7.0 to 7.8 GiB; at 8 GiB it
   was killed for lack of memory in two of four runs. All other steps stay
-  below 2 GiB.
+  below 2 GiB. On a GitHub-hosted runner without a limit, the workflow
+  `.github/workflows/artifact.yml` read a peak of 6.94 GiB for the current
+  sources (28 examples, 54 scenarios); it keeps the value as
+  `memory-peak.txt` with the logs of the run.
 - Docker Desktop (macOS, Windows): set Memory to at least 10 GB in
   Settings → Resources.
 - Disk: 10 GB for the image (3.1 GB compressed download, the same size for
@@ -54,22 +57,23 @@ Measured on a 4-core x86-64 virtual machine with 16 GB of memory:
 | Image build (`docker build`), without cache | 3 min |
 | `run.sh`, all 11 steps | 21 min |
 | of which: clean Isabelle build of `TRIEL_Core` | 2 min |
-| of which: 47 scenarios | 3.5 min |
+| of which: the scenarios | 3.5 min |
 | of which: translator and driver tests (pytest) | 8.5 min |
-| of which: parsing of the 27 examples with the ambiguity check | 4 min |
+| of which: parsing of the examples with the ambiguity check | 4 min |
 | of which: ambiguity regression tests | 2 min |
 | of which: excerpts of the documents | 14 s |
 | of which: session `TRIEL_Paper` (on the heap of `TRIEL_Core`) | 12 s |
 
-The times of `run.sh` are those of version 2.5.1, measured with the container
-limited to 10 GiB; the download and the image build were measured for version 2.5, with the same `Dockerfile`. On a
+The times of `run.sh` in the table are those of version 2.5.1 (47 scenarios, 27
+examples), measured with the container limited to 10 GiB; the download and the image build were measured for version 2.5, with the same `Dockerfile`. On a
 GitHub-hosted runner (`ubuntu-latest`, 4 cores, 15.6 GiB, workflow
-`.github/workflows/artifact.yml`) the image of the tag v2.5.1 built in 1.7 min,
-base images included, and `run.sh` passed all 11 steps in 13.6 min (816 s; of
-which the clean Isabelle build 102 s, the scenarios 134 s, pytest 333 s, the
-parsing of the examples 149 s, the ambiguity regression tests 70 s). Earlier
-runs of version 2.5 on the same runner took 10 min and 16.5 min: the time on a
-shared runner varies from run to run.
+`.github/workflows/artifact.yml`) the image of the current sources (28
+examples, 54 scenarios) built in 2.3 min, base images included, and `run.sh`
+passed all 11 steps in 19.6 min (1175 s; of which the clean Isabelle build
+122 s, the scenarios 200 s, pytest 490 s, the parsing of the examples 204 s,
+the ambiguity regression tests 118 s). On the same runner the tag v2.5.1 took
+13.6 min, and earlier runs of version 2.5 took 10 min and 16.5 min: the time on
+a shared runner varies from run to run.
 
 ## Running
 
@@ -100,11 +104,11 @@ Expected end of the output:
 theories checked by Isabelle (TRIEL_Core)    12 (.thy files in formal/core: 12)
 proved statements (lemma/theorem/corollary)  633
 paper theorems found, without oracles        52 of 52
-scenarios matching .expected                 47 of 47
-examples accepted by the core                25 of 27
-translator and driver tests (pytest)         305 passed in ...
-examples parsed with one derivation          27 of 27
-ambiguity regression checks passed           236
+scenarios matching .expected                 54 of 54
+examples accepted by the core                26 of 28
+translator and driver tests (pytest)         319 passed in ...
+examples parsed with one derivation          28 of 28
+ambiguity regression checks passed           237
 document excerpts conforming to the grammar  15
 wall-clock time                              ...
 ...
@@ -154,8 +158,8 @@ variables `?x`.
 |---|---|---|
 | The core is machine-checked: 12 theories, 633 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `12 (.thy files in formal/core: 12)`, `633`; `no sorry, oops or axiomatization ...` |
 | The evaluator is the code exported from the checked theories | `cat results/03-exported-code.log` | `evaluator/generated is the exported code` |
-| The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `47` |
-| 25 of the 27 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `25`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
+| The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `54` |
+| 26 of the 28 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `26`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
 | Every cited theorem exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 52` |
 | Finality of verdicts: on a trace (times that do not decrease) a definite verdict of an obligation, a prohibition or an invariant does not change when the trace is extended; the evaluator rejects a list of observations whose times decrease, so for `run` a decided line stays the same when observations are appended, unless the longer list is rejected for its time order or its types. A property of the design | `grep -A1 -E '\.(ob_verdict_final\|pr_verdict_final\|inv_final\|run_final\|time_order_rejected)$' results/paper_theorems.txt` | `TRIEL_Breach.ob_verdict_final`, `TRIEL_Breach.pr_verdict_final`, `TRIEL_Invariants.inv_final`, `TRIEL_Exec.run_final`, `TRIEL_Exec.time_order_rejected`, each with its statement, e.g. `inv_eval ?\<iota> ?\<pi> = Some ?b \<Longrightarrow> inv_eval ?\<iota> (?\<pi> @ ?\<rho>) = Some ?b` |
 | Two obligations in sequence need two actions; a prohibition in a composite term can be violated, and its trace semantics agrees with its verdict; the status of a composite term (read on the first prefix that violates the term or completes it by an executed action; conservative when a prefix has several readings) is sound and final, Violated before Done is needed, and the modes of the traces refine the denotation; for a term without AND, a violated prefix is reported as a violation at that entry or before it unless the status is unknown or the observation ended earlier on a completion by an executed action before any reading had reached a prohibition, and the exception for an earlier completion cannot be dropped; consequences for a prohibition after a reading has reached one, at the end of a sequence (no exception when the first part has no UNLESS and no AND) and in a branch of OR (no exception but an unknown status) | `grep -A1 -E '\.(must_then_must_two_actions\|violated_reachable\|then_mustnot_violated\|mustnot_violated_breach\|breach_mustnot_violated\|status_final\|status_sound\|violation_over_done\|fden_den\|then_mustnot_held\|then_mustnot_status\|status_no_missed_violation\|reached_prohibition_watched\|then_mustnot_watched\|or_mustnot_watched\|violation_after_completion)$' results/paper_theorems.txt` | the sixteen theorems with their statements |
@@ -195,8 +199,8 @@ The results rest on the following, which are not proved here:
   specifications to terms of the core, written in Python. Nothing proves that it
   translates a specification into the core term with the intended meaning, or
   that it rejects exactly the constructs outside the core. It is checked only
-  by tests: the 305 tests of `parser/test_triel_to_core.py`, the classification
-  of the 27 examples, and the 47 scenarios. The same holds for
+  by tests: the 319 tests of `parser/test_triel_to_core.py`, the classification
+  of the 28 examples, and the 54 scenarios. The same holds for
   `parser/triel_eval.py`, which converts a scenario into the input of the
   evaluator, and for the grammar `parser/triel.lark` with the parser library
   lark 1.3.1.
@@ -244,7 +248,8 @@ with its workflow, the script itself and `artifact/check_anonymous.sh`. The
 name of the author is found without a list of words: the script reads it from
 the places where the repository states it (`formal/core/document/root.tex`,
 `NOTICE`, `LICENSE.md`, the headers of both EBNF files and the Contact section
-of `README.md`) and replaces it, and each of its words, everywhere. The address
+of `README.md`) and replaces it, and each of its words, everywhere; names of
+other people, such as those of the authors of the works cited, are kept. The address
 of the repository and of the project's sites are replaced too, as are the
 account of the maintainer and the surname of the author, and every word listed
 in the optional `WORDS_FILE`, which is kept outside the repository. Text that
@@ -262,7 +267,7 @@ independently of the script that wrote it: the hashes of the tags, the name of
 the author, the account of the maintainer, the address of the repository, the
 sites of the project and e-mail addresses, in the file names, the tar headers
 and the contents of every file. The workflow `.github/workflows/artifact.yml`
-writes the archive of the tag v2.5.1 on every push, searches it, and keeps it
-as the artifact `triel-v2.5.1-anonymous` of the run; the result of the search
+writes the archive of the commit pushed on every push, searches it, and keeps it
+as the artifact `triel-artifact-anonymous` of the run; the result of the search
 is the separate artifact `anonymous-archive-check`. The archive is not
 committed.
