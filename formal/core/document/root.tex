@@ -187,6 +187,16 @@ the flow rule of Section~2.7 requires, has the same value at every entry with th
 factors removed and with them left in (\texttt{flow\_safe\_eval}). The flow rule itself is
 checked by the translator.
 
+\paragraph{Related entries of the Archive of Formal Proofs.}
+The entry \texttt{LTL3\_Semantics} by Amjad, van Glabbeek and
+O'Connor~\cite{LTL3_Semantics-AFP} formalises the full logic LTL3, with a semantics by
+definitive prefix sets and formula progression. Theory \texttt{TRIEL\_Invariants} has
+only \texttt{ALWAYS}, \texttt{EVENTUALLY} and \texttt{NEXT} over a state formula, which is
+evaluated in strong Kleene logic on incomplete data. The entry \texttt{MFOTL\_Monitor} by
+Schneider and Traytel~\cite{MFOTL_Monitor-AFP} verifies an executable monitor for metric
+first-order temporal logic and exports its code; it is the closest counterpart of the
+evaluator of theory \texttt{TRIEL\_Exec}.
+
 \paragraph{Not formalised.}
 Arithmetic occurs only in the amount of a \texttt{PENALTY}; elsewhere the translator
 rejects it, as it rejects function calls, \texttt{LET} and the \texttt{IF} expression. A
