@@ -11,9 +11,9 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The theories may contain no unproved or assumed results, and the
       # session may not switch proof checking off.
@@ -32,7 +32,7 @@ jobs:
       # (about 1.2 GB compressed) is cached between runs.
       - name: Cache the Isabelle distribution
         id: cache-isabelle
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/isabelle/${{ env.ISABELLE_VERSION }}
           key: ${{ env.ISABELLE_VERSION }}-linux-x86_64
@@ -65,13 +65,16 @@ jobs:
 
   # The copy of formal/core for the Archive of Formal Proofs, made by
   # tools/make_afp_copy.sh and built as the AFP builds an entry, with the PDF
-  # document, in the Docker image of the Isabelle release that the current AFP
+  # document, in the Docker image of the Isabelle release that the latest AFP
   # release is for (afp-2026-10-16: Isabelle2025-2). The image with LaTeX is
-  # used for the document.
+  # used for the document. Isabelle2026 was released on 2026-10-25 (the date in
+  # metadata/release-dates of the AFP repository for Isabelle2026), and the AFP
+  # has no release for it yet; the jobs afp-2026 and afp-2026-lint below check
+  # the same copy with it.
   afp:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Make the AFP copy
         shell: bash
@@ -91,7 +94,7 @@ jobs:
 
       - name: Keep the copy, the logs and the documents
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: afp-TRIEL_Core
           path: |
@@ -99,3 +102,96 @@ jobs:
             ${{ runner.temp }}/afp/copy.log
             ${{ runner.temp }}/afp/build.log
             ${{ runner.temp }}/afp/output/*.pdf
+
+  # The same copy, built in the same way in the official Docker image of
+  # Isabelle2026 with LaTeX, pinned by digest. The copy itself is kept as an
+  # archive, with the logs and the documents.
+  afp-2026:
+    runs-on: ubuntu-24.04
+    env:
+      ISABELLE_2026_IMAGE: makarius/isabelle:Isabelle2026_X11_Latex@sha256:a45d4bb7726cf2efc72eb7055f923228bdddfd427df87641850e10caae14c78e
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Make the AFP copy and its archive
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/afp"
+          tools/make_afp_copy.sh "$RUNNER_TEMP/afp" 2>&1 | tee "$RUNNER_TEMP/afp/copy.log"
+          tar -C "$RUNNER_TEMP/afp" --sort=name --mtime='2000-01-01 00:00:00Z' --owner=0 --group=0 \
+            --numeric-owner --mode='u=rwX,go=rX' -cf - TRIEL_Core | gzip -n > "$RUNNER_TEMP/afp/TRIEL_Core.tar.gz"
+          tar -tzvf "$RUNNER_TEMP/afp/TRIEL_Core.tar.gz"
+          sha256sum "$RUNNER_TEMP/afp/TRIEL_Core.tar.gz"
+
+      - name: Build session TRIEL_Core in Isabelle2026
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/afp/output"
+          chmod -R a+rwX "$RUNNER_TEMP/afp"
+          docker run --rm "$ISABELLE_2026_IMAGE" version
+          docker run --rm -v "$RUNNER_TEMP/afp:/work" "$ISABELLE_2026_IMAGE" \
+            build -v -o browser_info -o document=pdf \
+            -o "document_variants=document:outline=/proof,/ML" \
+            -o document_output=/work/output -D /work/TRIEL_Core 2>&1 | tee "$RUNNER_TEMP/afp/build.log"
+
+      - name: Keep the archive of the copy, the logs and the documents
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: afp-2026-TRIEL_Core
+          path: |
+            ${{ runner.temp }}/afp/TRIEL_Core.tar.gz
+            ${{ runner.temp }}/afp/copy.log
+            ${{ runner.temp }}/afp/build.log
+            ${{ runner.temp }}/afp/output/*.pdf
+
+  # isabelle-linter (github.com/isabelle-prover/isabelle-linter, the release
+  # Isabelle2026-v1.0.0, checked against its commit) on the AFP copy, in the
+  # same image as afp-2026, with the bundles afp_mandatory (the lints that the
+  # AFP requires), default and non_interactive_addon. "-f warn" makes the job
+  # fail on any finding, warning or error.
+  afp-2026-lint:
+    runs-on: ubuntu-24.04
+    env:
+      ISABELLE_2026_IMAGE: makarius/isabelle:Isabelle2026_X11_Latex@sha256:a45d4bb7726cf2efc72eb7055f923228bdddfd427df87641850e10caae14c78e
+      LINTER_TAG: Isabelle2026-v1.0.0
+      LINTER_COMMIT: 146d9fc0bbd304dd6f15fdb607331f7d81e92723
+      LINT_BUNDLES: afp_mandatory,default,non_interactive_addon
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Make the AFP copy
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/lint"
+          tools/make_afp_copy.sh "$RUNNER_TEMP/lint" 2>&1 | tee "$RUNNER_TEMP/lint/copy.log"
+
+      - name: Get isabelle-linter ${{ env.LINTER_TAG }}
+        shell: bash
+        run: |
+          git -c advice.detachedHead=false clone --depth 1 --branch "$LINTER_TAG" \
+            https://github.com/isabelle-prover/isabelle-linter "$RUNNER_TEMP/lint/isabelle-linter"
+          test "$(git -C "$RUNNER_TEMP/lint/isabelle-linter" rev-parse HEAD)" = "$LINTER_COMMIT"
+
+      - name: Lint session TRIEL_Core
+        shell: bash
+        run: |
+          chmod -R a+rwX "$RUNNER_TEMP/lint"
+          docker run --rm -e LINT_BUNDLES -v "$RUNNER_TEMP/lint:/work" --entrypoint bash "$ISABELLE_2026_IMAGE" -c '
+            set -e
+            isabelle=Isabelle/bin/isabelle
+            $isabelle version
+            $isabelle components -u /work/isabelle-linter/linter_base
+            $isabelle scala_build
+            echo "enabled lints: $($isabelle lint -l -o "lint_bundles=$LINT_BUNDLES")"
+            $isabelle lint -o "lint_bundles=$LINT_BUNDLES" -f warn -d /work/TRIEL_Core TRIEL_Core
+          ' 2>&1 | tee "$RUNNER_TEMP/lint/lint.log"
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: afp-2026-lint
+          path: |
+            ${{ runner.temp }}/lint/copy.log
+            ${{ runner.temp }}/lint/lint.log

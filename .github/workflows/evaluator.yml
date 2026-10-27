@@ -11,13 +11,13 @@ env:
 
 jobs:
   evaluate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Cache the Isabelle distribution
         id: cache-isabelle
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/isabelle/${{ env.ISABELLE_VERSION }}
           key: ${{ env.ISABELLE_VERSION }}-linux-x86_64
@@ -56,7 +56,7 @@ jobs:
       - name: Compile the evaluator
         run: ghc -O1 -ievaluator/generated -outputdir evaluator/build -o evaluator/triel-eval evaluator/Main.hs
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 

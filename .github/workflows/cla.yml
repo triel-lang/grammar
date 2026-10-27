@@ -29,11 +29,14 @@ jobs:
        github.event.issue.user.type != 'Bot' &&
        (github.event.comment.body == 'recheck' ||
         github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # The action reads pull request metadata only; it never checks out the pull request's code.
       # Signatures are written to signatures/cla.json on the cla-signatures branch.
       # No allowlist: in pull requests it checks, every commit author signs.
+      # v2.6.1 is the last release, and it declares Node 20: since March 2026 the
+      # README of the action states that it is no longer maintained and archived,
+      # and there is no release for Node 24. The runner runs it on Node 24.
       - name: Check CLA signatures
         uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08  # v2.6.1
         env:
