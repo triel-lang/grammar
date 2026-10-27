@@ -17,6 +17,12 @@
 # patterns are searched. The list is kept here independently of the list KEEP of
 # anonymize.sh.
 #
+# The patterns of GLUED are searched with their case: a replacement of
+# anonymize.sh joined to letters, ANONYMOUS followed by a letter or a letter
+# followed by ANONYM (ANONYMOUS, ANONYMIZED). Either means that a word was
+# replaced inside a longer word, such as the name of someone else, so the archive
+# fails the search.
+#
 # This script names the words it looks for, so anonymize.sh leaves it out of
 # the archive, as it leaves out itself.
 
@@ -40,6 +46,11 @@ PATTERNS=(
   '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'   # e-mail address
 )
 
+GLUED=(
+  'ANONYMOUS[A-Za-z]'
+  '[A-Za-z]ANONYM'
+)
+
 ALLOWED=(
   'Dmitriy Traytel'                 # an author of the AFP entry MFOTL_Monitor
 )
@@ -61,10 +72,15 @@ for p in "${PATTERNS[@]}"; do
   printf '%-70s %s\n' "$p" "$n"
   [ "$n" -eq 0 ] || { grep -aoiE -e "$p" "$TMP/archive.tar" | sort | uniq -c | head -5; found=1; }
 done
+for p in "${GLUED[@]}"; do
+  n=$({ LC_ALL=C grep -aoE -e "$p" "$TMP/archive.tar" || true; } | wc -l)
+  printf '%-70s %s\n' "$p (with its case)" "$n"
+  [ "$n" -eq 0 ] || { LC_ALL=C grep -aoE -e "[A-Za-z]*($p)[A-Za-z]*" "$TMP/archive.tar" | sort | uniq -c | head -5; found=1; }
+done
 n=$({ grep -aoE "\bTRIEL\b" "$TMP/archive.tar" || true; } | wc -l)
 echo "the name of the language, TRIEL, kept: $n occurrences"
 if [ $found -eq 0 ]; then
-  echo "RESULT: none of the ${#PATTERNS[@]} patterns found"
+  echo "RESULT: none of the $(( ${#PATTERNS[@]} + ${#GLUED[@]} )) patterns found"
 else
   echo "RESULT: FOUND"
 fi

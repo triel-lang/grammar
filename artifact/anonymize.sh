@@ -49,12 +49,21 @@
 # in it may be the hash of a commit of the repository, and no e-mail address
 # may be left.
 #
+# A word replaced inside a longer word leaves a replacement joined to letters,
+# as "ANONYMOUSy" above: the archive may contain neither ANONYMOUS followed by a
+# letter nor a letter followed by ANONYM (ANONYMOUS, ANONYMIZED), matched with
+# their case. The script fails on either, so a name of someone else damaged by a
+# replacement is found, and can be added to KEEP.
+#
 # The archive holds the files of the commit HEAD (or of $REF), without .git,
 # CLA.md, the signatures directory, .github/workflows/cla.yml, this script and
-# check_anonymous.sh (both name the words searched for). Tar owner names
-# and timestamps are fixed, so they reveal nothing. The script fails, and writes
-# no archive, if any of these words is still found in a file or a file name, in
-# text or binary files.
+# check_anonymous.sh (both name the words searched for). It is reproducible:
+# the same commit gives the same bytes, whoever writes it and wherever. The tar
+# file lists the files sorted by name, with the time 2000-01-01 00:00:00 UTC,
+# owner and group 0 without names, and the modes 644 and 755 (directories and
+# executable files); gzip stores no file name and no time. The script fails, and
+# writes no archive, if any of these words is still found in a file or a file
+# name, in text or binary files.
 
 set -euo pipefail
 
@@ -109,7 +118,8 @@ trap 'rm -rf "$TMP"' EXIT
 TREE="$TMP/triel"
 mkdir "$TREE"
 
-git -C "$REPO" archive --format=tar "$REF" | tar -C "$TREE" -xf -
+# Line ends as committed, whatever core.autocrlf or core.eol of the local configuration say.
+git -C "$REPO" -c core.autocrlf=false -c core.eol=lf archive --format=tar "$REF" | tar -C "$TREE" -xf -
 rm -rf "$TREE/CLA.md" "$TREE/signatures" "$TREE/.github/workflows/cla.yml" "$TREE/artifact/anonymize.sh" \
        "$TREE/artifact/check_anonymous.sh"
 
@@ -209,6 +219,16 @@ if hits=$(cd "$CHECK" && grep -raoE '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-
   printf 'error: an e-mail address is still in:\n%s\n' "$hits" >&2
   left=1
 fi
+# A replacement joined to letters: a word was replaced inside a longer word.
+if hits=$(cd "$CHECK" && LC_ALL=C grep -raoE '[A-Za-z]*(ANONYMOUS[A-Za-z]|[A-Za-z]ANONYM)[A-Za-z]*' .); then
+  printf 'error: a replacement joined to letters (a word replaced inside a longer word) is in:\n%s\n' "$hits" >&2
+  left=1
+fi
+hits=$(cd "$CHECK" && find . | LC_ALL=C grep -E 'ANONYMOUS[A-Za-z]|[A-Za-z]ANONYM' || true)
+if [ -n "$hits" ]; then
+  printf 'error: a replacement joined to letters is in the file names:\n%s\n' "$hits" >&2
+  left=1
+fi
 for entry in "${ENTRIES[@]}"; do
   w=${entry%%$'\t'*}
   if hits=$(cd "$CHECK" && grep -raliF -e "$w" .); then
@@ -226,8 +246,12 @@ if [ $left -ne 0 ]; then
   exit 1
 fi
 
-tar -C "$TMP" --sort=name --mtime='2000-01-01 00:00:00Z' --owner=0 --group=0 --numeric-owner \
+# The modes of the extracted files depend on the umask and on whether tar runs
+# as root, so they are set here.
+LC_ALL=C tar -C "$TMP" --format=gnu --sort=name --mtime='2000-01-01 00:00:00Z' \
+    --owner=0 --group=0 --numeric-owner --mode='u=rwX,go=rX' \
     -cf - triel | gzip -n > "$OUT"
 echo "anonymous archive: $OUT ($(tar -tzf "$OUT" | grep -vc '/$') files, ${#ENTRIES[@]} words checked:" \
      "${#AUTHOR_WORDS[@]} from the name of the author, ${#LISTED[@]} from ${WORDS:+$(basename "$WORDS")}${WORDS:-a words file (none given)}," \
      "${#BUILTIN[@]} built in; ${#KEEP[@]} names of other people kept)"
+echo "sha256 $(sha256sum "$OUT" | cut -d' ' -f1)"

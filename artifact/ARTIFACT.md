@@ -32,15 +32,17 @@ and prints a summary whose numbers are all computed by the run.
   Docker 20.10 or later.
 - CPU: 4 cores recommended; Isabelle uses up to 4 threads.
 - Memory: 10 GB. The memory peak is the clean Isabelle build of `TRIEL_Core`
-  with 4 threads (Poly/ML and the Isabelle/Scala process): the memory charged
-  to the container (its cgroup, page cache included) reached 8.2 GiB in a run
-  without a limit. With the container limited to 10 GiB (`--memory=10g`) the
-  build passed in each of three runs, with peaks of 7.0 to 7.8 GiB; at 8 GiB it
-  was killed for lack of memory in two of four runs. All other steps stay
-  below 2 GiB. On a GitHub-hosted runner without a limit, the workflow
-  `.github/workflows/artifact.yml` read a peak of 6.94 GiB for the current
-  sources (28 examples, 54 scenarios); it keeps the value as
-  `memory-peak.txt` with the logs of the run.
+  (Poly/ML and the Isabelle/Scala process); the memory measured is that charged
+  to the container (its cgroup, page cache included). With Isabelle2025-2 using
+  4 threads, for version 2.5.1 on a 4-core machine with 16 GB, it reached 8.2
+  GiB in a run without a limit; with the container limited to 10 GiB
+  (`--memory=10g`) the build passed in each of three runs, with peaks of 7.0 to
+  7.8 GiB; at 8 GiB it was killed for lack of memory in two of four runs. All
+  other steps stay below 2 GiB. On a GitHub-hosted runner (4 cores, 15.6 GiB)
+  without a limit, where Isabelle2025-2 used 2 threads (as its build log
+  states), the workflow `.github/workflows/artifact.yml` read peaks of 6.94,
+  6.95, 7.03 and 7.15 GiB in four runs of the current sources (28 examples, 54
+  scenarios); it keeps the value as `memory-peak.txt` with the logs of the run.
 - Docker Desktop (macOS, Windows): set Memory to at least 10 GB in
   Settings → Resources.
 - Disk: 10 GB for the image (3.1 GB compressed download, the same size for
@@ -192,7 +194,7 @@ The results rest on the following, which are not proved here:
   the Haskell code to the HOL definitions is the code generator's, not a theorem
   of this development.
 - **GHC 9.6.7** and its runtime, which build and run the evaluator.
-- **`evaluator/Main.hs`** (hand-written, 400 lines): reads the input
+- **`evaluator/Main.hs`** (hand-written, 410 lines): reads the input
   S-expression and prints the report. Every verdict is computed by the exported
   function `run`, but the reading and the printing are not proved.
 - **`parser/triel_to_core.py` is not proved.** It is the translator from TRIEL
@@ -255,18 +257,28 @@ account of the maintainer and the surname of the author, and every word listed
 in the optional `WORDS_FILE`, which is kept outside the repository. Text that
 points to the history of the project is rewritten as well: the commit hashes of
 the tags v2.5.1 and v2.5 and of the commit archived are removed (`LICENSE.md`
-of v2.5.1 cites the hash of v2.5), and the stages of the development named in
-`formal/core/CORE.md` ("the independent review of stage 13") become "an
-independent review" or "an earlier revision". The name of the language is kept.
-The script fails, and writes nothing, if any of these words, a hash of a commit
-of the repository, an e-mail address or a stage is left in a file or a file
-name, or if `root.tex` or `NOTICE` names no author.
+of v2.5.1 cites the hash of v2.5), and where `formal/core/CORE.md` names a
+review or a revision by the number of its stage of the development, the text
+becomes "an independent review" or "an earlier revision". The name of the
+language is kept. The script fails, and writes nothing, if any of these words,
+a hash of a commit of the repository, an e-mail address or a stage is left in a
+file or a file name, if a replacement is joined to letters (`ANONYMOUS`
+followed by a letter, or a letter followed by `ANONYM`: a word was replaced
+inside a longer word, such as the name of someone else), or if `root.tex` or
+`NOTICE` names no author.
+
+The archive is reproducible: the same commit gives the same bytes, whoever
+writes it and on whichever machine. The files are listed sorted by name, with
+the time 2000-01-01 00:00:00 UTC, owner and group 0 without names and the modes
+644 and 755, and gzip stores no file name and no time. The script prints the
+SHA-256 of the archive, so an archive written locally can be compared with the
+one of the CI run of the same commit.
 
 `artifact/check_anonymous.sh ARCHIVE.tar.gz` searches a written archive again,
 independently of the script that wrote it: the hashes of the tags, the name of
 the author, the account of the maintainer, the address of the repository, the
-sites of the project and e-mail addresses, in the file names, the tar headers
-and the contents of every file. The workflow `.github/workflows/artifact.yml`
+sites of the project, e-mail addresses and replacements joined to letters, in
+the file names, the tar headers and the contents of every file. The workflow `.github/workflows/artifact.yml`
 writes the archive of the commit pushed on every push, searches it, and keeps it
 as the artifact `triel-artifact-anonymous` of the run; the result of the search
 is the separate artifact `anonymous-archive-check`. The archive is not
