@@ -528,6 +528,7 @@ Points 1–14 are the points where §2.6 is ambiguous or contradictory. Points 1
 - **Completion.** σ′ is a completion of σ if σ ⊑ σ′ and dom σ′ = N (`completion`): a total valuation that agrees with σ wherever σ is defined. Every state has one (`completion_exists`).
 - **Skip reading.** `skip_allows c σ` ⟺ ⟦c⟧σ ≠ T: the action is allowed unless the condition is known to be true, so an undefined condition allows it.
 - **Absent-false reading.** `eval_af` is two-valued: a comparison with an operand that has no value is false, the connectives are the classical ones, and PRESENT(x) is x ∈ dom σ.
+- **Compositional evaluations.** G = (gnot, gand, gor, gimp) is a quadruple of connectives on 𝔹⊥ (`connectives`). `evalG G` reads the atoms as `eval` does and combines the values of NOT, AND, OR and IMPLIES with the connectives of G. G is sound (`sound_conn`) if, for every PRESENT-free e, every σ and every completion σ′ of σ, `evalG G e σ` ≼ ⟦e⟧σ′. Soundness quantifies over the conditions of one type of names and values, so that type is its first argument: `sound_conn TYPE(('n, 'v) expr) G`.
 
 *Theorems:*
 
@@ -539,6 +540,10 @@ Points 1–14 are the points where §2.6 is ambiguous or contradictory. Points 1
 - **`absent_comparison`:** for x ∉ dom σ, the comparison x = v is such a condition for both theorems: ⟦x = v⟧σ = ⊥, both readings allow the action, the monitor blocks it, and the completion that gives x the value v makes it true. Like the prohibition of `examples/core/core_invoice_agent.triel` when its quote is stale, it is a comparison one of whose operands has no value yet.
 - **`stale_quote_completion`:** the same for the ordering comparison limit < amount (the comparison amount_eur > limit_eur of that prohibition), with the limit l known and the amount absent, when vless l a for some amount a. The witness above is = because `value_order` assumes nothing about <.
 - **`kleene_not_complete`, `absent_contradiction`:** there are a PRESENT-free c and a state σ with ⟦c⟧σ = ⊥ although ⟦c⟧σ′ = F for every completion σ′; for x ∉ dom σ, the condition x = v AND NOT (x = v) is one.
+- **`kleene_sound_conn`:** the strong Kleene connectives (knot, kand, kor, kimp) are sound.
+- **`sound_conn_kleene_le`, `kleene_optimal`:** if the type of values has two different values, every connective of a sound G is pointwise ≼ the strong Kleene one, and so `evalG G e σ` ≼ ⟦e⟧σ for every PRESENT-free e. Strong Kleene evaluation is the most defined sound compositional evaluation. The proof uses the two values: where a strong Kleene connective is undefined, the completions that give x the one value and the other give the condition different values.
+- **`compositional_incomplete`:** under the same hypothesis no sound compositional evaluation is complete: x = v AND NOT (x = v) with x absent is false in every completion and undefined for every sound G.
+  — A classical fact about the logic of Kleene, proved here with respect to the completions of states.
 
 ## 9. Design decisions forced by the theory
 

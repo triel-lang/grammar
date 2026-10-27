@@ -83,6 +83,9 @@ thm TRIEL_Completions.breach_certain_completions
 thm TRIEL_Completions.skip_reading_unsound
 thm TRIEL_Completions.absent_false_unsound
 thm TRIEL_Completions.kleene_not_complete
+thm TRIEL_Completions.kleene_sound_conn
+thm TRIEL_Completions.kleene_optimal
+thm TRIEL_Completions.compositional_incomplete
 
 section \<open>The composition algebra\<close>
 
@@ -141,7 +144,8 @@ local
     "TRIEL_Breach.undefined_guard_blocks_not_breach", "TRIEL_Breach.enforced_no_breach",
     "TRIEL_Completions.monitor_sound_completions", "TRIEL_Completions.breach_certain_completions",
     "TRIEL_Completions.skip_reading_unsound", "TRIEL_Completions.absent_false_unsound",
-    "TRIEL_Completions.kleene_not_complete",
+    "TRIEL_Completions.kleene_not_complete", "TRIEL_Completions.kleene_sound_conn",
+    "TRIEL_Completions.kleene_optimal", "TRIEL_Completions.compositional_incomplete",
     "TRIEL_Compositions.comp_closure_equitone", "TRIEL_Compositions.interp_equitone",
     "TRIEL_Compositions.cond_fm_correct", "TRIEL_Compositions.cond_equitone_from_closure",
     "TRIEL_Core.T5_present", "TRIEL_Compositions.Ex_R_is_not_eps",

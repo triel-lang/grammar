@@ -207,4 +207,223 @@ proof -
   from absent_contradiction[OF this, where v = v] show ?thesis by blast
 qed
 
+section \<open>Strong Kleene evaluation is the best sound compositional evaluation\<close>
+
+text \<open>A compositional evaluation reads the atoms as \<open>eval\<close> does and combines the values of
+  the parts by four connectives on \<^typ>\<open>bool option\<close>, \<open>G = (gnot, gand, gor, gimp)\<close>.\<close>
+
+type_synonym connectives =
+  "(bool option \<Rightarrow> bool option) \<times> (bool option \<Rightarrow> bool option \<Rightarrow> bool option)
+   \<times> (bool option \<Rightarrow> bool option \<Rightarrow> bool option) \<times> (bool option \<Rightarrow> bool option \<Rightarrow> bool option)"
+
+fun gnot :: "connectives \<Rightarrow> bool option \<Rightarrow> bool option" where
+  "gnot (cn, ca, co, ci) = cn"
+
+fun gand :: "connectives \<Rightarrow> bool option \<Rightarrow> bool option \<Rightarrow> bool option" where
+  "gand (cn, ca, co, ci) = ca"
+
+fun gor :: "connectives \<Rightarrow> bool option \<Rightarrow> bool option \<Rightarrow> bool option" where
+  "gor (cn, ca, co, ci) = co"
+
+fun gimp :: "connectives \<Rightarrow> bool option \<Rightarrow> bool option \<Rightarrow> bool option" where
+  "gimp (cn, ca, co, ci) = ci"
+
+primrec evalG :: "connectives \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v) state \<Rightarrow> bool option" where
+  "evalG G ETrue \<sigma> = eval ETrue \<sigma>"
+| "evalG G EFalse \<sigma> = eval EFalse \<sigma>"
+| "evalG G (EEq a b) \<sigma> = eval (EEq a b) \<sigma>"
+| "evalG G (ELt a b) \<sigma> = eval (ELt a b) \<sigma>"
+| "evalG G (ELe a b) \<sigma> = eval (ELe a b) \<sigma>"
+| "evalG G (ENot e) \<sigma> = gnot G (evalG G e \<sigma>)"
+| "evalG G (EAnd e\<^sub>1 e\<^sub>2) \<sigma> = gand G (evalG G e\<^sub>1 \<sigma>) (evalG G e\<^sub>2 \<sigma>)"
+| "evalG G (EOr e\<^sub>1 e\<^sub>2) \<sigma> = gor G (evalG G e\<^sub>1 \<sigma>) (evalG G e\<^sub>2 \<sigma>)"
+| "evalG G (EImp e\<^sub>1 e\<^sub>2) \<sigma> = gimp G (evalG G e\<^sub>1 \<sigma>) (evalG G e\<^sub>2 \<sigma>)"
+| "evalG G (EPresent x) \<sigma> = eval (EPresent x) \<sigma>"
+
+text \<open>\<open>G\<close> is sound if, on every PRESENT-free condition, a value it gives on incomplete data is
+  the value of the condition in every completion. Soundness quantifies over the conditions of
+  one type of names and values, which is therefore an argument of \<open>sound_conn\<close>.\<close>
+
+definition sound_conn :: "('n, 'v :: value_order) expr itself \<Rightarrow> connectives \<Rightarrow> bool" where
+  "sound_conn T G \<longleftrightarrow>
+     (\<forall>(e :: ('n, 'v) expr) \<sigma> \<sigma>'. present_free e \<longrightarrow> completion \<sigma> \<sigma>' \<longrightarrow> evalG G e \<sigma> \<preceq> eval e \<sigma>')"
+
+lemma sound_connD:
+  assumes "sound_conn TYPE(('n, 'v :: value_order) expr) G" and "present_free (e :: ('n, 'v) expr)"
+    and "completion \<sigma> \<sigma>'"
+  shows "evalG G e \<sigma> \<preceq> eval e \<sigma>'"
+  using assms unfolding sound_conn_def by simp
+
+lemma approx_trans: "p \<preceq> q \<Longrightarrow> q \<preceq> r \<Longrightarrow> p \<preceq> r"
+  by (auto simp: approx_def)
+
+lemma evalG_kleene: "evalG (knot, kand, kor, kimp) e \<sigma> = eval e \<sigma>"
+  by (induction e) simp_all
+
+theorem kleene_sound_conn: "sound_conn TYPE(('n, 'v :: value_order) expr) (knot, kand, kor, kimp)"
+  unfolding sound_conn_def evalG_kleene by (auto simp: completion_def intro: eval_mono)
+
+text \<open>Every truth value is the value of a PRESENT-free condition in the state \<open>\<emptyset>\<close>: true,
+  false, and a comparison \<open>x = v\<close>, which is undefined there.\<close>
+
+definition truth_witness :: "'n \<Rightarrow> 'v \<Rightarrow> bool option \<Rightarrow> ('n, 'v) expr" where
+  "truth_witness x v p = (case p of None \<Rightarrow> EEq (VName x) (VConst v) | Some b \<Rightarrow> if b then ETrue else EFalse)"
+
+lemma truth_witness_present_free: "present_free (truth_witness x v p)"
+  by (simp add: truth_witness_def split: option.split)
+
+lemma evalG_truth_witness: "evalG G (truth_witness x v p) Map.empty = p"
+  by (simp add: truth_witness_def split: option.split)
+
+text \<open>In the completion that gives every name the value \<open>u\<close>, the witness of an undefined
+  value becomes \<open>u = v\<close>, and the others keep their value.\<close>
+
+definition refine :: "bool option \<Rightarrow> bool \<Rightarrow> bool option" where
+  "refine p c = (case p of None \<Rightarrow> Some c | Some b \<Rightarrow> Some b)"
+
+lemma approx_refine: "p \<preceq> refine p c"
+  by (cases p) (simp_all add: refine_def approx_iff)
+
+lemma eval_truth_witness: "eval (truth_witness x v p) (\<lambda>_. Some u) = refine p (u = v)"
+  by (simp add: truth_witness_def refine_def split: option.split)
+
+lemma completion_const: "completion Map.empty (\<lambda>_. Some u)"
+  by (simp add: completion_def info_le_def)
+
+text \<open>With two different values, the soundness of \<open>G\<close> on these conditions makes each
+  connective of \<open>G\<close> below the strong Kleene one. Where the strong Kleene connective is
+  defined, its value is the value in the completion that gives \<open>x\<close> the value \<open>v\<close>; where it
+  is undefined, two completions, which give \<open>x\<close> the values \<open>v\<close> and \<open>w\<close>, give the
+  condition different values.\<close>
+
+lemma sound_conn_kleene_le:
+  fixes v w :: "'v :: value_order"
+  assumes sound: "sound_conn TYPE(('n, 'v) expr) G" and vw: "v \<noteq> w"
+  shows "gnot G p \<preceq> knot p" and "gand G p q \<preceq> kand p q"
+    and "gor G p q \<preceq> kor p q" and "gimp G p q \<preceq> kimp p q"
+proof -
+  fix x :: 'n
+  let ?W = "truth_witness x"
+  have S: "evalG G e Map.empty \<preceq> eval e (\<lambda>_. Some u)" if "present_free (e :: ('n, 'v) expr)" for e u
+    using sound_connD[OF sound that completion_const] .
+  have N: "gnot G p \<preceq> knot (refine p (u = v))" for u
+  proof -
+    have "evalG G (ENot (?W v p)) Map.empty \<preceq> eval (ENot (?W v p)) (\<lambda>_. Some u)"
+      by (rule S) (simp add: truth_witness_present_free)
+    then show ?thesis by (simp only: evalG.simps eval.simps evalG_truth_witness eval_truth_witness)
+  qed
+  have A: "gand G p q \<preceq> kand (refine p (u = v1)) (refine q (u = v2))" for u v1 v2 :: 'v
+  proof -
+    have "evalG G (EAnd (?W v1 p) (?W v2 q)) Map.empty \<preceq> eval (EAnd (?W v1 p) (?W v2 q)) (\<lambda>_. Some u)"
+      by (rule S) (simp add: truth_witness_present_free)
+    then show ?thesis by (simp only: evalG.simps eval.simps evalG_truth_witness eval_truth_witness)
+  qed
+  have O: "gor G p q \<preceq> kor (refine p (u = v1)) (refine q (u = v2))" for u v1 v2 :: 'v
+  proof -
+    have "evalG G (EOr (?W v1 p) (?W v2 q)) Map.empty \<preceq> eval (EOr (?W v1 p) (?W v2 q)) (\<lambda>_. Some u)"
+      by (rule S) (simp add: truth_witness_present_free)
+    then show ?thesis by (simp only: evalG.simps eval.simps evalG_truth_witness eval_truth_witness)
+  qed
+  have I: "gimp G p q \<preceq> kimp (refine p (u = v1)) (refine q (u = v2))" for u v1 v2 :: 'v
+  proof -
+    have "evalG G (EImp (?W v1 p) (?W v2 q)) Map.empty \<preceq> eval (EImp (?W v1 p) (?W v2 q)) (\<lambda>_. Some u)"
+      by (rule S) (simp add: truth_witness_present_free)
+    then show ?thesis by (simp only: evalG.simps eval.simps evalG_truth_witness eval_truth_witness)
+  qed
+  have vv: "(v = v) = True" and wv: "(w = v) = False" and vw': "(v = w) = False"
+    using vw by simp_all
+  show "gnot G p \<preceq> knot p"
+  proof (cases p)
+    case None
+    then show ?thesis using N[of v] N[of w] by (auto simp: vv wv refine_def approx_iff)
+  next
+    case (Some b)
+    then show ?thesis using N[of v] by (simp add: refine_def)
+  qed
+  show "gand G p q \<preceq> kand p q"
+  proof (cases "kand p q")
+    case None
+    then have "kand (refine p True) (refine q True) = Some True"
+      and "kand (refine p False) (refine q False) = Some False"
+      using bool_option_cases[of p] bool_option_cases[of q] by (auto simp: kand_def refine_def)
+    then show ?thesis using A[of v v v] A[of w v v] None by (auto simp: vv wv approx_iff)
+  next
+    case (Some b)
+    moreover have "kand p q \<preceq> kand (refine p (v = v)) (refine q (v = v))"
+      by (rule kand_mono[OF approx_refine approx_refine])
+    ultimately show ?thesis using A[of v v v] by (simp add: approx_iff)
+  qed
+  show "gor G p q \<preceq> kor p q"
+  proof (cases "kor p q")
+    case None
+    then have "kor (refine p True) (refine q True) = Some True"
+      and "kor (refine p False) (refine q False) = Some False"
+      using bool_option_cases[of p] bool_option_cases[of q] by (auto simp: kor_def refine_def)
+    then show ?thesis using O[of v v v] O[of w v v] None by (auto simp: vv wv approx_iff)
+  next
+    case (Some b)
+    moreover have "kor p q \<preceq> kor (refine p (v = v)) (refine q (v = v))"
+      by (rule kor_mono[OF approx_refine approx_refine])
+    ultimately show ?thesis using O[of v v v] by (simp add: approx_iff)
+  qed
+  show "gimp G p q \<preceq> kimp p q"
+  proof (cases "kimp p q")
+    case None
+    then have "kimp (refine p True) (refine q False) = Some False"
+      and "kimp (refine p False) (refine q True) = Some True"
+      using bool_option_cases[of p] bool_option_cases[of q] by (auto simp: kimp_def refine_def)
+    then show ?thesis using I[of v v w] I[of w v w] None by (auto simp: vv wv vw' approx_iff)
+  next
+    case (Some b)
+    moreover have "kimp p q \<preceq> kimp (refine p (v = v)) (refine q (v = v))"
+      by (rule kimp_mono[OF approx_refine approx_refine])
+    ultimately show ?thesis using I[of v v v] by (simp add: approx_iff)
+  qed
+qed
+
+text \<open>So strong Kleene evaluation is the most defined sound compositional evaluation: on a
+  PRESENT-free condition every sound one is below it. This is a classical fact about the
+  logic of Kleene, proved here with respect to the completions of the data.\<close>
+
+theorem kleene_optimal:
+  assumes "sound_conn TYPE(('n, 'v :: value_order) expr) G" and "present_free (e :: ('n, 'v) expr)"
+    and "\<exists>v w :: 'v. v \<noteq> w"
+  shows "evalG G e \<sigma> \<preceq> eval e \<sigma>"
+proof -
+  from assms(3) obtain v w :: 'v where vw: "v \<noteq> w" by blast
+  note le = sound_conn_kleene_le[OF assms(1) vw]
+  from assms(2) show ?thesis
+  proof (induction e)
+    case (ENot e)
+    then show ?case using le(1) knot_mono approx_trans by fastforce
+  next
+    case (EAnd e\<^sub>1 e\<^sub>2)
+    then show ?case using le(2) kand_mono approx_trans by fastforce
+  next
+    case (EOr e\<^sub>1 e\<^sub>2)
+    then show ?case using le(3) kor_mono approx_trans by fastforce
+  next
+    case (EImp e\<^sub>1 e\<^sub>2)
+    then show ?case using le(4) kimp_mono approx_trans by fastforce
+  qed simp_all
+qed
+
+text \<open>And no sound compositional evaluation is complete: the witness of
+  \<open>kleene_not_complete\<close> is undefined for every one of them.\<close>
+
+theorem compositional_incomplete:
+  assumes "sound_conn TYPE(('n, 'v :: value_order) expr) G" and "\<exists>v w :: 'v. v \<noteq> w"
+  shows "\<exists>(e :: ('n, 'v) expr) \<sigma>. present_free e \<and> (\<forall>\<sigma>'. completion \<sigma> \<sigma>' \<longrightarrow> eval e \<sigma>' = Some False)
+           \<and> evalG G e \<sigma> = None"
+proof -
+  fix x :: 'n and v :: 'v
+  let ?e = "EAnd (EEq (VName x) (VConst v)) (ENot (EEq (VName x) (VConst v))) :: ('n, 'v) expr"
+  have x: "x \<notin> dom (Map.empty :: ('n, 'v) state)" by simp
+  note c = absent_contradiction[OF x, where v = v]
+  have "evalG G ?e Map.empty \<preceq> eval ?e Map.empty"
+    by (rule kleene_optimal[OF assms(1) c(1) assms(2)])
+  then have "evalG G ?e Map.empty = None" using c(2) by (simp add: approx_iff)
+  with c show ?thesis by blast
+qed
+
 end

@@ -19,7 +19,7 @@ behind the paper. It contains:
   with hand-written expected reports).
 - `artifact/`: the Docker image (`Dockerfile`), the script that runs every check
   (`run.sh`), and the Isabelle session `TRIEL_Paper`
-  (`isabelle/Paper_Theorems.thy`), which lists by name the 57 theorems cited in
+  (`isabelle/Paper_Theorems.thy`), which lists by name the 60 theorems cited in
   the paper; and `bench.sh`, which measures the time and the memory of the
   translation of a trace and of the evaluator on generated traces (not a step
   of `run.sh`).
@@ -43,7 +43,7 @@ and prints a summary whose numbers are all computed by the run.
   other steps stay below 2 GiB. On GitHub-hosted runners (4 cores, 15.6 GiB)
   without a limit, where Isabelle2025-2 used 2 threads (as the build logs
   state), the workflow `.github/workflows/artifact.yml` read peaks from 6.73 to
-  7.15 GiB in the thirteen runs listed under "Times on GitHub-hosted runners"
+  7.15 GiB in the fifteen runs listed under "Times on GitHub-hosted runners"
   below; it keeps the value as `memory-peak.txt` with the logs of the run.
 - Docker Desktop (macOS, Windows): set Memory to at least 10 GB in
   Settings → Resources.
@@ -77,21 +77,21 @@ image build were measured for version 2.5, with the same `Dockerfile`.
 The job `artifact` of `.github/workflows/artifact.yml` builds the image and
 runs `run.sh` on every push, on a GitHub-hosted runner (the label
 `ubuntu-latest` in #56 to #59, `ubuntu-24.04` from #60), and reads the memory
-peak of the container. The thirteen runs
+peak of the container. The fifteen runs
 below are those, from the first run that read the memory peak (#56) to the
-run #71 of this version, in which `run.sh` passed all 11 steps; all of them
+run #73 of this version, in which `run.sh` passed all 11 steps; all of them
 are of sources with 28 examples and 54 scenarios. Over these runs:
 
-| Phase | Range over the thirteen runs |
+| Phase | Range over the fifteen runs |
 |---|---|
 | Job `artifact` (disk clean-up, image build and `run.sh`) | 16:14 to 23:39 min |
 | Image build (`docker build`, base images included) | 1:14 to 2:18 min |
-| `run.sh`, all 11 steps | 766 to 1214 s (12.8 to 20.2 min) |
+| `run.sh`, all 11 steps | 766 to 1221 s (12.8 to 20.4 min) |
 | of which: clean Isabelle build of `TRIEL_Core` | 85 to 130 s |
-| of which: the scenarios | 124 to 210 s |
+| of which: the scenarios | 124 to 211 s |
 | of which: translator and driver tests (pytest) | 318 to 518 s |
 | of which: parsing of the examples with the ambiguity check | 123 to 217 s |
-| of which: ambiguity regression tests | 80 to 118 s |
+| of which: ambiguity regression tests | 67 to 118 s |
 | Memory peak of the container | 6.73 to 7.15 GiB |
 
 | Run | Date (UTC) | Theories | Job `artifact` | Image build | `run.sh` | Memory peak |
@@ -109,10 +109,13 @@ are of sources with 28 examples and 54 scenarios. Over these runs:
 | #69 | 2026-10-27 | 13 | 19:03 | 1:48 | 951 s | 6.74 GiB |
 | #70 | 2026-10-27 | 13 | 18:42 | 1:44 | 889 s | 7.12 GiB |
 | #71 | 2026-10-27 | 13 | 21:30 | 1:45 | 1054 s | 6.73 GiB |
+| #72 | 2026-10-27 | 13 | 18:25 | 1:42 | 891 s | 6.96 GiB |
+| #73 | 2026-10-27 | 13 | 22:36 | 1:17 | 1221 s | 7.05 GiB |
 
-Runs #61 to #63 are of the same commit; #67 to #71 are of this version, with
-the new theory (#68 and #69 of one tree, #70 and #71 of another, which differ
-from it in documentation and in the checks of the anonymous archive). In the runs #64 to #66 of drafts of this version, `run.sh` failed in
+Runs #61 to #63 are of the same commit; #67 to #73 are of this version, with
+the new theory (#68 and #69 of one tree, #70 and #71 of a second, #72 and #73
+of a third; they differ in documentation and in the checks of the anonymous
+archive). In the runs #64 to #66 of drafts of this version, `run.sh` failed in
 the step pytest: the test that every name in backquotes in `CORE.md` is defined
 in the theories failed on the name of a file, since corrected; they are not in
 the table. The time on a shared
@@ -145,8 +148,8 @@ Expected end of the output:
 ```
 === Summary
 theories checked by Isabelle (TRIEL_Core)    13 (.thy files in formal/core: 13)
-proved statements (lemma/theorem/corollary)  646
-paper theorems found, without oracles        57 of 57
+proved statements (lemma/theorem/corollary)  658
+paper theorems found, without oracles        60 of 60
 scenarios matching .expected                 54 of 54
 examples accepted by the core                26 of 28
 translator and driver tests (pytest)         319 passed in ...
@@ -178,7 +181,7 @@ docker run --rm -it --entrypoint bash triel-artifact
 | 08-parse-examples | every example parses with exactly one derivation | parse-examples.yml |
 | 09-ambiguity-tests | the ambiguity regression tests and the LALR(1) check of the grammar | parse-examples.yml |
 | 10-document-excerpts | every TRIEL excerpt of the documents, every grammar excerpt of `TECHNICAL_REPORT.md` and every usage example of the grammar file conforms to the grammar | parse-examples.yml |
-| 11-paper-theorems | the session `TRIEL_Paper` builds: each of the 57 names is a theorem of `TRIEL_Core` that depends on no oracle | — |
+| 11-paper-theorems | the session `TRIEL_Paper` builds: each of the 60 names is a theorem of `TRIEL_Core` that depends on no oracle | — |
 
 As in CI, the PDF document of `TRIEL_Core` is switched off (it needs LaTeX):
 step 02 applies the same `sed` to the scratch copy of `formal/core/ROOT` as the
@@ -227,30 +230,30 @@ docker run --rm -e RESULTS_DIR=/results -v "$PWD/bench-results:/results" \
   push, on a runner of its own, and keeps the results as the artifact
   `bench-results` of the run.
 
-Results of the job `bench` in the six runs #66 to #71 of the workflow
+Results of the job `bench` in the eight runs #66 to #73 of the workflow
 (2026-10-27), on GitHub-hosted runners with 4 cores and 15.6 GiB: an AMD EPYC
-7763 in #66 and #71, an AMD EPYC 9V74 in #67 and #70, an AMD EPYC 9V45 in #68
-and #69; GHC 9.6.7, Python 3.12.3, lark 1.3.1. The runs #68 to #71 printed the
-same `traces.sha256`; #66 and #67 ran the same `bench_trace.py` with the same
-seed, before `bench.sh` printed the hashes. For each point the table gives the
-median of its 5 runs as a range over the six CI runs, the minimum and maximum
-of all 30 runs, and the peak memory:
+7763 in #66 and #71 to #73, an AMD EPYC 9V74 in #67 and #70, an AMD EPYC 9V45
+in #68 and #69; GHC 9.6.7, Python 3.12.3, lark 1.3.1. The runs #68 to #73
+printed the same `traces.sha256`; #66 and #67 ran the same `bench_trace.py`
+with the same seed, before `bench.sh` printed the hashes. For each point the
+table gives the median of its 5 runs as a range over the eight CI runs, the
+minimum and maximum of all 40 runs, and the peak memory:
 
 | Example | Entries | Phase | Median, s | All runs, s | Peak memory, MiB |
 |---|---:|---|---:|---:|---:|
 | core_invoice_agent | 10^2 | translate | 2.19–3.98 | 2.16–4.08 | 52.0–52.2 |
 | core_invoice_agent | 10^2 | evaluate | 0.012–0.014 | 0.012–0.015 | 9.2–9.5 |
 | core_invoice_agent | 10^3 | translate | 2.24–3.98 | 2.19–4.02 | 56.5–56.9 |
-| core_invoice_agent | 10^3 | evaluate | 0.093–0.174 | 0.093–0.185 | 15.7–15.9 |
+| core_invoice_agent | 10^3 | evaluate | 0.093–0.174 | 0.093–0.185 | 15.7–17.8 |
 | core_invoice_agent | 10^4 | translate | 2.73–4.75 | 2.67–4.81 | 92.1–92.3 |
-| core_invoice_agent | 10^4 | evaluate | timeout (120 s) in all six | | |
+| core_invoice_agent | 10^4 | evaluate | timeout (120 s) in all eight | | |
 | core_invoice_agent | 10^5, 10^6 | both | skipped | | |
-| core_sequence | 10^2 | translate | 2.05–3.86 | 2.01–3.96 | 49.4–50.1 |
+| core_sequence | 10^2 | translate | 2.05–3.88 | 2.01–3.96 | 49.4–50.1 |
 | core_sequence | 10^2 | evaluate | 0.022–0.053 | 0.022–0.063 | 10.0–10.2 |
 | core_sequence | 10^3 | translate | 2.09–3.93 | 2.02–3.96 | 53.2–53.4 |
-| core_sequence | 10^3 | evaluate | 13.0–28.6 | 12.5–29.1 | 12.7–12.9 |
-| core_sequence | 10^4 | translate | 2.37–4.40 | 2.31–4.41 | 72.7–72.9 |
-| core_sequence | 10^4 | evaluate | timeout (120 s) in all six | | |
+| core_sequence | 10^3 | evaluate | 13.0–28.7 | 12.5–29.4 | 12.7–12.9 |
+| core_sequence | 10^4 | translate | 2.37–4.41 | 2.31–4.43 | 72.7–72.9 |
+| core_sequence | 10^4 | evaluate | timeout (120 s) in all eight | | |
 | core_sequence | 10^5, 10^6 | both | skipped | | |
 
 What these measurements show, and nothing beyond them:
@@ -261,10 +264,10 @@ What these measurements show, and nothing beyond them:
   within each CI run; at 10^2 entries the medians are only 12 to 14 ms, so the
   ratio is coarse), and the trace of 10^4 entries did not finish within 120 s, more
   than 689 times the largest median at 10^3. For `core_sequence`, from 10^2 to
-  10^3 entries the median grew 403 to 655 times within each CI run, and 10^4
+  10^3 entries the median grew 403 to 668 times within each CI run, and 10^4
   entries did not finish within 120 s. So no trace of 10^5 or 10^6 entries was
   run, and there is no time for them. The evaluator is not changed here.
-- The peak memory of the evaluator stayed below 16 MiB up to 10^3 entries.
+- The peak memory of the evaluator stayed below 18 MiB up to 10^3 entries.
   `runs.csv` also records the memory a run had reached when it timed out.
 - The translation took 2.0 to 4.8 s per run at every length measured, 10^2 to
   10^4 entries, already 2.0 to 4.1 s at 10^2; its peak memory grew from about
@@ -283,11 +286,11 @@ variables `?x`.
 
 | Claim | Command | Expected output |
 |---|---|---|
-| The core is machine-checked: 13 theories, 646 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `13 (.thy files in formal/core: 13)`, `646`; `no sorry, oops or axiomatization ...` |
+| The core is machine-checked: 13 theories, 658 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `13 (.thy files in formal/core: 13)`, `658`; `no sorry, oops or axiomatization ...` |
 | The evaluator is the code exported from the checked theories | `cat results/03-exported-code.log` | `evaluator/generated is the exported code` |
 | The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `54` |
 | 26 of the 28 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `26`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
-| Every cited theorem exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 57` |
+| Every cited theorem exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 60` |
 | Finality of verdicts: on a trace (times that do not decrease) a definite verdict of an obligation, a prohibition or an invariant does not change when the trace is extended; the evaluator rejects a list of observations whose times decrease, so for `run` a decided line stays the same when observations are appended, unless the longer list is rejected for its time order or its types. A property of the design | `grep -A1 -E '\.(ob_verdict_final\|pr_verdict_final\|inv_final\|run_final\|time_order_rejected)$' results/paper_theorems.txt` | `TRIEL_Breach.ob_verdict_final`, `TRIEL_Breach.pr_verdict_final`, `TRIEL_Invariants.inv_final`, `TRIEL_Exec.run_final`, `TRIEL_Exec.time_order_rejected`, each with its statement, e.g. `inv_eval ?\<iota> ?\<pi> = Some ?b \<Longrightarrow> inv_eval ?\<iota> (?\<pi> @ ?\<rho>) = Some ?b` |
 | Two obligations in sequence need two actions; a prohibition in a composite term can be violated, and its trace semantics agrees with its verdict; the status of a composite term (read on the first prefix that violates the term or completes it by an executed action; conservative when a prefix has several readings) is sound and final, Violated before Done is needed, and the modes of the traces refine the denotation; for a term without AND, a violated prefix is reported as a violation at that entry or before it unless the status is unknown or the observation ended earlier on a completion by an executed action before any reading had reached a prohibition, and the exception for an earlier completion cannot be dropped; consequences for a prohibition after a reading has reached one, at the end of a sequence (no exception when the first part has no UNLESS and no AND) and in a branch of OR (no exception but an unknown status) | `grep -A1 -E '\.(must_then_must_two_actions\|violated_reachable\|then_mustnot_violated\|mustnot_violated_breach\|breach_mustnot_violated\|status_final\|status_sound\|violation_over_done\|fden_den\|then_mustnot_held\|then_mustnot_status\|status_no_missed_violation\|reached_prohibition_watched\|then_mustnot_watched\|or_mustnot_watched\|violation_after_completion)$' results/paper_theorems.txt` | the sixteen theorems with their statements |
 | Stability of the values of conditions: a definite value T or F of a condition built from equitone atoms does not change when the data is extended. This is about conditions, not about the verdicts of norms over time | `grep -A1 -E '\.(verdict_stable\|verdict_stable_nd\|cond_equitone)$' results/paper_theorems.txt` | `TRIEL_Indicators.verdict_stable`, `TRIEL_Indicators.verdict_stable_nd`, `TRIEL_Indicators.cond_equitone` with their statements |
@@ -295,7 +298,7 @@ variables `?x`.
 | IF: denotation, classical reading when the data is complete, stability of the branch; UNLESS distributes over IF | `grep -A1 -E '\.(den_if\|if_classical\|if_branch_stable\|unless_if)$' results/paper_theorems.txt` | `TRIEL_Terms.term_semantics.den_if`, `...if_classical`, `...if_branch_stable`, `TRIEL_Trace.unless_if` with their statements |
 | References between the elements of a block are acyclic, and resolving them preserves the denotation | `grep -A1 -E '\.(resolve_den\|block_den\|refs_ok_acyclic)$' results/paper_theorems.txt` | `TRIEL_Exec.term_semantics.resolve_den`, `TRIEL_Exec.term_semantics.block_den`, `TRIEL_Exec.refs_ok_acyclic` with their statements |
 | An undefined guard does not make a prohibition breached | `grep -A2 -E '\.(undefined_guard_blocks_not_breach\|enforced_no_breach)$' results/paper_theorems.txt` | `TRIEL_Breach.undefined_guard_blocks_not_breach` (two conclusions), `TRIEL_Breach.enforced_no_breach` |
-| Completions of the data (a completion is a total valuation that agrees with the state wherever the state is defined): for a condition without PRESENT and DEFAULT, if the fail-closed monitor does not block, the condition is false in every completion, and a true condition is true in every completion; allowing the action when the condition is not known to be true, or reading a comparison with an absent operand as false, can allow an action that the monitor blocks and whose condition is true in a completion; strong Kleene evaluation is not complete with respect to completions | `grep -A1 -E '\.(monitor_sound_completions\|breach_certain_completions\|skip_reading_unsound\|absent_false_unsound\|kleene_not_complete)$' results/paper_theorems.txt` | `TRIEL_Completions.monitor_sound_completions`, e.g. `\<lbrakk>present_free ?c; \<not> blocks ?c ?\<sigma>; completion ?\<sigma> ?\<sigma>'\<rbrakk> \<Longrightarrow> eval ?c ?\<sigma>' = Some False`, `...breach_certain_completions`, `...skip_reading_unsound`, `...absent_false_unsound`, `...kleene_not_complete` with their statements |
+| Completions of the data (a completion is a total valuation that agrees with the state wherever the state is defined): for a condition without PRESENT and DEFAULT, if the fail-closed monitor does not block, the condition is false in every completion, and a true condition is true in every completion; allowing the action when the condition is not known to be true, or reading a comparison with an absent operand as false, can allow an action that the monitor blocks and whose condition is true in a completion; strong Kleene evaluation is not complete with respect to completions; with two different values, it is the most defined of the sound evaluations that combine the values of the atoms by four connectives, and none of these is complete | `grep -A1 -E '\.(monitor_sound_completions\|breach_certain_completions\|skip_reading_unsound\|absent_false_unsound\|kleene_not_complete\|kleene_sound_conn\|kleene_optimal\|compositional_incomplete)$' results/paper_theorems.txt` | `TRIEL_Completions.monitor_sound_completions`, e.g. `\<lbrakk>present_free ?c; \<not> blocks ?c ?\<sigma>; completion ?\<sigma> ?\<sigma>'\<rbrakk> \<Longrightarrow> eval ?c ?\<sigma>' = Some False`, `...breach_certain_completions`, `...skip_reading_unsound`, `...absent_false_unsound`, `...kleene_not_complete`, `...kleene_sound_conn`, `...kleene_optimal`, `...compositional_incomplete` with their statements |
 | Conditions are terms of the composition algebra, and equitonicity follows from closure under the base compositions | `grep -A1 -E '\.(comp_closure_equitone\|interp_equitone\|cond_fm_correct\|cond_equitone_from_closure\|Ex_R_is_not_eps)$' results/paper_theorems.txt` | the five theorems of `TRIEL_Compositions` with their statements |
 | A missed deadline with ELSE puts the fallback in force instead of a breach; the verdict is final | `grep -A1 -E '\.else_(taken\|no_breach\|alt_breached\|final)$' results/paper_theorems.txt` | `TRIEL_Breach.else_taken`, `...else_no_breach`, `...else_alt_breached`, `...else_final` with their statements |
 | Hidden data does not influence the report (noninterference). A property of the design: the evaluator removes the hidden factors before it reads anything | `grep -A1 -E '\.(run_noninterference\|run_erase\|erase_flat\|flow_safe_eval\|flow_safe_evalV)$' results/paper_theorems.txt` | `TRIEL_Exec.run_noninterference`, e.g. `erase_obs (hidden ?fs) ?obs = erase_obs (hidden ?fs) ?obs' \<Longrightarrow> run (Spec ?fs ?blk ?invs) ?obs = run (Spec ?fs ?blk ?invs) ?obs'`, and the other four |
