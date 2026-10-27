@@ -32,7 +32,7 @@ lemma time_mono: "is_trace \<pi> \<Longrightarrow> i \<le> j \<Longrightarrow> j
 lemma time_append [simp]: "j < length \<pi> \<Longrightarrow> time (\<pi> @ \<rho>) j = time \<pi> j"
   by (simp add: time_def nth_append)
 
-lemma nth_append_left [simp]: "j < length \<pi> \<Longrightarrow> (\<pi> @ \<rho>) ! j = \<pi> ! j"
+lemma itrace_nth_append [simp]: "j < length \<pi> \<Longrightarrow> (\<pi> @ \<rho>) ! j = \<pi> ! j"
   by (simp add: nth_append)
 
 lemma st_append [simp]: "j < length \<pi> \<Longrightarrow> st (\<pi> @ \<rho>) j = st \<pi> j"
@@ -785,7 +785,7 @@ proof -
   from assms have "\<exists>j. 1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> after lo (time \<pi> j)"
     unfolding ob_verdict_def by (auto split: if_splits)
   then have "\<exists>j. 1 \<le> j \<and> j < length (\<pi> @ \<rho>) \<and> does s a (evt ((\<pi> @ \<rho>) ! j)) \<and> after lo (time (\<pi> @ \<rho>) j)"
-    by (metis length_append nth_append_left time_append trans_less_add1)
+    by (metis length_append itrace_nth_append time_append trans_less_add1)
   with assms show ?thesis unfolding ob_verdict_def by (auto split: if_splits)
 qed
 

@@ -109,6 +109,12 @@ Proved: on a prefix \texttt{ALWAYS} is never true and \texttt{EVENTUALLY} never 
 definite verdict is final under extension; an entry where the formula is undefined for
 lack of data neither violates \texttt{ALWAYS} nor fulfils \texttt{EVENTUALLY}; definite
 verdicts survive more data.
+\texttt{EVENTUALLY \dots\ WITHIN} a deadline is evaluated on the entries up to the
+deadline: it is true as soon as the formula is true at one of them, false once the trace
+has passed the deadline with the formula false at every one of them, and undefined
+otherwise. Proved: before the deadline it is never false; an entry up to the deadline
+where the formula is undefined for lack of data prevents a false verdict; a definite
+verdict is final under extension and survives more data.
 
 \paragraph{Indicator predicates (theory \texttt{TRIEL\_Indicators}).}
 Following Shkilniak (2024)~\cite{Shkilniak2024}, an R-predicate is given by a truth domain and a falsity domain,
