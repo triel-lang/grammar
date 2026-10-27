@@ -1,6 +1,6 @@
 # TRIEL core: definitions and theorems
 
-This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8), [`TRIEL_Invariants.thy`](TRIEL_Invariants.thy) (invariants, section 10), [`TRIEL_Indicators.thy`](TRIEL_Indicators.thy) (the indicators E_z and ↓z and the stability of verdicts, section 7.2), [`TRIEL_Compositions.thy`](TRIEL_Compositions.thy) (the quantifier, renomination, closure under the base compositions, and conditions as terms, section 7.3), [`TRIEL_Numbers.thy`](TRIEL_Numbers.thy) (the numeric types Integer and Decimal, section 10.4), [`TRIEL_Penalty.thy`](TRIEL_Penalty.thy) (the amount of a penalty, section 8.4) and [`TRIEL_Exec.thy`](TRIEL_Exec.thy) (the evaluator exported to Haskell, section 10). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
+This is a mechanised core of the TRIEL specification language, checked in Isabelle/HOL. The theories are [`TRIEL_Core.thy`](TRIEL_Core.thy) (expressions, sections 1–3), [`TRIEL_Trace.thy`](TRIEL_Trace.thy) (trace semantics, section 4), [`TRIEL_Ex.thy`](TRIEL_Ex.thy) (the indicator predicate *Ex*, section 5), [`TRIEL_Terms.thy`](TRIEL_Terms.thy) (the term language, section 6), [`TRIEL_ND.thy`](TRIEL_ND.thy) (nominative data, section 7) [`TRIEL_Breach.thy`](TRIEL_Breach.thy) (deadlines and breach, section 8), [`TRIEL_Completions.thy`](TRIEL_Completions.thy) (completions of the data, section 8.5), [`TRIEL_Invariants.thy`](TRIEL_Invariants.thy) (invariants, section 10), [`TRIEL_Indicators.thy`](TRIEL_Indicators.thy) (the indicators E_z and ↓z and the stability of verdicts, section 7.2), [`TRIEL_Compositions.thy`](TRIEL_Compositions.thy) (the quantifier, renomination, closure under the base compositions, and conditions as terms, section 7.3), [`TRIEL_Numbers.thy`](TRIEL_Numbers.thy) (the numeric types Integer and Decimal, section 10.4), [`TRIEL_Penalty.thy`](TRIEL_Penalty.thy) (the amount of a penalty, section 8.4) and [`TRIEL_Exec.thy`](TRIEL_Exec.thy) (the evaluator exported to Haskell, section 10). [`ROOT`](ROOT) defines the session `TRIEL_Core`. `TRIEL_ND.thy` uses the finite maps of `HOL-Library`.
 
 It is based only on the public material at <https://github.com/triel-lang/grammar>: TECHNICAL_REPORT.md §2.5–§2.9, and FOUNDATIONS.md. It makes no assumptions about any non-public implementation.
 
@@ -520,6 +520,25 @@ Points 1–14 are the points where §2.6 is ambiguous or contradictory. Points 1
 - **`breach_entry_passed`, `ob_pen_state_at_deadline`:** the penalty of an obligation is read in the last state not after the deadline (in the activation state if the deadline is before activation).
 - **`pr_pen_state_condition`:** the penalty of a prohibition is read in the state in which its condition is true, the state before the forbidden action.
 - **`ob_pen_state_final`, `pr_pen_state_final`, `ob_report_final`, `pr_report_final`:** once a norm is breached, later entries change neither the state of the breach nor the reported actions and amounts.
+
+### 8.5 Completions of the data (`TRIEL_Completions.thy`)
+
+*Definitions:*
+
+- **Completion.** σ′ is a completion of σ if σ ⊑ σ′ and dom σ′ = N (`completion`): a total valuation that agrees with σ wherever σ is defined. Every state has one (`completion_exists`).
+- **Skip reading.** `skip_allows c σ` ⟺ ⟦c⟧σ ≠ T: the action is allowed unless the condition is known to be true, so an undefined condition allows it.
+- **Absent-false reading.** `eval_af` is two-valued: a comparison with an operand that has no value is false, the connectives are the classical ones, and PRESENT(x) is x ∈ dom σ.
+
+*Theorems:*
+
+- **`eval_af_total`, `completion_defined`:** on a total valuation every condition is defined, and its value is that of `eval_af`.
+- **`monitor_sound_completions`:** c PRESENT-free ∧ ¬ blocks c σ ∧ σ′ a completion of σ ⟹ ⟦c⟧σ′ = F. If the fail-closed monitor does not block, the condition is false in every completion.
+- **`breach_certain_completions`:** c PRESENT-free ∧ ⟦c⟧σ = T ∧ σ′ a completion of σ ⟹ ⟦c⟧σ′ = T.
+- **`skip_reading_unsound`:** there are a PRESENT-free c, a state σ and a completion σ′ with `skip_allows c σ`, `blocks c σ` and ⟦c⟧σ′ = T.
+- **`absent_false_unsound`:** there are a PRESENT-free c, a state σ and a completion σ′ with `eval_af c σ` false, `blocks c σ` and ⟦c⟧σ′ = T.
+- **`absent_comparison`:** for x ∉ dom σ, the comparison x = v is such a condition for both theorems: ⟦x = v⟧σ = ⊥, both readings allow the action, the monitor blocks it, and the completion that gives x the value v makes it true. Like the prohibition of `examples/core/core_invoice_agent.triel` when its quote is stale, it is a comparison one of whose operands has no value yet.
+- **`stale_quote_completion`:** the same for the ordering comparison limit < amount (the comparison amount_eur > limit_eur of that prohibition), with the limit l known and the amount absent, when vless l a for some amount a. The witness above is = because `value_order` assumes nothing about <.
+- **`kleene_not_complete`, `absent_contradiction`:** there are a PRESENT-free c and a state σ with ⟦c⟧σ = ⊥ although ⟦c⟧σ′ = F for every completion σ′; for x ∉ dom σ, the condition x = v AND NOT (x = v) is one.
 
 ## 9. Design decisions forced by the theory
 

@@ -101,6 +101,23 @@ continuation-determining action is allowed; a cure in time prevents a second bre
 failed cure is final; a result computed with stale factors treated as absent is not
 overturned when they are refreshed.
 
+\paragraph{Completions of the data (theory \texttt{TRIEL\_Completions}).}
+A completion of a state is a total valuation that agrees with the state wherever it is
+defined. Proved: every state has a completion; on a total valuation every condition is
+defined, and its value is that of the two-valued reading in which a comparison with an
+absent operand is false; for a condition without \texttt{PRESENT} and \texttt{DEFAULT}, if
+the fail-closed monitor does not block, the condition is false in every completion
+(\texttt{monitor\_sound\_completions}), and if it is true, it is true in every completion
+(\texttt{breach\_certain\_completions}). Two other readings of incomplete data are not
+sound: for each there are a condition, a state and a completion such that the reading
+allows the action, the monitor blocks it, and the condition is true in the completion ---
+allowing the action when the condition is not known to be true
+(\texttt{skip\_reading\_unsound}), and reading a comparison with an absent operand as false
+(\texttt{absent\_false\_unsound}); for both, a comparison $x = v$ with $x$ absent is such a
+condition (\texttt{absent\_comparison}). Strong Kleene evaluation is not complete with respect
+to completions: $x = v$ \texttt{AND NOT} $(x = v)$ with $x$ absent is undefined, though it is
+false in every completion (\texttt{absent\_contradiction}, \texttt{kleene\_not\_complete}).
+
 \paragraph{Invariants (theory \texttt{TRIEL\_Invariants}).}
 \texttt{ALWAYS}, \texttt{EVENTUALLY} and \texttt{NEXT} are evaluated on finite prefixes of
 implementation traces with the three verdicts of LTL3 (Bauer, Leucker and

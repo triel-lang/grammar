@@ -14,6 +14,7 @@ theory Paper_Theorems
     TRIEL_Core.TRIEL_Trace
     TRIEL_Core.TRIEL_Terms
     TRIEL_Core.TRIEL_Breach
+    TRIEL_Core.TRIEL_Completions
     TRIEL_Core.TRIEL_Invariants
     TRIEL_Core.TRIEL_Indicators
     TRIEL_Core.TRIEL_Compositions
@@ -75,6 +76,14 @@ section \<open>Prohibitions and undefined guards\<close>
 thm TRIEL_Breach.undefined_guard_blocks_not_breach
 thm TRIEL_Breach.enforced_no_breach
 
+section \<open>Completions of the data\<close>
+
+thm TRIEL_Completions.monitor_sound_completions
+thm TRIEL_Completions.breach_certain_completions
+thm TRIEL_Completions.skip_reading_unsound
+thm TRIEL_Completions.absent_false_unsound
+thm TRIEL_Completions.kleene_not_complete
+
 section \<open>The composition algebra\<close>
 
 thm TRIEL_Compositions.comp_closure_equitone
@@ -130,6 +139,9 @@ local
     "TRIEL_Exec.term_semantics.resolve_den", "TRIEL_Exec.term_semantics.block_den",
     "TRIEL_Exec.refs_ok_acyclic",
     "TRIEL_Breach.undefined_guard_blocks_not_breach", "TRIEL_Breach.enforced_no_breach",
+    "TRIEL_Completions.monitor_sound_completions", "TRIEL_Completions.breach_certain_completions",
+    "TRIEL_Completions.skip_reading_unsound", "TRIEL_Completions.absent_false_unsound",
+    "TRIEL_Completions.kleene_not_complete",
     "TRIEL_Compositions.comp_closure_equitone", "TRIEL_Compositions.interp_equitone",
     "TRIEL_Compositions.cond_fm_correct", "TRIEL_Compositions.cond_equitone_from_closure",
     "TRIEL_Core.T5_present", "TRIEL_Compositions.Ex_R_is_not_eps",
