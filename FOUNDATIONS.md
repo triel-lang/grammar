@@ -1,21 +1,75 @@
 # Foundations
 
-TRIEL's semantics builds on the composition-nominative approach (CNA) to program logics developed at Taras Shevchenko National University of Kyiv.
+TRIEL rests on several traditions of logic and formal methods. Its treatment of incomplete data follows most closely the composition-nominative approach (CNA) to program logics developed at Taras Shevchenko National University of Kyiv; that approach is formalised in the most detail in [`formal/core`](formal/core/CORE.md). The first section below names each tradition, what TRIEL takes from it and what it does not. The sections after it state, construct by construct, which result each construct rests on and what the Isabelle/HOL core proves about it. Names in code font are definitions and theorems of that core.
 
-## References
+## Traditions TRIEL builds on
 
-1. M. S. Nikitchenko, S. S. Shkilniak. *Applied Logic* (Прикладна логіка). Textbook. Kyiv: Kyiv University Publishing Centre, 2013.
+**Partial and three-valued logic.** Conditions are evaluated in the strong three-valued logic of Kleene [K1, K2] over partial states, in which a name may have no value yet. The same logic underlies the Logic of Partial Functions (LPF) of Barringer, Cheng and Jones [K3], which handles undefined terms in proofs about programs, and Kripke's theory of truth [K4], which relies on its monotonicity. The information order on partial values goes back to Scott [K5, K6]. TRIEL takes from this tradition the evaluation itself, its monotonicity under the information order (`T2_monotone`) and its agreement with two-valued logic on total states (`T4_classical`). A second reading of a partial state, the supervaluation of van Fraassen [K7], looks at all its completions. The core relates the two readings for conditions without `PRESENT` and `DEFAULT`: a value that strong Kleene evaluation gives on incomplete data is the value in every completion (`monitor_sound_completions`, `breach_certain_completions`); the converse fails (`kleene_not_complete`); every sound compositional evaluation is at most as defined as strong Kleene evaluation (`kleene_optimal`), and none is complete (`compositional_incomplete`). The optimality is a classical fact about the logic of Kleene (cf. [K8]), proved here with respect to the completions of the data. TRIEL has no proof system for conditions, as LPF has, and no theory of truth.
+
+**Free logic.** `PRESENT(x)` is the existence predicate of free logic [F1, F2; survey F3]: it is true where `x` has a value and false where it has none (`present_is_Ex`, `Ex_ind_exists`). It is not monotone (`T3_present_not_monotone`), so the results about completions and stable verdicts exclude it. The quantifiers of free logic are not part of TRIEL.
+
+**The composition-nominative approach.** The logics of partial quasiary predicates of Nikitchenko, Shkilniak and colleagues give TRIEL its notions of named data, of equitone predicates (whose definite values survive the arrival of data) and of the indicator predicates for definedness. The closure of the equitone predicates under all base compositions is checked in full (`comp_closure_equitone`), every TRIEL condition is a term of the composition algebra (`cond_fm_correct`), and nested records follow the Mizar formalisation of nominative data. The next section gives the references and the construct-by-construct account.
+
+**Deontic logic and contrary-to-duty obligations.** The vocabulary of obligations, permissions and prohibitions comes from deontic logic [D1], and the handling of breach from the study of contrary-to-duty obligations [D2, D3]: what is required once a duty has been violated. Governatori and Rotolo [D4] describe chains of reparations, and defeasible deontic logic has reasoners such as SPINdle [D5]. TRIEL gives a breach its handlers (`CURE_BY`, `ESCALATE_TO`, `NOTIFY`, `PENALTY`) and a fallback obligation (`WITHIN … ELSE`) on traces of events, with final verdicts (`window_final`, `handle_breach_final`, `else_taken`, `cure_restores`, `escalation_keeps_breach`). TRIEL is not a deontic logic: it gives verdicts on traces and has no rules of inference between norms, no defeasibility and no priorities between norms.
+
+**Logics of contracts.** The contract language CL of Prisacariu and Schneider [D6] is a dynamic deontic logic in which norms apply to actions and violations carry reparations. TRIEL shares the view of a contract as norms over actions with deadlines and reparations, and gives them a trace semantics with verdicts in place of a modal logic.
+
+**Temporal logic and runtime verification.** The invariants `ALWAYS`, `EVENTUALLY` and `NEXT` come from linear temporal logic [T1]; their verdicts on finite prefixes follow LTL3 [T2]: true, false, or not yet decided, and final once decided (`inv_final`). This is the setting of runtime verification [T3], where monitors for metric first-order temporal logic [T4, T5] have been verified in Isabelle/HOL and exported as code [T6]. TRIEL adds a second kind of incompleteness, data that may still arrive in a state, and keeps the verdicts stable under it for conditions whose atoms are equitone, which excludes `PRESENT` and `DEFAULT` (`inv_data_mono`, `ew_data_mono`, `verdict_stable`). TRIEL has no quantification over objects, no full LTL and no metric intervals beyond deadlines.
+
+**Enforcement by monitors.** Schneider [E1] characterised the policies that an execution monitor can enforce, and edit automata [E2] extend such monitors. TRIEL enforces a prohibition fail-closed: the monitor blocks the action unless the condition is known to be false (`blocks`, `enforced_no_breach`). Enforcement is kept apart from the verdict, which records a breach only when the condition is true (`undefined_guard_blocks_not_breach`). How a blocked action appears in the trace is not modelled.
+
+**Information flow.** Hidden zero-knowledge factors follow noninterference [I1] and the static checking of information flow [I2]: no report of the evaluator depends on the value of a hidden factor (`run_noninterference`); the flow rule itself is checked by the translator, outside Isabelle.
+
+**Languages for policies and norms.** Authorization languages such as Cedar and XACML, rights and norm languages such as ODRL, LegalRuleML and Symboleo, and Catala for computations prescribed by law are the closest languages to TRIEL. They are compared in [`RELATED_WORK.md`](RELATED_WORK.md).
+
+### Sources for this section
+
+- [K1] S. C. Kleene. On notation for ordinal numbers. *The Journal of Symbolic Logic*, 3(4), 1938, 150–155. https://doi.org/10.2307/2267778
+- [K2] S. C. Kleene. *Introduction to Metamathematics*. New York: Van Nostrand, 1952.
+- [K3] H. Barringer, J. H. Cheng, C. B. Jones. A logic covering undefinedness in program proofs. *Acta Informatica*, 21(3), 1984, 251–269. https://doi.org/10.1007/BF00264250
+- [K4] S. Kripke. Outline of a theory of truth. *The Journal of Philosophy*, 72(19), 1975, 690–716.
+- [K5] D. S. Scott. *Outline of a Mathematical Theory of Computation*. Technical Monograph PRG-2, Oxford University Computing Laboratory, 1970.
+- [K6] D. S. Scott. Data types as lattices. *SIAM Journal on Computing*, 5(3), 1976, 522–587. https://doi.org/10.1137/0205037
+- [K7] B. C. van Fraassen. Singular terms, truth-value gaps, and free logic. *The Journal of Philosophy*, 63(17), 1966, 481–495.
+- [K8] M. Fitting. Kleene's three valued logics and their children. *Fundamenta Informaticae*, 20, 1994, 113–131.
+- [F1] H. S. Leonard. The logic of existence. *Philosophical Studies*, 7(4), 1956, 49–64. https://doi.org/10.1007/BF02221764
+- [F2] K. Lambert. Existential import revisited. *Notre Dame Journal of Formal Logic*, 4(4), 1963, 288–292. https://doi.org/10.1305/ndjfl/1093957655
+- [F3] J. Nolt. Free logic. *The Stanford Encyclopedia of Philosophy*, revision of 19 June 2025. https://plato.stanford.edu/entries/logic-free/
+- [D1] G. H. von Wright. Deontic logic. *Mind*, 60(237), 1951, 1–15. https://doi.org/10.1093/mind/LX.237.1
+- [D2] R. M. Chisholm. Contrary-to-duty imperatives and deontic logic. *Analysis*, 24(2), 1963, 33–36. https://doi.org/10.1093/analys/24.2.33
+- [D3] H. Prakken, M. Sergot. Contrary-to-duty obligations. *Studia Logica*, 57(1), 1996, 91–115. https://doi.org/10.1007/BF00370671
+- [D4] G. Governatori, A. Rotolo. Logic of violations: a Gentzen system for reasoning with contrary-to-duty obligations. *Australasian Journal of Logic*, 4, 2006, 193–215. https://doi.org/10.26686/ajl.v4i0.1780
+- [D5] H.-P. Lam, G. Governatori. The making of SPINdle. *RuleML 2009*, LNCS 5858, Springer, 2009, 315–322. https://doi.org/10.1007/978-3-642-04985-9_29
+- [D6] C. Prisacariu, G. Schneider. A dynamic deontic logic for complex contracts. *The Journal of Logic and Algebraic Programming*, 81(4), 2012, 458–490. https://doi.org/10.1016/j.jlap.2012.03.003
+- [T1] A. Pnueli. The temporal logic of programs. *18th Annual Symposium on Foundations of Computer Science*, IEEE, 1977, 46–57. https://doi.org/10.1109/SFCS.1977.32
+- [T2] A. Bauer, M. Leucker, C. Schallhart. Runtime verification for LTL and TLTL. *ACM Transactions on Software Engineering and Methodology*, 20(4), 2011, article 14. https://doi.org/10.1145/2000799.2000800
+- [T3] M. Leucker, C. Schallhart. A brief account of runtime verification. *The Journal of Logic and Algebraic Programming*, 78(5), 2009, 293–303. https://doi.org/10.1016/j.jlap.2008.08.004
+- [T4] D. Basin, F. Klaedtke, S. Müller, E. Zălinescu. Monitoring metric first-order temporal properties. *Journal of the ACM*, 62(2), 2015, 15:1–15:45. https://doi.org/10.1145/2699444
+- [T5] D. Basin, F. Klaedtke, E. Zălinescu. The MonPoly monitoring tool. *RV-CuBES 2017*, Kalpa Publications in Computing, vol. 3, 2017, 19–28. https://doi.org/10.29007/89hs
+- [T6] J. Schneider, D. Basin, S. Krstić, D. Traytel. A formally verified monitor for metric first-order temporal logic. *Runtime Verification (RV 2019)*, LNCS 11757, Springer, 2019, 310–328. https://doi.org/10.1007/978-3-030-32079-9_18
+- [E1] F. B. Schneider. Enforceable security policies. *ACM Transactions on Information and System Security*, 3(1), 2000, 30–50. https://doi.org/10.1145/353323.353382
+- [E2] J. Ligatti, L. Bauer, D. Walker. Edit automata: enforcement mechanisms for run-time security policies. *International Journal of Information Security*, 4, 2005, 2–16. https://doi.org/10.1007/s10207-004-0046-8
+- [I1] J. A. Goguen, J. Meseguer. Security policies and security models. *IEEE Symposium on Security and Privacy*, 1982, 11–20.
+- [I2] D. Volpano, C. Irvine, G. Smith. A sound type system for secure flow analysis. *Journal of Computer Security*, 4(2–3), 1996, 167–187.
+
+## The composition-nominative approach
+
+TRIEL adopts the definitions of this approach for partial truth values, named and nested data, equitone predicates and the indicator predicates for definedness.
+
+### References
+
+1. M. S. Nikitchenko, S. S. Shkilniak. *Applied Logic* (Прикладна логіка). Kyiv: Taras Shevchenko National University of Kyiv, 2013.
 2. M. Nikitchenko, S. Shkilniak. Algebras and logics of partial quasiary predicates. *Algebra and Discrete Mathematics*, 23(2), 2017, 263–278.
-3. M. Nikitchenko. Composition-Nominative Methods and Models in Program Development. *SN Computer Science*, 3, 507, 2022. https://doi.org/10.1007/s42979-022-01335-2
-4. M. Nikitchenko, O. Shkilniak, S. Shkilniak. Pure first-order logics of quasiary predicates. *Problems in Programming*, No. 2–3, 2016, 73–86 (in Ukrainian).
-5. O. Shkilniak, S. Shkilniak. Transitional modal logics of quasiary predicates with equality and sequent calculi for these logics. UkrPROG'2024, *CEUR Workshop Proceedings*, Vol. 3806, 2024. https://ceur-ws.org/Vol-3806/S_49_Shkilniak.pdf
-6. I. Ivanov, M. Nikitchenko, U. Abraham. Event-based proof of the mutual exclusion property of Peterson's algorithm. *Formalized Mathematics*, 2015.
-7. I. Ivanov, M. Nikitchenko, A. Kryvolap, A. Korniłowicz. Simple-named complex-valued nominative data – definition and basic operations. *Formalized Mathematics*, 25(3), 2017, 205–216.
-8. S. S. Shkilniak. First-order logics with partial predicates for checking whether a variable is defined (Першопорядкові логіки з частковими предикатами для перевірки означеності змінної). *Problems in Programming*, No. 4, 2024, 23–33 (in Ukrainian). https://doi.org/10.15407/pp2024.04.023
+3. M. Nikitchenko. Composition-Nominative Methods and Models in Program Development. *SN Computer Science*, 3(6), 2022, article 507. https://doi.org/10.1007/s42979-022-01335-2
+4. M. Nikitchenko, O. Shkilniak, S. Shkilniak. Pure first-order logics of quasiary predicates. *Problems in Programming*, No. 2–3, 2016, 73–86 (in Ukrainian). https://doi.org/10.15407/pp2016.02-03.073
+5. O. Shkilniak, S. Shkilniak. Transitional modal logics of quasiary predicates with equality and sequent calculi for these logics. *UkrPROG'2024*, CEUR Workshop Proceedings, Vol. 3806, 2024, 30–49. https://ceur-ws.org/Vol-3806/S_49_Shkilniak.pdf
+6. I. Ivanov, M. Nikitchenko, U. Abraham. Event-based proof of the mutual exclusion property of Peterson's algorithm. *Formalized Mathematics*, 23(4), 2015, 325–331. https://doi.org/10.1515/forma-2015-0026
+7. I. Ivanov, M. Nikitchenko, A. Kryvolap, A. Korniłowicz. Simple-named complex-valued nominative data – definition and basic operations. *Formalized Mathematics*, 25(3), 2017, 205–216. https://doi.org/10.1515/forma-2017-0020
+8. S. S. Shkilniak. First-order logics with partial predicates for checking variable definedness (Першопорядкові логіки з частковими предикатами для перевірки означеності змінної). *Problems in Programming*, No. 4, 2024, 23–33 (in Ukrainian). https://doi.org/10.15407/pp2024.04.023
 
-Section numbers (§) refer to the textbook [1]. Page numbers are omitted because the available edition is a preliminary version with approximate pagination.
+Section numbers (§) refer to the book [1]. Page numbers are omitted because the available edition is a preliminary version with approximate pagination.
 
-## How each construct rests on these works
+### How each construct rests on these works
 
 The table states, for each TRIEL construct, which part of these works it rests on and how far the connection goes:
 
@@ -58,7 +112,7 @@ Beyond the composition-nominative approach, TRIEL rests on standard results of l
 | `PRESENT(x)` | Existence predicate of free logic. H. S. Leonard. The logic of existence. *Philosophical Studies*, 7(4), 1956, 49–64; K. Lambert. Existential import revisited. *Notre Dame Journal of Formal Logic*, 4(4), 1963, 288–292 | `Ex_ind_exists` (E!x ≡ ∃y. y = x), `present_is_Ex` ([`TRIEL_Ex.thy`](formal/core/TRIEL_Ex.thy)); `present_nd_is_Ex` ([`TRIEL_ND.thy`](formal/core/TRIEL_ND.thy)) | Proved for the existence predicate. Quantifiers of free logic are not formalised |
 | Temporal invariants: `ALWAYS`, `EVENTUALLY`, `NEXT` | Linear temporal logic. A. Pnueli. The temporal logic of programs. *18th Annual Symposium on Foundations of Computer Science*, IEEE, 1977, 46–57; three-valued verdicts on finite prefixes (LTL3). A. Bauer, M. Leucker, C. Schallhart. Runtime verification for LTL and TLTL. *ACM Transactions on Software Engineering and Methodology*, 20(4), 2011, article 14 | `always_never_true`, `eventually_never_false`, `inv_final`, `always_undefined_data`, `eventually_undefined_data`, `inv_data_mono` ([`TRIEL_Invariants.thy`](formal/core/TRIEL_Invariants.thy)) | Proved for `ALWAYS`, `EVENTUALLY` and `NEXT` of a state formula on finite prefixes of implementation traces, with strong Kleene evaluation of the formula. The exported evaluator computes these verdicts ([`TRIEL_Exec.thy`](formal/core/TRIEL_Exec.thy)) |
 | Other LTL operators (`G`, `F`, `X`, `U`, `R`, `W`) | Pnueli, 1977 (as above) | none | Ahead |
-| CTL operators (`AX` … `ER`) | Computation tree logic. E. M. Clarke, E. A. Emerson. Design and synthesis of synchronization skeletons using branching time temporal logic. *Logics of Programs* (1981), LNCS 131, Springer, 1982, 52–71 | none | Ahead |
+| CTL operators (`AX` … `ER`) | Computation tree logic. E. M. Clarke, E. A. Emerson. Design and synthesis of synchronization skeletons using branching time temporal logic. *Logics of Programs* (Workshop 1981), LNCS 131, Springer, 1982, 52–71 | none | Ahead |
 | Terms: `MUST`, `MAY`, `MUST_NOT` | Deontic logic. G. H. von Wright. Deontic logic. *Mind*, 60(237), 1951, 1–15 | `total_must`, `total_may`, `total_mustnot`, `wf_must`, `wf_may`, `wf_mustnot` ([`TRIEL_Trace.thy`](formal/core/TRIEL_Trace.thy)); `deadline_missed_breach`, `fulfilled_at_deadline`, `window_final`, `pr_verdict_final`, `may_never_breached`, `breach_blocked`, `enforced_no_breach` ([`TRIEL_Breach.thy`](formal/core/TRIEL_Breach.thy)) | Proved for the trace denotations of §2.5, and for the verdicts of satisfaction and breach of §2.6 on the top-level elements of a `TERMS` block, with the clarifications in `formal/core/CORE.md`, section 8.3. Inside composite terms, membership of a trace in the denotation is decided three-valued: definite answers are sound for terms without `AND` (`mem3_sound`), and are always given for terms without `UNLESS` and `AND` (`mem3_complete`, [`TRIEL_Exec.thy`](formal/core/TRIEL_Exec.thy)) |
 | `ON_BREACH`, `CURE_BY` | Contrary-to-duty obligations. R. M. Chisholm. Contrary-to-duty imperatives and deontic logic. *Analysis*, 24(2), 1963, 33–36 | `bound_to_nearest`, `nested_handler_rejected`, `wf_one_handler`, `cont_unique`, `two_continuations_rejected`, `cure_restores`, `cure_failed`, `escalation_keeps_breach`, `handle_breach_final` ([`TRIEL_Breach.thy`](formal/core/TRIEL_Breach.thy)) | Proved for handlers at the top level of a `TERMS` block: binding, mutual exclusion of continuations, cure and escalation (§2.6, with the clarifications in `formal/core/CORE.md`, section 8.3). A handler bound to a prohibition has only informational actions (`cont_free_prohibitions`, `pr_actions_cont_free` in [`TRIEL_Exec.thy`](formal/core/TRIEL_Exec.thy)). Contrary-to-duty reasoning as a deontic logic is not formalised |
 | Terms: `THEN`, `OR`, `UNLESS` | Process and program logics. C. A. R. Hoare. Communicating sequential processes. *Communications of the ACM*, 21(8), 1978, 666–677; D. Harel. *First-Order Dynamic Logic*. LNCS 68, Springer, 1979 | `unless_false`, `unless_or`, `unless_then`, `unless_idem`, `unless_then_counterexample`, `unless_nested_ne_or` ([`TRIEL_Trace.thy`](formal/core/TRIEL_Trace.thy)); `den_total`, `term_unless_then` ([`TRIEL_Terms.thy`](formal/core/TRIEL_Terms.thy)) | Proved: the laws of `UNLESS` in §2.5, and distributivity over `THEN` for every term |
