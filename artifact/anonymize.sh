@@ -51,9 +51,11 @@
 #
 # A word replaced inside a longer word leaves a replacement joined to letters,
 # as "ANONYMOUSy" above: the archive may contain neither ANONYMOUS or ANONYMIZED
-# followed by a letter nor a letter followed by ANONYM, matched with their case.
-# The script fails on either, so a name of someone else damaged by a replacement
-# is found, and can be added to KEEP.
+# followed by a letter nor a letter followed by ANONYM, matched with their case;
+# a letter is one of any alphabet (the Unicode property L), so "ANONYMOUSа" with
+# a Cyrillic а is found too. Nor may a name of KEEP be joined directly to
+# ANONYMOUS or ANONYMIZED. The script fails on any of these, so a name of
+# someone else damaged by a replacement is found, and can be added to KEEP.
 #
 # The archive holds the files of the commit HEAD (or of $REF), without .git,
 # CLA.md, the signatures directory, .github/workflows/cla.yml, this script and
@@ -221,10 +223,20 @@ if hits=$(cd "$CHECK" && grep -raoE '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-
   left=1
 fi
 # A replacement joined to letters: a word was replaced inside a longer word.
-if hits=$(cd "$CHECK" && LC_ALL=C grep -raoE '[A-Za-z]*(ANONYM(OUS|IZED)[A-Za-z]|[A-Za-z]ANONYM)[A-Za-z]*' .); then
+# The files are read as UTF-8 (invalid sequences, as in a binary file, are
+# skipped), so that a letter of any alphabet counts.
+if hits=$(cd "$CHECK" && LC_ALL=C.UTF-8 grep -raoP '\p{L}*(ANONYM(OUS|IZED)\p{L}|\p{L}ANONYM)\p{L}*' .); then
   printf 'error: a replacement joined to letters (a word replaced inside a longer word) is in:\n%s\n' "$hits" >&2
   left=1
 fi
+# The copy read above has a line break in place of each name of KEEP, so a
+# replacement joined directly to such a name is looked for in the archive itself.
+for k in "${KEEP[@]}"; do
+  if hits=$(cd "$TREE" && grep -raoF -e "${k}ANONYM" -e "ANONYMOUS${k}" -e "ANONYMIZED${k}" .); then
+    printf 'error: a replacement joined to the name %s is in:\n%s\n' "$k" "$hits" >&2
+    left=1
+  fi
+done
 hits=$(cd "$CHECK" && find . | LC_ALL=C grep -E 'ANONYM(OUS|IZED)[A-Za-z]|[A-Za-z]ANONYM' || true)
 if [ -n "$hits" ]; then
   printf 'error: a replacement joined to letters is in the file names:\n%s\n' "$hits" >&2

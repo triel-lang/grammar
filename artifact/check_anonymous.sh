@@ -19,9 +19,12 @@
 #
 # The patterns of GLUED are searched with their case: a replacement of
 # anonymize.sh joined to letters, ANONYMOUS or ANONYMIZED followed by a letter,
-# or a letter followed by ANONYM. Either means that a word was
-# replaced inside a longer word, such as the name of someone else, so the archive
-# fails the search.
+# or a letter followed by ANONYM. A letter is one of any alphabet (\p{L}, with
+# the archive read as UTF-8; invalid sequences, as in the tar headers, are
+# skipped). Either means that a word was replaced inside a longer word, such as
+# the name of someone else, so the archive fails the search. So does a name of
+# ALLOWED joined directly to ANONYMOUS or ANONYMIZED, which is counted before
+# the name is replaced by a line break.
 #
 # This script names the words it looks for, so anonymize.sh leaves it out of
 # the archive, as it leaves out itself.
@@ -47,9 +50,9 @@ PATTERNS=(
 )
 
 GLUED=(
-  'ANONYMOUS[A-Za-z]'
-  'ANONYMIZED[A-Za-z]'
-  '[A-Za-z]ANONYM'
+  'ANONYMOUS\p{L}'
+  'ANONYMIZED\p{L}'
+  '\p{L}ANONYM'
 )
 
 ALLOWED=(
@@ -62,21 +65,23 @@ gzip -dc "$1" > "$TMP/archive.tar"
 
 echo "archive: $1 ($(tar -tf "$TMP/archive.tar" | grep -vc '/$') files, sha256 $(sha256sum "$1" | cut -d' ' -f1))"
 echo "owners in the tar headers: $(tar -tvf "$TMP/archive.tar" | awk '{print $2}' | sort -u | paste -sd ' ')"
+found=0
 for a in "${ALLOWED[@]}"; do
   n=$({ grep -aoF -e "$a" "$TMP/archive.tar" || true; } | wc -l)
-  printf 'allowed, not counted below: %s, %s occurrences\n' "$a" "$n"
+  j=$({ grep -aoF -e "${a}ANONYM" -e "ANONYMOUS${a}" -e "ANONYMIZED${a}" "$TMP/archive.tar" || true; } | wc -l)
+  printf 'allowed, not counted below: %s, %s occurrences, %s joined to a replacement\n' "$a" "$n" "$j"
+  [ "$j" -eq 0 ] || found=1
   A=$a perl -pi -e 's/\Q$ENV{A}\E/\n/g' "$TMP/archive.tar"
 done
-found=0
 for p in "${PATTERNS[@]}"; do
   n=$({ grep -aoiE -e "$p" "$TMP/archive.tar" || true; } | wc -l)
   printf '%-70s %s\n' "$p" "$n"
   [ "$n" -eq 0 ] || { grep -aoiE -e "$p" "$TMP/archive.tar" | sort | uniq -c | head -5; found=1; }
 done
 for p in "${GLUED[@]}"; do
-  n=$({ LC_ALL=C grep -aoE -e "$p" "$TMP/archive.tar" || true; } | wc -l)
+  n=$({ LC_ALL=C.UTF-8 grep -aoP -e "$p" "$TMP/archive.tar" || true; } | wc -l)
   printf '%-70s %s\n' "$p (with its case)" "$n"
-  [ "$n" -eq 0 ] || { LC_ALL=C grep -aoE -e "[A-Za-z]*($p)[A-Za-z]*" "$TMP/archive.tar" | sort | uniq -c | head -5; found=1; }
+  [ "$n" -eq 0 ] || { LC_ALL=C.UTF-8 grep -aoP -e "\p{L}*($p)\p{L}*" "$TMP/archive.tar" | sort | uniq -c | head -5; found=1; }
 done
 n=$({ grep -aoE "\bTRIEL\b" "$TMP/archive.tar" || true; } | wc -l)
 echo "the name of the language, TRIEL, kept: $n occurrences"
