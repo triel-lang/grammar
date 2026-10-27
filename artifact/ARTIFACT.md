@@ -42,8 +42,8 @@ and prints a summary whose numbers are all computed by the run.
   7.8 GiB; at 8 GiB it was killed for lack of memory in two of four runs. All
   other steps stay below 2 GiB. On GitHub-hosted runners (4 cores, 15.6 GiB)
   without a limit, where Isabelle2025-2 used 2 threads (as the build logs
-  state), the workflow `.github/workflows/artifact.yml` read peaks from 6.91 to
-  7.15 GiB in the nine runs listed under "Times on GitHub-hosted runners"
+  state), the workflow `.github/workflows/artifact.yml` read peaks from 6.73 to
+  7.15 GiB in the thirteen runs listed under "Times on GitHub-hosted runners"
   below; it keeps the value as `memory-peak.txt` with the logs of the run.
 - Docker Desktop (macOS, Windows): set Memory to at least 10 GB in
   Settings → Resources.
@@ -77,12 +77,12 @@ image build were measured for version 2.5, with the same `Dockerfile`.
 The job `artifact` of `.github/workflows/artifact.yml` builds the image and
 runs `run.sh` on every push, on a GitHub-hosted runner (the label
 `ubuntu-latest` in #56 to #59, `ubuntu-24.04` from #60), and reads the memory
-peak of the container. The nine runs
+peak of the container. The thirteen runs
 below are those, from the first run that read the memory peak (#56) to the
-run #67 of this version, in which `run.sh` passed all 11 steps; all of them
+run #71 of this version, in which `run.sh` passed all 11 steps; all of them
 are of sources with 28 examples and 54 scenarios. Over these runs:
 
-| Phase | Range over the nine runs |
+| Phase | Range over the thirteen runs |
 |---|---|
 | Job `artifact` (disk clean-up, image build and `run.sh`) | 16:14 to 23:39 min |
 | Image build (`docker build`, base images included) | 1:14 to 2:18 min |
@@ -90,9 +90,9 @@ are of sources with 28 examples and 54 scenarios. Over these runs:
 | of which: clean Isabelle build of `TRIEL_Core` | 85 to 130 s |
 | of which: the scenarios | 124 to 210 s |
 | of which: translator and driver tests (pytest) | 318 to 518 s |
-| of which: parsing of the examples with the ambiguity check | 123 to 216 s |
-| of which: ambiguity regression tests | 89 to 118 s |
-| Memory peak of the container | 6.91 to 7.15 GiB |
+| of which: parsing of the examples with the ambiguity check | 123 to 217 s |
+| of which: ambiguity regression tests | 80 to 118 s |
+| Memory peak of the container | 6.73 to 7.15 GiB |
 
 | Run | Date (UTC) | Theories | Job `artifact` | Image build | `run.sh` | Memory peak |
 |---|---|---:|---:|---:|---:|---:|
@@ -105,9 +105,14 @@ are of sources with 28 examples and 54 scenarios. Over these runs:
 | #62 | 2026-10-27 | 12 | 21:17 | 1:15 | 1156 s | 7.02 GiB |
 | #63 | 2026-10-27 | 12 | 22:34 | 1:14 | 1214 s | 7.05 GiB |
 | #67 | 2026-10-27 | 13 | 19:53 | 1:42 | 931 s | 6.95 GiB |
+| #68 | 2026-10-27 | 13 | 22:53 | 1:18 | 1201 s | 7.04 GiB |
+| #69 | 2026-10-27 | 13 | 19:03 | 1:48 | 951 s | 6.74 GiB |
+| #70 | 2026-10-27 | 13 | 18:42 | 1:44 | 889 s | 7.12 GiB |
+| #71 | 2026-10-27 | 13 | 21:30 | 1:45 | 1054 s | 6.73 GiB |
 
-Runs #61 to #63 are of the same commit; #67 is of the sources of this version
-with the new theory. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
+Runs #61 to #63 are of the same commit; #67 to #71 are of this version, with
+the new theory (#68 and #69 of one tree, #70 and #71 of another, which differ
+from it in documentation and in the checks of the anonymous archive). In the runs #64 to #66 of drafts of this version, `run.sh` failed in
 the step pytest: the test that every name in backquotes in `CORE.md` is defined
 in the theories failed on the name of a file, since corrected; they are not in
 the table. The time on a shared
@@ -222,47 +227,51 @@ docker run --rm -e RESULTS_DIR=/results -v "$PWD/bench-results:/results" \
   push, on a runner of its own, and keeps the results as the artifact
   `bench-results` of the run.
 
-Results of the job `bench` in the runs #66 and #67 of the workflow
+Results of the job `bench` in the six runs #66 to #71 of the workflow
 (2026-10-27), on GitHub-hosted runners with 4 cores and 15.6 GiB: an AMD EPYC
-7763 in #66, an AMD EPYC 9V74 in #67; GHC 9.6.7, Python 3.12.3, lark 1.3.1.
-Both ran `bench_trace.py` of this version with the seed 20261027. For each point the
-table gives the median of its 5 runs as a range over the two CI runs, the
-minimum and maximum of all 10 runs, and the peak memory:
+7763 in #66 and #71, an AMD EPYC 9V74 in #67 and #70, an AMD EPYC 9V45 in #68
+and #69; GHC 9.6.7, Python 3.12.3, lark 1.3.1. The runs #68 to #71 printed the
+same `traces.sha256`; #66 and #67 ran the same `bench_trace.py` with the same
+seed, before `bench.sh` printed the hashes. For each point the table gives the
+median of its 5 runs as a range over the six CI runs, the minimum and maximum
+of all 30 runs, and the peak memory:
 
 | Example | Entries | Phase | Median, s | All runs, s | Peak memory, MiB |
 |---|---:|---|---:|---:|---:|
-| core_invoice_agent | 10^2 | translate | 2.91–3.85 | 2.89–3.93 | 52.1–52.2 |
-| core_invoice_agent | 10^2 | evaluate | 0.012–0.013 | 0.012–0.015 | 9.4–9.5 |
-| core_invoice_agent | 10^3 | translate | 2.95–3.91 | 2.88–3.95 | 56.8–56.9 |
-| core_invoice_agent | 10^3 | evaluate | 0.143–0.174 | 0.133–0.174 | 15.7–15.8 |
-| core_invoice_agent | 10^4 | translate | 3.53–4.63 | 3.52–4.66 | 92.1–92.2 |
-| core_invoice_agent | 10^4 | evaluate | timeout (120 s) in both | | |
+| core_invoice_agent | 10^2 | translate | 2.19–3.98 | 2.16–4.08 | 52.0–52.2 |
+| core_invoice_agent | 10^2 | evaluate | 0.012–0.014 | 0.012–0.015 | 9.2–9.5 |
+| core_invoice_agent | 10^3 | translate | 2.24–3.98 | 2.19–4.02 | 56.5–56.9 |
+| core_invoice_agent | 10^3 | evaluate | 0.093–0.174 | 0.093–0.185 | 15.7–15.9 |
+| core_invoice_agent | 10^4 | translate | 2.73–4.75 | 2.67–4.81 | 92.1–92.3 |
+| core_invoice_agent | 10^4 | evaluate | timeout (120 s) in all six | | |
 | core_invoice_agent | 10^5, 10^6 | both | skipped | | |
-| core_sequence | 10^2 | translate | 2.83–3.86 | 2.79–3.89 | 49.6–49.7 |
-| core_sequence | 10^2 | evaluate | 0.043 | 0.033–0.053 | 10.1–10.2 |
-| core_sequence | 10^3 | translate | 2.86–3.87 | 2.83–3.90 | 53.4 |
-| core_sequence | 10^3 | evaluate | 21.7–28.2 | 18.1–29.0 | 12.7–12.8 |
-| core_sequence | 10^4 | translate | 3.30–4.36 | 3.23–4.40 | 72.7–72.8 |
-| core_sequence | 10^4 | evaluate | timeout (120 s) in both | | |
+| core_sequence | 10^2 | translate | 2.05–3.86 | 2.01–3.96 | 49.4–50.1 |
+| core_sequence | 10^2 | evaluate | 0.022–0.053 | 0.022–0.063 | 10.0–10.2 |
+| core_sequence | 10^3 | translate | 2.09–3.93 | 2.02–3.96 | 53.2–53.4 |
+| core_sequence | 10^3 | evaluate | 13.0–28.6 | 12.5–29.1 | 12.7–12.9 |
+| core_sequence | 10^4 | translate | 2.37–4.40 | 2.31–4.41 | 72.7–72.9 |
+| core_sequence | 10^4 | evaluate | timeout (120 s) in all six | | |
 | core_sequence | 10^5, 10^6 | both | skipped | | |
 
 What these measurements show, and nothing beyond them:
 
 - **On these traces, the time of the evaluator grows faster than linearly
-  with their length.** For `core_invoice_agent`, ten times more entries took 13.4 and
-  11.9 times longer from 10^2 to 10^3 entries (the ratio of the medians in #66
-  and in #67), and the trace of 10^4 entries did not finish within 120 s, more
-  than 689 times the median at 10^3. For `core_sequence`, the median went from
-  0.043 s at 10^2 entries to 28.2 and 21.7 s at 10^3, 655 and 505 times longer, and
-  10^4 entries did not finish within 120 s. So no trace of 10^5 or 10^6 entries
-  was run, and there is no time for them. The evaluator is not changed here.
+  with their length.** For `core_invoice_agent`, ten times more entries took
+  7.2 to 13.4 times longer from 10^2 to 10^3 entries (the ratio of the medians
+  within each CI run; at 10^2 entries the medians are only 12 to 14 ms, so the
+  ratio is coarse), and the trace of 10^4 entries did not finish within 120 s, more
+  than 689 times the largest median at 10^3. For `core_sequence`, from 10^2 to
+  10^3 entries the median grew 403 to 655 times within each CI run, and 10^4
+  entries did not finish within 120 s. So no trace of 10^5 or 10^6 entries was
+  run, and there is no time for them. The evaluator is not changed here.
 - The peak memory of the evaluator stayed below 16 MiB up to 10^3 entries.
   `runs.csv` also records the memory a run had reached when it timed out.
-- The translation took 2.8 to 4.7 s per run at every length measured, 10^2 to
-  10^4 entries, already 2.8 to 3.9 s at 10^2; its peak memory grew from about
+- The translation took 2.0 to 4.8 s per run at every length measured, 10^2 to
+  10^4 entries, already 2.0 to 4.1 s at 10^2; its peak memory grew from about
   50 MiB to 92 MiB.
-- The medians of the two runners differ by up to 37 % (translation) and 30 %
-  (evaluation): the absolute times depend on the machine.
+- Between runners the medians differ by a factor of up to 1.9 (translation)
+  and 2.4 (evaluation; 2.2 at 10^3 entries): the absolute times depend on the
+  machine.
 
 ## Claims of the paper
 
