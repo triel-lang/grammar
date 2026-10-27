@@ -1,6 +1,6 @@
 # Examples inside the formal core
 
-The thirteen specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
+The fourteen specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
 
 - `core_deadline_cure.triel`: a deadline, its breach, and a cure;
 - `core_unless_records.triel`: a sequence under UNLESS, with the guard read from a nested record;
@@ -14,13 +14,14 @@ The thirteen specifications in this folder use only constructs that the translat
 - `core_sequence.triel`: two obligations in sequence, which need two actions, and prohibitions inside composite terms, which their first forbidden action violates, and the status of each term, read on the first prefix of the trace with a violation or with a completion by an executed action;
 - `core_readings.triel`: composite terms whose prefixes have several readings (the guard of `UNLESS` after or at the entry of the payment, a prohibition in a branch of `OR`), for which the status is conservative;
 - `core_hidden.triel`: a hidden `ZK<Integer>` factor, named as an action argument and never read, a `ZK<String>` factor `WITHOUT REVEALING ALL` read like an ordinary factor, and `PROOF_SYSTEM`, `CURVE`, `DID`, `PROVES`, `HASH` with a salt and `BOUND_TO` printed as metadata;
-- `core_invoice_agent.triel`: an AI agent that pays an invoice for its owner: `WITHIN … ELSE` with the owner as the fallback, a prohibition whose condition compares a Decimal factor quoted by an oracle under `ON_STALE BLOCK` and reads an approval that may be absent, a breach handler that notifies the owner, and `PROVENANCE_REQUIRED`.
+- `core_invoice_agent.triel`: an AI agent that pays an invoice for its owner: `WITHIN … ELSE` with the owner as the fallback, a prohibition whose condition compares a Decimal factor quoted by an oracle under `ON_STALE BLOCK` and reads an approval that may be absent, a breach handler that notifies the owner, and `PROVENANCE_REQUIRED`;
+- `gdpr_art33_notification.triel`: the notification of a personal data breach to the supervisory authority after Article 33 of the GDPR, as `WITHIN … ELSE`: 72 hours from activation, the moment the controller became aware of the breach, and then a notification with the reasons for the delay within 7 days of the first deadline. The 7 days are an assumption of the example, not a period of Article 33.
 
 The scenario `age_verification_breach` runs `examples/age_verification.triel`, whose hidden `age` factor the core accepts.
 
 The evaluator exported from Isabelle runs them on the scenarios in `scenarios/`.
 
-The expected outputs (`scenarios/*.expected`) and the expected classification of all examples (`classification.expected`) were written by hand from the text of the specifications. They were committed before the evaluator, so the evaluator is not checked against its own output. The scenarios added in version 2.5.1 (`sequence_*`, `deadline_cure_time_order`) were committed, with their expected outputs, before they were first run.
+The expected outputs (`scenarios/*.expected`) and the expected classification of all examples (`classification.expected`) were written by hand from the text of the specifications. They were committed before the evaluator, so the evaluator is not checked against its own output. The scenarios added in version 2.5.1 (`sequence_*`, `deadline_cure_time_order`) were committed, with their expected outputs, before they were first run, and so were the scenarios `gdpr_*`.
 
 ## Scenarios
 

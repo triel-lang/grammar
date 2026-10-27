@@ -15,7 +15,7 @@ behind the paper. It contains:
 - `parser/`: the reference parser of the TRIEL 2.5 grammar (which 2.5.1 does
   not change), and the translator
   `parser/triel_to_core.py` from TRIEL specifications to terms of the core.
-- `examples/`: 28 TRIEL specifications and 54 scenarios (implementation traces
+- `examples/`: 29 TRIEL specifications and 59 scenarios (implementation traces
   with hand-written expected reports).
 - `artifact/`: the Docker image (`Dockerfile`), the script that runs every check
   (`run.sh`), and the Isabelle session `TRIEL_Paper`
@@ -155,11 +155,11 @@ Expected end of the output:
 theories checked by Isabelle (TRIEL_Core)    13 (.thy files in formal/core: 13)
 proved statements (lemma/theorem/corollary)  658
 paper theorems found, without oracles        60 of 60
-scenarios matching .expected                 54 of 54
-examples accepted by the core                26 of 28
-translator and driver tests (pytest)         319 passed in ...
-examples parsed with one derivation          28 of 28
-ambiguity regression checks passed           237
+scenarios matching .expected                 59 of 59
+examples accepted by the core                27 of 29
+translator and driver tests (pytest)         329 passed in ...
+examples parsed with one derivation          29 of 29
+ambiguity regression checks passed           238
 document excerpts conforming to the grammar  15
 wall-clock time                              ...
 ...
@@ -293,8 +293,8 @@ variables `?x`.
 |---|---|---|
 | The core is machine-checked: 13 theories, 658 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `13 (.thy files in formal/core: 13)`, `658`; `no sorry, oops or axiomatization ...` |
 | The evaluator is the code exported from the checked theories | `cat results/03-exported-code.log` | `evaluator/generated is the exported code` |
-| The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `54` |
-| 26 of the 28 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `26`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
+| The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `59` |
+| 27 of the 29 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `27`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
 | Every cited theorem exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 60` |
 | Finality of verdicts: on a trace (times that do not decrease) a definite verdict of an obligation, a prohibition or an invariant does not change when the trace is extended; the evaluator rejects a list of observations whose times decrease, so for `run` a decided line stays the same when observations are appended, unless the longer list is rejected for its time order or its types. A property of the design | `grep -A1 -E '\.(ob_verdict_final\|pr_verdict_final\|inv_final\|run_final\|time_order_rejected)$' results/paper_theorems.txt` | `TRIEL_Breach.ob_verdict_final`, `TRIEL_Breach.pr_verdict_final`, `TRIEL_Invariants.inv_final`, `TRIEL_Exec.run_final`, `TRIEL_Exec.time_order_rejected`, each with its statement, e.g. `inv_eval ?\<iota> ?\<pi> = Some ?b \<Longrightarrow> inv_eval ?\<iota> (?\<pi> @ ?\<rho>) = Some ?b` |
 | Two obligations in sequence need two actions; a prohibition in a composite term can be violated, and its trace semantics agrees with its verdict; the status of a composite term (read on the first prefix that violates the term or completes it by an executed action; conservative when a prefix has several readings) is sound and final, Violated before Done is needed, and the modes of the traces refine the denotation; for a term without AND, a violated prefix is reported as a violation at that entry or before it unless the status is unknown or the observation ended earlier on a completion by an executed action before any reading had reached a prohibition, and the exception for an earlier completion cannot be dropped; consequences for a prohibition after a reading has reached one, at the end of a sequence (no exception when the first part has no UNLESS and no AND) and in a branch of OR (no exception but an unknown status) | `grep -A1 -E '\.(must_then_must_two_actions\|violated_reachable\|then_mustnot_violated\|mustnot_violated_breach\|breach_mustnot_violated\|status_final\|status_sound\|violation_over_done\|fden_den\|then_mustnot_held\|then_mustnot_status\|status_no_missed_violation\|reached_prohibition_watched\|then_mustnot_watched\|or_mustnot_watched\|violation_after_completion)$' results/paper_theorems.txt` | the sixteen theorems with their statements |
@@ -335,8 +335,8 @@ The results rest on the following, which are not proved here:
   specifications to terms of the core, written in Python. Nothing proves that it
   translates a specification into the core term with the intended meaning, or
   that it rejects exactly the constructs outside the core. It is checked only
-  by tests: the 319 tests of `parser/test_triel_to_core.py`, the classification
-  of the 28 examples, and the 54 scenarios. The same holds for
+  by tests: the 329 tests of `parser/test_triel_to_core.py`, the classification
+  of the 29 examples, and the 59 scenarios. The same holds for
   `parser/triel_eval.py`, which converts a scenario into the input of the
   evaluator, and for the grammar `parser/triel.lark` with the parser library
   lark 1.3.1.
