@@ -61,6 +61,39 @@ jobs:
           name: artifact-results
           path: results/
 
+  # artifact/bench.sh in the same image: the time and the memory of the
+  # translation and of the evaluator on generated traces of 10^2 to 10^6
+  # entries. A job of its own, on a runner of its own, so that no other step
+  # runs beside it; run.sh does not run it. The results are kept as the artifact
+  # bench-results of the run.
+  bench:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Build the artifact image
+        run: docker build -f artifact/Dockerfile -t triel-artifact .
+
+      - name: Run artifact/bench.sh
+        run: |
+          mkdir -p bench-results
+          chmod 777 bench-results
+          docker run --rm -e RESULTS_DIR=/results -v "$PWD/bench-results:/results" \
+            --entrypoint /home/isabelle/triel/artifact/bench.sh triel-artifact
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-results
+          path: bench-results/
+
   # The anonymous source archive of this commit for double-blind review,
   # written by artifact/anonymize.sh and searched by artifact/check_anonymous.sh.
   # It is kept as an artifact of the run, never committed. The full history is

@@ -17,11 +17,12 @@ FROM makarius/isabelle:Isabelle2025-2@sha256:9bd33b183c399327c5d554fc8cde27c29b5
 USER root
 
 # A C toolchain and the libraries GHC links against; Python 3.12 is the
-# python3 of Ubuntu 24.04.
+# python3 of Ubuntu 24.04; GNU time for the peak memory measured by
+# artifact/bench.sh.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       binutils gcc libc6-dev libffi-dev libgmp-dev libnuma-dev make \
-      python3 python3-venv \
+      python3 python3-venv time \
  && rm -rf /var/lib/apt/lists/*
 
 # Documentation and profiling libraries are not needed to build the evaluator.
