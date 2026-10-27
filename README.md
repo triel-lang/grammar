@@ -71,7 +71,7 @@ Of these, `age_verification.triel` and `eudi_driving_license.triel` — identity
 
 ## Foundations
 
-TRIEL's semantics builds on the composition-nominative approach to program logics developed by M. Nikitchenko, S. Shkilniak and colleagues at Taras Shevchenko National University of Kyiv, in particular *Applied Logic* (2013), *Algebras and logics of partial quasiary predicates* (2017) and *Composition-Nominative Methods and Models in Program Development* (2022). `FOUNDATIONS.md` gives the full references and states, for each construct, which results it rests on and which questions remain open.
+TRIEL rests on several traditions: strong Kleene logic over partial data, free logic, the composition-nominative approach to program logics developed by M. Nikitchenko, S. Shkilniak and colleagues at Taras Shevchenko National University of Kyiv, deontic logic and contrary-to-duty obligations, temporal logic with three-valued verdicts for runtime verification, and the enforcement of policies by execution monitors. `FOUNDATIONS.md` states what TRIEL takes from each and, for each construct, which results it rests on and which questions remain open; `RELATED_WORK.md` compares TRIEL with the closest languages.
 
 ## License
 
@@ -84,4 +84,5 @@ TRIEL's semantics builds on the composition-nominative approach to program logic
 ## Contact
 
 Dmitri Chistyakov
+
 
