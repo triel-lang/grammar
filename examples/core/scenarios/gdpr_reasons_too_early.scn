@@ -1,0 +1,14 @@
+; The controller sends a notification with reasons 24 hours after activation,
+; and never the ordinary notification. That action is not notify(authority),
+; so it does not fulfil the first obligation; and it comes before the first
+; deadline, so it does not fulfil the fallback either, whose window is
+; (28 May 10:00, 4 June 10:00] (else_alt_after). Nothing else happens, and on
+; 5 June the fallback is breached at its deadline.
+(scenario gdpr_reasons_too_early
+  (spec "examples/core/gdpr_art33_notification.triel")
+  (entry "2026-05-25T10:00:00Z" (activate)
+    (data))
+  (entry "2026-05-26T10:00:00Z" (act controller (notify_with_reasons (name authority)) must)
+    (data (affected_records (int 1200))))
+  (entry "2026-06-05T10:00:00Z" (tick)
+    (data (affected_records (int 1200)))))

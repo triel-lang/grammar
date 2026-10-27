@@ -12,6 +12,7 @@ examples/core/core_readings.triel: ACCEPTED
 examples/core/core_sequence.triel: ACCEPTED
 examples/core/core_stale_block.triel: ACCEPTED
 examples/core/core_unless_records.triel: ACCEPTED
+examples/core/gdpr_art33_notification.triel: ACCEPTED
 examples/delivery_agreement.triel: ACCEPTED
 examples/eudi/eudi_driving_license.triel: ACCEPTED
 examples/hello_triel.triel: ACCEPTED

@@ -1,0 +1,10 @@
+; Nobody notifies the authority, and the number of records affected is never
+; given. On 5 June the fallback, in force from 28 May 10:00, has passed its
+; deadline of 72 hours + 7 days after activation, 4 June 10:00: it is
+; breached at that deadline. The first obligation itself is not breached.
+(scenario gdpr_no_notification
+  (spec "examples/core/gdpr_art33_notification.triel")
+  (entry "2026-05-25T10:00:00Z" (activate)
+    (data))
+  (entry "2026-06-05T10:00:00Z" (tick)
+    (data)))

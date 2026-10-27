@@ -1,0 +1,8 @@
+SPEC gdpr_art33_notification
+METADATA JURISDICTION "EU"
+METADATA SOURCE affected_records controller
+ACTIVATION OK
+BLOCK OK
+TYPES OK
+TERM 1 MUST controller notify(authority) DEADLINE 1779962400 ELSE controller notify_with_reasons(authority) DEADLINE 1780567200 : ELSE FULFILLED
+INVARIANT records_known : T

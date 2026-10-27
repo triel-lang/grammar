@@ -1,0 +1,54 @@
+-- TRIEL example inside the formal core: the notification of a personal data
+-- breach to the supervisory authority, after Article 33 of the GDPR, as an
+-- obligation with a fallback (WITHIN ... ELSE).
+--
+-- Durations count from the activation of the specification
+-- (formal/core/CORE.md, section 8.3, point 5). Here the activation is the
+-- moment when the controller became aware of the breach, so the controller
+-- must notify the authority within 72 hours of it.
+--
+-- If it has not by then, the obligation is not breached: the fallback comes
+-- into force at the first deadline, and a duration in its deadline counts from
+-- that deadline (else_alt_duration). The notification with the reasons for
+-- the delay is therefore due within 72 hours + 7 days of the activation, and
+-- only a notification with reasons after the first deadline fulfils it
+-- (else_alt_after).
+--
+-- The 7 days are an assumption of this example: Article 33 sets no such
+-- period. It requires notification without undue delay and, where feasible,
+-- within 72 hours, and a notification made later must give the reasons for
+-- the delay.
+--
+-- Article 33 also exempts a breach that is unlikely to result in a risk to
+-- the rights and freedoms of natural persons. That exemption needs a
+-- conditional term whose branch has a deadline, which is outside the core: a
+-- deadline in a composite term is rejected by the translator, so the
+-- exemption is not part of this example.
+--
+-- The SUBJECTS block declares every subject that the terms name, the
+-- authority included (formal/core/CORE.md, section 9, decision 29); no factor
+-- comes from an ORACLE and there is no PENALTY, so neither
+-- PROVENANCE_REQUIRED nor CURRENCY is required (decision 28). Every construct
+-- in this file is translated into the Isabelle/HOL core (formal/core) and
+-- evaluated by the exported evaluator (evaluator/).
+
+SPECIFICATION gdpr_art33_notification VERSION 1.0.0
+    JURISDICTION "EU"
+
+SUBJECTS {
+  controller : PARTY,
+  authority  : REGULATOR
+}
+
+TERMS {
+  controller MUST notify(authority) WITHIN 72 HOURS
+    ELSE controller MUST notify_with_reasons(authority) BY 7 DAYS
+}
+
+FACTORS {
+  affected_records : Integer METADATA SOURCE controller
+}
+
+INVARIANTS {
+  records_known : LIVENESS : EVENTUALLY(PRESENT(affected_records))
+}
