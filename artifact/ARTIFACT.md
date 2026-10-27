@@ -75,8 +75,9 @@ image build were measured for version 2.5, with the same `Dockerfile`.
 ### Times on GitHub-hosted runners
 
 The job `artifact` of `.github/workflows/artifact.yml` builds the image and
-runs `run.sh` on every push, on a GitHub-hosted runner (`ubuntu-24.04`, 4
-cores, 15.6 GiB), and reads the memory peak of the container. The nine runs
+runs `run.sh` on every push, on a GitHub-hosted runner (the label
+`ubuntu-latest` in #56 to #59, `ubuntu-24.04` from #60), and reads the memory
+peak of the container. The nine runs
 below are those, from the first run that read the memory peak (#56) to the
 run #67 of this version, in which `run.sh` passed all 11 steps; all of them
 are of sources with 28 examples and 54 scenarios. Over these runs:
@@ -247,8 +248,8 @@ minimum and maximum of all 10 runs, and the peak memory:
 
 What these measurements show, and nothing beyond them:
 
-- **The time of the evaluator grows faster than linearly with the length of
-  the trace.** For `core_invoice_agent`, ten times more entries took 13.4 and
+- **On these traces, the time of the evaluator grows faster than linearly
+  with their length.** For `core_invoice_agent`, ten times more entries took 13.4 and
   11.9 times longer from 10^2 to 10^3 entries (the ratio of the medians in #66
   and in #67), and the trace of 10^4 entries did not finish within 120 s, more
   than 689 times the median at 10^3. For `core_sequence`, the median went from
@@ -256,6 +257,7 @@ What these measurements show, and nothing beyond them:
   10^4 entries did not finish within 120 s. So no trace of 10^5 or 10^6 entries
   was run, and there is no time for them. The evaluator is not changed here.
 - The peak memory of the evaluator stayed below 16 MiB up to 10^3 entries.
+  `runs.csv` also records the memory a run had reached when it timed out.
 - The translation took 2.8 to 4.7 s per run at every length measured, 10^2 to
   10^4 entries, already 2.8 to 3.9 s at 10^2; its peak memory grew from about
   50 MiB to 92 MiB.
@@ -390,6 +392,10 @@ the time 2000-01-01 00:00:00 UTC, owner and group 0 without names and the modes
 644 and 755, and gzip stores no file name and no time. The script prints the
 SHA-256 of the archive, so an archive written locally can be compared with the
 one of the CI run of the same commit.
+
+Both scripts need GNU grep built with PCRE (`grep -P`, used with the locale
+`C.UTF-8` for the letters of any alphabet); without it they stop with an error
+instead of skipping those checks.
 
 `artifact/check_anonymous.sh ARCHIVE.tar.gz` searches a written archive again,
 independently of the script that wrote it: the hashes of the tags, the name of

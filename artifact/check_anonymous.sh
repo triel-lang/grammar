@@ -31,6 +31,13 @@
 
 set -euo pipefail
 
+# The checks for replacements joined to letters use grep -P (PCRE) with a UTF-8
+# locale. Without it they would find nothing, so the script stops instead.
+if ! printf 'a\n' | LC_ALL=C.UTF-8 grep -qP '\p{L}' 2>/dev/null; then
+  echo "error: grep -P with the locale C.UTF-8 is needed (GNU grep built with PCRE)" >&2
+  exit 2
+fi
+
 [ $# -eq 1 ] && [ -f "$1" ] || { echo "usage: $0 ARCHIVE.tar.gz" >&2; exit 2; }
 
 PATTERNS=(
