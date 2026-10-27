@@ -119,8 +119,9 @@ version with the new theory before its last three theorems (646 statements,
 57 paper theorems): #68 and #69 of one tree, #70 and #71 of a second, #72 and
 #73 of a third, which differ in documentation and in the checks of the
 anonymous archive. #74 and #75 are of one tree with all of it (658
-statements, 60 paper theorems), which differs from this version only in this
-file, `build.log`, `root.tex` and a comment of `TRIEL_Completions.thy`. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
+statements, 60 paper theorems); since then the theories are unchanged, and
+the sources differ in documentation and in the example
+`gdpr_art33_notification` with its five scenarios. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
 the step pytest: the test that every name in backquotes in `CORE.md` is defined
 in the theories failed on the name of a file, since corrected; they are not in
 the table. The time on a shared

@@ -1,6 +1,6 @@
 ; The controller notifies the authority exactly 72 hours after activation,
 ; on 28 May at 10:00. The window of the obligation is (-inf, d], so an action
-; at the deadline fulfils it (fulfilled_at_deadline).
+; at the deadline fulfils it (else_fulfilled).
 (scenario gdpr_notified_at_72h
   (spec "examples/core/gdpr_art33_notification.triel")
   (entry "2026-05-25T10:00:00Z" (activate)

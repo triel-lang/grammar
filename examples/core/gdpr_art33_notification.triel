@@ -21,13 +21,15 @@
 --
 -- Article 33 also exempts a breach that is unlikely to result in a risk to
 -- the rights and freedoms of natural persons. That exemption needs a
--- conditional term whose branch has a deadline, which is outside the core: a
--- deadline in a composite term is rejected by the translator, so the
+-- conditional term whose branch has a deadline, which is outside the core:
+-- the translator rejects a deadline in a composite term, and WITHIN ... ELSE
+-- in a composite term (formal/core/CORE.md, section 10.6, rule 12), so the
 -- exemption is not part of this example.
 --
--- The SUBJECTS block declares every subject that the terms name, the
--- authority included (formal/core/CORE.md, section 9, decision 29); no factor
--- comes from an ORACLE and there is no PENALTY, so neither
+-- The SUBJECTS block declares the controller, the subject of the terms
+-- (formal/core/CORE.md, section 9, decision 29), and the authority, which an
+-- action argument may name only if it is declared (section 10.6, rule 9). No
+-- factor comes from an ORACLE and there is no PENALTY, so neither
 -- PROVENANCE_REQUIRED nor CURRENCY is required (decision 28). Every construct
 -- in this file is translated into the Isabelle/HOL core (formal/core) and
 -- evaluated by the exported evaluator (evaluator/).
