@@ -262,13 +262,13 @@ review or a revision by the number of its stage of the development, the text
 becomes "an independent review" or "an earlier revision". The name of the
 language is kept. The script fails, and writes nothing, if any of these words,
 a hash of a commit of the repository, an e-mail address or a stage is left in a
-file or a file name, if a replacement is joined to letters (`ANONYMOUS`
-followed by a letter, or a letter followed by `ANONYM`: a word was replaced
-inside a longer word, such as the name of someone else), or if `root.tex` or
-`NOTICE` names no author.
+file or a file name, if a replacement is joined to letters (`ANONYMOUS` or
+`ANONYMIZED` followed by a letter, or a letter followed by `ANONYM`: a word was
+replaced inside a longer word, such as the name of someone else), or if
+`root.tex` or `NOTICE` names no author.
 
 The archive is reproducible: the same commit gives the same bytes, whoever
-writes it and on whichever machine. The files are listed sorted by name, with
+writes it, with GNU tar and GNU gzip. The files are listed sorted by name, with
 the time 2000-01-01 00:00:00 UTC, owner and group 0 without names and the modes
 644 and 755, and gzip stores no file name and no time. The script prints the
 SHA-256 of the archive, so an archive written locally can be compared with the

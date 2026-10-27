@@ -183,7 +183,7 @@ jobs:
             $isabelle version
             $isabelle components -u /work/isabelle-linter/linter_base
             $isabelle scala_build
-            echo "enabled lints: $($isabelle lint -l -o "lint_bundles=$LINT_BUNDLES")"
+            $isabelle lint -l -o "lint_bundles=$LINT_BUNDLES"
             $isabelle lint -o "lint_bundles=$LINT_BUNDLES" -f warn -d /work/TRIEL_Core TRIEL_Core
           ' 2>&1 | tee "$RUNNER_TEMP/lint/lint.log"
 

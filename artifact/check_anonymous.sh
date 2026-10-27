@@ -18,8 +18,8 @@
 # anonymize.sh.
 #
 # The patterns of GLUED are searched with their case: a replacement of
-# anonymize.sh joined to letters, ANONYMOUS followed by a letter or a letter
-# followed by ANONYM (ANONYMOUS, ANONYMIZED). Either means that a word was
+# anonymize.sh joined to letters, ANONYMOUS or ANONYMIZED followed by a letter,
+# or a letter followed by ANONYM. Either means that a word was
 # replaced inside a longer word, such as the name of someone else, so the archive
 # fails the search.
 #
@@ -48,6 +48,7 @@ PATTERNS=(
 
 GLUED=(
   'ANONYMOUS[A-Za-z]'
+  'ANONYMIZED[A-Za-z]'
   '[A-Za-z]ANONYM'
 )
 

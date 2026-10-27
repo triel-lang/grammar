@@ -50,15 +50,16 @@
 # may be left.
 #
 # A word replaced inside a longer word leaves a replacement joined to letters,
-# as "ANONYMOUSy" above: the archive may contain neither ANONYMOUS followed by a
-# letter nor a letter followed by ANONYM (ANONYMOUS, ANONYMIZED), matched with
-# their case. The script fails on either, so a name of someone else damaged by a
-# replacement is found, and can be added to KEEP.
+# as "ANONYMOUSy" above: the archive may contain neither ANONYMOUS or ANONYMIZED
+# followed by a letter nor a letter followed by ANONYM, matched with their case.
+# The script fails on either, so a name of someone else damaged by a replacement
+# is found, and can be added to KEEP.
 #
 # The archive holds the files of the commit HEAD (or of $REF), without .git,
 # CLA.md, the signatures directory, .github/workflows/cla.yml, this script and
 # check_anonymous.sh (both name the words searched for). It is reproducible:
-# the same commit gives the same bytes, whoever writes it and wherever. The tar
+# the same commit gives the same bytes, whoever writes it, with GNU tar and GNU
+# gzip (the options below are those of GNU tar). The tar
 # file lists the files sorted by name, with the time 2000-01-01 00:00:00 UTC,
 # owner and group 0 without names, and the modes 644 and 755 (directories and
 # executable files); gzip stores no file name and no time. The script fails, and
@@ -220,11 +221,11 @@ if hits=$(cd "$CHECK" && grep -raoE '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-
   left=1
 fi
 # A replacement joined to letters: a word was replaced inside a longer word.
-if hits=$(cd "$CHECK" && LC_ALL=C grep -raoE '[A-Za-z]*(ANONYMOUS[A-Za-z]|[A-Za-z]ANONYM)[A-Za-z]*' .); then
+if hits=$(cd "$CHECK" && LC_ALL=C grep -raoE '[A-Za-z]*(ANONYM(OUS|IZED)[A-Za-z]|[A-Za-z]ANONYM)[A-Za-z]*' .); then
   printf 'error: a replacement joined to letters (a word replaced inside a longer word) is in:\n%s\n' "$hits" >&2
   left=1
 fi
-hits=$(cd "$CHECK" && find . | LC_ALL=C grep -E 'ANONYMOUS[A-Za-z]|[A-Za-z]ANONYM' || true)
+hits=$(cd "$CHECK" && find . | LC_ALL=C grep -E 'ANONYM(OUS|IZED)[A-Za-z]|[A-Za-z]ANONYM' || true)
 if [ -n "$hits" ]; then
   printf 'error: a replacement joined to letters is in the file names:\n%s\n' "$hits" >&2
   left=1
@@ -252,6 +253,6 @@ LC_ALL=C tar -C "$TMP" --format=gnu --sort=name --mtime='2000-01-01 00:00:00Z' \
     --owner=0 --group=0 --numeric-owner --mode='u=rwX,go=rX' \
     -cf - triel | gzip -n > "$OUT"
 echo "anonymous archive: $OUT ($(tar -tzf "$OUT" | grep -vc '/$') files, ${#ENTRIES[@]} words checked:" \
-     "${#AUTHOR_WORDS[@]} from the name of the author, ${#LISTED[@]} from ${WORDS:+$(basename "$WORDS")}${WORDS:-a words file (none given)}," \
+     "${#AUTHOR_WORDS[@]} from the name of the author, ${#LISTED[@]} from $([ -n "$WORDS" ] && basename "$WORDS" || echo "a words file (none given)")," \
      "${#BUILTIN[@]} built in; ${#KEEP[@]} names of other people kept)"
 echo "sha256 $(sha256sum "$OUT" | cut -d' ' -f1)"
