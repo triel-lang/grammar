@@ -5,7 +5,7 @@
 This artifact reproduces the machine-checked results and the executable checks
 behind the paper. It contains:
 
-- `formal/core/`: the core of TRIEL 2.5.1 (the errata to 2.5) in Isabelle/HOL, 12 theories (session
+- `formal/core/`: the core of TRIEL 2.5.1 (the errata to 2.5) in Isabelle/HOL, 13 theories (session
   `TRIEL_Core`). All theorems are proved; there is no `sorry`, `oops` or
   `axiomatization`.
 - `evaluator/`: an evaluator of the core. Its Haskell code
@@ -19,8 +19,10 @@ behind the paper. It contains:
   with hand-written expected reports).
 - `artifact/`: the Docker image (`Dockerfile`), the script that runs every check
   (`run.sh`), and the Isabelle session `TRIEL_Paper`
-  (`isabelle/Paper_Theorems.thy`), which lists by name the 52 theorems cited in
-  the paper.
+  (`isabelle/Paper_Theorems.thy`), which lists by name the 57 theorems cited in
+  the paper; and `bench.sh`, which measures the time and the memory of the
+  translation of a trace and of the evaluator on generated traces (not a step
+  of `run.sh`).
 
 `artifact/run.sh` runs, in one command, every check of the repository's CI
 (`isabelle.yml`, `evaluator.yml`, `parse-examples.yml`), builds `TRIEL_Paper`,
@@ -38,11 +40,11 @@ and prints a summary whose numbers are all computed by the run.
   GiB in a run without a limit; with the container limited to 10 GiB
   (`--memory=10g`) the build passed in each of three runs, with peaks of 7.0 to
   7.8 GiB; at 8 GiB it was killed for lack of memory in two of four runs. All
-  other steps stay below 2 GiB. On a GitHub-hosted runner (4 cores, 15.6 GiB)
-  without a limit, where Isabelle2025-2 used 2 threads (as its build log
-  states), the workflow `.github/workflows/artifact.yml` read peaks of 6.94,
-  6.95, 7.03 and 7.15 GiB in four runs of the current sources (28 examples, 54
-  scenarios); it keeps the value as `memory-peak.txt` with the logs of the run.
+  other steps stay below 2 GiB. On GitHub-hosted runners (4 cores, 15.6 GiB)
+  without a limit, where Isabelle2025-2 used 2 threads (as the build logs
+  state), the workflow `.github/workflows/artifact.yml` read peaks from 6.91 to
+  7.15 GiB in the nine runs listed under "Times on GitHub-hosted runners"
+  below; it keeps the value as `memory-peak.txt` with the logs of the run.
 - Docker Desktop (macOS, Windows): set Memory to at least 10 GB in
   Settings → Resources.
 - Disk: 10 GB for the image (3.1 GB compressed download, the same size for
@@ -67,15 +69,48 @@ Measured on a 4-core x86-64 virtual machine with 16 GB of memory:
 | of which: session `TRIEL_Paper` (on the heap of `TRIEL_Core`) | 12 s |
 
 The times of `run.sh` in the table are those of version 2.5.1 (47 scenarios, 27
-examples), measured with the container limited to 10 GiB; the download and the image build were measured for version 2.5, with the same `Dockerfile`. On a
-GitHub-hosted runner (`ubuntu-latest`, 4 cores, 15.6 GiB, workflow
-`.github/workflows/artifact.yml`) the image of the current sources (28
-examples, 54 scenarios) built in 2.3 min, base images included, and `run.sh`
-passed all 11 steps in 19.6 min (1175 s; of which the clean Isabelle build
-122 s, the scenarios 200 s, pytest 490 s, the parsing of the examples 204 s,
-the ambiguity regression tests 118 s). On the same runner the tag v2.5.1 took
-13.6 min, and earlier runs of version 2.5 took 10 min and 16.5 min: the time on
-a shared runner varies from run to run.
+examples), measured with the container limited to 10 GiB; the download and the
+image build were measured for version 2.5, with the same `Dockerfile`.
+
+### Times on GitHub-hosted runners
+
+The job `artifact` of `.github/workflows/artifact.yml` builds the image and
+runs `run.sh` on every push, on a GitHub-hosted runner (`ubuntu-24.04`, 4
+cores, 15.6 GiB), and reads the memory peak of the container. The nine runs
+below are those, from the first run that read the memory peak (#56) to the
+run #67 of this version, in which `run.sh` passed all 11 steps; all of them
+are of sources with 28 examples and 54 scenarios. Over these runs:
+
+| Phase | Range over the nine runs |
+|---|---|
+| Job `artifact` (disk clean-up, image build and `run.sh`) | 16:14 to 23:39 min |
+| Image build (`docker build`, base images included) | 1:14 to 2:18 min |
+| `run.sh`, all 11 steps | 766 to 1214 s (12.8 to 20.2 min) |
+| of which: clean Isabelle build of `TRIEL_Core` | 85 to 130 s |
+| of which: the scenarios | 124 to 210 s |
+| of which: translator and driver tests (pytest) | 318 to 518 s |
+| of which: parsing of the examples with the ambiguity check | 123 to 216 s |
+| of which: ambiguity regression tests | 89 to 118 s |
+| Memory peak of the container | 6.91 to 7.15 GiB |
+
+| Run | Date (UTC) | Theories | Job `artifact` | Image build | `run.sh` | Memory peak |
+|---|---|---:|---:|---:|---:|---:|
+| #56 | 2026-10-26 | 12 | 23:26 | 2:18 | 1175 s | 6.94 GiB |
+| #57 | 2026-10-26 | 12 | 23:29 | 2:13 | 1213 s | 7.15 GiB |
+| #58 | 2026-10-26 | 12 | 23:05 | 2:06 | 1202 s | 7.03 GiB |
+| #59 | 2026-10-26 | 12 | 23:39 | 2:08 | 1186 s | 6.95 GiB |
+| #60 | 2026-10-27 | 12 | 20:59 | 1:14 | 1141 s | 6.91 GiB |
+| #61 | 2026-10-27 | 12 | 16:14 | 1:38 | 766 s | 6.93 GiB |
+| #62 | 2026-10-27 | 12 | 21:17 | 1:15 | 1156 s | 7.02 GiB |
+| #63 | 2026-10-27 | 12 | 22:34 | 1:14 | 1214 s | 7.05 GiB |
+| #67 | 2026-10-27 | 13 | 19:53 | 1:42 | 931 s | 6.95 GiB |
+
+Runs #61 to #63 are of the same commit; #67 is of the sources of this version
+with the new theory. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
+the step pytest: the test that every name in backquotes in `CORE.md` is defined
+in the theories failed on the name of a file, since corrected; they are not in
+the table. The time on a shared
+runner varies from run to run, and so does its CPU.
 
 ## Running
 
@@ -103,9 +138,9 @@ Expected end of the output:
 
 ```
 === Summary
-theories checked by Isabelle (TRIEL_Core)    12 (.thy files in formal/core: 12)
-proved statements (lemma/theorem/corollary)  633
-paper theorems found, without oracles        52 of 52
+theories checked by Isabelle (TRIEL_Core)    13 (.thy files in formal/core: 13)
+proved statements (lemma/theorem/corollary)  646
+paper theorems found, without oracles        57 of 57
 scenarios matching .expected                 54 of 54
 examples accepted by the core                26 of 28
 translator and driver tests (pytest)         319 passed in ...
@@ -137,7 +172,7 @@ docker run --rm -it --entrypoint bash triel-artifact
 | 08-parse-examples | every example parses with exactly one derivation | parse-examples.yml |
 | 09-ambiguity-tests | the ambiguity regression tests and the LALR(1) check of the grammar | parse-examples.yml |
 | 10-document-excerpts | every TRIEL excerpt of the documents, every grammar excerpt of `TECHNICAL_REPORT.md` and every usage example of the grammar file conforms to the grammar | parse-examples.yml |
-| 11-paper-theorems | the session `TRIEL_Paper` builds: each of the 52 names is a theorem of `TRIEL_Core` that depends on no oracle | — |
+| 11-paper-theorems | the session `TRIEL_Paper` builds: each of the 57 names is a theorem of `TRIEL_Core` that depends on no oracle | — |
 
 As in CI, the PDF document of `TRIEL_Core` is switched off (it needs LaTeX):
 step 02 applies the same `sed` to the scratch copy of `formal/core/ROOT` as the
@@ -147,6 +182,85 @@ The number of proved statements is counted by `artifact/count_statements.py`:
 the commands `lemma`, `theorem` and `corollary` (and `proposition`,
 `schematic_goal`, of which there are none) in `formal/core/*.thy`, outside
 comments, quotations and text blocks.
+
+## Speed of the translation and of the evaluator: bench.sh
+
+`artifact/bench.sh` measures, on generated traces of growing length, the time
+and the memory of the two programs that check a trace. It is not a step of
+`run.sh`. In the image:
+
+```bash
+mkdir -p bench-results && chmod 777 bench-results
+docker run --rm -e RESULTS_DIR=/results -v "$PWD/bench-results:/results" \
+  --entrypoint artifact/bench.sh triel-artifact
+```
+
+- **Traces.** `artifact/bench_trace.py` writes, with the fixed seed 20261027,
+  scenarios of 10^2, 10^3, 10^4, 10^5 and 10^6 entries for
+  `examples/core/core_invoice_agent.triel` and for
+  `examples/core/core_sequence.triel`, whose three terms are composite; the
+  file describes what the entries contain. The traces are written to a scratch
+  directory and removed, never committed; `traces.sha256` lists their SHA-256.
+- **Two phases, measured apart.** *translate* is
+  `python3 parser/triel_eval.py SCENARIO --input`: Python starts, the
+  specification is parsed (lark) and translated (`triel_to_core.py`), both once
+  whatever the length of the trace, and the scenario is read and the input of
+  the evaluator written to a file. *evaluate* is `evaluator/triel-eval` on that
+  file.
+- **Statistics.** Each point is run 5 times: the median, the minimum and the
+  maximum of the wall-clock times, and as peak memory the largest "Maximum
+  resident set size" that `/usr/bin/time -v` reports over the runs.
+- **Limit.** Every run is started under `timeout 120` (`timeout 60` from 10^6
+  entries). A point that does not finish is reported as `timeout`, with no
+  time, and all longer traces of that example are skipped (`skipped`) in both
+  phases.
+- **Output** in `RESULTS_DIR`: `bench.csv`, `bench.md` (the same as a Markdown
+  table), `runs.csv` (every run), `machine.txt` (CPU, cores, memory, kernel,
+  GHC, Python, lark), `traces.sha256` and the reports of the evaluator. The job
+  `bench` of `.github/workflows/artifact.yml` runs it in the same image on every
+  push, on a runner of its own, and keeps the results as the artifact
+  `bench-results` of the run.
+
+Results of the job `bench` in the runs #66 and #67 of the workflow
+(2026-10-27), on GitHub-hosted runners with 4 cores and 15.6 GiB: an AMD EPYC
+7763 in #66, an AMD EPYC 9V74 in #67; GHC 9.6.7, Python 3.12.3, lark 1.3.1.
+Both ran `bench_trace.py` of this version with the seed 20261027. For each point the
+table gives the median of its 5 runs as a range over the two CI runs, the
+minimum and maximum of all 10 runs, and the peak memory:
+
+| Example | Entries | Phase | Median, s | All runs, s | Peak memory, MiB |
+|---|---:|---|---:|---:|---:|
+| core_invoice_agent | 10^2 | translate | 2.91–3.85 | 2.89–3.93 | 52.1–52.2 |
+| core_invoice_agent | 10^2 | evaluate | 0.012–0.013 | 0.012–0.015 | 9.4–9.5 |
+| core_invoice_agent | 10^3 | translate | 2.95–3.91 | 2.88–3.95 | 56.8–56.9 |
+| core_invoice_agent | 10^3 | evaluate | 0.143–0.174 | 0.133–0.174 | 15.7–15.8 |
+| core_invoice_agent | 10^4 | translate | 3.53–4.63 | 3.52–4.66 | 92.1–92.2 |
+| core_invoice_agent | 10^4 | evaluate | timeout (120 s) in both | | |
+| core_invoice_agent | 10^5, 10^6 | both | skipped | | |
+| core_sequence | 10^2 | translate | 2.83–3.86 | 2.79–3.89 | 49.6–49.7 |
+| core_sequence | 10^2 | evaluate | 0.043 | 0.033–0.053 | 10.1–10.2 |
+| core_sequence | 10^3 | translate | 2.86–3.87 | 2.83–3.90 | 53.4 |
+| core_sequence | 10^3 | evaluate | 21.7–28.2 | 18.1–29.0 | 12.7–12.8 |
+| core_sequence | 10^4 | translate | 3.30–4.36 | 3.23–4.40 | 72.7–72.8 |
+| core_sequence | 10^4 | evaluate | timeout (120 s) in both | | |
+| core_sequence | 10^5, 10^6 | both | skipped | | |
+
+What these measurements show, and nothing beyond them:
+
+- **The time of the evaluator grows faster than linearly with the length of
+  the trace.** For `core_invoice_agent`, ten times more entries took 13.4 and
+  11.9 times longer from 10^2 to 10^3 entries (the ratio of the medians in #66
+  and in #67), and the trace of 10^4 entries did not finish within 120 s, more
+  than 689 times the median at 10^3. For `core_sequence`, the median went from
+  0.043 s at 10^2 entries to 28.2 and 21.7 s at 10^3, 655 and 505 times longer, and
+  10^4 entries did not finish within 120 s. So no trace of 10^5 or 10^6 entries
+  was run, and there is no time for them. The evaluator is not changed here.
+- The peak memory of the evaluator stayed below 16 MiB up to 10^3 entries.
+- The translation took 2.8 to 4.7 s per run at every length measured, 10^2 to
+  10^4 entries, already 2.8 to 3.9 s at 10^2; its peak memory grew from about
+  50 MiB to 92 MiB.
+- The medians of the two runners differ by up to 37 % (translation) and 30 %
+  (evaluation): the absolute times depend on the machine.
 
 ## Claims of the paper
 
@@ -158,11 +272,11 @@ variables `?x`.
 
 | Claim | Command | Expected output |
 |---|---|---|
-| The core is machine-checked: 12 theories, 633 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `12 (.thy files in formal/core: 12)`, `633`; `no sorry, oops or axiomatization ...` |
+| The core is machine-checked: 13 theories, 646 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `13 (.thy files in formal/core: 13)`, `646`; `no sorry, oops or axiomatization ...` |
 | The evaluator is the code exported from the checked theories | `cat results/03-exported-code.log` | `evaluator/generated is the exported code` |
 | The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `54` |
 | 26 of the 28 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `26`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
-| Every cited theorem exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 52` |
+| Every cited theorem exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 57` |
 | Finality of verdicts: on a trace (times that do not decrease) a definite verdict of an obligation, a prohibition or an invariant does not change when the trace is extended; the evaluator rejects a list of observations whose times decrease, so for `run` a decided line stays the same when observations are appended, unless the longer list is rejected for its time order or its types. A property of the design | `grep -A1 -E '\.(ob_verdict_final\|pr_verdict_final\|inv_final\|run_final\|time_order_rejected)$' results/paper_theorems.txt` | `TRIEL_Breach.ob_verdict_final`, `TRIEL_Breach.pr_verdict_final`, `TRIEL_Invariants.inv_final`, `TRIEL_Exec.run_final`, `TRIEL_Exec.time_order_rejected`, each with its statement, e.g. `inv_eval ?\<iota> ?\<pi> = Some ?b \<Longrightarrow> inv_eval ?\<iota> (?\<pi> @ ?\<rho>) = Some ?b` |
 | Two obligations in sequence need two actions; a prohibition in a composite term can be violated, and its trace semantics agrees with its verdict; the status of a composite term (read on the first prefix that violates the term or completes it by an executed action; conservative when a prefix has several readings) is sound and final, Violated before Done is needed, and the modes of the traces refine the denotation; for a term without AND, a violated prefix is reported as a violation at that entry or before it unless the status is unknown or the observation ended earlier on a completion by an executed action before any reading had reached a prohibition, and the exception for an earlier completion cannot be dropped; consequences for a prohibition after a reading has reached one, at the end of a sequence (no exception when the first part has no UNLESS and no AND) and in a branch of OR (no exception but an unknown status) | `grep -A1 -E '\.(must_then_must_two_actions\|violated_reachable\|then_mustnot_violated\|mustnot_violated_breach\|breach_mustnot_violated\|status_final\|status_sound\|violation_over_done\|fden_den\|then_mustnot_held\|then_mustnot_status\|status_no_missed_violation\|reached_prohibition_watched\|then_mustnot_watched\|or_mustnot_watched\|violation_after_completion)$' results/paper_theorems.txt` | the sixteen theorems with their statements |
 | Stability of the values of conditions: a definite value T or F of a condition built from equitone atoms does not change when the data is extended. This is about conditions, not about the verdicts of norms over time | `grep -A1 -E '\.(verdict_stable\|verdict_stable_nd\|cond_equitone)$' results/paper_theorems.txt` | `TRIEL_Indicators.verdict_stable`, `TRIEL_Indicators.verdict_stable_nd`, `TRIEL_Indicators.cond_equitone` with their statements |
@@ -170,6 +284,7 @@ variables `?x`.
 | IF: denotation, classical reading when the data is complete, stability of the branch; UNLESS distributes over IF | `grep -A1 -E '\.(den_if\|if_classical\|if_branch_stable\|unless_if)$' results/paper_theorems.txt` | `TRIEL_Terms.term_semantics.den_if`, `...if_classical`, `...if_branch_stable`, `TRIEL_Trace.unless_if` with their statements |
 | References between the elements of a block are acyclic, and resolving them preserves the denotation | `grep -A1 -E '\.(resolve_den\|block_den\|refs_ok_acyclic)$' results/paper_theorems.txt` | `TRIEL_Exec.term_semantics.resolve_den`, `TRIEL_Exec.term_semantics.block_den`, `TRIEL_Exec.refs_ok_acyclic` with their statements |
 | An undefined guard does not make a prohibition breached | `grep -A2 -E '\.(undefined_guard_blocks_not_breach\|enforced_no_breach)$' results/paper_theorems.txt` | `TRIEL_Breach.undefined_guard_blocks_not_breach` (two conclusions), `TRIEL_Breach.enforced_no_breach` |
+| Completions of the data (a completion is a total valuation that agrees with the state wherever the state is defined): for a condition without PRESENT and DEFAULT, if the fail-closed monitor does not block, the condition is false in every completion, and a true condition is true in every completion; allowing the action when the condition is not known to be true, or reading a comparison with an absent operand as false, can allow an action that the monitor blocks and whose condition is true in a completion; strong Kleene evaluation is not complete with respect to completions | `grep -A1 -E '\.(monitor_sound_completions\|breach_certain_completions\|skip_reading_unsound\|absent_false_unsound\|kleene_not_complete)$' results/paper_theorems.txt` | `TRIEL_Completions.monitor_sound_completions`, e.g. `\<lbrakk>present_free ?c; \<not> blocks ?c ?\<sigma>; completion ?\<sigma> ?\<sigma>'\<rbrakk> \<Longrightarrow> eval ?c ?\<sigma>' = Some False`, `...breach_certain_completions`, `...skip_reading_unsound`, `...absent_false_unsound`, `...kleene_not_complete` with their statements |
 | Conditions are terms of the composition algebra, and equitonicity follows from closure under the base compositions | `grep -A1 -E '\.(comp_closure_equitone\|interp_equitone\|cond_fm_correct\|cond_equitone_from_closure\|Ex_R_is_not_eps)$' results/paper_theorems.txt` | the five theorems of `TRIEL_Compositions` with their statements |
 | A missed deadline with ELSE puts the fallback in force instead of a breach; the verdict is final | `grep -A1 -E '\.else_(taken\|no_breach\|alt_breached\|final)$' results/paper_theorems.txt` | `TRIEL_Breach.else_taken`, `...else_no_breach`, `...else_alt_breached`, `...else_final` with their statements |
 | Hidden data does not influence the report (noninterference). A property of the design: the evaluator removes the hidden factors before it reads anything | `grep -A1 -E '\.(run_noninterference\|run_erase\|erase_flat\|flow_safe_eval\|flow_safe_evalV)$' results/paper_theorems.txt` | `TRIEL_Exec.run_noninterference`, e.g. `erase_obs (hidden ?fs) ?obs = erase_obs (hidden ?fs) ?obs' \<Longrightarrow> run (Spec ?fs ?blk ?invs) ?obs = run (Spec ?fs ?blk ?invs) ?obs'`, and the other four |
@@ -238,7 +353,8 @@ Both base images are pinned by digest in `artifact/Dockerfile`:
 
 The Python packages are installed from `artifact/requirements.txt` with
 `--require-hashes`: lark 1.3.1 (as in CI), pytest 9.1.1 and its dependencies.
-The Ubuntu packages (C toolchain and libraries for GHC, `python3-venv`) come
+The Ubuntu packages (C toolchain and libraries for GHC, `python3-venv`, and
+`time`, the GNU time of `bench.sh`) come
 from the Ubuntu 24.04 archive at build time and are not pinned.
 
 ## Anonymous archive
@@ -263,9 +379,10 @@ becomes "an independent review" or "an earlier revision". The name of the
 language is kept. The script fails, and writes nothing, if any of these words,
 a hash of a commit of the repository, an e-mail address or a stage is left in a
 file or a file name, if a replacement is joined to letters (`ANONYMOUS` or
-`ANONYMIZED` followed by a letter, or a letter followed by `ANONYM`: a word was
-replaced inside a longer word, such as the name of someone else), or if
-`root.tex` or `NOTICE` names no author.
+`ANONYMIZED` followed by a letter of any alphabet, or such a letter followed by
+`ANONYM`: a word was replaced inside a longer word, such as the name of someone
+else), if a name of another person that it keeps is joined directly to a
+replacement, or if `root.tex` or `NOTICE` names no author.
 
 The archive is reproducible: the same commit gives the same bytes, whoever
 writes it, with GNU tar and GNU gzip. The files are listed sorted by name, with
@@ -277,7 +394,8 @@ one of the CI run of the same commit.
 `artifact/check_anonymous.sh ARCHIVE.tar.gz` searches a written archive again,
 independently of the script that wrote it: the hashes of the tags, the name of
 the author, the account of the maintainer, the address of the repository, the
-sites of the project, e-mail addresses and replacements joined to letters, in
+sites of the project, e-mail addresses and replacements joined to letters of
+any alphabet or to the name of another person that the archive keeps, in
 the file names, the tar headers and the contents of every file. The workflow `.github/workflows/artifact.yml`
 writes the archive of the commit pushed on every push, searches it, and keeps it
 as the artifact `triel-artifact-anonymous` of the run; the result of the search
