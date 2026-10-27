@@ -43,7 +43,7 @@ and prints a summary whose numbers are all computed by the run.
   other steps stay below 2 GiB. On GitHub-hosted runners (4 cores, 15.6 GiB)
   without a limit, where Isabelle2025-2 used 2 threads (as the build logs
   state), the workflow `.github/workflows/artifact.yml` read peaks from 6.73 to
-  7.15 GiB in the fifteen runs listed under "Times on GitHub-hosted runners"
+  7.20 GiB in the seventeen runs listed under "Times on GitHub-hosted runners"
   below; it keeps the value as `memory-peak.txt` with the logs of the run.
 - Docker Desktop (macOS, Windows): set Memory to at least 10 GB in
   Settings → Resources.
@@ -77,22 +77,22 @@ image build were measured for version 2.5, with the same `Dockerfile`.
 The job `artifact` of `.github/workflows/artifact.yml` builds the image and
 runs `run.sh` on every push, on a GitHub-hosted runner (the label
 `ubuntu-latest` in #56 to #59, `ubuntu-24.04` from #60), and reads the memory
-peak of the container. The fifteen runs
+peak of the container. The seventeen runs
 below are those, from the first run that read the memory peak (#56) to the
-run #73 of this version, in which `run.sh` passed all 11 steps; all of them
+run #75 of this version, in which `run.sh` passed all 11 steps; all of them
 are of sources with 28 examples and 54 scenarios. Over these runs:
 
-| Phase | Range over the fifteen runs |
+| Phase | Range over the seventeen runs |
 |---|---|
 | Job `artifact` (disk clean-up, image build and `run.sh`) | 16:14 to 23:39 min |
 | Image build (`docker build`, base images included) | 1:14 to 2:18 min |
 | `run.sh`, all 11 steps | 766 to 1221 s (12.8 to 20.4 min) |
-| of which: clean Isabelle build of `TRIEL_Core` | 85 to 130 s |
+| of which: clean Isabelle build of `TRIEL_Core` | 85 to 132 s |
 | of which: the scenarios | 124 to 211 s |
 | of which: translator and driver tests (pytest) | 318 to 518 s |
 | of which: parsing of the examples with the ambiguity check | 123 to 217 s |
 | of which: ambiguity regression tests | 67 to 118 s |
-| Memory peak of the container | 6.73 to 7.15 GiB |
+| Memory peak of the container | 6.73 to 7.20 GiB |
 
 | Run | Date (UTC) | Theories | Job `artifact` | Image build | `run.sh` | Memory peak |
 |---|---|---:|---:|---:|---:|---:|
@@ -111,11 +111,16 @@ are of sources with 28 examples and 54 scenarios. Over these runs:
 | #71 | 2026-10-27 | 13 | 21:30 | 1:45 | 1054 s | 6.73 GiB |
 | #72 | 2026-10-27 | 13 | 18:25 | 1:42 | 891 s | 6.96 GiB |
 | #73 | 2026-10-27 | 13 | 22:36 | 1:17 | 1221 s | 7.05 GiB |
+| #74 | 2026-10-27 | 13 | 16:30 | 1:41 | 770 s | 7.20 GiB |
+| #75 | 2026-10-27 | 13 | 23:28 | 1:21 | 1219 s | 7.01 GiB |
 
-Runs #61 to #63 are of the same commit; #67 to #73 are of this version, with
-the new theory (#68 and #69 of one tree, #70 and #71 of a second, #72 and #73
-of a third; they differ in documentation and in the checks of the anonymous
-archive). In the runs #64 to #66 of drafts of this version, `run.sh` failed in
+Runs #61 to #63 are of the same commit. #67 to #73 are of drafts of this
+version with the new theory before its last three theorems (646 statements,
+57 paper theorems): #68 and #69 of one tree, #70 and #71 of a second, #72 and
+#73 of a third, which differ in documentation and in the checks of the
+anonymous archive. #74 and #75 are of one tree with all of it (658
+statements, 60 paper theorems), which differs from this version only in this
+file, `build.log`, `root.tex` and a comment of `TRIEL_Completions.thy`. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
 the step pytest: the test that every name in backquotes in `CORE.md` is defined
 in the theories failed on the name of a file, since corrected; they are not in
 the table. The time on a shared
@@ -230,14 +235,14 @@ docker run --rm -e RESULTS_DIR=/results -v "$PWD/bench-results:/results" \
   push, on a runner of its own, and keeps the results as the artifact
   `bench-results` of the run.
 
-Results of the job `bench` in the eight runs #66 to #73 of the workflow
+Results of the job `bench` in the ten runs #66 to #75 of the workflow
 (2026-10-27), on GitHub-hosted runners with 4 cores and 15.6 GiB: an AMD EPYC
-7763 in #66 and #71 to #73, an AMD EPYC 9V74 in #67 and #70, an AMD EPYC 9V45
-in #68 and #69; GHC 9.6.7, Python 3.12.3, lark 1.3.1. The runs #68 to #73
+7763 in #66 and #71 to #75, an AMD EPYC 9V74 in #67 and #70, an AMD EPYC 9V45
+in #68 and #69; GHC 9.6.7, Python 3.12.3, lark 1.3.1. The runs #68 to #75
 printed the same `traces.sha256`; #66 and #67 ran the same `bench_trace.py`
 with the same seed, before `bench.sh` printed the hashes. For each point the
-table gives the median of its 5 runs as a range over the eight CI runs, the
-minimum and maximum of all 40 runs, and the peak memory:
+table gives the median of its 5 runs as a range over the ten CI runs, the
+minimum and maximum of all 50 runs, and the peak memory:
 
 | Example | Entries | Phase | Median, s | All runs, s | Peak memory, MiB |
 |---|---:|---|---:|---:|---:|
@@ -245,15 +250,15 @@ minimum and maximum of all 40 runs, and the peak memory:
 | core_invoice_agent | 10^2 | evaluate | 0.012–0.014 | 0.012–0.015 | 9.2–9.5 |
 | core_invoice_agent | 10^3 | translate | 2.24–3.98 | 2.19–4.02 | 56.5–56.9 |
 | core_invoice_agent | 10^3 | evaluate | 0.093–0.174 | 0.093–0.185 | 15.7–17.8 |
-| core_invoice_agent | 10^4 | translate | 2.73–4.75 | 2.67–4.81 | 92.1–92.3 |
-| core_invoice_agent | 10^4 | evaluate | timeout (120 s) in all eight | | |
+| core_invoice_agent | 10^4 | translate | 2.73–4.75 | 2.67–4.81 | 92.1–92.4 |
+| core_invoice_agent | 10^4 | evaluate | timeout (120 s) in all ten | | |
 | core_invoice_agent | 10^5, 10^6 | both | skipped | | |
-| core_sequence | 10^2 | translate | 2.05–3.88 | 2.01–3.96 | 49.4–50.1 |
+| core_sequence | 10^2 | translate | 2.05–3.88 | 2.01–3.98 | 49.4–50.1 |
 | core_sequence | 10^2 | evaluate | 0.022–0.053 | 0.022–0.063 | 10.0–10.2 |
 | core_sequence | 10^3 | translate | 2.09–3.93 | 2.02–3.96 | 53.2–53.4 |
-| core_sequence | 10^3 | evaluate | 13.0–28.7 | 12.5–29.4 | 12.7–12.9 |
-| core_sequence | 10^4 | translate | 2.37–4.41 | 2.31–4.43 | 72.7–72.9 |
-| core_sequence | 10^4 | evaluate | timeout (120 s) in all eight | | |
+| core_sequence | 10^3 | evaluate | 13.0–29.0 | 12.5–29.4 | 12.7–12.9 |
+| core_sequence | 10^4 | translate | 2.37–4.41 | 2.31–4.48 | 72.7–72.9 |
+| core_sequence | 10^4 | evaluate | timeout (120 s) in all ten | | |
 | core_sequence | 10^5, 10^6 | both | skipped | | |
 
 What these measurements show, and nothing beyond them:
@@ -264,7 +269,7 @@ What these measurements show, and nothing beyond them:
   within each CI run; at 10^2 entries the medians are only 12 to 14 ms, so the
   ratio is coarse), and the trace of 10^4 entries did not finish within 120 s, more
   than 689 times the largest median at 10^3. For `core_sequence`, from 10^2 to
-  10^3 entries the median grew 403 to 668 times within each CI run, and 10^4
+  10^3 entries the median grew 403 to 675 times within each CI run, and 10^4
   entries did not finish within 120 s. So no trace of 10^5 or 10^6 entries was
   run, and there is no time for them. The evaluator is not changed here.
 - The peak memory of the evaluator stayed below 18 MiB up to 10^3 entries.

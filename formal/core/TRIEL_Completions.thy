@@ -3,8 +3,10 @@
                 state wherever it is defined. What the fail-closed monitor of TRIEL_Breach
                 allows, and a condition known to be true, stay so in every completion;
                 reading an undefined condition as "skip the policy", or a comparison with
-                an absent operand as false, does not; and strong Kleene evaluation is not
-                complete with respect to completions.
+                an absent operand as false, does not; strong Kleene evaluation is not
+                complete with respect to completions, and, with two different values, it
+                is the most defined sound evaluation that combines the values of the parts
+                of a condition by four connectives.
     SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 

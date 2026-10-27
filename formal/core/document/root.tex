@@ -119,12 +119,11 @@ to completions: $x = v$ \texttt{AND NOT} $(x = v)$ with $x$ absent is undefined,
 false in every completion (\texttt{absent\_contradiction}, \texttt{kleene\_not\_complete}).
 Among the evaluations that read the atoms in the same way and combine their values by any
 four connectives on the three truth values, strong Kleene evaluation is sound for every
-completion, and, when there are two different values, every sound one is below it on each
-condition without \texttt{PRESENT} and \texttt{DEFAULT} and none defines $x = v$
-\texttt{AND NOT} $(x = v)$ with $x$ absent (\texttt{kleene\_sound\_conn},
-\texttt{kleene\_optimal}, \texttt{compositional\_incomplete}): a classical fact about the
-logic of Kleene, proved here with respect to the completions of states, the flat nominative
-data that map names to values.
+completion and, with two different values, the most defined sound one, and no sound one is
+complete (\texttt{kleene\_sound\_conn}, \texttt{kleene\_optimal},
+\texttt{compositional\_incomplete}): a classical fact about the logic of Kleene, proved here
+with respect to the completions of states, the flat nominative data that map names to
+values.
 
 \paragraph{Invariants (theory \texttt{TRIEL\_Invariants}).}
 \texttt{ALWAYS}, \texttt{EVENTUALLY} and \texttt{NEXT} are evaluated on finite prefixes of
