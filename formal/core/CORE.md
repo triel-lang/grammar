@@ -364,7 +364,9 @@ The values in sections 1–6 have an arbitrary type. This section gives TRIEL da
 
 *Reading.* "The field is absent for good" corresponds to E_x on a closed record: E_x(d) = F is a definite answer, and it is right only if no extension can add the field. "The value is not yet known" corresponds to the undefinedness of ↓x: ↓x(d) = ⊥, and an extension can only make it T. A condition written with ↓ never gives a verdict that more data would overturn (`verdict_stable_nd`). A condition written with E_x can (`Ex_breaks_stability`). The meanings of `PRESENT` and of Optional are unchanged: `PRESENT` is E_x (section 9, decision 1), and typing with Optional is still not monotone.
 
-**Open question.** Does this reading match the intent of the composition-nominative approach for data that arrive over time? That is: should an absence in data that may still arrive be read as ↓ (not yet known), and an absence in a closed record as E_x (absent for good)?
+This reading is TRIEL's own; it is not claimed to be the reading of absence intended in the composition-nominative approach.
+
+**Open question.** This is a question of TRIEL's design: should TRIEL read an absence in data that may still arrive as ↓ (not yet known), and an absence in a closed record as E_x (absent for good)?
 
 ### 7.3 Compositions (`TRIEL_Compositions.thy`)
 

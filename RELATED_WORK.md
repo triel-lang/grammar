@@ -1,6 +1,6 @@
 # Related Work
 
-This file compares TRIEL with the closest languages and formalisations, on the basis of their published papers, documentation and specifications. The traditions TRIEL builds on, and the result each construct rests on, are in [`FOUNDATIONS.md`](FOUNDATIONS.md). `TECHNICAL_REPORT.md` §3 compares TRIEL with OPA/Rego, Wysteria and Wys\*, ZK-SecreC, Allium, and ZoKrates and Noir. Statements about TRIEL here are limited to what the Isabelle/HOL core in [`formal/core`](formal/core/CORE.md) proves; names in code font are its definitions and theorems.
+This file compares TRIEL with the closest languages and formalisations, on the basis of their published papers, documentation and specifications. The traditions TRIEL draws on, and the definitions and results each construct uses, are in [`FOUNDATIONS.md`](FOUNDATIONS.md). `TECHNICAL_REPORT.md` §3 compares TRIEL with OPA/Rego, Wysteria and Wys\*, ZK-SecreC, Allium, and ZoKrates and Noir. Statements about TRIEL here are limited to what the Isabelle/HOL core in [`formal/core`](formal/core/CORE.md) proves; names in code font are its definitions and theorems.
 
 ## Authorization policies for software and agents
 

@@ -71,7 +71,7 @@ Of these, `age_verification.triel` and `eudi_driving_license.triel` — identity
 
 ## Foundations
 
-TRIEL rests on several traditions: strong Kleene logic over partial data, free logic, the composition-nominative approach to program logics developed by M. Nikitchenko, S. Shkilniak and colleagues at Taras Shevchenko National University of Kyiv, deontic logic and contrary-to-duty obligations, temporal logic with three-valued verdicts for runtime verification, and the enforcement of policies by execution monitors. `FOUNDATIONS.md` states what TRIEL takes from each and, for each construct, which results it rests on and which questions remain open; `RELATED_WORK.md` compares TRIEL with the closest languages.
+TRIEL is a separate piece of work that draws on several traditions: strong Kleene logic over partial data, free logic, definitions from the composition-nominative approach to program logics developed by M. Nikitchenko, S. Shkilniak and colleagues at Taras Shevchenko National University of Kyiv, deontic logic and contrary-to-duty obligations, temporal logic with three-valued verdicts for runtime verification, and the enforcement of policies by execution monitors. `FOUNDATIONS.md` states what TRIEL takes from each and, for each construct, which definitions and results it uses and which questions remain open; `RELATED_WORK.md` compares TRIEL with the closest languages.
 
 ## License
 
