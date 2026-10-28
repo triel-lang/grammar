@@ -357,7 +357,7 @@ The two readings never both succeed. After the operator, one reading needs an op
 
 TRIEL overlaps, in stated purpose, with several existing languages; the comparisons below are drawn at the level of publicly observable syntax and semantics, not implementation internals.
 
-The traditions the language draws on, and for each construct which definitions it takes from them, which it defines itself and which questions are still open, are set out separately in `FOUNDATIONS.md`.
+`FOUNDATIONS.md` sets out the traditions the language draws on and, for each construct, which definitions it takes from them, which it defines itself and which questions remain open.
 
 **OPA/Rego.** Rego is a mature declarative policy language evaluating rules against a snapshot of input data — a stateless, single-query evaluation model. TRIEL shares the goal of separating policy from the systems it governs, but adds trace semantics with native LTL/CTL operators and zero-knowledge field constraints, neither of which Rego's evaluation model addresses. This is a difference in scope, not a claim of superiority: Rego's runtime maturity and integration ecosystem for real-time authorization decisions is not something TRIEL, as a specification language without a released runtime, currently offers.
 
