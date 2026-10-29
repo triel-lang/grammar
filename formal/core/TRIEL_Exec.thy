@@ -1232,9 +1232,9 @@ corollary mem3_sound:
 end
 
 
-text \<open>Completeness: for terms without UNLESS and AND the answer is always definite.\<close>
+text \<open>Definiteness: for terms without UNLESS and AND the answer is always definite.\<close>
 
-theorem mem3_complete: "unless_free t \<Longrightarrow> and_free t \<Longrightarrow> mem3 t \<pi> r \<noteq> None"
+theorem mem3_definite: "unless_free t \<Longrightarrow> and_free t \<Longrightarrow> mem3 t \<pi> r \<noteq> None"
 proof (induction t arbitrary: \<pi> r)
   case (TThen t u)
   from TThen.prems have ut: "unless_free t" and ft: "and_free t"
@@ -1393,7 +1393,7 @@ fun mem3m :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: li
       else if eval c (st \<pi> 0) = Some True then mem3m t \<pi> r m else mem3m u \<pi> r m)"
 | "mem3m TSkip \<pi> r m = Some (r = Done \<and> length \<pi> = 1 \<and> m = Inst)"
 
-theorem mem3m_complete: "unless_free t \<Longrightarrow> and_free t \<Longrightarrow> mem3m t \<pi> r m \<noteq> None"
+theorem mem3m_definite: "unless_free t \<Longrightarrow> and_free t \<Longrightarrow> mem3m t \<pi> r m \<noteq> None"
 proof (induction t arbitrary: \<pi> r m)
   case (TMust s a)
   then show ?case by auto
@@ -1412,7 +1412,7 @@ next
   case (TThen t u)
   from TThen.prems have ut: "unless_free t" and ft: "and_free t"
     and uu: "unless_free u" and fu: "and_free u" by simp_all
-  note ht = TThen.IH(1)[OF ut ft] and hu = TThen.IH(2)[OF uu fu] and mt = mem3_complete[OF ut ft]
+  note ht = TThen.IH(1)[OF ut ft] and hu = TThen.IH(2)[OF uu fu] and mt = mem3_definite[OF ut ft]
   have a: "kors (map (\<lambda>k. kand (mem3 t (take (Suc k) \<pi>) Done) (mem3m u (drop k \<pi>) r m))
                      [0..<length \<pi> - 1]) \<noteq> None"
   proof (rule kors_defined)
@@ -1522,7 +1522,7 @@ proof (rule kors_defined)
   fix x assume "x \<in> set (map (\<lambda>j. hstep t (take (Suc j) \<pi>)) [0..<Suc k])"
   then obtain j where x: "x = hstep t (take (Suc j) \<pi>)" by auto
   show "x \<noteq> None" unfolding x hstep_def
-    by (rule kor_defined) (rule mem3m_complete[OF u a])+
+    by (rule kor_defined) (rule mem3m_definite[OF u a])+
 qed
 
 lemma status_CAt:
@@ -1588,7 +1588,7 @@ proof
   have d: "pstep t \<pi> k \<noteq> None" for k
     unfolding pstep_def
     by (rule step_defined)
-      (simp_all add: mem3_complete[OF u a] mem3m_complete[OF u a] held_upto_defined[OF u a])
+      (simp_all add: mem3_definite[OF u a] mem3m_definite[OF u a] held_upto_defined[OF u a])
   from c obtain k where f: "find (\<lambda>k. pstep t \<pi> k \<noteq> Some None) [0..<length \<pi>] = Some k"
     by (auto simp: status_def split: option.splits)
   then have n: "pstep t \<pi> k \<noteq> Some None" by (simp add: find_upt_Some)
@@ -2176,11 +2176,11 @@ qed
 text \<open>Without UNLESS and AND the three answers are the memberships themselves.\<close>
 
 lemma mem3_eq: "unless_free t \<Longrightarrow> and_free t \<Longrightarrow> mem3 t \<rho> r = Some ((\<rho>, r) \<in> den t)"
-  using mem3_complete[of t \<rho> r] mem3_sound[of t \<rho> r] by (cases "mem3 t \<rho> r") auto
+  using mem3_definite[of t \<rho> r] mem3_sound[of t \<rho> r] by (cases "mem3 t \<rho> r") auto
 
 lemma mem3m_eq:
   "unless_free t \<Longrightarrow> and_free t \<Longrightarrow> mem3m t \<rho> r m = Some ((\<rho>, r, m) \<in> fden t)"
-  using mem3m_complete[of t \<rho> r m] mem3m_sound[of t \<rho> r m] by (cases "mem3m t \<rho> r m") auto
+  using mem3m_definite[of t \<rho> r m] mem3m_sound[of t \<rho> r m] by (cases "mem3m t \<rho> r m") auto
 
 lemma held_upto_eq:
   "unless_free t \<Longrightarrow> and_free t
@@ -3495,7 +3495,7 @@ qed
 
 text \<open>A composite line reports \<open>mem3\<close> on the blocked trace. By \<open>mem3_sound\<close> its definite
   answers are membership in the denotation of the term, for terms without AND, and by
-  \<open>mem3_complete\<close> they are always definite for terms without UNLESS and AND.\<close>
+  \<open>mem3_definite\<close> they are always definite for terms without UNLESS and AND.\<close>
 
 
 subsection \<open>Export\<close>
