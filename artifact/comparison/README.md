@@ -43,7 +43,7 @@ The policies:
 The time, the activation time, the limit, and the optional amount, quote time and approval are attributes of the request. The policies:
 - `invoice.cedar`: unguarded.
 - `invoice_guarded.cedar`: every optional attribute guarded with `has … &&`, as the validator asks.
-- `invoice_failclosed.cedar`: the prohibition holds unless its condition `amount_eur > limit_eur AND NOT owner_approved` is known to be false in strong Kleene logic. That is, it holds unless the amount is known and not over the limit, or the approval is known and true. The amount counts as known only while its quote is at most one hour old, as under `MAX_AGE 1 HOURS ON_STALE BLOCK`. This is how the fail-closed monitor of the TRIEL core reads the prohibition. The policy validates.
+- `invoice_failclosed.cedar`: the prohibition holds unless its condition `amount_eur > limit_eur AND NOT owner_approved` is known to be false in strong Kleene logic. That is, it holds unless the amount is known and not over the limit, or the approval is known and true. The amount counts as known only while its quote is at most one hour old. This follows `MAX_AGE 1 HOURS ON_STALE BLOCK` with one difference: Cedar measures the age at the time of the request (`now`), whereas TRIEL judges the prohibition in the state of the entry before the action, so it measures the age at that entry. The two agree on every recorded trace; the stale-quote trace has a tick at 10:45 before the payment at 11:00. This is how the fail-closed monitor of the TRIEL core reads the prohibition. The policy validates.
 
 ### Other files
 
@@ -73,7 +73,7 @@ Without `TRIEL_EVAL`, the script builds the evaluator from `evaluator/` with `gh
 
 Every trace is activated at 09:00 on Monday 2 November 2026, with a limit of 1000.00. The oracle quotes the invoice at 09:30, and the payment is at 10:00, unless the row says otherwise.
 
-The TRIEL column gives the two verdicts of the evaluator: the obligation to pay, then the prohibition. "Blocked" means that the condition of the prohibition is undefined before the payment, so the fail-closed monitor of the core blocks it (`undefined_guard_blocks_not_breach`). The evaluator does not print this; it reports verdicts only. "—" marks a request that was not run in that variant.
+The TRIEL column gives the two verdicts of the evaluator: the obligation to pay, then the prohibition. "Blocked" means that the condition of the prohibition is undefined before the payment, so the fail-closed monitor of the core blocks it (`undefined_guard_blocks_not_breach`). The evaluator does not print this; it reports verdicts only. "—" marks a request that was not run: there is no Dogwood trace for a payment approved while the quote is missing.
 
 | Trace | TRIEL: obligation; prohibition | Cedar unguarded | Cedar guarded | Cedar fail-closed | Dogwood events | Dogwood unguarded | Dogwood guarded |
 |---|---|---|---|---|---|---|---|
