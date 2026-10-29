@@ -1,4 +1,5 @@
-(* The theorems cited in the paper, listed by name. Built on top of the session
+(* The theorems cited in the paper and further ones, and the definitions that the
+   paper restates, listed by name. Built on top of the session
    TRIEL_Core of formal/core, which is not changed:
 
      isabelle build -e -d ../../formal/core -D .

@@ -96,3 +96,17 @@ ALLOW
   error while evaluating policy `block_stale_quote`: record does not have the attribute `quoted_at`
   error while evaluating policy `over_limit_without_approval`: record does not have the attribute `amount_eur`
 [exit 0]
+
+$ cedar authorize -p invoice.cedar -s schema.cedarschema --entities entities.json --request-json req/no_amount_approved.json -v -f plain
+ALLOW
+  policies: agent_may_pay
+  error while evaluating policy `block_stale_quote`: record does not have the attribute `quoted_at`
+  error while evaluating policy `over_limit_without_approval`: record does not have the attribute `amount_eur`
+[exit 0]
+
+$ cedar authorize -p invoice.cedar --entities entities.json --request-json req/no_amount_approved.json -v -f plain
+ALLOW
+  policies: agent_may_pay
+  error while evaluating policy `block_stale_quote`: record does not have the attribute `quoted_at`
+  error while evaluating policy `over_limit_without_approval`: record does not have the attribute `amount_eur`
+[exit 0]

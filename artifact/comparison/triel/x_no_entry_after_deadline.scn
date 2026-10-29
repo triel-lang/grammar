@@ -1,4 +1,4 @@
-; (c1) Nobody pays and nothing at all is recorded after 09:30 on 2 November.
+; Nobody pays and nothing at all is recorded after 09:30 on 2 November.
 (scenario x_no_entry_after_deadline
   (spec "examples/core/core_invoice_agent.triel")
   (entry "2026-11-02T09:00:00Z" (activate) (data (limit_eur (dec 1000.00)) (owner_approved (bool false))))

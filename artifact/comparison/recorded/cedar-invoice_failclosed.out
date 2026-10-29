@@ -82,7 +82,6 @@ $ cedar authorize -p invoice_failclosed.cedar -s schema.cedarschema --entities e
 DENY
 
 note: this decision was due to the following policies:
-  block_stale_quote
   over_limit_without_approval
 
 [exit 2]
@@ -92,7 +91,6 @@ $ cedar authorize -p invoice_failclosed.cedar --entities entities.json --request
 DENY
 
 note: this decision was due to the following policies:
-  block_stale_quote
   over_limit_without_approval
 
 [exit 2]
@@ -149,7 +147,6 @@ DENY
 
 note: this decision was due to the following policies:
   over_limit_without_approval
-  block_stale_quote
 
 [exit 2]
 
@@ -158,8 +155,25 @@ $ cedar authorize -p invoice_failclosed.cedar --entities entities.json --request
 DENY
 
 note: this decision was due to the following policies:
-  block_stale_quote
   over_limit_without_approval
 
 [exit 2]
+
+$ cedar authorize -p invoice_failclosed.cedar -s schema.cedarschema --entities entities.json --request-json req/no_amount_approved.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice_failclosed.cedar --entities entities.json --request-json req/no_amount_approved.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
 

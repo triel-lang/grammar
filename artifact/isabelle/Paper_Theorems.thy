@@ -1,9 +1,12 @@
 (*  Title:      Paper_Theorems.thy
-    Purpose:    The theorems of formal/core cited in the paper, by their full names.
+    Purpose:    The theorems of formal/core cited in the paper, and further ones that
+                the artifact documents, by their full names; and the definitions that
+                the formal sections of the paper restate.
 
-Every name below is looked up by thm. A name that is not a theorem of TRIEL_Core is an
-error, and so the build of the session TRIEL_Paper fails. The check at the end fails the
-build as well if one of the theorems depends on an oracle (an unfinished proof is one).
+Every name below is looked up by thm. A name that is not a theorem or definition of
+TRIEL_Core is an error, and so the build of the session TRIEL_Paper fails. The check at the end fails the
+build as well if one of the theorems (the names before the section on definitions)
+depends on an oracle (an unfinished proof is one).
 The theorems, with their statements, are also exported to output/paper_theorems.txt
 by isabelle build -e.
 *)

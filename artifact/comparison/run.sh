@@ -7,7 +7,7 @@
 # Needs, on PATH:
 #   cedar    cedar-policy-cli 4.14.0   cargo install cedar-policy-cli --version 4.14.0 --locked
 #   dogwood  dogwood-cli 1.1.0         cargo install dogwood-cli --version 1.1.0 --locked
-#   python3 with lark (parser/requirements of the repository)
+#   python3 with lark (artifact/requirements.txt)
 # and the TRIEL evaluator: the path in TRIEL_EVAL, or ghc to build it from
 # evaluator/.
 #
@@ -20,15 +20,20 @@ set -u
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
-OUT=${1:-$HERE/results}
+OUT=$(realpath -m "${1:-$HERE/results}")
 WORK="$OUT/work"
 
 for tool in cedar dogwood python3; do
   command -v "$tool" >/dev/null || { echo "error: $tool not found on PATH"; exit 1; }
 done
 
-rm -rf "$OUT"
+# Remove an earlier output of this script only, never another directory.
+if [ -e "$OUT" ]; then
+  [ -f "$OUT/.comparison-results" ] || { echo "error: $OUT exists and is not an output of this script"; exit 1; }
+  rm -rf "$OUT"
+fi
 mkdir -p "$WORK"
+touch "$OUT/.comparison-results"
 cp -r "$HERE/dw" "$HERE/cedar" "$HERE/cedar5" "$HERE/gen" "$WORK/"
 
 # One output file per group of commands. Each command is printed, then its
@@ -51,7 +56,7 @@ python3 -I "$WORK/gen/mkctx.py" "$WORK/cedar/req" >/dev/null
 
 TRACES="within_limit over_limit approved approval_missing stale_quote owner_fallback owner_late no_amount owner_early owner_after_5d"
 ATTR_TRACES="within_limit over_limit approved approval_missing stale_quote owner_fallback owner_late no_amount"
-REQUESTS="within_limit over_limit approved approval_missing stale_quote owner_fallback owner_early owner_after_5d no_amount"
+REQUESTS="within_limit over_limit approved approval_missing stale_quote owner_fallback owner_early owner_after_5d no_amount no_amount_approved"
 
 # --- Dogwood: quote, approval and activation as events in the history ---------
 
@@ -126,7 +131,7 @@ if [ -z "$EVAL" ]; then
   EVAL="$WORK/triel-eval"
 fi
 group triel-further-traces
-for s in x_no_amount x_no_entry_after_deadline x_tick_between; do
+for s in x_no_amount x_no_amount_approved x_no_entry_after_deadline x_tick_between; do
   cmd python3 parser/triel_eval.py "artifact/comparison/triel/$s.scn" --evaluator "$EVAL"
 done
 

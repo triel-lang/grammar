@@ -2,7 +2,6 @@ import json, os, sys
 out = sys.argv[1]; os.makedirs(out, exist_ok=True)
 def dt(s): return {"__extn": {"fn": "datetime", "arg": s}}
 def dec(s): return {"__extn": {"fn": "decimal", "arg": s}}
-D = "2026-11-0"
 def ctx(now, amount=None, quoted="2026-11-02T09:30:00Z", approved=None):
     c = {"now": dt(now), "activated_at": dt("2026-11-02T09:00:00Z"), "limit_eur": dec("1000.00")}
     if amount is not None: c["amount_eur"] = dec(amount)
@@ -19,6 +18,7 @@ cases = {
  "owner_early":      ("owner", ctx("2026-11-02T10:00:00Z", "1500.00", approved=False)),
  "owner_after_5d":   ("owner", ctx("2026-11-07T12:00:00Z", "1500.00", approved=False)),
  "no_amount":        ("agent", ctx("2026-11-02T10:00:00Z", None, quoted=None, approved=False)),
+ "no_amount_approved": ("agent", ctx("2026-11-02T10:00:00Z", None, quoted=None, approved=True)),
 }
 for name, (who, c) in cases.items():
     req = {"principal": f'Inv::{"Agent" if who=="agent" else "Owner"}::"{who}"',

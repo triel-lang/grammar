@@ -1,9 +1,7 @@
-// Variant T: the quote, the approval and the activation are events in the history.
+// temporal.dw for the default event schema, whose windows are at most 24 hours:
+// without the owner's window, and with the approval window shortened to 24h.
 @id("agent_may_pay")
 permit (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource);
-
-// Attempted encoding of the ELSE branch: the owner may pay once the agent's
-// three days since activation have passed and within the next two days.
 
 // MUST_NOT pay WHEN amount > limit AND NOT owner_approved.
 @id("over_limit_without_approval")

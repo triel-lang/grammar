@@ -1,4 +1,4 @@
-// Variant A2: the same, with `has` guards (absent attribute -> condition false).
+// The amount and approval as request attributes, with `has` guards (absent attribute -> condition false).
 @id("agent_may_pay")
 permit (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource);
 

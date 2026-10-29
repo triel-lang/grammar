@@ -87,3 +87,13 @@ $ cedar authorize -p invoice_guarded.cedar --entities entities.json --request-js
 ALLOW
   policies: agent_may_pay
 [exit 0]
+
+$ cedar authorize -p invoice_guarded.cedar -s schema.cedarschema --entities entities.json --request-json req/no_amount_approved.json -v -f plain
+ALLOW
+  policies: agent_may_pay
+[exit 0]
+
+$ cedar authorize -p invoice_guarded.cedar --entities entities.json --request-json req/no_amount_approved.json -v -f plain
+ALLOW
+  policies: agent_may_pay
+[exit 0]

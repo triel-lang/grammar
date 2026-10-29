@@ -44,12 +44,12 @@ DENY
 
 $ cedar authorize -p invoice_failclosed.cedar -s schema.cedarschema --entities entities.json --request-json req/stale_quote.json -v -f plain
 DENY
-  policies: block_stale_quote, over_limit_without_approval
+  policies: over_limit_without_approval
 [exit 2]
 
 $ cedar authorize -p invoice_failclosed.cedar --entities entities.json --request-json req/stale_quote.json -v -f plain
 DENY
-  policies: block_stale_quote, over_limit_without_approval
+  policies: over_limit_without_approval
 [exit 2]
 
 $ cedar authorize -p invoice_failclosed.cedar -s schema.cedarschema --entities entities.json --request-json req/owner_fallback.json -v -f plain
@@ -80,10 +80,20 @@ DENY
 
 $ cedar authorize -p invoice_failclosed.cedar -s schema.cedarschema --entities entities.json --request-json req/no_amount.json -v -f plain
 DENY
-  policies: block_stale_quote, over_limit_without_approval
+  policies: over_limit_without_approval
 [exit 2]
 
 $ cedar authorize -p invoice_failclosed.cedar --entities entities.json --request-json req/no_amount.json -v -f plain
 DENY
-  policies: block_stale_quote, over_limit_without_approval
+  policies: over_limit_without_approval
 [exit 2]
+
+$ cedar authorize -p invoice_failclosed.cedar -s schema.cedarschema --entities entities.json --request-json req/no_amount_approved.json -v -f plain
+ALLOW
+  policies: agent_may_pay
+[exit 0]
+
+$ cedar authorize -p invoice_failclosed.cedar --entities entities.json --request-json req/no_amount_approved.json -v -f plain
+ALLOW
+  policies: agent_may_pay
+[exit 0]

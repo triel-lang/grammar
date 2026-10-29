@@ -1,4 +1,4 @@
-// Variant A1: amount and approval are request attributes, read without `has`.
+// The amount and approval are request attributes, read without `has`.
 @id("agent_may_pay")
 permit (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource);
 

@@ -1,7 +1,10 @@
-// Pure Cedar rendering of core_invoice_agent.triel written to fail closed: a
-// forbid holds unless its condition is known to be false, as the TRIEL monitor
-// blocks unless the condition is known to be false. Guarded with if ... then ...
-// else true, which the validator accepts.
+// Pure Cedar rendering of core_invoice_agent.triel written as the TRIEL monitor
+// reads the prohibition: the forbid holds unless its condition
+// `amount_eur > limit_eur AND NOT owner_approved` is known to be false in strong
+// Kleene logic, that is, unless the amount is known and not over the limit, or
+// the approval is known and true. As in TRIEL (MAX_AGE 1 HOURS ON_STALE BLOCK),
+// the amount counts as known only while its quote is at most one hour old. Every
+// optional attribute is read behind `has`, so the policy validates.
 @id("agent_may_pay")
 permit (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource);
 
@@ -15,16 +18,8 @@ when {
 @id("over_limit_without_approval")
 forbid (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource)
 when {
-  if context has amount_eur
-  then context.amount_eur.greaterThan(context.limit_eur) &&
-       (if context has owner_approved then !context.owner_approved else true)
-  else true
-};
-
-@id("block_stale_quote")
-forbid (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource)
-when {
-  if context has quoted_at
-  then context.now.durationSince(context.quoted_at) > duration("1h")
-  else true
+  !((context has amount_eur && context has quoted_at &&
+     context.now.durationSince(context.quoted_at) <= duration("1h") &&
+     !context.amount_eur.greaterThan(context.limit_eur)) ||
+    (context has owner_approved && context.owner_approved))
 };

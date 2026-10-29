@@ -32,10 +32,14 @@ ALLOW
 
 $ cedar authorize -p absent.cedar -s s_req.cedarschema --entities entities.json --request-json req_empty.json -v -f plain
 failed to parse request
+  failed to create a context from req_empty.json
+  while parsing context, expected the record to have an attribute `owner_approved`, but it does not
 [exit 1]
 
 $ cedar authorize -p absent.cedar -s s_req.cedarschema --request-validation false --entities entities.json --request-json req_empty.json -v -f plain
 failed to parse request
+  failed to create a context from req_empty.json
+  while parsing context, expected the record to have an attribute `owner_approved`, but it does not
 [exit 1]
 
 $ cedar authorize -p absent.cedar -s s_none.cedarschema --entities entities.json --request-json req_empty.json -v -f plain
@@ -77,8 +81,12 @@ DENY
 
 $ cedar authorize -p absent.cedar -s s_none.cedarschema --entities entities.json --request-json req_false.json -v -f plain
 failed to parse request
+  failed to create a context from req_false.json
+  while parsing context, record attribute `owner_approved` should not exist according to the schema
 [exit 1]
 
 $ cedar authorize -p absent.cedar -s s_none.cedarschema --request-validation false --entities entities.json --request-json req_false.json -v -f plain
 failed to parse request
+  failed to create a context from req_false.json
+  while parsing context, record attribute `owner_approved` should not exist according to the schema
 [exit 1]

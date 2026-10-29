@@ -1,4 +1,4 @@
-; (b) The oracle never quotes the invoice: amount_eur is never supplied.
+; The oracle never quotes the invoice: amount_eur is never supplied.
 (scenario x_no_amount
   (spec "examples/core/core_invoice_agent.triel")
   (entry "2026-11-02T09:00:00Z" (activate) (data (limit_eur (dec 1000.00)) (owner_approved (bool false))))

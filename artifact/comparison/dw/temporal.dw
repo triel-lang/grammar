@@ -1,4 +1,4 @@
-// Variant T: the quote, the approval and the activation are events in the history.
+// The quote, the approval and the activation are events in the history.
 @id("agent_may_pay")
 permit (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource);
 

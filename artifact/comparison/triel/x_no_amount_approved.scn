@@ -1,0 +1,8 @@
+; The oracle never quotes the invoice, and the owner has approved the payment:
+; the condition of the limit is undefined AND false, that is false, so the
+; monitor does not block the payment and it is not a breach.
+(scenario x_no_amount_approved
+  (spec "examples/core/core_invoice_agent.triel")
+  (entry "2026-11-02T09:00:00Z" (activate) (data (limit_eur (dec 1000.00)) (owner_approved (bool true))))
+  (entry "2026-11-02T10:00:00Z" (act agent (pay (name supplier)) must)
+    (data (limit_eur (dec 1000.00)) (owner_approved (bool true)))))
