@@ -1,0 +1,8 @@
+$ cedar --version
+cedar-policy-cli 4.14.0
+[exit 0]
+
+$ dogwood --version
+dogwood 1.1.0
+[exit 0]
+

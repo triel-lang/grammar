@@ -1,0 +1,92 @@
+$ dogwood validate attr_unguarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema
+error: for policy `policy_2`, unable to guarantee safety of access to optional attribute `input.amount_eur` in context for Inv::Action::"Pay"
+error: for policy `policy_2`, unable to guarantee safety of access to optional attribute `input.owner_approved` in context for Inv::Action::"Pay"
+FAILED: 2 error(s), 0 warning(s).
+[exit 2]
+
+$ dogwood replay attr_unguarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/within_limit.log
+@1793613600 (time point 0): ALLOW  [rules: 0]
+[exit 0]
+
+$ dogwood replay attr_unguarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/over_limit.log
+@1793613600 (time point 0): DENY  [rules: 2]
+[exit 0]
+
+$ dogwood replay attr_unguarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/approved.log
+@1793613600 (time point 0): ALLOW  [rules: 0]
+[exit 0]
+
+$ dogwood replay attr_unguarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/approval_missing.log
+@1793613600 (time point 0): ALLOW  [rules: 0]
+    error: error while evaluating policy `policy_2`: record does not have the attribute `owner_approved`
+[exit 0]
+
+$ dogwood replay attr_unguarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/stale_quote.log
+@1793617200 (time point 0): DENY  [rules: 2]
+[exit 0]
+
+$ dogwood replay attr_unguarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/owner_fallback.log
+@1793959200 (time point 0): ALLOW  [rules: 1]
+[exit 0]
+
+$ dogwood replay attr_unguarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/owner_late.log
+[exit 0]
+
+$ dogwood replay attr_unguarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/no_amount.log
+@1793613600 (time point 0): ALLOW  [rules: 0]
+    error: error while evaluating policy `policy_2`: record does not have the attribute `amount_eur`
+[exit 0]
+
+$ dogwood validate attr_guarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema
+OK: validation passed with no errors or warnings.
+[exit 0]
+
+$ dogwood replay attr_guarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/within_limit.log
+@1793613600 (time point 0): ALLOW  [rules: 0]
+[exit 0]
+
+$ dogwood replay attr_guarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/over_limit.log
+@1793613600 (time point 0): DENY  [rules: 2]
+[exit 0]
+
+$ dogwood replay attr_guarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/approved.log
+@1793613600 (time point 0): ALLOW  [rules: 0]
+[exit 0]
+
+$ dogwood replay attr_guarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/approval_missing.log
+@1793613600 (time point 0): ALLOW  [rules: 0]
+[exit 0]
+
+$ dogwood replay attr_guarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/stale_quote.log
+@1793617200 (time point 0): DENY  [rules: 2]
+[exit 0]
+
+$ dogwood replay attr_guarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/owner_fallback.log
+@1793959200 (time point 0): ALLOW  [rules: 1]
+[exit 0]
+
+$ dogwood replay attr_guarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/owner_late.log
+[exit 0]
+
+$ dogwood replay attr_guarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/no_amount.log
+@1793613600 (time point 0): ALLOW  [rules: 0]
+[exit 0]
+
+$ dogwood replay attr_unguarded.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/approval_missing.log --format json
+{
+  "verdicts": [
+    {
+      "index": 0,
+      "timestamp": 1793613600,
+      "verdict": "allow",
+      "determining_rules": [
+        0
+      ],
+      "errors": [
+        "error while evaluating policy `policy_2`: record does not have the attribute `owner_approved`"
+      ]
+    }
+  ]
+}
+[exit 0]
+

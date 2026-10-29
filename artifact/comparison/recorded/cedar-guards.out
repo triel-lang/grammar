@@ -1,0 +1,55 @@
+$ cedar validate -s s_opt.cedarschema -p guard_and.cedar -f plain
+policy set validation passed
+    Diagnostic severity: advice
+    Caused by: no errors or warnings
+
+[exit 0]
+
+$ cedar authorize -p guard_and.cedar -s s_opt.cedarschema --entities entities.json --request-json req_empty.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  allow_pay
+
+[exit 0]
+
+$ cedar validate -s s_opt.cedarschema -p guard_or.cedar -f plain
+policy set validation failed
+    Diagnostic severity: error
+    Caused by: for policy `forbid_unapproved`, unable to guarantee safety of access to optional attribute `owner_approved` in context for Inv::Action::"Pay"
+Begin snippet starting at line 5, column 1
+
+snippet line 5: forbid (principal, action == Inv::Action::"Pay", resource)
+snippet line 6: when { !(context has owner_approved) || !context.owner_approved };
+    label at line 6, columns 42 to 63
+diagnostic help: try testing for the attribute's presence with `context has owner_approved && ..`
+
+
+[exit 3]
+
+$ cedar authorize -p guard_or.cedar -s s_opt.cedarschema --entities entities.json --request-json req_empty.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  forbid_unapproved
+
+[exit 2]
+
+$ cedar validate -s s_opt.cedarschema -p guard_if.cedar -f plain
+policy set validation passed
+    Diagnostic severity: advice
+    Caused by: no errors or warnings
+
+[exit 0]
+
+$ cedar authorize -p guard_if.cedar -s s_opt.cedarschema --entities entities.json --request-json req_empty.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  forbid_unapproved
+
+[exit 2]
+

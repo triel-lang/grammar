@@ -1,0 +1,27 @@
+$ cedar validate -s s_opt.cedarschema -p guard_and.cedar -f plain
+validation passed
+[exit 0]
+
+$ cedar authorize -p guard_and.cedar -s s_opt.cedarschema --entities entities.json --request-json req_empty.json -v -f plain
+ALLOW
+  policies: allow_pay
+[exit 0]
+
+$ cedar validate -s s_opt.cedarschema -p guard_or.cedar -f plain
+validation failed
+  for policy `forbid_unapproved`, unable to guarantee safety of access to optional attribute `owner_approved` in context for Inv::Action::"Pay"
+[exit 3]
+
+$ cedar authorize -p guard_or.cedar -s s_opt.cedarschema --entities entities.json --request-json req_empty.json -v -f plain
+DENY
+  policies: forbid_unapproved
+[exit 2]
+
+$ cedar validate -s s_opt.cedarschema -p guard_if.cedar -f plain
+validation passed
+[exit 0]
+
+$ cedar authorize -p guard_if.cedar -s s_opt.cedarschema --entities entities.json --request-json req_empty.json -v -f plain
+DENY
+  policies: forbid_unapproved
+[exit 2]

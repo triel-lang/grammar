@@ -1,0 +1,163 @@
+$ cedar validate --schema schema.cedarschema --policies invoice_guarded.cedar -f plain
+policy set validation passed
+    Diagnostic severity: advice
+    Caused by: no errors or warnings
+
+[exit 0]
+
+$ cedar authorize -p invoice_guarded.cedar -s schema.cedarschema --entities entities.json --request-json req/within_limit.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice_guarded.cedar --entities entities.json --request-json req/within_limit.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice_guarded.cedar -s schema.cedarschema --entities entities.json --request-json req/over_limit.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  over_limit_without_approval
+
+[exit 2]
+
+$ cedar authorize -p invoice_guarded.cedar --entities entities.json --request-json req/over_limit.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  over_limit_without_approval
+
+[exit 2]
+
+$ cedar authorize -p invoice_guarded.cedar -s schema.cedarschema --entities entities.json --request-json req/approved.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice_guarded.cedar --entities entities.json --request-json req/approved.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice_guarded.cedar -s schema.cedarschema --entities entities.json --request-json req/approval_missing.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice_guarded.cedar --entities entities.json --request-json req/approval_missing.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice_guarded.cedar -s schema.cedarschema --entities entities.json --request-json req/stale_quote.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  block_stale_quote
+  over_limit_without_approval
+
+[exit 2]
+
+$ cedar authorize -p invoice_guarded.cedar --entities entities.json --request-json req/stale_quote.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  over_limit_without_approval
+  block_stale_quote
+
+[exit 2]
+
+$ cedar authorize -p invoice_guarded.cedar -s schema.cedarschema --entities entities.json --request-json req/owner_fallback.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  owner_may_pay_in_fallback_window
+
+[exit 0]
+
+$ cedar authorize -p invoice_guarded.cedar --entities entities.json --request-json req/owner_fallback.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  owner_may_pay_in_fallback_window
+
+[exit 0]
+
+$ cedar authorize -p invoice_guarded.cedar -s schema.cedarschema --entities entities.json --request-json req/owner_early.json -v -f plain
+
+DENY
+
+note: no policies applied to this request
+[exit 2]
+
+$ cedar authorize -p invoice_guarded.cedar --entities entities.json --request-json req/owner_early.json -v -f plain
+
+DENY
+
+note: no policies applied to this request
+[exit 2]
+
+$ cedar authorize -p invoice_guarded.cedar -s schema.cedarschema --entities entities.json --request-json req/owner_after_5d.json -v -f plain
+
+DENY
+
+note: no policies applied to this request
+[exit 2]
+
+$ cedar authorize -p invoice_guarded.cedar --entities entities.json --request-json req/owner_after_5d.json -v -f plain
+
+DENY
+
+note: no policies applied to this request
+[exit 2]
+
+$ cedar authorize -p invoice_guarded.cedar -s schema.cedarschema --entities entities.json --request-json req/no_amount.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice_guarded.cedar --entities entities.json --request-json req/no_amount.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+

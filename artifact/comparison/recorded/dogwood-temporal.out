@@ -1,0 +1,50 @@
+$ dogwood validate temporal.dw --policy-schema schema.cedarschema --event-schema events.dwschema
+OK: validation passed with no errors or warnings.
+[exit 0]
+
+$ dogwood validate temporal.dw --policy-schema schema.cedarschema
+error: temporal window `5d` exceeds the maximum allowed window `24h` set by the event schema's `max_window`; shorten this window to at most `24h`, or raise `max_window` in the event schema
+error: temporal window `3d` exceeds the maximum allowed window `24h` set by the event schema's `max_window`; shorten this window to at most `24h`, or raise `max_window` in the event schema
+error: temporal window `5d` exceeds the maximum allowed window `24h` set by the event schema's `max_window`; shorten this window to at most `24h`, or raise `max_window` in the event schema
+FAILED: 3 error(s), 0 warning(s).
+[exit 2]
+
+$ dogwood replay temporal.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/within_limit.log
+@1793613600 (time point 0): ALLOW  [rules: 0]
+[exit 0]
+
+$ dogwood replay temporal.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/over_limit.log
+@1793613600 (time point 0): DENY  [rules: 2]
+[exit 0]
+
+$ dogwood replay temporal.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/approved.log
+@1793613600 (time point 0): ALLOW  [rules: 0]
+[exit 0]
+
+$ dogwood replay temporal.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/approval_missing.log
+@1793613600 (time point 0): DENY  [rules: 2]
+[exit 0]
+
+$ dogwood replay temporal.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/stale_quote.log
+@1793617200 (time point 0): DENY  [rules: 3]
+[exit 0]
+
+$ dogwood replay temporal.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/owner_fallback.log
+@1793959200 (time point 0): ALLOW  [rules: 1]
+[exit 0]
+
+$ dogwood replay temporal.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/owner_late.log
+[exit 0]
+
+$ dogwood replay temporal.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/no_amount.log
+@1793613600 (time point 0): DENY  [rules: 3]
+[exit 0]
+
+$ dogwood replay temporal.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/owner_early.log
+@1793613600 (time point 0): DENY
+[exit 0]
+
+$ dogwood replay temporal.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace traces/owner_after_5d.log
+@1794052800 (time point 0): DENY
+[exit 0]
+

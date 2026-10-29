@@ -1,0 +1,170 @@
+$ cedar validate -s s_opt.cedarschema -p absent.cedar -f plain
+policy set validation failed
+    Diagnostic severity: error
+    Caused by: for policy `forbid_unapproved`, unable to guarantee safety of access to optional attribute `owner_approved` in context for Inv::Action::"Pay"
+Begin snippet starting at line 5, column 1
+
+snippet line 5: forbid (principal, action == Inv::Action::"Pay", resource)
+snippet line 6: when { !context.owner_approved };
+    label at line 6, columns 9 to 30
+diagnostic help: try testing for the attribute's presence with `context has owner_approved && ..`
+
+
+[exit 3]
+
+$ cedar validate -s s_req.cedarschema -p absent.cedar -f plain
+policy set validation passed
+    Diagnostic severity: advice
+    Caused by: no errors or warnings
+
+[exit 0]
+
+$ cedar validate -s s_none.cedarschema -p absent.cedar -f plain
+policy set validation failed
+    Diagnostic severity: error
+    Caused by: for policy `forbid_unapproved`, attribute `owner_approved` in context for Inv::Action::"Pay" not found
+Begin snippet starting at line 5, column 1
+
+snippet line 5: forbid (principal, action == Inv::Action::"Pay", resource)
+snippet line 6: when { !context.owner_approved };
+    label at line 6, columns 9 to 30
+
+
+[exit 3]
+
+$ cedar authorize -p absent.cedar --entities entities.json --request-json req_empty.json -v -f plain
+
+ALLOW
+
+error while evaluating policy `forbid_unapproved`: record does not have the attribute `owner_approved`
+
+note: this decision was due to the following policies:
+  allow_pay
+
+[exit 0]
+
+$ cedar authorize -p absent.cedar -s s_opt.cedarschema --entities entities.json --request-json req_empty.json -v -f plain
+
+ALLOW
+
+error while evaluating policy `forbid_unapproved`: record does not have the attribute `owner_approved`
+
+note: this decision was due to the following policies:
+  allow_pay
+
+[exit 0]
+
+$ cedar authorize -p absent.cedar -s s_opt.cedarschema --request-validation false --entities entities.json --request-json req_empty.json -v -f plain
+
+ALLOW
+
+error while evaluating policy `forbid_unapproved`: record does not have the attribute `owner_approved`
+
+note: this decision was due to the following policies:
+  allow_pay
+
+[exit 0]
+
+$ cedar authorize -p absent.cedar -s s_req.cedarschema --entities entities.json --request-json req_empty.json -v -f plain
+
+failed to parse request
+    Diagnostic severity: error
+    Caused by: failed to create a context from req_empty.json
+    Caused by: while parsing context, expected the record to have an attribute `owner_approved`, but it does not
+
+[exit 1]
+
+$ cedar authorize -p absent.cedar -s s_req.cedarschema --request-validation false --entities entities.json --request-json req_empty.json -v -f plain
+
+failed to parse request
+    Diagnostic severity: error
+    Caused by: failed to create a context from req_empty.json
+    Caused by: while parsing context, expected the record to have an attribute `owner_approved`, but it does not
+
+[exit 1]
+
+$ cedar authorize -p absent.cedar -s s_none.cedarschema --entities entities.json --request-json req_empty.json -v -f plain
+
+ALLOW
+
+error while evaluating policy `forbid_unapproved`: record does not have the attribute `owner_approved`
+
+note: this decision was due to the following policies:
+  allow_pay
+
+[exit 0]
+
+$ cedar authorize -p absent.cedar -s s_none.cedarschema --request-validation false --entities entities.json --request-json req_empty.json -v -f plain
+
+ALLOW
+
+error while evaluating policy `forbid_unapproved`: record does not have the attribute `owner_approved`
+
+note: this decision was due to the following policies:
+  allow_pay
+
+[exit 0]
+
+$ cedar authorize -p absent.cedar --entities entities.json --request-json req_false.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  forbid_unapproved
+
+[exit 2]
+
+$ cedar authorize -p absent.cedar -s s_opt.cedarschema --entities entities.json --request-json req_false.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  forbid_unapproved
+
+[exit 2]
+
+$ cedar authorize -p absent.cedar -s s_opt.cedarschema --request-validation false --entities entities.json --request-json req_false.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  forbid_unapproved
+
+[exit 2]
+
+$ cedar authorize -p absent.cedar -s s_req.cedarschema --entities entities.json --request-json req_false.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  forbid_unapproved
+
+[exit 2]
+
+$ cedar authorize -p absent.cedar -s s_req.cedarschema --request-validation false --entities entities.json --request-json req_false.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  forbid_unapproved
+
+[exit 2]
+
+$ cedar authorize -p absent.cedar -s s_none.cedarschema --entities entities.json --request-json req_false.json -v -f plain
+
+failed to parse request
+    Diagnostic severity: error
+    Caused by: failed to create a context from req_false.json
+    Caused by: while parsing context, record attribute `owner_approved` should not exist according to the schema
+
+[exit 1]
+
+$ cedar authorize -p absent.cedar -s s_none.cedarschema --request-validation false --entities entities.json --request-json req_false.json -v -f plain
+
+failed to parse request
+    Diagnostic severity: error
+    Caused by: failed to create a context from req_false.json
+    Caused by: while parsing context, record attribute `owner_approved` should not exist according to the schema
+
+[exit 1]
+

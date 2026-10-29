@@ -2,7 +2,7 @@
 # Runs the comparison of TRIEL with Cedar and Dogwood on the running example of
 # the paper (examples/core/core_invoice_agent.triel), writes every output to
 # results/ (or to the directory given as the first argument) and compares the
-# outputs with the recorded ones in expected/.
+# outputs, through summarize.py, with the recorded ones in expected/.
 #
 # Needs, on PATH:
 #   cedar    cedar-policy-cli 4.14.0   cargo install cedar-policy-cli --version 4.14.0 --locked
@@ -132,17 +132,18 @@ done
 
 # --- Comparison with the recorded outputs --------------------------------------
 
-# The evaluator path in the last group depends on the machine: compare its
-# output without the command lines.
+# cedar lists determining policies and validation diagnostics in an order that
+# varies from run to run, so the outputs are compared through summarize.py,
+# which sorts them; the raw outputs stay in the results directory.
+python3 -I "$HERE/summarize.py" "$OUT" "$OUT/summary"
 status=0
-for f in "$HERE"/expected/*.out; do
+for f in "$HERE"/expected/*.txt; do
   name=$(basename "$f")
-  if [ "$name" = triel-further-traces.out ]; then
-    diff <(grep -v '^\$ ' "$f") <(grep -v '^\$ ' "$OUT/$name") >/dev/null || { echo "DIFFERS: $name"; status=1; continue; }
+  if diff -q "$f" "$OUT/summary/$name" >/dev/null; then
+    echo "same:    $name"
   else
-    diff -q "$f" "$OUT/$name" >/dev/null || { echo "DIFFERS: $name"; status=1; continue; }
+    echo "DIFFERS: $name"; status=1
   fi
-  echo "same:    $name"
 done
 [ "$status" = 0 ] && echo "All outputs equal the recorded ones."
 exit "$status"

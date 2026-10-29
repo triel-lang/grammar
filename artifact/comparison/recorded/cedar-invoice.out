@@ -1,0 +1,200 @@
+$ cedar validate --schema schema.cedarschema --policies invoice.cedar -f plain
+policy set validation failed
+    Diagnostic severity: error
+    Caused by: for policy `over_limit_without_approval`, unable to guarantee safety of access to optional attribute `amount_eur` in context for Inv::Action::"Pay"
+Begin snippet starting at line 15, column 1
+
+snippet line 15: forbid (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource)
+snippet line 16: when { context.amount_eur.greaterThan(context.limit_eur) && !context.owner_approved };
+    label at line 16, columns 8 to 56
+snippet line 17: 
+diagnostic help: try testing for the attribute's presence with `context has amount_eur && ..`
+
+Error: for policy `over_limit_without_approval`, unable to guarantee safety of access to optional attribute `owner_approved` in context for Inv::Action::"Pay"
+    Diagnostic severity: error
+
+Begin snippet starting at line 15, column 1
+
+snippet line 15: forbid (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource)
+snippet line 16: when { context.amount_eur.greaterThan(context.limit_eur) && !context.owner_approved };
+    label at line 16, columns 62 to 83
+snippet line 17: 
+diagnostic help: try testing for the attribute's presence with `context has owner_approved && ..`
+Error: for policy `block_stale_quote`, unable to guarantee safety of access to optional attribute `quoted_at` in context for Inv::Action::"Pay"
+    Diagnostic severity: error
+
+Begin snippet starting at line 20, column 1
+
+snippet line 20: forbid (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource)
+snippet line 21: when { context.now.durationSince(context.quoted_at) > duration("1h") };
+    label at line 21, columns 34 to 50
+diagnostic help: try testing for the attribute's presence with `context has quoted_at && ..`
+
+[exit 3]
+
+$ cedar authorize -p invoice.cedar -s schema.cedarschema --entities entities.json --request-json req/within_limit.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice.cedar --entities entities.json --request-json req/within_limit.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice.cedar -s schema.cedarschema --entities entities.json --request-json req/over_limit.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  over_limit_without_approval
+
+[exit 2]
+
+$ cedar authorize -p invoice.cedar --entities entities.json --request-json req/over_limit.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  over_limit_without_approval
+
+[exit 2]
+
+$ cedar authorize -p invoice.cedar -s schema.cedarschema --entities entities.json --request-json req/approved.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice.cedar --entities entities.json --request-json req/approved.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice.cedar -s schema.cedarschema --entities entities.json --request-json req/approval_missing.json -v -f plain
+
+ALLOW
+
+error while evaluating policy `over_limit_without_approval`: record does not have the attribute `owner_approved`
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice.cedar --entities entities.json --request-json req/approval_missing.json -v -f plain
+
+ALLOW
+
+error while evaluating policy `over_limit_without_approval`: record does not have the attribute `owner_approved`
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice.cedar -s schema.cedarschema --entities entities.json --request-json req/stale_quote.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  block_stale_quote
+  over_limit_without_approval
+
+[exit 2]
+
+$ cedar authorize -p invoice.cedar --entities entities.json --request-json req/stale_quote.json -v -f plain
+
+DENY
+
+note: this decision was due to the following policies:
+  over_limit_without_approval
+  block_stale_quote
+
+[exit 2]
+
+$ cedar authorize -p invoice.cedar -s schema.cedarschema --entities entities.json --request-json req/owner_fallback.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  owner_may_pay_in_fallback_window
+
+[exit 0]
+
+$ cedar authorize -p invoice.cedar --entities entities.json --request-json req/owner_fallback.json -v -f plain
+
+ALLOW
+
+note: this decision was due to the following policies:
+  owner_may_pay_in_fallback_window
+
+[exit 0]
+
+$ cedar authorize -p invoice.cedar -s schema.cedarschema --entities entities.json --request-json req/owner_early.json -v -f plain
+
+DENY
+
+note: no policies applied to this request
+[exit 2]
+
+$ cedar authorize -p invoice.cedar --entities entities.json --request-json req/owner_early.json -v -f plain
+
+DENY
+
+note: no policies applied to this request
+[exit 2]
+
+$ cedar authorize -p invoice.cedar -s schema.cedarschema --entities entities.json --request-json req/owner_after_5d.json -v -f plain
+
+DENY
+
+note: no policies applied to this request
+[exit 2]
+
+$ cedar authorize -p invoice.cedar --entities entities.json --request-json req/owner_after_5d.json -v -f plain
+
+DENY
+
+note: no policies applied to this request
+[exit 2]
+
+$ cedar authorize -p invoice.cedar -s schema.cedarschema --entities entities.json --request-json req/no_amount.json -v -f plain
+
+ALLOW
+
+error while evaluating policy `over_limit_without_approval`: record does not have the attribute `amount_eur`
+error while evaluating policy `block_stale_quote`: record does not have the attribute `quoted_at`
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
+$ cedar authorize -p invoice.cedar --entities entities.json --request-json req/no_amount.json -v -f plain
+
+ALLOW
+
+error while evaluating policy `over_limit_without_approval`: record does not have the attribute `amount_eur`
+error while evaluating policy `block_stale_quote`: record does not have the attribute `quoted_at`
+
+note: this decision was due to the following policies:
+  agent_may_pay
+
+[exit 0]
+
