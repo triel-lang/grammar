@@ -1,0 +1,5 @@
+namespace Inv {
+  entity Agent;
+  entity Supplier;
+  action "Pay" appliesTo { principal: [Agent], resource: [Supplier], context: { owner_approved: Bool } };
+}

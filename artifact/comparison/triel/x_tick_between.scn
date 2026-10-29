@@ -1,0 +1,8 @@
+; (c2) Nobody pays; one tick on 6 November, after the agent's deadline, before the owner's.
+(scenario x_tick_between
+  (spec "examples/core/core_invoice_agent.triel")
+  (entry "2026-11-02T09:00:00Z" (activate) (data (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-02T09:30:00Z" (arrive amount_eur)
+    (data (amount_eur (dec 1500.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false))))
+  (entry "2026-11-06T10:00:00Z" (tick)
+    (data (amount_eur (dec 1500.00)) (limit_eur (dec 1000.00)) (owner_approved (bool false)))))

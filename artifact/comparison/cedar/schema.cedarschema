@@ -1,0 +1,18 @@
+namespace Inv {
+  entity Owner;
+  entity Agent;
+  entity Supplier;
+
+  action "Pay" appliesTo {
+    principal: [Agent, Owner],
+    resource: [Supplier],
+    context: {
+      now: datetime,
+      activated_at: datetime,
+      limit_eur: decimal,
+      amount_eur?: decimal,
+      quoted_at?: datetime,
+      owner_approved?: Bool
+    }
+  };
+}

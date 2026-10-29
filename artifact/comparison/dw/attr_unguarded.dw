@@ -1,0 +1,10 @@
+// Variant A1: amount and approval are request attributes, read without `has`.
+@id("agent_may_pay")
+permit (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource);
+
+@id("owner_may_pay")
+permit (principal == Inv::Owner::"owner", action == Inv::Action::"Pay", resource);
+
+@id("over_limit_without_approval")
+forbid (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource)
+when { context.input.amount_eur.greaterThan(context.input.limit_eur) && !context.input.owner_approved };

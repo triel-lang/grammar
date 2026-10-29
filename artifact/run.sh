@@ -129,12 +129,13 @@ document_excerpts() {
   python3 parser/test_documents.py
 }
 
-# The names listed by thm in Paper_Theorems.thy and the names of its oracle check
-# must be the same list; then the session is built on top of the heap of
+# The theorems listed by thm in Paper_Theorems.thy (the lines thm ..._def and
+# thm ....simps name definitions and are left out) and the names of its oracle
+# check must be the same list; then the session is built on top of the heap of
 # TRIEL_Core, and the statements it exports are printed.
 paper_theorems() {
   local thy=artifact/isabelle/Paper_Theorems.thy
-  diff -u <(sed -nE 's/^thm ([A-Za-z0-9_.]+)$/\1/p' "$thy" | sort) \
+  diff -u <(sed -nE 's/^thm ([A-Za-z0-9_.]+)$/\1/p' "$thy" | grep -vE '(_def|\.simps)$' | sort) \
           <(grep -oE '"TRIEL_[A-Za-z0-9_.]+"' "$thy" | tr -d '"' | sort) \
     || { echo "error: the thm list and the oracle check of $thy differ"; return 1; }
   isabelle build -e -v -d formal/core -D artifact/isabelle || return 1
@@ -178,7 +179,8 @@ total_seconds=$(( $(date +%s) - total_start ))
 theories=$(grep -oE 'theory TRIEL_Core\.[A-Za-z0-9_]+' "$RESULTS_DIR/02-isabelle-build.log" 2>/dev/null | sort -u | wc -l)
 thy_files=$(ls "$WORK"/formal/core/*.thy | wc -l)
 statements=$(python3 "$WORK/artifact/count_statements.py" "$WORK"/formal/core/*.thy | sed -n 's/^total: //p')
-paper=$(grep -cE '^thm ' "$WORK/artifact/isabelle/Paper_Theorems.thy")
+# Theorems only: the lines thm ..._def and thm ....simps name definitions.
+paper=$(grep -E '^thm ' "$WORK/artifact/isabelle/Paper_Theorems.thy" | grep -cvE '(_def|\.simps)$')
 paper_ok=$(sed -nE 's/^Paper theorems without oracles: ([0-9]+)$/\1/p' "$RESULTS_DIR/paper_theorems.txt" 2>/dev/null)
 scn_total=$(ls "$WORK"/examples/core/scenarios/*.scn | wc -l)
 scn_ok=$(grep -c '^ok ' "$RESULTS_DIR/06-scenarios.log" 2>/dev/null)

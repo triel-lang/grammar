@@ -12,6 +12,8 @@ theory Paper_Theorems
   imports
     TRIEL_Core.TRIEL_Core
     TRIEL_Core.TRIEL_Trace
+    TRIEL_Core.TRIEL_Ex
+    TRIEL_Core.TRIEL_ND
     TRIEL_Core.TRIEL_Terms
     TRIEL_Core.TRIEL_Breach
     TRIEL_Core.TRIEL_Completions
@@ -26,6 +28,8 @@ section \<open>Finality of verdicts\<close>
 thm TRIEL_Breach.ob_verdict_final
 thm TRIEL_Breach.pr_verdict_final
 thm TRIEL_Invariants.inv_final
+thm TRIEL_Invariants.sinv_final
+thm TRIEL_Breach.handle_breach_final
 thm TRIEL_Exec.run_final
 thm TRIEL_Exec.time_order_rejected
 
@@ -50,10 +54,14 @@ thm TRIEL_Exec.term_semantics.violation_after_completion
 
 section \<open>Stability of verdicts and its limits\<close>
 
+thm TRIEL_Core.T2_monotone
+thm TRIEL_ND.T2_nd_monotone
+thm TRIEL_Ex.present_free_equitone
 thm TRIEL_Indicators.verdict_stable
 thm TRIEL_Indicators.verdict_stable_nd
 thm TRIEL_Indicators.cond_equitone
 thm TRIEL_Core.T3_present_not_monotone
+thm TRIEL_Core.present_flips
 thm TRIEL_Indicators.Ex_breaks_stability
 thm TRIEL_Core.T3_default_not_monotone
 thm TRIEL_Indicators.default_breaks_stability
@@ -63,7 +71,9 @@ section \<open>IF and UNLESS\<close>
 thm TRIEL_Terms.term_semantics.den_if
 thm TRIEL_Terms.term_semantics.if_classical
 thm TRIEL_Terms.term_semantics.if_branch_stable
+thm TRIEL_Terms.term_semantics.if_undefined_else
 thm TRIEL_Trace.unless_if
+thm TRIEL_Trace.interleaving_satisfiable
 
 section \<open>References between the elements of a block\<close>
 
@@ -86,6 +96,7 @@ thm TRIEL_Completions.kleene_not_complete
 thm TRIEL_Completions.kleene_sound_conn
 thm TRIEL_Completions.kleene_optimal
 thm TRIEL_Completions.compositional_incomplete
+thm TRIEL_Completions.stale_quote_completion
 
 section \<open>The composition algebra\<close>
 
@@ -94,6 +105,7 @@ thm TRIEL_Compositions.interp_equitone
 thm TRIEL_Compositions.cond_fm_correct
 thm TRIEL_Compositions.cond_equitone_from_closure
 thm TRIEL_Core.T5_present
+thm TRIEL_Ex.present_is_Ex
 thm TRIEL_Compositions.Ex_R_is_not_eps
 
 section \<open>Deadlines with ELSE\<close>
@@ -111,6 +123,25 @@ thm TRIEL_Exec.erase_flat
 thm TRIEL_Exec.flow_safe_eval
 thm TRIEL_Exec.flow_safe_evalV
 
+section \<open>Definitions used in the paper\<close>
+
+text \<open>The definitions that the formal sections of the paper restate.\<close>
+
+thm TRIEL_Core.info_le_def
+thm TRIEL_Core.approx_def
+thm TRIEL_Core.evalV.simps
+thm TRIEL_Core.eval.simps
+thm TRIEL_Breach.window_def
+thm TRIEL_Breach.ob_verdict_def
+thm TRIEL_Trace.forbidden_def
+thm TRIEL_Breach.pr_verdict_def
+thm TRIEL_Breach.blocks_def
+thm TRIEL_Invariants.inv_eval.simps
+thm TRIEL_Ex.equitone_def
+thm TRIEL_Completions.completion_def
+thm TRIEL_Completions.evalG.simps
+thm TRIEL_Completions.sound_conn_def
+
 section \<open>No oracles\<close>
 
 text \<open>The same names once more: none of these theorems may depend on an oracle. The
@@ -120,7 +151,8 @@ ML \<open>
 local
   val names =
    ["TRIEL_Breach.ob_verdict_final", "TRIEL_Breach.pr_verdict_final",
-    "TRIEL_Invariants.inv_final", "TRIEL_Exec.run_final", "TRIEL_Exec.time_order_rejected",
+    "TRIEL_Invariants.inv_final", "TRIEL_Invariants.sinv_final", "TRIEL_Breach.handle_breach_final",
+    "TRIEL_Exec.run_final", "TRIEL_Exec.time_order_rejected",
     "TRIEL_Terms.term_semantics.must_then_must_two_actions",
     "TRIEL_Terms.term_semantics.violated_reachable",
     "TRIEL_Terms.term_semantics.then_mustnot_violated",
@@ -133,12 +165,14 @@ local
     "TRIEL_Exec.term_semantics.reached_prohibition_watched",
     "TRIEL_Exec.term_semantics.then_mustnot_watched", "TRIEL_Exec.term_semantics.or_mustnot_watched",
     "TRIEL_Exec.term_semantics.violation_after_completion",
+    "TRIEL_Core.T2_monotone", "TRIEL_ND.T2_nd_monotone", "TRIEL_Ex.present_free_equitone",
     "TRIEL_Indicators.verdict_stable", "TRIEL_Indicators.verdict_stable_nd",
-    "TRIEL_Indicators.cond_equitone", "TRIEL_Core.T3_present_not_monotone",
+    "TRIEL_Indicators.cond_equitone", "TRIEL_Core.T3_present_not_monotone", "TRIEL_Core.present_flips",
     "TRIEL_Indicators.Ex_breaks_stability", "TRIEL_Core.T3_default_not_monotone",
     "TRIEL_Indicators.default_breaks_stability",
     "TRIEL_Terms.term_semantics.den_if", "TRIEL_Terms.term_semantics.if_classical",
-    "TRIEL_Terms.term_semantics.if_branch_stable", "TRIEL_Trace.unless_if",
+    "TRIEL_Terms.term_semantics.if_branch_stable", "TRIEL_Terms.term_semantics.if_undefined_else",
+    "TRIEL_Trace.unless_if", "TRIEL_Trace.interleaving_satisfiable",
     "TRIEL_Exec.term_semantics.resolve_den", "TRIEL_Exec.term_semantics.block_den",
     "TRIEL_Exec.refs_ok_acyclic",
     "TRIEL_Breach.undefined_guard_blocks_not_breach", "TRIEL_Breach.enforced_no_breach",
@@ -146,9 +180,10 @@ local
     "TRIEL_Completions.skip_reading_unsound", "TRIEL_Completions.absent_false_unsound",
     "TRIEL_Completions.kleene_not_complete", "TRIEL_Completions.kleene_sound_conn",
     "TRIEL_Completions.kleene_optimal", "TRIEL_Completions.compositional_incomplete",
+    "TRIEL_Completions.stale_quote_completion",
     "TRIEL_Compositions.comp_closure_equitone", "TRIEL_Compositions.interp_equitone",
     "TRIEL_Compositions.cond_fm_correct", "TRIEL_Compositions.cond_equitone_from_closure",
-    "TRIEL_Core.T5_present", "TRIEL_Compositions.Ex_R_is_not_eps",
+    "TRIEL_Core.T5_present", "TRIEL_Ex.present_is_Ex", "TRIEL_Compositions.Ex_R_is_not_eps",
     "TRIEL_Breach.else_taken", "TRIEL_Breach.else_no_breach",
     "TRIEL_Breach.else_alt_breached", "TRIEL_Breach.else_final",
     "TRIEL_Exec.run_noninterference", "TRIEL_Exec.run_erase", "TRIEL_Exec.erase_flat",

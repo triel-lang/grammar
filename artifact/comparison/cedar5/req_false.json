@@ -1,0 +1,1 @@
+{"principal":"Inv::Agent::\"agent\"","action":"Inv::Action::\"Pay\"","resource":"Inv::Supplier::\"supplier\"","context":{"owner_approved": false}}

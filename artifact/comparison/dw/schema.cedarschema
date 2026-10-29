@@ -1,0 +1,33 @@
+namespace Inv {
+  entity Owner;
+  entity Agent;
+  entity Oracle;
+  entity Supplier;
+
+  type InvoiceRef = { invoice: String };
+  type PayInput = {
+    invoice: String,
+    limit_cents: Long,
+    limit_eur: decimal,
+    amount_eur?: decimal,
+    owner_approved?: Bool
+  };
+  type QuoteOutput = { amount_cents: Long };
+
+  action "Activate" appliesTo {
+    principal: [Owner], resource: [Supplier],
+    context: { input: InvoiceRef }
+  };
+  action "Approve" appliesTo {
+    principal: [Owner], resource: [Supplier],
+    context: { input: InvoiceRef }
+  };
+  action "Quote" appliesTo {
+    principal: [Oracle], resource: [Supplier],
+    context: { input: InvoiceRef, output?: QuoteOutput }
+  };
+  action "Pay" appliesTo {
+    principal: [Agent, Owner], resource: [Supplier],
+    context: { input: PayInput }
+  };
+}

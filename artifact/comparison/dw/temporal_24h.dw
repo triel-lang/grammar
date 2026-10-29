@@ -1,0 +1,26 @@
+// Variant T: the quote, the approval and the activation are events in the history.
+@id("agent_may_pay")
+permit (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource);
+
+// Attempted encoding of the ELSE branch: the owner may pay once the agent's
+// three days since activation have passed and within the next two days.
+
+// MUST_NOT pay WHEN amount > limit AND NOT owner_approved.
+@id("over_limit_without_approval")
+forbid (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource)
+when temporal {
+    exists (a: Long). (
+        formerly within 1h Inv::Action::"Quote"::response{ input.invoice: context.input.invoice, output.amount_cents: a }
+        && a > context.input.limit_cents
+    )
+}
+unless temporal {
+    formerly within 24h Inv::Action::"Approve"::response{ input.invoice: context.input.invoice }
+};
+
+// MAX_AGE 1 HOURS ON_STALE BLOCK: no quote in the last hour -> deny.
+@id("block_without_fresh_quote")
+forbid (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource)
+unless temporal {
+    formerly within 1h Inv::Action::"Quote"::response{ input.invoice: context.input.invoice }
+};

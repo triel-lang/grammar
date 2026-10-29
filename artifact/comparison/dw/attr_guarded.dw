@@ -1,0 +1,10 @@
+// Variant A2: the same, with `has` guards (absent attribute -> condition false).
+@id("agent_may_pay")
+permit (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource);
+
+@id("owner_may_pay")
+permit (principal == Inv::Owner::"owner", action == Inv::Action::"Pay", resource);
+
+@id("over_limit_without_approval")
+forbid (principal == Inv::Agent::"agent", action == Inv::Action::"Pay", resource)
+when { context.input has amount_eur && context.input has owner_approved && context.input.amount_eur.greaterThan(context.input.limit_eur) && !context.input.owner_approved };
