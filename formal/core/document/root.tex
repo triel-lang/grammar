@@ -170,6 +170,11 @@ Formulas of the language are terms of the composition algebra, interpreted by th
 compositions. Every condition of \texttt{TRIEL\_Indicators} translates to such a term,
 with \texttt{AND} expressed by negation and disjunction, and the value of the condition is
 the value of the term. The stability of definite verdicts follows again, from the closure.
+The expressions of \texttt{TRIEL\_Core}, with their literals and \texttt{IMPLIES}, are
+translated as well, to conditions over nominative data and to formulas over flat states,
+with the literal true written $\downarrow[]$ on nominative data and $\exists x \downarrow x$
+on flat states; so the monotonicity theorem T2, in both forms, is a consequence of the
+closure theorem.
 
 \paragraph{Numbers (theory \texttt{TRIEL\_Numbers}).}
 There is no floating point. An Integer is a rational number in $\mathbb{Z}$, and a Decimal

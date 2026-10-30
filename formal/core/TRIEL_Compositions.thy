@@ -721,15 +721,19 @@ theorem T2_nd_from_closure:
   assumes "present_free e" and "nd_le d d'" and "eval_nd e d = Some b"
   shows "eval_nd e d' = Some b"
 proof -
-  let ?\<phi> = "expr_cond e :: ('n, unit, 'b) catom cond"
-  let ?I = "\<lambda>(q :: unit) (v :: 'b). False"
-  have atoms: "a \<in> cond_atoms ?\<phi> \<Longrightarrow> Ex_free_atom a" for a
-    using expr_cond_Ex_free[of e] assms(1) by blast
-  have "cond_eval (catom_eval ?I) ?\<phi> d = Some b"
-    using assms(3) by (simp add: expr_cond_correct)
-  then have "cond_eval (catom_eval ?I) ?\<phi> d' = Some b"
-    by (rule verdict_stable_from_closure[OF atoms assms(2)])
-  then show ?thesis by (simp add: expr_cond_correct)
+  define \<phi> :: "('n, unit, 'b) catom cond" where "\<phi> = expr_cond e"
+  define I :: "unit \<Rightarrow> 'b \<Rightarrow> bool" where "I = (\<lambda>q v. False)"
+  have atoms: "Ex_free_atom a" if "a \<in> cond_atoms \<phi>" for a
+    using that expr_cond_Ex_free[of e] assms(1) unfolding \<phi>_def by blast
+  have eq: "equitone_nd (cond_eval (catom_eval I) \<phi>)"
+    by (rule cond_equitone_from_closure) (erule atoms)
+  have d: "cond_eval (catom_eval I) \<phi> d = Some b"
+    using assms(3) unfolding \<phi>_def by (simp add: expr_cond_correct)
+  from eq have "cond_eval (catom_eval I) \<phi> d \<noteq> None \<and> nd_le d d' \<longrightarrow>
+      cond_eval (catom_eval I) \<phi> d' = cond_eval (catom_eval I) \<phi> d"
+    unfolding equitone_nd_def by blast
+  with d assms(2) have "cond_eval (catom_eval I) \<phi> d' = Some b" by simp
+  then show ?thesis unfolding \<phi>_def by (simp add: expr_cond_correct)
 qed
 
 corollary present_free_equitone_nd_from_closure: "present_free e \<Longrightarrow> equitone_nd (eval_nd e)"
