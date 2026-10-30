@@ -875,7 +875,12 @@ proof -
   have f1: "forbidden s a (ENot (EPresent x)) \<pi> (Suc 0)"
     by (simp add: forbidden_def \<pi>_def st_def does_def)
   have least: "(LEAST j. forbidden s a (ENot (EPresent x)) \<pi> j) = Suc 0"
-    by (rule Least_equality) (use f1 only1[OF _ len(1)] in auto)
+  proof (rule Least_equality)
+    show "forbidden s a (ENot (EPresent x)) \<pi> (Suc 0)" by (rule f1)
+  next
+    fix y assume "forbidden s a (ENot (EPresent x)) \<pi> y"
+    from only1[OF this len(1)] show "Suc 0 \<le> y" by simp
+  qed
   have t1: "time \<pi> (Suc 0) = 1" by (simp add: \<pi>_def time_def)
   show "pr_verdict s a (ENot (EPresent x)) \<pi> = Breached 1"
     unfolding pr_verdict_def least t1 using f1 by auto
@@ -1438,7 +1443,7 @@ qed
 
 theorem handle_breach_data_indep:
   "data_le \<pi> \<pi>' \<Longrightarrow> handle_breach \<tau>\<^sub>0 lo s a d acts \<pi>' = handle_breach \<tau>\<^sub>0 lo s a d acts \<pi>"
-  by (simp add: handle_breach_def window_data_indep continue_after_data_indep)
+  by (simp add: handle_breach_def window_data_indep continue_after_data_indep split: verdict.split)
 
 theorem else_verdict_data_indep:
   "data_le \<pi> \<pi>' \<Longrightarrow> else_verdict s a d s' a' D' \<pi>' = else_verdict s a d s' a' D' \<pi>"
