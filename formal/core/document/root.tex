@@ -95,7 +95,17 @@ never breached. Deadlines are fixed at activation. Proved: the violated traces o
 prohibition are exactly the prefixes up to its breach; a missed deadline is a breach;
 verdicts are final once reached; fail-closed enforcement of prohibitions blocks every
 breach and also undefined conditions, which the verdict does not count as breaches (cf.\
-the enforcement of security policies by execution monitors~\cite{Schneider2000}); breach
+the enforcement of security policies by execution monitors~\cite{Schneider2000}). The
+monitor of a prohibition is also a function on traces, \texttt{enforce}, which replaces
+every blocked action by a clock tick with the same time and state, a suppression automaton
+in the sense of Ligatti, Bauer and Walker~\cite{LigattiBauerWalker2005}. Proved: its output
+is a trace that is never breached (\texttt{enforce\_sound}); it is idempotent and changes
+exactly the blocked actions; it leaves a trace unchanged exactly when the trace has no
+blocked action, and, when the condition is defined at every entry, exactly when the
+verdict is pending (\texttt{enforce\_transparent}), while an action taken under an undefined
+condition is blocked and is not a breach (\texttt{enforce\_undefined\_blocks}); on defined
+data no breach-free edit of the trace keeps an action the monitor blocks
+(\texttt{enforce\_minimal}). Breach
 handlers bind to the nearest preceding obligation or prohibition of the same subject; at most one
 continuation-determining action is allowed; a cure in time prevents a second breach, and a
 failed cure is final; a result computed with stale factors treated as absent is not
@@ -212,7 +222,9 @@ observations a decided verdict of its report stays the same when observations ar
 appended, unless the longer list is rejected for the order of its times or for the types
 of its data (\texttt{run\_final}). A breached prohibition is reported with the informational actions of the handler
 bound to it; a continuation in such a handler is rejected, since Section~2.6 defines
-continuations only for obligations.
+continuations only for obligations. For every top-level prohibition the report also lists
+the decisions of its monitor, one per action of the subject (\texttt{monitor\_decisions});
+a decision is final, and \texttt{run\_final} covers these lines.
 
 \paragraph{Hidden factors (theory \texttt{TRIEL\_Exec}).}
 A factor of type \texttt{ZK<T>} without \texttt{WITHOUT REVEALING ALL} is hidden, and

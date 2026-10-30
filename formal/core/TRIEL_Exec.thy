@@ -2982,6 +2982,7 @@ datatype line =
   | LOnBreach nat name "nat option"
   | LComposite nat "bool option" "bool option" "bool option" cstatus
   | LInvariant name "bool option"
+  | LMonitor nat "(nat \<times> bool) list"
 
 text \<open>The handler bound to the element \<open>i\<close> of a block, if any.\<close>
 
@@ -3088,11 +3089,40 @@ definition term_line :: "int \<Rightarrow> (path, atom) state \<Rightarrow> cter
       | SOnBreach s acts \<Rightarrow> LOnBreach (Suc i) s (map_option Suc (bound_to blk i s))
       | _ \<Rightarrow> composite_line (Suc i) (benv blk ! i) \<pi>)"
 
+text \<open>The decisions of the fail-closed monitor of each top-level prohibition
+  (\<open>monitor_decisions\<close>, TRIEL_Breach): for every action \<open>a\<close> of \<open>s\<close> in the trace, its entry
+  and whether the monitor blocks it, decided in the blocked state of the entry before the
+  action. They are reported after the invariants, one line per prohibition, in the order of
+  the block. Prohibitions inside composite terms have no verdict of their own and no monitor
+  line.\<close>
+
+fun is_prohibition :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> bool" where
+  "is_prohibition (SMustNot s a c) = True"
+| "is_prohibition _ = False"
+
+definition prohibitions :: "('n, 'v, 's, 'a, 'p) sterm list \<Rightarrow> nat list" where
+  "prohibitions blk = filter (\<lambda>i. is_prohibition (blk ! i)) [0..<length blk]"
+
+definition monitor_line :: "cterm list \<Rightarrow> ctrace \<Rightarrow> nat \<Rightarrow> line" where
+  "monitor_line blk \<pi> i =
+     (case blk ! i of
+        SMustNot s a c \<Rightarrow> LMonitor (Suc i) (monitor_decisions s a c \<pi>)
+      | _ \<Rightarrow> LMonitor (Suc i) [])"
+
+definition monitor_lines :: "cterm list \<Rightarrow> ctrace \<Rightarrow> line list" where
+  "monitor_lines blk \<pi> = map (monitor_line blk \<pi>) (prohibitions blk)"
+
+lemma prohibitions_SMustNot:
+  assumes "i \<in> set (prohibitions blk)"
+  shows "\<exists>s a c. blk ! i = SMustNot s a c"
+  using assms by (cases "blk ! i") (auto simp: prohibitions_def)
+
 text \<open>The evaluator on data without hidden factors. Activation is checked first, in the
   blocked state of entry 0 at the time of entry 0, for the deadlines of the TERMS block and
   of the invariants, and for the order of the deadlines of each fallback; then the well-formedness of the block, with only informational actions
   in a handler bound to a prohibition; then the types of the data as given. The verdicts,
-  the invariants and the membership of composite terms are computed on the blocked trace.\<close>
+  the invariants, the membership of composite terms and the decisions of the monitors are
+  computed on the blocked trace.\<close>
 
 definition evaluate_trace :: "spec \<Rightarrow> observation list \<Rightarrow> line list" where
   "evaluate_trace sp obs =
@@ -3108,7 +3138,8 @@ definition evaluate_trace :: "spec \<Rightarrow> observation list \<Rightarrow> 
               (case ill_typed fs obs of
                  Some e \<Rightarrow> [LTypes (Some e)]
                | None \<Rightarrow> LTypes None # map (term_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi>) [0..<length blk]
-                          @ map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> \<pi>)) invs))))"
+                          @ map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> \<pi>)) invs
+                          @ monitor_lines blk \<pi>))))"
 
 text \<open>A list of observations whose times decrease is rejected before anything else, with the
   first entry that is earlier than the entry before it.\<close>
@@ -3174,7 +3205,9 @@ text \<open>The theorems of finality (\<open>window_final\<close>, \<open>handle
   end, unless the longer list is rejected for its time order or its types. In the line of a
   composite term, the answers for the whole observed trace are not verdicts and change when
   the trace grows; its status is a verdict, and once an outcome is found it stays
-  (\<open>status_final\<close>).\<close>
+  (\<open>status_final\<close>). The line of a monitor lists its decisions on the observed entries; the
+  list grows with the trace, but the decisions already made stay (\<open>monitor_decisions_append\<close>):
+  the line of the longer trace begins with the line of the shorter one.\<close>
 
 fun cont_decided :: "name continuation \<Rightarrow> bool" where
   "cont_decided (Cure v) = (v \<noteq> Pending)"
@@ -3193,13 +3226,16 @@ fun decided :: "line \<Rightarrow> bool" where
 | "decided (LMustElse i s a d s' a' d' es) = (es \<noteq> EPending \<and> (\<forall>\<tau> v. es = EElse \<tau> v \<longrightarrow> v \<noteq> Pending))"
 | "decided (LInvariant n b) = (b \<noteq> None)"
 | "decided (LComposite n d it v p) = (\<exists>r k. p = CAt r k)"
+| "decided (LMonitor i ds) = True"
 | "decided _ = False"
 
-text \<open>A decided line stays the same, except a composite line: there only the status is
-  decided, and the answers for the whole trace may change.\<close>
+text \<open>A decided line stays the same, except a composite line, where only the status is
+  decided and the answers for the whole trace may change, and a monitor line, whose list of
+  decisions is extended and never revised.\<close>
 
 fun same_verdict :: "line \<Rightarrow> line \<Rightarrow> bool" where
   "same_verdict (LComposite n d it v p) l' = (\<exists>d' it' v'. l' = LComposite n d' it' v' p)"
+| "same_verdict (LMonitor i ds) l' = (\<exists>ds'. l' = LMonitor i (ds @ ds'))"
 | "same_verdict l l' = (l' = l)"
 
 lemma same_verdict_refl: "same_verdict l l"
@@ -3353,6 +3389,15 @@ next
   from term_line_composite_final[OF False dec] show ?thesis .
 qed
 
+lemma monitor_line_final:
+  assumes "i \<in> set (prohibitions blk)"
+  shows "same_verdict (monitor_line blk \<pi> i) (monitor_line blk (\<pi> @ \<rho>) i)"
+proof -
+  from prohibitions_SMustNot[OF assms] obtain s a c where "blk ! i = SMustNot s a c" by blast
+  then show ?thesis
+    using monitor_decisions_append[of s a c \<pi> \<rho>] by (auto simp: monitor_line_def)
+qed
+
 lemma btrace_prefix:
   "take (length \<pi>) (btrace M (\<pi> @ \<rho>)) = btrace M \<pi>"
 proof (rule nth_equalityI)
@@ -3440,7 +3485,8 @@ proof -
                 \<and> else_order_ok time_of (time \<pi> 0) (st \<pi> 0) blk"
     let ?blk = "wf_block blk \<and> cont_free_prohibitions blk \<and> else_handlers_ok blk \<and> refs_ok blk"
     let ?lines = "\<lambda>p. map (term_line (time \<pi> 0) (st \<pi> 0) blk p) [0..<length blk]
-                     @ map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> p)) invs"
+                     @ map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> p)) invs
+                     @ monitor_lines blk p"
     have E: "evaluate_trace sp ?O =
                (if \<not> ?act then [LActivation False]
                 else LActivation True # (if \<not> ?blk then [LBlock False] else LBlock True #
@@ -3482,12 +3528,28 @@ proof -
       next
         case False
         define n where "n = k - length blk"
-        have nl: "n < length invs" using kl False by (simp add: n_def)
-        obtain nm \<iota> where inv: "invs ! n = (nm, \<iota>)" by (cases "invs ! n")
-        have l: "?lines p ! k = LInvariant nm (sinv_eval time_of \<iota> p)" for p
-          using False nl inv by (simp add: nth_append n_def)
-        from dk obtain b where b: "sinv_eval time_of \<iota> \<pi> = Some b" by (auto simp: l)
-        from sinv_final[OF tr'[unfolded pr] nep b] show ?thesis by (simp add: l pr b same_verdict_refl)
+        let ?rest = "\<lambda>p. map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> p)) invs @ monitor_lines blk p"
+        have kn: "?lines p ! k = ?rest p ! n" for p
+          using False by (simp add: nth_append n_def)
+        have nl: "n < length invs + length (prohibitions blk)"
+          using kl False by (simp add: n_def monitor_lines_def)
+        show ?thesis
+        proof (cases "n < length invs")
+          case True
+          obtain nm \<iota> where inv: "invs ! n = (nm, \<iota>)" by (cases "invs ! n")
+          have l: "?lines p ! k = LInvariant nm (sinv_eval time_of \<iota> p)" for p
+            using True inv by (simp add: kn nth_append)
+          from dk obtain b where b: "sinv_eval time_of \<iota> \<pi> = Some b" by (auto simp: l)
+          from sinv_final[OF tr'[unfolded pr] nep b] show ?thesis by (simp add: l pr b same_verdict_refl)
+        next
+          case False
+          define m where "m = n - length invs"
+          have ml: "m < length (prohibitions blk)" using nl False unfolding m_def by arith
+          have l: "?lines p ! k = monitor_line blk p (prohibitions blk ! m)" for p
+            using False ml by (simp add: kn nth_append monitor_lines_def m_def)
+          have "prohibitions blk ! m \<in> set (prohibitions blk)" using ml by (rule nth_mem)
+          from monitor_line_final[OF this] show ?thesis by (simp add: l pr)
+        qed
       qed
       then show ?thesis unfolding R R' k by simp
     qed
@@ -3509,7 +3571,9 @@ export_code run Spec Fdecl Act ArgName ArgVal Pen PVal PAdd PSub PMul PNeg num_o
   Always Eventually Next SInv SEventuallyWithin TPrim TOptional TRecord PBool PInt PDec PStr PTime
   ABool ANum AStr ATime dec_atom quotient_of Atom Nom fmap_of_list Deontic Arrival Tick
   Must May MustNot
-  LTimeOrder LActivation LBlock LTypes LMust LMustNot LMay LMustElse LOnBreach LComposite LInvariant CAt COpen CUnknown Done Interrupted Violated
+  LTimeOrder LActivation LBlock LTypes LMust LMustNot LMay LMustElse LOnBreach LComposite LInvariant LMonitor
+  CAt COpen CUnknown Done Interrupted Violated
+  blocks enforce
   EFulfilled EPending EElse
   SFulfilled SPending SBreached NoContinuation Terminated Cure Escalated
   Fulfilled Breached Pending

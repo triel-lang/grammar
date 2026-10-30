@@ -11,3 +11,4 @@ TERM 3 MAY buyer cancel : FULFILLED
 INVARIANT quantity_positive : U
 INVARIANT amount_bounded : U
 INVARIANT limit_known : U
+MONITOR 1 : ENTRY 1 BLOCK ENTRY 3 BLOCK

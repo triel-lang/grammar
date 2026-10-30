@@ -105,6 +105,25 @@ proof -
   ultimately show ?thesis using T2_monotone[OF assms(1)] by blast
 qed
 
+text \<open>The same for the monitor as a function: an action that \<open>enforce\<close> lets through was taken
+  in a state in which the condition is false in every completion.\<close>
+
+theorem enforce_allows_sound:
+  assumes "present_free c" and j: "1 \<le> j" "j < length \<pi>"
+    and d: "does s a (evt (enforce s a c \<pi> ! j))"
+    and "completion (st \<pi> (j - 1)) \<sigma>'"
+  shows "eval c \<sigma>' = Some False"
+proof -
+  have nb: "\<not> blocked_action s a c \<pi> j"
+  proof
+    assume "blocked_action s a c \<pi> j"
+    with j d show False by (simp add: enforce_evt does_def)
+  qed
+  with j d have "does s a (evt (\<pi> ! j))" by (simp add: enforce_evt)
+  with nb j have "\<not> blocks c (st \<pi> (j - 1))" by (simp add: blocked_action_def)
+  from monitor_sound_completions[OF assms(1) this assms(5)] show ?thesis .
+qed
+
 text \<open>If the condition is true, it is true in every completion: the condition of a breach
   recorded on incomplete data holds however the missing data turn out.\<close>
 

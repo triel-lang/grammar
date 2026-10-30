@@ -10,3 +10,4 @@ TERM 3 MUST_NOT landlord enter(tenant) : BREACHED 1772323200 PENALTY UNDEFINED N
 TERM 4 ON_BREACH landlord : BOUND 3
 TERM 5 MAY tenant sublet("room") : PENDING
 INVARIANT rent_positive : U
+MONITOR 3 : ENTRY 1 BLOCK

@@ -73,23 +73,25 @@ Without `TRIEL_EVAL`, the script builds the evaluator from `evaluator/` with `gh
 
 Every trace is activated at 09:00 on Monday 2 November 2026, with a limit of 1000.00. The oracle quotes the invoice at 09:30, and the payment is at 10:00, unless the row says otherwise.
 
-The TRIEL column gives the two verdicts of the evaluator: the obligation to pay, then the prohibition. "Blocked" means that the condition of the prohibition is undefined before the payment, so the fail-closed monitor of the core blocks it (`undefined_guard_blocks_not_breach`). The evaluator does not print this; it reports verdicts only. "—" marks a request that was not run: there is no Dogwood trace for a payment approved while the quote is missing.
+The TRIEL columns are quoted from the report of the evaluator: the verdicts of the obligation to pay (`TERM 1`) and of the prohibition (`TERM 2`), and the `MONITOR 2` line, the decision of the fail-closed monitor of the prohibition at the payment (`examples/core/README.md`, Output; `enforce` and `monitor_decisions` of `formal/core/TRIEL_Breach.thy`). `ENTRY J BLOCK` means that the condition of the prohibition is not known to be false in the state before the payment at entry J, true or undefined, so the monitor blocks the payment; `ALLOW` that it is false; `NO ACTION` that the agent does not pay. A payment is `BLOCK` with the verdict `PENDING` exactly when the condition is undefined before it (`undefined_guard_blocks_not_breach`, `enforce_undefined_blocks`). The scenarios are `examples/core/scenarios/invoice_*.scn` and `triel/x_*.scn`. "—" marks a request that was not run: there is no Dogwood trace for a payment approved while the quote is missing.
 
-| Trace | TRIEL: obligation; prohibition | Cedar unguarded | Cedar guarded | Cedar fail-closed | Dogwood events | Dogwood unguarded | Dogwood guarded |
-|---|---|---|---|---|---|---|---|
-| quote 800.00, agent pays | fulfilled; pending | allow | allow | allow | allow | allow | allow |
-| quote 1500.00, not approved | fulfilled; breached, notify | deny | deny | deny | deny | deny | deny |
-| quote 1500.00, approved | fulfilled; pending | allow | allow | allow | allow | allow | allow |
-| quote 1500.00, approval absent | fulfilled; pending, blocked | allow, error | allow | deny | deny | allow, error | allow |
-| quote stale (payment at 11:00) | fulfilled; pending, blocked | deny | deny | deny | deny | deny | deny |
-| no quote, not approved | fulfilled; pending, blocked | allow, errors | allow | deny | deny | allow, error | allow |
-| no quote, approved | fulfilled; pending | allow, errors | allow | allow | — | — | — |
-| owner pays on 6 November | fallback fulfilled; pending | allow | allow | allow | allow | allow | allow |
-| nobody pays, tick on 7 November | fallback breached; pending | no request | no request | no request | no output | no output | no output |
+| Trace | TRIEL: obligation; prohibition | TRIEL: `MONITOR 2 :` | Cedar unguarded | Cedar guarded | Cedar fail-closed | Dogwood events | Dogwood unguarded | Dogwood guarded |
+|---|---|---|---|---|---|---|---|---|
+| quote 800.00, agent pays | `FULFILLED`; `PENDING` | `ENTRY 2 ALLOW` | allow | allow | allow | allow | allow | allow |
+| quote 1500.00, not approved | `FULFILLED`; `BREACHED 1793613600 NOTIFY owner` | `ENTRY 2 BLOCK` | deny | deny | deny | deny | deny | deny |
+| quote 1500.00, approved | `FULFILLED`; `PENDING` | `ENTRY 2 ALLOW` | allow | allow | allow | allow | allow | allow |
+| quote 1500.00, approval absent | `FULFILLED`; `PENDING` | `ENTRY 2 BLOCK` | allow, error | allow | deny | deny | allow, error | allow |
+| quote stale (payment at 11:00) | `FULFILLED`; `PENDING` | `ENTRY 3 BLOCK` | deny | deny | deny | deny | deny | deny |
+| no quote, not approved | `FULFILLED`; `PENDING` | `ENTRY 1 BLOCK` | allow, errors | allow | deny | deny | allow, error | allow |
+| no quote, approved | `FULFILLED`; `PENDING` | `ENTRY 1 ALLOW` | allow, errors | allow | allow | — | — | — |
+| owner pays on 6 November | `ELSE FULFILLED`; `PENDING` | `NO ACTION` | allow | allow | allow | allow | allow | allow |
+| nobody pays, tick on 7 November | `ELSE BREACHED 1794042000`; `PENDING` | `NO ACTION` | no request | no request | no request | no output | no output | no output |
+
+The payment is entry 2 in the traces with a quote (activation, quote, payment), entry 3 in the stale-quote trace (a tick at 10:45 between the quote and the payment) and entry 1 in the traces without a quote.
 
 **Unguarded and guarded policies.** Both validators reject the unguarded policies. `cedar authorize` and `dogwood replay` evaluate them all the same: they skip the erroring `forbid` and report the error. With the guards that the validator asks for, the policies validate, and a `forbid` over an absent attribute is not satisfied, so the payment is allowed without an error.
 
-**Fail-closed Cedar.** `invoice_failclosed.cedar` gives the decisions of the TRIEL monitor on every request: it denies exactly where the prohibition is breached or blocked, and allows a payment approved while the quote is missing, whose condition is false.
+**Fail-closed Cedar.** `invoice_failclosed.cedar` gives the decisions of the TRIEL monitor on every request: it denies exactly where the `MONITOR 2` line says `BLOCK`, and allows a payment approved while the quote is missing, whose condition is false (`ALLOW`).
 
 **The minimal test in `cedar5/`.** Two more ways make a prohibition hold when the attribute is absent:
 - `if context has … then … else true`, which validates and denies;

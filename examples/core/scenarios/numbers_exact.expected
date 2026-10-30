@@ -11,3 +11,4 @@ TERM 3 MAY buyer cancel : PENDING
 INVARIANT quantity_positive : F
 INVARIANT amount_bounded : U
 INVARIANT limit_known : T
+MONITOR 1 : ENTRY 2 ALLOW

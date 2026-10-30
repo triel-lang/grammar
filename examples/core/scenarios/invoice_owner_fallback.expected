@@ -8,3 +8,4 @@ TERM 1 MUST agent pay(supplier) DEADLINE 1793869200 ELSE owner pay(supplier) DEA
 TERM 2 MUST_NOT agent pay(supplier) : PENDING
 TERM 3 ON_BREACH agent : BOUND 2
 INVARIANT limit_positive : U
+MONITOR 2 : NO ACTION

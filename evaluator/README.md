@@ -1,6 +1,6 @@
 # Evaluator of the TRIEL core
 
-`generated/TRIEL.hs` is exported by Isabelle from [`formal/core/TRIEL_Exec.thy`](../formal/core/TRIEL_Exec.thy) and must not be edited. CI checks that it is exactly what `isabelle build -e -D formal/core` produces. `Main.hs` reads the input and prints the report; every verdict is computed by the exported function `run` (`formal/core/CORE.md`, section 10).
+`generated/TRIEL.hs` is exported by Isabelle from [`formal/core/TRIEL_Exec.thy`](../formal/core/TRIEL_Exec.thy) and must not be edited. CI checks that it is exactly what `isabelle build -e -D formal/core` produces. `Main.hs` reads the input and prints the report; every verdict and every decision of a monitor is computed by the exported function `run` (`formal/core/CORE.md`, section 10); the module also exports `blocks` and `enforce`, the fail-closed monitor of a prohibition as a predicate and as a function on traces (section 8).
 
 Build with GHC (checked with 9.6.7; only `base` is needed):
 

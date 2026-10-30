@@ -5,7 +5,7 @@
 -- the report in the format of examples/core/README.md.
 --
 -- Only reading the input and printing the report are written here; every
--- verdict comes from the exported code. The input is produced by
+-- verdict and every decision of a monitor comes from the exported code. The input is produced by
 -- parser/triel_eval.py. Its grammar:
 --
 --   input  ::= (input (spec (factors F*) (terms T*) (invariants I*)) (trace E*))
@@ -396,6 +396,12 @@ line (T.LComposite i d n v p) =
     outcome T.Interrupted = "INTERRUPTED"
     outcome T.Done = "DONE"
 line (T.LInvariant n b) = "INVARIANT " ++ n ++ " : " ++ truth b
+-- The decisions of the fail-closed monitor of a prohibition: one pair per
+-- action of its subject, in trace order.
+line (T.LMonitor i ds) =
+  "MONITOR " ++ nat i ++ " :" ++ (if null ds then " NO ACTION" else concatMap decision ds)
+  where
+    decision (j, b) = " ENTRY " ++ nat j ++ (if b then " BLOCK" else " ALLOW")
 
 main :: IO ()
 main = do

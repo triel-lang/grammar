@@ -22,3 +22,4 @@ TERM 2 ON_BREACH holder : BOUND 1
 TERM 3 MUST_NOT lender grant_loan : BREACHED 1777852800
 INVARIANT loan_requires_valid_proof : F
 INVARIANT loan_only_in_the_eu : U
+MONITOR 3 : ENTRY 2 BLOCK

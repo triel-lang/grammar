@@ -1,8 +1,10 @@
 (*  Title:      TRIEL_Breach.thy
     Purpose:    Deadlines and breach (TECHNICAL_REPORT.md section 2.6) as a layer of
                 verdicts over implementation traces: BY and WITHIN, prohibitions and
-                permissions, binding of ON_BREACH, breach actions and their continuations,
-                and MAX_AGE with ON_STALE BLOCK. The trace semantics of TRIEL_Trace and
+                permissions, the fail-closed monitor of a prohibition as a function on
+                traces (enforce: sound, transparent on defined data, idempotent),
+                binding of ON_BREACH, breach actions and their continuations, and
+                MAX_AGE with ON_STALE BLOCK. The trace semantics of TRIEL_Trace and
                 TRIEL_Terms is unchanged.
     SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
@@ -368,6 +370,276 @@ theorem undefined_guard_blocks_not_breach:
   assumes "eval c (st \<pi> (j - 1)) = None"
   shows "blocks c (st \<pi> (j - 1))" and "\<not> forbidden s a c \<pi> j"
   using assms by (simp_all add: blocks_def forbidden_def)
+
+
+subsection \<open>The monitor as a function on traces\<close>
+
+text \<open>The monitor of \<open>s MUST_NOT a WHEN c\<close> as a function on implementation traces, a
+  suppression automaton in the sense of Ligatti, Bauer and Walker: \<open>enforce s a c \<pi>\<close> keeps
+  every entry of \<open>\<pi>\<close>, except that an action \<open>a\<close> of \<open>s\<close> taken in a blocking state is replaced
+  by a clock tick with the same time and the same state. The entry \<open>j\<close> is a blocked action
+  when it is a later entry with the action \<open>a\<close> of \<open>s\<close> and \<open>c\<close> is not known to be false in the
+  state of the entry before it. States and times are never changed, so the monitor decides
+  the same on \<open>\<pi>\<close> and on its own output.\<close>
+
+definition blocked_action :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> bool" where
+  "blocked_action s a c \<pi> j \<longleftrightarrow>
+     1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> blocks c (st \<pi> (j - 1))"
+
+definition enforce :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 's, 'a) itrace \<Rightarrow> ('n, 'v, 's, 'a) itrace" where
+  "enforce s a c \<pi> =
+     map (\<lambda>j. if blocked_action s a c \<pi> j then (st \<pi> j, time \<pi> j, Tick) else \<pi> ! j) [0..<length \<pi>]"
+
+lemma enforce_length [simp]: "length (enforce s a c \<pi>) = length \<pi>"
+  by (simp add: enforce_def)
+
+lemma enforce_nth:
+  "j < length \<pi> \<Longrightarrow>
+     enforce s a c \<pi> ! j = (if blocked_action s a c \<pi> j then (st \<pi> j, time \<pi> j, Tick) else \<pi> ! j)"
+  by (simp add: enforce_def)
+
+lemma enforce_st [simp]: "j < length \<pi> \<Longrightarrow> st (enforce s a c \<pi>) j = st \<pi> j"
+  by (simp add: st_def enforce_nth)
+
+lemma enforce_time [simp]: "j < length \<pi> \<Longrightarrow> time (enforce s a c \<pi>) j = time \<pi> j"
+  by (simp add: time_def enforce_nth)
+
+lemma enforce_evt:
+  "j < length \<pi> \<Longrightarrow> evt (enforce s a c \<pi> ! j) = (if blocked_action s a c \<pi> j then Tick else evt (\<pi> ! j))"
+  by (simp add: enforce_nth)
+
+text \<open>The output of the monitor has no blocked action left: a blocked action became a tick,
+  and an action that was let through was taken in the same state, which does not block.\<close>
+
+lemma blocked_action_enforce: "\<not> blocked_action s a c (enforce s a c \<pi>) j"
+proof
+  assume b: "blocked_action s a c (enforce s a c \<pi>) j"
+  then have j: "1 \<le> j" "j < length \<pi>" and d: "does s a (evt (enforce s a c \<pi> ! j))"
+    and bl: "blocks c (st (enforce s a c \<pi>) (j - 1))"
+    unfolding blocked_action_def by simp_all
+  have "j - 1 < length \<pi>" using j by simp
+  with bl have bl': "blocks c (st \<pi> (j - 1))" by simp
+  show False
+  proof (cases "blocked_action s a c \<pi> j")
+    case True
+    with d j show False by (simp add: enforce_evt does_def)
+  next
+    case False
+    with d j have "does s a (evt (\<pi> ! j))" by (simp add: enforce_evt)
+    with j bl' False show False by (simp add: blocked_action_def)
+  qed
+qed
+
+text \<open>Soundness: the output of the monitor is never breached.\<close>
+
+theorem enforce_sound: "pr_verdict s a c (enforce s a c \<pi>) = Pending"
+proof (rule enforced_no_breach)
+  fix j assume j: "1 \<le> j" "j < length (enforce s a c \<pi>)" "does s a (evt (enforce s a c \<pi> ! j))"
+  show "\<not> blocks c (st (enforce s a c \<pi>) (j - 1))"
+  proof
+    assume "blocks c (st (enforce s a c \<pi>) (j - 1))"
+    with j have "blocked_action s a c (enforce s a c \<pi>) j" unfolding blocked_action_def by simp
+    with blocked_action_enforce show False by blast
+  qed
+qed
+
+text \<open>The output of the monitor is a trace: times and states are kept.\<close>
+
+theorem enforce_is_trace:
+  assumes tr: "is_trace \<pi>"
+  shows "is_trace (enforce s a c \<pi>)"
+proof -
+  have eq: "map tstamp (enforce s a c \<pi>) = map tstamp \<pi>"
+    by (rule nth_equalityI) (simp_all add: enforce_nth time_def)
+  have ne: "enforce s a c \<pi> \<noteq> []" using tr unfolding enforce_def is_trace_def by simp
+  from tr ne eq show ?thesis by (simp add: is_trace_def)
+qed
+
+text \<open>The monitor is idempotent, and it changes exactly the blocked actions.\<close>
+
+theorem enforce_idempotent: "enforce s a c (enforce s a c \<pi>) = enforce s a c \<pi>"
+proof (rule nth_equalityI)
+  show "length (enforce s a c (enforce s a c \<pi>)) = length (enforce s a c \<pi>)" by simp
+next
+  fix j assume "j < length (enforce s a c (enforce s a c \<pi>))"
+  then have j: "j < length \<pi>" by simp
+  have "\<not> blocked_action s a c (enforce s a c \<pi>) j" by (rule blocked_action_enforce)
+  with j show "enforce s a c (enforce s a c \<pi>) ! j = enforce s a c \<pi> ! j"
+    by (simp add: enforce_nth)
+qed
+
+theorem enforce_blocks_exactly:
+  assumes j: "j < length \<pi>"
+  shows "enforce s a c \<pi> ! j \<noteq> \<pi> ! j \<longleftrightarrow> blocked_action s a c \<pi> j"
+proof (cases "blocked_action s a c \<pi> j")
+  case True
+  then have "evt (enforce s a c \<pi> ! j) = Tick" using j by (simp add: enforce_evt)
+  moreover have "evt (\<pi> ! j) \<noteq> Tick" using True unfolding blocked_action_def does_def by auto
+  ultimately have "enforce s a c \<pi> ! j \<noteq> \<pi> ! j" by force
+  with True show ?thesis by simp
+next
+  case False
+  with j show ?thesis by (simp add: enforce_nth)
+qed
+
+text \<open>The monitor leaves a trace unchanged exactly when the trace has no blocked action.\<close>
+
+theorem enforce_id_iff: "enforce s a c \<pi> = \<pi> \<longleftrightarrow> (\<forall>j. \<not> blocked_action s a c \<pi> j)"
+proof
+  assume e: "enforce s a c \<pi> = \<pi>"
+  show "\<forall>j. \<not> blocked_action s a c \<pi> j"
+  proof
+    fix j
+    show "\<not> blocked_action s a c \<pi> j"
+    proof
+      assume b: "blocked_action s a c \<pi> j"
+      then have j: "j < length \<pi>" by (simp add: blocked_action_def)
+      have "enforce s a c \<pi> ! j \<noteq> \<pi> ! j" using enforce_blocks_exactly[OF j] b by simp
+      with e show False by simp
+    qed
+  qed
+next
+  assume nb: "\<forall>j. \<not> blocked_action s a c \<pi> j"
+  show "enforce s a c \<pi> = \<pi>"
+  proof (rule nth_equalityI)
+    show "length (enforce s a c \<pi>) = length \<pi>" by simp
+  next
+    fix j assume "j < length (enforce s a c \<pi>)"
+    then have "j < length \<pi>" by simp
+    with nb show "enforce s a c \<pi> ! j = \<pi> ! j" by (simp add: enforce_nth)
+  qed
+qed
+
+text \<open>Transparency. A trace the monitor leaves unchanged is not breached. Conversely, when
+  \<open>c\<close> is defined at every entry, a trace that is not breached is left unchanged: on defined
+  data the monitor changes a trace exactly when the prohibition is breached. Undefined data
+  is where the two sides come apart: an action taken while \<open>c\<close> is undefined is blocked
+  although it is not a breach (\<open>undefined_guard_blocks_not_breach\<close>), so there the monitor
+  changes a trace whose verdict is pending.\<close>
+
+theorem enforce_unchanged_no_breach:
+  assumes "enforce s a c \<pi> = \<pi>"
+  shows "pr_verdict s a c \<pi> = Pending"
+  using enforce_sound[of s a c \<pi>] by (simp add: assms)
+
+theorem enforce_transparent:
+  assumes def: "\<And>j. j < length \<pi> \<Longrightarrow> eval c (st \<pi> j) \<noteq> None"
+  shows "enforce s a c \<pi> = \<pi> \<longleftrightarrow> pr_verdict s a c \<pi> = Pending"
+proof
+  assume "enforce s a c \<pi> = \<pi>"
+  then show "pr_verdict s a c \<pi> = Pending" by (rule enforce_unchanged_no_breach)
+next
+  assume p: "pr_verdict s a c \<pi> = Pending"
+  have "\<not> blocked_action s a c \<pi> j" for j
+  proof
+    assume b: "blocked_action s a c \<pi> j"
+    then have j: "1 \<le> j" "j < length \<pi>" and d: "does s a (evt (\<pi> ! j))"
+      and bl: "blocks c (st \<pi> (j - 1))"
+      unfolding blocked_action_def by simp_all
+    have "eval c (st \<pi> (j - 1)) \<noteq> None" using def[of "j - 1"] j by simp
+    with bl have "eval c (st \<pi> (j - 1)) = Some True"
+      unfolding blocks_def by (cases "eval c (st \<pi> (j - 1))") auto
+    with j d have "forbidden s a c \<pi> j" by (simp add: forbidden_def)
+    then have "pr_verdict s a c \<pi> \<noteq> Pending" by (auto simp: pr_verdict_def)
+    with p show False by simp
+  qed
+  then show "enforce s a c \<pi> = \<pi>" by (simp add: enforce_id_iff)
+qed
+
+theorem enforce_undefined_blocks:
+  assumes j: "1 \<le> j" "j < length \<pi>" and d: "does s a (evt (\<pi> ! j))"
+    and u: "eval c (st \<pi> (j - 1)) = None"
+  shows "evt (enforce s a c \<pi> ! j) = Tick" and "enforce s a c \<pi> \<noteq> \<pi>" and "\<not> forbidden s a c \<pi> j"
+proof -
+  have b: "blocked_action s a c \<pi> j"
+    using j d u unfolding blocked_action_def blocks_def by simp
+  then show "evt (enforce s a c \<pi> ! j) = Tick" using j by (simp add: enforce_evt)
+  have "enforce s a c \<pi> ! j \<noteq> \<pi> ! j" using enforce_blocks_exactly[OF j(2)] b by simp
+  then show "enforce s a c \<pi> \<noteq> \<pi>" by auto
+  show "\<not> forbidden s a c \<pi> j" using u by (simp add: forbidden_def)
+qed
+
+text \<open>Minimality on defined data. Consider any other way to edit the trace that keeps its
+  states and times (an edit may replace or suppress events). If the edited trace is not
+  breached, then every action \<open>a\<close> of \<open>s\<close> that it keeps was taken in a state that does not block,
+  so the monitor keeps it too: no breach-free edit keeps an action that the monitor blocks.
+  This needs \<open>c\<close> defined along the trace; on undefined data the fail-closed monitor blocks
+  more than the verdict requires, by design.\<close>
+
+theorem enforce_minimal:
+  assumes def: "\<And>j. j < length \<pi> \<Longrightarrow> eval c (st \<pi> j) \<noteq> None"
+    and len: "length \<pi>' = length \<pi>" and sts: "\<And>j. j < length \<pi> \<Longrightarrow> st \<pi>' j = st \<pi> j"
+    and ok: "pr_verdict s a c \<pi>' = Pending"
+    and j: "1 \<le> j" "j < length \<pi>" and d: "does s a (evt (\<pi>' ! j))"
+  shows "\<not> blocked_action s a c \<pi> j" and "enforce s a c \<pi> ! j = \<pi> ! j"
+proof -
+  show nb: "\<not> blocked_action s a c \<pi> j"
+  proof
+    assume "blocked_action s a c \<pi> j"
+    then have bl: "blocks c (st \<pi> (j - 1))" by (simp add: blocked_action_def)
+    have "eval c (st \<pi> (j - 1)) \<noteq> None" using def[of "j - 1"] j by simp
+    with bl have "eval c (st \<pi> (j - 1)) = Some True"
+      unfolding blocks_def by (cases "eval c (st \<pi> (j - 1))") auto
+    then have "eval c (st \<pi>' (j - 1)) = Some True" using sts[of "j - 1"] j by simp
+    with j d len have "forbidden s a c \<pi>' j" by (simp add: forbidden_def)
+    then have "pr_verdict s a c \<pi>' \<noteq> Pending" by (auto simp: pr_verdict_def)
+    with ok show False by simp
+  qed
+  then show "enforce s a c \<pi> ! j = \<pi> ! j" using enforce_blocks_exactly[OF j(2)] by simp
+qed
+
+text \<open>The decisions of the monitor on a trace, as the evaluator reports them: for every
+  action \<open>a\<close> of \<open>s\<close> in the trace, its entry and whether the monitor blocks it. The blocked
+  entries are exactly the entries \<open>enforce\<close> changes.\<close>
+
+definition monitor_decisions :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v, 's, 'a) itrace
+    \<Rightarrow> (nat \<times> bool) list" where
+  "monitor_decisions s a c \<pi> =
+     map (\<lambda>j. (j, blocks c (st \<pi> (j - 1)))) (filter (\<lambda>j. does s a (evt (\<pi> ! j))) [1..<length \<pi>])"
+
+lemma monitor_decisions_iff:
+  "(j, b) \<in> set (monitor_decisions s a c \<pi>) \<longleftrightarrow>
+     1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> b = blocks c (st \<pi> (j - 1))"
+  by (auto simp: monitor_decisions_def image_iff)
+
+theorem monitor_decisions_block:
+  "(j, True) \<in> set (monitor_decisions s a c \<pi>) \<longleftrightarrow> blocked_action s a c \<pi> j"
+  by (auto simp: monitor_decisions_iff blocked_action_def)
+
+theorem monitor_decisions_allow:
+  "(j, False) \<in> set (monitor_decisions s a c \<pi>) \<longleftrightarrow>
+     1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> \<not> blocked_action s a c \<pi> j"
+  by (auto simp: monitor_decisions_iff blocked_action_def)
+
+theorem monitor_decisions_enforce:
+  assumes "j < length \<pi>"
+  shows "(j, True) \<in> set (monitor_decisions s a c \<pi>) \<longleftrightarrow> enforce s a c \<pi> ! j \<noteq> \<pi> ! j"
+  by (simp add: monitor_decisions_block enforce_blocks_exactly[OF assms])
+
+text \<open>A decision is final: the decisions on a longer trace begin with those on the shorter
+  one, since the decision at an entry reads the state of the entry before it.\<close>
+
+lemma monitor_decisions_append:
+  "\<exists>ds. monitor_decisions s a c (\<pi> @ \<rho>) = monitor_decisions s a c \<pi> @ ds"
+proof (cases "\<pi> = []")
+  case True
+  then show ?thesis by (simp add: monitor_decisions_def)
+next
+  case False
+  then have l1: "1 \<le> length \<pi>" by (cases \<pi>) simp_all
+  have u: "[1..<length (\<pi> @ \<rho>)] = [1..<length \<pi>] @ [length \<pi>..<length \<pi> + length \<rho>]"
+    unfolding length_append by (rule upt_add_eq_append[OF l1])
+  have f: "filter (\<lambda>j. does s a (evt ((\<pi> @ \<rho>) ! j))) [1..<length \<pi>]
+           = filter (\<lambda>j. does s a (evt (\<pi> ! j))) [1..<length \<pi>]"
+    by (rule filter_cong) simp_all
+  have st': "\<And>x. x \<in> set [1..<length \<pi>] \<Longrightarrow> st (\<pi> @ \<rho>) (x - 1) = st \<pi> (x - 1)"
+    by (intro st_append) simp
+  have m: "map (\<lambda>j. (j, blocks c (st (\<pi> @ \<rho>) (j - 1)))) (filter (\<lambda>j. does s a (evt (\<pi> ! j))) [1..<length \<pi>])
+           = map (\<lambda>j. (j, blocks c (st \<pi> (j - 1)))) (filter (\<lambda>j. does s a (evt (\<pi> ! j))) [1..<length \<pi>])"
+    by (rule map_cong) (simp_all add: st')
+  show ?thesis
+    unfolding monitor_decisions_def u filter_append map_append f m by blast
+qed
 
 text \<open>\<open>s MAY a WHEN c\<close> is fulfilled when exercised in a state where \<open>c\<close> holds, and is
   never breached.\<close>
