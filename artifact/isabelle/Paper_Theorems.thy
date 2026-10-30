@@ -74,7 +74,6 @@ text \<open>Stability of the verdicts of norms, not only of the values of condit
   the report of the evaluator.\<close>
 
 thm TRIEL_Trace.forbidden_data_mono
-thm TRIEL_Breach.blocks_data_mono
 thm TRIEL_Breach.pr_verdict_data_mono
 thm TRIEL_Breach.pr_verdict_pending_data_mono
 thm TRIEL_Breach.ob_verdict_data_indep
@@ -217,7 +216,7 @@ local
     "TRIEL_Indicators.cond_equitone", "TRIEL_Core.T3_present_not_monotone", "TRIEL_Core.present_flips",
     "TRIEL_Indicators.Ex_breaks_stability", "TRIEL_Core.T3_default_not_monotone",
     "TRIEL_Indicators.default_breaks_stability",
-    "TRIEL_Trace.forbidden_data_mono", "TRIEL_Breach.blocks_data_mono",
+    "TRIEL_Trace.forbidden_data_mono",
     "TRIEL_Breach.pr_verdict_data_mono", "TRIEL_Breach.pr_verdict_pending_data_mono",
     "TRIEL_Breach.ob_verdict_data_indep", "TRIEL_Breach.may_verdict_data_mono",
     "TRIEL_Invariants.sinv_data_mono_le", "TRIEL_Breach.pr_verdict_present_not_mono",

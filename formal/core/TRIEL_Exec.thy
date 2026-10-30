@@ -4020,14 +4020,15 @@ qed
 
 text \<open>The report on the same observations with more data. If the observations \<open>obs\<close> were
   accepted (their report has the line \<open>LTypes None\<close>), then either \<open>obs'\<close> is rejected for the
-  types of its data, or every line of the report on \<open>obs'\<close> refines the corresponding line of
-  the report on \<open>obs\<close>. \<open>obs'\<close> cannot be rejected for its time order or its activation: the
+  types of its data, or the report on \<open>obs'\<close> has the same number of lines and every line of it
+  refines the corresponding line of the report on \<open>obs\<close>. \<open>obs'\<close> cannot be rejected for its time order or its activation: the
   times are the same, and activation succeeds on more data.\<close>
 
 theorem run_data_mono:
   assumes pf: "present_free_spec sp" and le: "obs_le obs obs'"
     and ok: "LTypes None \<in> set (run sp obs)" and i: "i < length (run sp obs)"
-  shows "line_refines (run sp obs ! i) (run sp obs' ! i) \<or> (\<exists>e. LTypes (Some e) \<in> set (run sp obs'))"
+  shows "(length (run sp obs') = length (run sp obs) \<and> line_refines (run sp obs ! i) (run sp obs' ! i))
+         \<or> (\<exists>e. LTypes (Some e) \<in> set (run sp obs'))"
 proof -
   obtain fs blk invs where sp: "sp = Spec fs blk invs" by (cases sp)
   let ?H = "hidden fs"
@@ -4101,6 +4102,8 @@ proof -
     case None
     with act' blk have R': "run sp obs' = LActivation True # LBlock True # LTypes None # ?lines (st \<pi>' 0) \<pi>'"
       unfolding run ev E' by simp
+    have len: "length (run sp obs') = length (run sp obs)"
+      unfolding R R' by (simp add: monitor_lines_def)
     have "line_refines (run sp obs ! i) (run sp obs' ! i)"
     proof (cases "3 \<le> i")
       case False
@@ -4159,7 +4162,7 @@ proof -
       qed
       then show ?thesis unfolding R R' k by simp
     qed
-    then show ?thesis by (rule disjI1)
+    with len show ?thesis by blast
   qed
 qed
 
@@ -4172,19 +4175,40 @@ text \<open>Three readings of \<open>run_data_mono\<close> for a report on accep
 corollary run_data_mono_decided:
   assumes pf: "present_free_spec sp" and le: "obs_le obs obs'" and i: "i < length (run sp obs)"
     and dec: "decided (run sp obs ! i)" and nc: "\<And>n d it v p. run sp obs ! i \<noteq> LComposite n d it v p"
-  shows "decided (run sp obs' ! i) \<or> (\<exists>e. LTypes (Some e) \<in> set (run sp obs'))"
-  using run_data_mono[OF pf le run_decided_accepted[OF i dec] i] line_refines_decided[OF _ dec nc]
-  by blast
+  shows "(i < length (run sp obs') \<and> decided (run sp obs' ! i)) \<or> (\<exists>e. LTypes (Some e) \<in> set (run sp obs'))"
+proof -
+  from run_data_mono[OF pf le run_decided_accepted[OF i dec] i] show ?thesis
+  proof
+    assume h: "length (run sp obs') = length (run sp obs) \<and> line_refines (run sp obs ! i) (run sp obs' ! i)"
+    then have "decided (run sp obs' ! i)" using line_refines_decided[OF _ dec nc] by blast
+    moreover have "i < length (run sp obs')" using h i by simp
+    ultimately show ?thesis by blast
+  next
+    assume "\<exists>e. LTypes (Some e) \<in> set (run sp obs')"
+    then show ?thesis by blast
+  qed
+qed
 
 corollary run_data_mono_breach:
   assumes pf: "present_free_spec sp" and le: "obs_le obs obs'" and i: "i < length (run sp obs)"
     and l: "run sp obs ! i = LMustNot n s a (Breached \<tau>) acts"
-  shows "(\<exists>\<tau>' acts'. \<tau>' \<le> \<tau> \<and> run sp obs' ! i = LMustNot n s a (Breached \<tau>') acts')
+  shows "(i < length (run sp obs') \<and> (\<exists>\<tau>' acts'. \<tau>' \<le> \<tau> \<and> run sp obs' ! i = LMustNot n s a (Breached \<tau>') acts'))
          \<or> (\<exists>e. LTypes (Some e) \<in> set (run sp obs'))"
 proof -
   have dec: "decided (run sp obs ! i)" by (simp add: l)
   from run_data_mono[OF pf le run_decided_accepted[OF i dec] i] show ?thesis
-    unfolding l by auto
+  proof
+    assume h: "length (run sp obs') = length (run sp obs) \<and> line_refines (run sp obs ! i) (run sp obs' ! i)"
+    then have "i < length (run sp obs')" using i by simp
+    moreover from h have "line_refines (LMustNot n s a (Breached \<tau>) acts) (run sp obs' ! i)"
+      by (simp add: l)
+    then have "\<exists>\<tau>' acts'. \<tau>' \<le> \<tau> \<and> run sp obs' ! i = LMustNot n s a (Breached \<tau>') acts'"
+      by auto
+    ultimately show ?thesis by blast
+  next
+    assume "\<exists>e. LTypes (Some e) \<in> set (run sp obs')"
+    then show ?thesis by blast
+  qed
 qed
 
 corollary run_data_mono_pending:
@@ -4197,7 +4221,7 @@ proof -
   then have ok: "LTypes None \<in> set (run sp obs)" by (rule run_norm_accepted) (simp_all add: l)
   from run_data_mono[OF pf le ok i] show ?thesis
   proof
-    assume "line_refines (run sp obs ! i) (run sp obs' ! i)"
+    assume "length (run sp obs') = length (run sp obs) \<and> line_refines (run sp obs ! i) (run sp obs' ! i)"
     then show ?thesis unfolding l l' by (cases v) auto
   next
     assume "\<exists>e. LTypes (Some e) \<in> set (run sp obs')"

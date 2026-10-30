@@ -19,8 +19,8 @@ behind the paper. It contains:
   with hand-written expected reports).
 - `artifact/`: the Docker image (`Dockerfile`), the script that runs every check
   (`run.sh`), and the Isabelle session `TRIEL_Paper`
-  (`isabelle/Paper_Theorems.thy`), which lists by name 89 theorems, the 56 cited
-  in the paper and 33 more, and the 17 definitions that the
+  (`isabelle/Paper_Theorems.thy`), which lists by name 101 theorems, the 56 cited
+  in the paper and 45 more, and the 21 definitions that the
   formal sections of the paper restate; and `bench.sh`, which measures the time and the memory of the
   translation of a trace and of the evaluator on generated traces (not a step
   of `run.sh`).
@@ -125,12 +125,14 @@ version with the new theory before its last three theorems (646 statements,
 #73 of a third, which differ in documentation and in the checks of the
 anonymous archive. #74 and #75 are of one tree with all of it (658
 statements, 60 paper theorems); since then the sources differ in
-documentation, in the example `gdpr_art33_notification` with its six
-scenarios, in the translation of conditions into the composition algebra
-(decision 35 of `formal/core/CORE.md`, 20 proved statements and 5 listed
-theorems) and in the monitor as a function on traces (decision 37, 28 proved
-statements and 14 listed theorems), 706 proved statements and 89 listed
-theorems in all, whose runs are not in the table. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
+documentation, in 10 theorems already proved and added to the list (stage
+28), in the example `gdpr_art33_notification` with its six scenarios, in the
+translation of conditions into the composition algebra (decision 35 of
+`formal/core/CORE.md`, 20 proved statements and 5 listed theorems), in the
+stability of verdicts under more data (decision 36, 58 proved statements and
+12 listed theorems) and in the monitor as a function on traces (decision 37,
+28 proved statements and 14 listed theorems), 764 proved statements and 101
+listed theorems in all, whose runs are not in the table. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
 the step pytest: the test that every name in backquotes in `CORE.md` is defined
 in the theories failed on the name of a file, since corrected; they are not in
 the table. The time on a shared
@@ -163,8 +165,8 @@ Expected end of the output:
 ```
 === Summary
 theories checked by Isabelle (TRIEL_Core)    13 (.thy files in formal/core: 13)
-proved statements (lemma/theorem/corollary)  706
-paper theorems found, without oracles        89 of 89
+proved statements (lemma/theorem/corollary)  764
+paper theorems found, without oracles        101 of 101
 scenarios matching .expected                 60 of 60
 examples accepted by the core                27 of 29
 translator and driver tests (pytest)         331 passed in ...
@@ -196,7 +198,7 @@ docker run --rm -it --entrypoint bash triel-artifact
 | 08-parse-examples | every example parses with exactly one derivation | parse-examples.yml |
 | 09-ambiguity-tests | the ambiguity regression tests and the LALR(1) check of the grammar | parse-examples.yml |
 | 10-document-excerpts | every TRIEL excerpt of the documents, every grammar excerpt of `TECHNICAL_REPORT.md` and every usage example of the grammar file conforms to the grammar | parse-examples.yml |
-| 11-paper-theorems | the session `TRIEL_Paper` builds: each of the 89 names is a theorem of `TRIEL_Core` that depends on no oracle, and each of the 17 definitions exists | — |
+| 11-paper-theorems | the session `TRIEL_Paper` builds: each of the 101 names is a theorem of `TRIEL_Core` that depends on no oracle, and each of the 21 definitions exists | — |
 
 As in CI, the PDF document of `TRIEL_Core` is switched off (it needs LaTeX):
 step 02 applies the same `sed` to the scratch copy of `formal/core/ROOT` as the
@@ -301,16 +303,16 @@ variables `?x`.
 
 | Claim | Command | Expected output |
 |---|---|---|
-| The core is machine-checked: 13 theories, 706 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `13 (.thy files in formal/core: 13)`, `706`; `no sorry, oops or axiomatization ...` |
+| The core is machine-checked: 13 theories, 764 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `13 (.thy files in formal/core: 13)`, `764`; `no sorry, oops or axiomatization ...` |
 | The evaluator is the code exported from the checked theories | `cat results/03-exported-code.log` | `evaluator/generated is the exported code` |
 | The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `60` |
 | 27 of the 29 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `27`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
-| Every listed theorem (the 56 cited in the paper and 33 more) exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 89` |
+| Every listed theorem (the 56 cited in the paper and 45 more) exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 101` |
 | Finality of verdicts: on a trace (times that do not decrease) a definite verdict of an obligation, a prohibition or an invariant does not change when the trace is extended; the evaluator rejects a list of observations whose times decrease, so for `run` a decided line stays the same when observations are appended, unless the longer list is rejected for its time order or its types. A property of the design | `grep -A1 -E '\.(ob_verdict_final\|pr_verdict_final\|inv_final\|sinv_final\|handle_breach_final\|run_final\|time_order_rejected)$' results/paper_theorems.txt` | `TRIEL_Breach.ob_verdict_final`, `TRIEL_Breach.pr_verdict_final`, `TRIEL_Invariants.inv_final`, `TRIEL_Invariants.sinv_final` (EVENTUALLY … WITHIN), `TRIEL_Breach.handle_breach_final` (breach handlers), `TRIEL_Exec.run_final`, `TRIEL_Exec.time_order_rejected`, each with its statement, e.g. `inv_eval ?\<iota> ?\<pi> = Some ?b \<Longrightarrow> inv_eval ?\<iota> (?\<pi> @ ?\<rho>) = Some ?b` |
 | Two obligations in sequence need two actions; a prohibition in a composite term can be violated, and its trace semantics agrees with its verdict; the status of a composite term (read on the first prefix that violates the term or completes it by an executed action; conservative when a prefix has several readings) is sound and final, Violated before Done is needed, and the modes of the traces refine the denotation; for a term without AND, a violated prefix is reported as a violation at that entry or before it unless the status is unknown or the observation ended earlier on a completion by an executed action before any reading had reached a prohibition, and the exception for an earlier completion cannot be dropped; consequences for a prohibition after a reading has reached one, at the end of a sequence (no exception when the first part has no UNLESS and no AND) and in a branch of OR (no exception but an unknown status) | `grep -A1 -E '\.(must_then_must_two_actions\|violated_reachable\|then_mustnot_violated\|mustnot_violated_breach\|breach_mustnot_violated\|status_final\|status_sound\|violation_over_done\|fden_den\|then_mustnot_held\|then_mustnot_status\|status_no_missed_violation\|reached_prohibition_watched\|then_mustnot_watched\|or_mustnot_watched\|violation_after_completion)$' results/paper_theorems.txt` | the sixteen theorems with their statements |
 | Stability of the values of conditions: a definite value T or F of a condition without PRESENT and DEFAULT, on flat states and on nested data, and of a condition built from equitone atoms, does not change when the data is extended. This is about conditions, not about the verdicts of norms over time | `grep -A1 -E '\.(T2_monotone\|T2_nd_monotone\|present_free_equitone\|verdict_stable\|verdict_stable_nd\|cond_equitone)$' results/paper_theorems.txt` | `TRIEL_Core.T2_monotone`, `TRIEL_ND.T2_nd_monotone`, `TRIEL_Ex.present_free_equitone`, `TRIEL_Indicators.verdict_stable`, `TRIEL_Indicators.verdict_stable_nd`, `TRIEL_Indicators.cond_equitone` with their statements |
 | PRESENT and DEFAULT are the exceptions: each breaks monotonicity and stability; PRESENT is the total indicator E | `grep -A3 -E '\.(T3_present_not_monotone\|present_flips\|Ex_breaks_stability\|T3_default_not_monotone\|default_breaks_stability\|T5_present\|present_is_Ex)$' results/paper_theorems.txt` | the seven theorems with their statements, e.g. `\<exists>\<sigma> \<sigma>' x. \<sigma> \<sqsubseteq> \<sigma>' \<and> eval (EPresent x) \<sigma> \<noteq> eval (EPresent x) \<sigma>'` |
-| Stability of the verdicts of norms under more data, in the report: on the same observations read with more data (`obs_le`), for PRESENT-free conditions and formulas, an obligation keeps its status, a breached prohibition stays breached at the same or an earlier time, a fulfilled permission stays fulfilled, a definite invariant stays the same (`run_data_mono`, `run_data_mono_breach`, `run_data_mono_pending`), unless the richer data is ill-typed; on traces (`data_le`): `ob_verdict_data_indep`, `pr_verdict_data_mono`, `pr_verdict_pending_data_mono`, `may_verdict_data_mono`, `sinv_data_mono_le`. With PRESENT a breach can be withdrawn (`pr_verdict_present_not_mono`) | `grep -A1 -E '\.(run_data_mono\|run_data_mono_breach\|run_data_mono_pending\|pr_verdict_data_mono\|pr_verdict_present_not_mono)$' results/paper_theorems.txt` | the five theorems with their statements, e.g. `present_free_spec ?sp \<Longrightarrow> obs_le ?obs ?obs' \<Longrightarrow> LTypes None \<in> set (run ?sp ?obs) \<Longrightarrow> ?i < length (run ?sp ?obs) \<Longrightarrow> line_refines (run ?sp ?obs ! ?i) (run ?sp ?obs' ! ?i) \<or> (\<exists>e. LTypes (Some e) \<in> set (run ?sp ?obs'))` |
+| Stability of the verdicts of norms under more data, in the report: on the same observations read with more data (`obs_le`), for conditions and formulas without PRESENT and DEFAULT, the report has the same number of lines and an obligation keeps its status, a breached prohibition stays breached at the same or an earlier time, a fulfilled permission stays fulfilled, a definite invariant stays the same (`run_data_mono`, `run_data_mono_breach`, `run_data_mono_pending`), unless the richer data is ill-typed; on traces (`data_le`): `ob_verdict_data_indep`, `pr_verdict_data_mono`, `pr_verdict_pending_data_mono`, `may_verdict_data_mono`, `sinv_data_mono_le`. With PRESENT a breach can be withdrawn (`pr_verdict_present_not_mono`) | `grep -A4 -E '\.(run_data_mono\|run_data_mono_breach\|run_data_mono_pending\|pr_verdict_data_mono\|pr_verdict_present_not_mono)$' results/paper_theorems.txt` | the five theorems with their statements, e.g. `present_free_spec ?sp \<Longrightarrow> obs_le ?obs ?obs' \<Longrightarrow> LTypes None \<in> set (run ?sp ?obs) \<Longrightarrow> ?i < length (run ?sp ?obs) \<Longrightarrow> length (run ?sp ?obs') = length (run ?sp ?obs) \<and> line_refines (run ?sp ?obs ! ?i) (run ?sp ?obs' ! ?i) \<or> (\<exists>e. LTypes (Some e) \<in> set (run ?sp ?obs'))` |
 | IF: denotation, classical reading when the data is complete, stability of the branch, the ELSE branch when the condition is undefined; UNLESS distributes over IF; the locale of the term semantics is satisfiable | `grep -A2 -E '\.(den_if\|if_classical\|if_branch_stable\|if_undefined_else\|unless_if\|interleaving_satisfiable)$' results/paper_theorems.txt` | `TRIEL_Terms.term_semantics.den_if`, `...if_classical`, `...if_branch_stable`, `...if_undefined_else`, `TRIEL_Trace.unless_if`, `TRIEL_Trace.interleaving_satisfiable` with their statements |
 | References between the elements of a block are acyclic, and resolving them preserves the denotation | `grep -A1 -E '\.(resolve_den\|block_den\|refs_ok_acyclic)$' results/paper_theorems.txt` | `TRIEL_Exec.term_semantics.resolve_den`, `TRIEL_Exec.term_semantics.block_den`, `TRIEL_Exec.refs_ok_acyclic` with their statements |
 | An undefined guard does not make a prohibition breached | `grep -A2 -E '\.(undefined_guard_blocks_not_breach\|enforced_no_breach)$' results/paper_theorems.txt` | `TRIEL_Breach.undefined_guard_blocks_not_breach` (two conclusions), `TRIEL_Breach.enforced_no_breach` |
