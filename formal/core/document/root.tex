@@ -195,9 +195,11 @@ actions and amounts.
 \paragraph{The evaluator (theory \texttt{TRIEL\_Exec}).}
 Executable equations, each proved equal to a definition of the other theories, replace
 unbounded quantifiers, \texttt{LEAST} and \texttt{GREATEST}. Membership of a trace in the
-denotation of a composite term is decided three-valued: definite answers are proved
-sound for terms without \texttt{AND}, and are always given for terms without
-\texttt{UNLESS} and \texttt{AND}. Stale factors are blocked by factor, and the safety
+denotation of a composite term is decided three-valued: a definite answer is correct for
+every term without \texttt{AND} (soundness, \texttt{mem3\_sound}), and an answer is
+always definite for terms without \texttt{UNLESS} and \texttt{AND}
+(\texttt{mem3\_definite}); for these terms the two together make the test exact
+(\texttt{mem3\_eq}). Stale factors are blocked by factor, and the safety
 claim of Section~2.9 is proved again for this blocking. The function \texttt{run}
 computes the report of a specification on an implementation trace and is exported to
 Haskell. It rejects a list of observations whose times decrease, and for every list of

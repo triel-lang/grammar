@@ -12,6 +12,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
 
@@ -61,7 +63,31 @@ jobs:
           cat formal/core/ROOT
 
       - name: Build session TRIEL_Core
-        run: ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -v -D formal/core
+        shell: bash
+        run: |
+          set -o pipefail
+          ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -v -D formal/core 2>&1 | tee "$RUNNER_TEMP/isabelle-build.log"
+
+      # The logs of this job cannot be read from a cloud session. When the
+      # build fails, the error lines are posted as a comment on the commit, so
+      # that they can be read through the API.
+      - name: Post the error lines as a commit comment
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          log="$RUNNER_TEMP/isabelle-build.log"
+          test -s "$log" || { echo "no build log"; exit 0; }
+          {
+            echo "Isabelle build of formal/core failed (run ${{ github.run_id }}). Error lines:"
+            echo
+            echo '```'
+            grep -n -A12 '^\*\*\*' "$log" | head -c 60000
+            echo '```'
+          } > "$RUNNER_TEMP/comment.md"
+          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
+            -f body="$(cat "$RUNNER_TEMP/comment.md")" > /dev/null
 
   # The copy of formal/core for the Archive of Formal Proofs, made by
   # tools/make_afp_copy.sh and built as the AFP builds an entry, with the PDF

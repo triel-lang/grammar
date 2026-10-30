@@ -3,8 +3,9 @@
                 Every function the evaluator uses is either defined in the other theories
                 of formal/core, or proved equal to such a function by a code equation in
                 this theory. Membership of a trace in the denotation of a composite term
-                is three-valued: definite answers are proved sound, and for terms without
-                UNLESS the answer is always definite.
+                is three-valued: definite answers are proved sound for terms without AND, and
+                for terms without UNLESS and AND the answer is always definite, so there
+                the test is exact (mem3_eq).
     SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
