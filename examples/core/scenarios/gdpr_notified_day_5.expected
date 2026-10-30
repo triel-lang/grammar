@@ -1,0 +1,10 @@
+SPEC gdpr_art33_notification
+METADATA JURISDICTION "EU"
+METADATA SOURCE affected_records controller
+METADATA SOURCE delay_reasons controller
+ACTIVATION OK
+BLOCK OK
+TYPES OK
+TERM 1 MUST controller notify(authority) DEADLINE 1779962400 : BREACHED 1779962400 CURE FULFILLED
+TERM 2 ON_BREACH controller : BOUND 1
+INVARIANT records_known : T
