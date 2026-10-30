@@ -688,6 +688,215 @@ definition may_verdict :: "'s \<Rightarrow> 'a \<Rightarrow> ('n, 'v :: value_or
 theorem may_never_breached: "may_verdict s a c \<pi> \<noteq> Breached \<tau>"
   by (simp add: may_verdict_def)
 
+lemma pr_verdict_not_fulfilled: "pr_verdict s a c \<pi> \<noteq> Fulfilled"
+  by (simp add: pr_verdict_def)
+
+
+section \<open>Verdicts when the entries carry more data\<close>
+
+text \<open>Finality (\<open>window_final\<close>, \<open>pr_verdict_final\<close>) is about extending the trace by later
+  entries. A second question is what happens when the same entries are read with more data:
+  \<open>data_le \<pi> \<pi>'\<close> (TRIEL_Trace) says that \<open>\<pi>'\<close> has the entries of \<open>\<pi>\<close>, with the same times
+  and events, and at each entry a state with more data. The verdicts of obligations read only
+  times and events, so they do not change at all. The verdict of a prohibition reads its
+  condition; for a PRESENT-free condition a breach is not withdrawn, but it can move to an
+  earlier action, whose condition was undefined before and is true now. With PRESENT a breach
+  can be withdrawn.\<close>
+
+lemma data_le_time: "data_le \<pi> \<pi>' \<Longrightarrow> j < length \<pi> \<Longrightarrow> time \<pi>' j = time \<pi> j"
+  by (simp add: time_def data_le_tstamp)
+
+subsection \<open>Obligations do not read the data\<close>
+
+lemma acted_data_indep:
+  assumes le: "data_le \<pi> \<pi>'"
+  shows "acted s a lo d \<pi>' \<longleftrightarrow> acted s a lo d \<pi>"
+proof -
+  have "1 \<le> j \<and> j < length \<pi>' \<and> does s a (evt (\<pi>' ! j)) \<and> after lo (time \<pi>' j) \<and> time \<pi>' j \<le> d
+        \<longleftrightarrow> 1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> after lo (time \<pi> j) \<and> time \<pi> j \<le> d" for j
+  proof (cases "j < length \<pi>")
+    case True
+    then show ?thesis
+      using data_le_length[OF le] data_le_evt[OF le True] data_le_time[OF le True] by simp
+  next
+    case False
+    then show ?thesis using data_le_length[OF le] by simp
+  qed
+  then show ?thesis unfolding acted_def by simp
+qed
+
+lemma passed_data_indep:
+  assumes le: "data_le \<pi> \<pi>'"
+  shows "passed d \<pi>' \<longleftrightarrow> passed d \<pi>"
+proof -
+  have "j < length \<pi>' \<and> d < time \<pi>' j \<longleftrightarrow> j < length \<pi> \<and> d < time \<pi> j" for j
+  proof (cases "j < length \<pi>")
+    case True
+    then show ?thesis using data_le_length[OF le] data_le_time[OF le True] by simp
+  next
+    case False
+    then show ?thesis using data_le_length[OF le] by simp
+  qed
+  then show ?thesis unfolding passed_def by simp
+qed
+
+lemma window_data_indep: "data_le \<pi> \<pi>' \<Longrightarrow> window s a lo d \<pi>' = window s a lo d \<pi>"
+  by (simp add: window_def acted_data_indep passed_data_indep)
+
+theorem ob_verdict_data_indep:
+  assumes le: "data_le \<pi> \<pi>'"
+  shows "ob_verdict s a lo D \<pi>' = ob_verdict s a lo D \<pi>"
+proof -
+  have "1 \<le> j \<and> j < length \<pi>' \<and> does s a (evt (\<pi>' ! j)) \<and> after lo (time \<pi>' j)
+        \<longleftrightarrow> 1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> after lo (time \<pi> j)" for j
+  proof (cases "j < length \<pi>")
+    case True
+    then show ?thesis
+      using data_le_length[OF le] data_le_evt[OF le True] data_le_time[OF le True] by simp
+  next
+    case False
+    then show ?thesis using data_le_length[OF le] by simp
+  qed
+  then show ?thesis unfolding ob_verdict_def by (simp add: window_data_indep[OF le])
+qed
+
+subsection \<open>Prohibitions and permissions\<close>
+
+text \<open>Blocking is antitone: what the monitor allows in a state it allows in every state with
+  more data, because a false condition stays false (T2).\<close>
+
+theorem blocks_data_mono:
+  assumes "present_free c" and "\<sigma> \<sqsubseteq> \<sigma>'" and "blocks c \<sigma>'"
+  shows "blocks c \<sigma>"
+proof (rule ccontr)
+  assume "\<not> blocks c \<sigma>"
+  then have "eval c \<sigma> = Some False" by (simp add: blocks_def)
+  from T2_monotone[OF assms(1,2) this] have "eval c \<sigma>' = Some False" .
+  with assms(3) show False by (simp add: blocks_def)
+qed
+
+text \<open>A breach is not withdrawn by more data: if \<open>\<pi>'\<close> is pending, so was \<open>\<pi>\<close>.\<close>
+
+theorem pr_verdict_pending_data_mono:
+  assumes pf: "present_free c" and le: "data_le \<pi> \<pi>'" and p: "pr_verdict s a c \<pi>' = Pending"
+  shows "pr_verdict s a c \<pi> = Pending"
+proof (rule ccontr)
+  assume "pr_verdict s a c \<pi> \<noteq> Pending"
+  then obtain j where "forbidden s a c \<pi> j" by (auto simp: pr_verdict_def split: if_splits)
+  from forbidden_data_mono[OF pf le this] have "forbidden s a c \<pi>' j" .
+  then have "pr_verdict s a c \<pi>' \<noteq> Pending" by (auto simp: pr_verdict_def)
+  with p show False by simp
+qed
+
+corollary pr_verdict_decided_data_mono:
+  "present_free c \<Longrightarrow> data_le \<pi> \<pi>' \<Longrightarrow> pr_verdict s a c \<pi> \<noteq> Pending \<Longrightarrow> pr_verdict s a c \<pi>' \<noteq> Pending"
+  using pr_verdict_pending_data_mono by blast
+
+text \<open>The time of a breach can only move earlier: the first forbidden action of \<open>\<pi>\<close> is still
+  forbidden in \<open>\<pi>'\<close>, and an earlier action, whose condition was undefined in \<open>\<pi>\<close>, may have
+  become forbidden. With non-decreasing times the new breach is not later than the old one.\<close>
+
+theorem pr_verdict_data_mono:
+  assumes pf: "present_free c" and tr: "is_trace \<pi>" and le: "data_le \<pi> \<pi>'"
+    and b: "pr_verdict s a c \<pi> = Breached \<tau>"
+  shows "\<exists>\<tau>' \<le> \<tau>. pr_verdict s a c \<pi>' = Breached \<tau>'"
+proof -
+  from b obtain j where j: "forbidden s a c \<pi> j" by (auto simp: pr_verdict_def split: if_splits)
+  define k where "k = (LEAST j. forbidden s a c \<pi> j)"
+  have fk: "forbidden s a c \<pi> k" unfolding k_def using j by (rule LeastI)
+  have kl: "k < length \<pi>" using fk by (rule forbidden_less)
+  have tau: "\<tau> = time \<pi> k" using b j by (auto simp: pr_verdict_def k_def)
+  have fk': "forbidden s a c \<pi>' k" by (rule forbidden_data_mono[OF pf le fk])
+  define k' where "k' = (LEAST j. forbidden s a c \<pi>' j)"
+  have k'k: "k' \<le> k" unfolding k'_def using fk' by (rule Least_le)
+  have ex': "\<exists>j. forbidden s a c \<pi>' j" using fk' by blast
+  have v': "pr_verdict s a c \<pi>' = Breached (time \<pi>' k')"
+    using ex' by (simp add: pr_verdict_def k'_def)
+  have k'l: "k' < length \<pi>" using k'k kl by simp
+  have "time \<pi>' k' = time \<pi> k'" by (rule data_le_time[OF le k'l])
+  also have "time \<pi> k' \<le> time \<pi> k" by (rule time_mono[OF tr k'k kl])
+  finally have "time \<pi>' k' \<le> \<tau>" by (simp add: tau)
+  with v' show ?thesis by blast
+qed
+
+text \<open>A permission exercised in a state where its condition holds stays exercised.\<close>
+
+theorem may_verdict_data_mono:
+  assumes pf: "present_free c" and le: "data_le \<pi> \<pi>'"
+  shows "may_verdict s a c \<pi> = Fulfilled \<Longrightarrow> may_verdict s a c \<pi>' = Fulfilled"
+    and "may_verdict s a c \<pi>' = Pending \<Longrightarrow> may_verdict s a c \<pi> = Pending"
+proof -
+  have f: "may_verdict s a c \<pi>' = Fulfilled" if v: "may_verdict s a c \<pi> = Fulfilled"
+  proof -
+    from v obtain j where j: "1 \<le> j" "j < length \<pi>" "does s a (evt (\<pi> ! j))"
+      "eval c (st \<pi> (j - 1)) = Some True"
+      unfolding may_verdict_def by (auto split: if_splits)
+    have "j - 1 < length \<pi>" using j(2) by simp
+    from T2_monotone[OF pf data_le_st[OF le this] j(4)] have c': "eval c (st \<pi>' (j - 1)) = Some True" .
+    have "1 \<le> j \<and> j < length \<pi>' \<and> does s a (evt (\<pi>' ! j)) \<and> eval c (st \<pi>' (j - 1)) = Some True"
+      using j(1,2,3) c' data_le_length[OF le] data_le_evt[OF le j(2)] by simp
+    then show ?thesis unfolding may_verdict_def by auto
+  qed
+  then show "may_verdict s a c \<pi> = Fulfilled \<Longrightarrow> may_verdict s a c \<pi>' = Fulfilled" .
+  show "may_verdict s a c \<pi>' = Pending \<Longrightarrow> may_verdict s a c \<pi> = Pending"
+    using f may_never_breached[of s a c \<pi>] by (cases "may_verdict s a c \<pi>") auto
+qed
+
+subsection \<open>With PRESENT a breach can be withdrawn\<close>
+
+text \<open>\<open>s MUST_NOT a WHEN NOT PRESENT(x)\<close> on two entries: the activation entry and the action \<open>a\<close>
+  of \<open>s\<close> at time 1. Without \<open>x\<close> in the activation state the action is forbidden and the
+  prohibition is breached at 1; with \<open>x\<close> present, the same action is allowed and the verdict is
+  Pending. So the exception of \<open>pr_verdict_data_mono\<close> for PRESENT cannot be dropped: a
+  definite breach would be withdrawn by more data.\<close>
+
+theorem pr_verdict_present_not_mono:
+  fixes x :: 'n and v :: "'v :: value_order" and s :: 's and a :: 'a and p :: polarity
+  defines "\<pi> \<equiv> [(Map.empty, 0, Tick), (Map.empty, 1, Deontic s a p)] :: ('n, 'v, 's, 'a) itrace"
+    and "\<pi>' \<equiv> [([x \<mapsto> v], 0, Tick), (Map.empty, 1, Deontic s a p)] :: ('n, 'v, 's, 'a) itrace"
+  shows "is_trace \<pi>" and "data_le \<pi> \<pi>'"
+    and "pr_verdict s a (ENot (EPresent x)) \<pi> = Breached 1"
+    and "pr_verdict s a (ENot (EPresent x)) \<pi>' = Pending"
+proof -
+  have len: "length \<pi> = Suc (Suc 0)" "length \<pi>' = Suc (Suc 0)" by (simp_all add: \<pi>_def \<pi>'_def)
+  have idx: "j = 0 \<or> j = Suc 0" if "j < length \<pi>" for j
+    using that unfolding len(1) by (auto simp: less_Suc_eq)
+  show "is_trace \<pi>" by (simp add: \<pi>_def is_trace_def)
+  have ent: "tstamp (\<pi>' ! j) = tstamp (\<pi> ! j) \<and> evt (\<pi>' ! j) = evt (\<pi> ! j) \<and> st \<pi> j \<sqsubseteq> st \<pi>' j"
+    if "j < length \<pi>" for j
+    using idx[OF that] by (auto simp: \<pi>_def \<pi>'_def st_def info_le_def)
+  show "data_le \<pi> \<pi>'"
+    unfolding data_le_def
+  proof (intro conjI allI impI)
+    show "length \<pi>' = length \<pi>" by (simp add: len)
+  next
+    fix j assume "j < length \<pi>"
+    then show "tstamp (\<pi>' ! j) = tstamp (\<pi> ! j) \<and> evt (\<pi>' ! j) = evt (\<pi> ! j) \<and> st \<pi> j \<sqsubseteq> st \<pi>' j"
+      by (rule ent)
+  qed
+  have only1: "j = Suc 0" if f: "forbidden s a c\<^sub>0 \<rho> j" and l: "length \<rho> = Suc (Suc 0)" for c\<^sub>0 \<rho> j
+  proof -
+    from f have "1 \<le> j" "j < length \<rho>" by (simp_all add: forbidden_def)
+    with l show "j = Suc 0" by (auto simp: less_Suc_eq)
+  qed
+  have f1: "forbidden s a (ENot (EPresent x)) \<pi> (Suc 0)"
+    by (simp add: forbidden_def \<pi>_def st_def does_def)
+  have least: "(LEAST j. forbidden s a (ENot (EPresent x)) \<pi> j) = Suc 0"
+    by (rule Least_equality) (use f1 only1[OF _ len(1)] in auto)
+  have t1: "time \<pi> (Suc 0) = 1" by (simp add: \<pi>_def time_def)
+  show "pr_verdict s a (ENot (EPresent x)) \<pi> = Breached 1"
+    unfolding pr_verdict_def least t1 using f1 by auto
+  have nf': "\<not> forbidden s a (ENot (EPresent x)) \<pi>' j" for j
+  proof
+    assume f: "forbidden s a (ENot (EPresent x)) \<pi>' j"
+    from only1[OF f len(2)] f have "eval (ENot (EPresent x)) (st \<pi>' 0) = Some True"
+      by (simp add: forbidden_def)
+    then show False by (simp add: \<pi>'_def st_def)
+  qed
+  show "pr_verdict s a (ENot (EPresent x)) \<pi>' = Pending"
+    using nf' by (simp add: pr_verdict_def)
+qed
+
 
 section \<open>Breach actions\<close>
 

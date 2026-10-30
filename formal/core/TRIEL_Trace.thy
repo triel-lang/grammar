@@ -134,6 +134,85 @@ lemma forbidden_append:
 lemma forbidden_less: "forbidden s a c \<pi> j \<Longrightarrow> j < length \<pi>"
   by (simp add: forbidden_def)
 
+subsection \<open>The same trace with more data\<close>
+
+text \<open>\<open>data_le \<pi> \<pi>'\<close>: \<open>\<pi>'\<close> has the entries of \<open>\<pi>\<close>, with the same timestamps and events, and
+  at each entry a state with more data (the information order of TRIEL_Core, pointwise). This
+  is the hypothesis under which the verdicts of TRIEL_Breach and TRIEL_Invariants are compared
+  on the two traces: what is reported on \<open>\<pi>\<close> against what is reported when every entry is
+  read with more of its data.\<close>
+
+definition data_le :: "('n, 'v, 't, 's, 'a) trace \<Rightarrow> ('n, 'v, 't, 's, 'a) trace \<Rightarrow> bool" where
+  "data_le \<pi> \<pi>' \<longleftrightarrow>
+     length \<pi>' = length \<pi> \<and>
+     (\<forall>j < length \<pi>. tstamp (\<pi>' ! j) = tstamp (\<pi> ! j) \<and> evt (\<pi>' ! j) = evt (\<pi> ! j) \<and> st \<pi> j \<sqsubseteq> st \<pi>' j)"
+
+lemma data_le_length: "data_le \<pi> \<pi>' \<Longrightarrow> length \<pi>' = length \<pi>"
+  by (simp add: data_le_def)
+
+lemma data_le_tstamp: "data_le \<pi> \<pi>' \<Longrightarrow> j < length \<pi> \<Longrightarrow> tstamp (\<pi>' ! j) = tstamp (\<pi> ! j)"
+  by (simp add: data_le_def)
+
+lemma data_le_evt: "data_le \<pi> \<pi>' \<Longrightarrow> j < length \<pi> \<Longrightarrow> evt (\<pi>' ! j) = evt (\<pi> ! j)"
+  by (simp add: data_le_def)
+
+lemma data_le_st: "data_le \<pi> \<pi>' \<Longrightarrow> j < length \<pi> \<Longrightarrow> st \<pi> j \<sqsubseteq> st \<pi>' j"
+  by (simp add: data_le_def)
+
+lemma data_le_refl: "data_le \<pi> \<pi>"
+  by (simp add: data_le_def info_le_refl)
+
+lemma data_le_trans:
+  assumes 12: "data_le \<pi>\<^sub>1 \<pi>\<^sub>2" and 23: "data_le \<pi>\<^sub>2 \<pi>\<^sub>3"
+  shows "data_le \<pi>\<^sub>1 \<pi>\<^sub>3"
+proof -
+  have l: "length \<pi>\<^sub>3 = length \<pi>\<^sub>1" using data_le_length[OF 12] data_le_length[OF 23] by simp
+  have "tstamp (\<pi>\<^sub>3 ! j) = tstamp (\<pi>\<^sub>1 ! j) \<and> evt (\<pi>\<^sub>3 ! j) = evt (\<pi>\<^sub>1 ! j) \<and> st \<pi>\<^sub>1 j \<sqsubseteq> st \<pi>\<^sub>3 j"
+    if j: "j < length \<pi>\<^sub>1" for j
+  proof -
+    have j2: "j < length \<pi>\<^sub>2" using j data_le_length[OF 12] by simp
+    show ?thesis
+      using data_le_tstamp[OF 12 j] data_le_tstamp[OF 23 j2] data_le_evt[OF 12 j] data_le_evt[OF 23 j2]
+        info_le_trans[OF data_le_st[OF 12 j] data_le_st[OF 23 j2]] by simp
+  qed
+  with l show ?thesis by (simp add: data_le_def)
+qed
+
+lemma data_le_map_tstamp:
+  assumes d: "data_le \<pi> \<pi>'"
+  shows "map tstamp \<pi>' = map tstamp \<pi>"
+proof (rule nth_equalityI)
+  show "length (map tstamp \<pi>') = length (map tstamp \<pi>)" by (simp add: data_le_length[OF d])
+next
+  fix i assume "i < length (map tstamp \<pi>')"
+  then have "i < length \<pi>" by (simp add: data_le_length[OF d])
+  then show "map tstamp \<pi>' ! i = map tstamp \<pi> ! i" by (simp add: data_le_length[OF d] data_le_tstamp[OF d])
+qed
+
+lemma data_le_is_trace:
+  assumes d: "data_le \<pi> \<pi>'"
+  shows "is_trace \<pi>' \<longleftrightarrow> is_trace \<pi>"
+proof -
+  have ne: "\<pi>' = [] \<longleftrightarrow> \<pi> = []" using data_le_length[OF d] length_0_conv by metis
+  show ?thesis by (simp add: is_trace_def data_le_map_tstamp[OF d] ne)
+qed
+
+text \<open>For a PRESENT-free condition, a forbidden action stays forbidden when the states carry
+  more data (T2 at the entry before the action).\<close>
+
+theorem forbidden_data_mono:
+  assumes pf: "present_free c" and le: "data_le \<pi> \<pi>'" and f: "forbidden s a c \<pi> j"
+  shows "forbidden s a c \<pi>' j"
+proof -
+  from f have j: "1 \<le> j" "j < length \<pi>" and e: "does s a (evt (\<pi> ! j))"
+    and c: "eval c (st \<pi> (j - 1)) = Some True"
+    by (simp_all add: forbidden_def)
+  have "j - 1 < length \<pi>" using j(2) by simp
+  from T2_monotone[OF pf data_le_st[OF le this] c] have c': "eval c (st \<pi>' (j - 1)) = Some True" .
+  from data_le_evt[OF le j(2)] e have "does s a (evt (\<pi>' ! j))" by simp
+  with j c' le show ?thesis by (simp add: forbidden_def data_le_length)
+qed
+
 subsection \<open>Composite terms\<close>
 
 definition then_d :: "('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v, 't, 's, 'a) den \<Rightarrow> ('n, 'v, 't, 's, 'a) den" where
