@@ -110,7 +110,12 @@ makes it block more (\texttt{blocks\_data\_mono}). Breach
 handlers bind to the nearest preceding obligation or prohibition of the same subject; at most one
 continuation-determining action is allowed; a cure in time prevents a second breach, and a
 failed cure is final; a result computed with stale factors treated as absent is not
-overturned when they are refreshed.
+overturned when they are refreshed. Verdicts are also stable under more data: on the same
+trace read with more data at every entry, for a condition without \texttt{PRESENT} and
+\texttt{DEFAULT}, an obligation keeps its verdict and status, a breached prohibition stays
+breached, at the same or an earlier time, and an exercised permission stays exercised
+(\texttt{pr\_verdict\_data\_mono}); with \texttt{PRESENT} a breach can be withdrawn, by an
+explicit counterexample.
 
 \paragraph{Completions of the data (theory \texttt{TRIEL\_Completions}).}
 A completion of a state is a total valuation that agrees with the state wherever it is
@@ -221,7 +226,13 @@ computes the report of a specification on an implementation trace and is exporte
 Haskell. It rejects a list of observations whose times decrease, and for every list of
 observations a decided verdict of its report stays the same when observations are
 appended, unless the longer list is rejected for the order of its times or for the types
-of its data (\texttt{run\_final}). A breached prohibition is reported with the informational actions of the handler
+of its data (\texttt{run\_final}); and when the same observations are read with more
+data, for a specification whose conditions are without \texttt{PRESENT} and
+\texttt{DEFAULT}, every verdict of a norm or an invariant in the report is refined, not
+withdrawn: the status of an obligation is unchanged, a reported breach of a prohibition
+stays reported at the same or an earlier time, and a pending prohibition on the richer
+data was pending before, unless the richer data fails the type check
+(\texttt{run\_data\_mono}). A breached prohibition is reported with the informational actions of the handler
 bound to it; a continuation in such a handler is rejected, since Section~2.6 defines
 continuations only for obligations. For every top-level prohibition the report also lists
 the decisions of its monitor, one per action of the subject (\texttt{monitor\_decisions});

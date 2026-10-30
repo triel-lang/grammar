@@ -69,6 +69,24 @@ thm TRIEL_Indicators.Ex_breaks_stability
 thm TRIEL_Core.T3_default_not_monotone
 thm TRIEL_Indicators.default_breaks_stability
 
+text \<open>Stability of the verdicts of norms, not only of the values of conditions: the same trace
+  read with more data (\<open>data_le\<close>), and the same observations with more data (\<open>obs_le\<close>) in
+  the report of the evaluator.\<close>
+
+thm TRIEL_Trace.forbidden_data_mono
+thm TRIEL_Breach.blocks_data_mono
+thm TRIEL_Breach.pr_verdict_data_mono
+thm TRIEL_Breach.pr_verdict_pending_data_mono
+thm TRIEL_Breach.ob_verdict_data_indep
+thm TRIEL_Breach.may_verdict_data_mono
+thm TRIEL_Invariants.sinv_data_mono_le
+thm TRIEL_Breach.pr_verdict_present_not_mono
+thm TRIEL_Exec.term_line_data_mono
+thm TRIEL_Exec.run_data_mono
+thm TRIEL_Exec.run_data_mono_decided
+thm TRIEL_Exec.run_data_mono_breach
+thm TRIEL_Exec.run_data_mono_pending
+
 section \<open>IF and UNLESS\<close>
 
 thm TRIEL_Terms.term_semantics.den_if
@@ -162,6 +180,10 @@ thm TRIEL_Breach.blocked_action_def
 thm TRIEL_Breach.enforce_def
 thm TRIEL_Breach.monitor_decisions_def
 thm TRIEL_Invariants.inv_eval.simps
+thm TRIEL_Trace.data_le_def
+thm TRIEL_Exec.obs_le_def
+thm TRIEL_Exec.pr_refines.simps
+thm TRIEL_Exec.line_refines.simps
 thm TRIEL_Ex.equitone_def
 thm TRIEL_Completions.completion_def
 thm TRIEL_Completions.evalG.simps
@@ -195,6 +217,13 @@ local
     "TRIEL_Indicators.cond_equitone", "TRIEL_Core.T3_present_not_monotone", "TRIEL_Core.present_flips",
     "TRIEL_Indicators.Ex_breaks_stability", "TRIEL_Core.T3_default_not_monotone",
     "TRIEL_Indicators.default_breaks_stability",
+    "TRIEL_Trace.forbidden_data_mono", "TRIEL_Breach.blocks_data_mono",
+    "TRIEL_Breach.pr_verdict_data_mono", "TRIEL_Breach.pr_verdict_pending_data_mono",
+    "TRIEL_Breach.ob_verdict_data_indep", "TRIEL_Breach.may_verdict_data_mono",
+    "TRIEL_Invariants.sinv_data_mono_le", "TRIEL_Breach.pr_verdict_present_not_mono",
+    "TRIEL_Exec.term_line_data_mono", "TRIEL_Exec.run_data_mono",
+    "TRIEL_Exec.run_data_mono_decided", "TRIEL_Exec.run_data_mono_breach",
+    "TRIEL_Exec.run_data_mono_pending",
     "TRIEL_Terms.term_semantics.den_if", "TRIEL_Terms.term_semantics.if_classical",
     "TRIEL_Terms.term_semantics.if_branch_stable", "TRIEL_Terms.term_semantics.if_undefined_else",
     "TRIEL_Trace.unless_if", "TRIEL_Trace.interleaving_satisfiable",
