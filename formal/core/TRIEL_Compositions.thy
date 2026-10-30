@@ -674,4 +674,221 @@ corollary verdict_stable_from_closure:
   shows "cond_eval (catom_eval I) \<phi> d' = Some b"
   using cond_equitone_from_closure[OF assms(1)] assms(2,3) unfolding equitone_nd_def by fastforce
 
+
+section \<open>The expressions of TRIEL_Core as conditions\<close>
+
+text \<open>The conditions of TRIEL_Indicators are built from atoms by NOT, AND and OR. The
+  expressions of TRIEL_Core, which the evaluator reads, have in addition the literals
+  true and false and IMPLIES. Every expression is a condition: the literals are
+  \<open>\<down>[]\<close> and its negation, since the complex name \<open>[]\<close> leads to the datum itself and so
+  is present on every datum; \<open>e\<^sub>1 IMPLIES e\<^sub>2\<close> is \<open>NOT e\<^sub>1 OR e\<^sub>2\<close> (\<open>kimp_kor_knot\<close>); a
+  comparison is the atom \<open>ACmp\<close>, DEFAULT included, since the operands of that atom are
+  value expressions; and \<open>PRESENT(p)\<close> is \<open>E\<^sub>p\<close>. The translation is total. Its atoms are
+  without \<open>E\<^sub>p\<close> and DEFAULT exactly when the expression is PRESENT-free.\<close>
+
+primrec expr_cond :: "('n list, 'b) expr \<Rightarrow> ('n, 'p, 'b) catom cond" where
+  "expr_cond ETrue = CAtom (ADown [])"
+| "expr_cond EFalse = CNot (CAtom (ADown []))"
+| "expr_cond (EEq a c) = CAtom (ACmp REq a c)"
+| "expr_cond (ELt a c) = CAtom (ACmp RLt a c)"
+| "expr_cond (ELe a c) = CAtom (ACmp RLe a c)"
+| "expr_cond (ENot e) = CNot (expr_cond e)"
+| "expr_cond (EAnd e\<^sub>1 e\<^sub>2) = CAnd (expr_cond e\<^sub>1) (expr_cond e\<^sub>2)"
+| "expr_cond (EOr e\<^sub>1 e\<^sub>2) = COr (expr_cond e\<^sub>1) (expr_cond e\<^sub>2)"
+| "expr_cond (EImp e\<^sub>1 e\<^sub>2) = COr (CNot (expr_cond e\<^sub>1)) (expr_cond e\<^sub>2)"
+| "expr_cond (EPresent p) = CAtom (AEx p)"
+
+lemma present_partial_Nil: "present_partial [] d = Some True"
+  by (simp add: present_partial_def)
+
+text \<open>The value of the condition is the value of the expression, on every datum and under
+  every interpretation of the primitive types (no type check occurs in the translation).\<close>
+
+theorem expr_cond_correct: "cond_eval (catom_eval I) (expr_cond e) d = eval_nd e d"
+  by (induction e) (simp_all add: present_partial_Nil present_nd_is_Ex kimp_kor_knot)
+
+theorem expr_cond_Ex_free: "(\<forall>a \<in> cond_atoms (expr_cond e). Ex_free_atom a) \<longleftrightarrow> present_free e"
+  by (induction e) auto
+
+text \<open>Monotonicity over nominative data (\<open>T2_nd_monotone\<close>) from the closure of the equitone
+  P-predicates under the base compositions: a PRESENT-free expression is a condition whose
+  atoms are without \<open>E\<^sub>p\<close> and DEFAULT, that condition is a term of the algebra
+  (\<open>cond_fm_correct\<close>), and the term denotes an equitone P-predicate
+  (\<open>cond_equitone_from_closure\<close>).\<close>
+
+theorem T2_nd_from_closure:
+  fixes e :: "('n list, 'b :: value_order) expr"
+  assumes "present_free e" and "nd_le d d'" and "eval_nd e d = Some b"
+  shows "eval_nd e d' = Some b"
+proof -
+  let ?\<phi> = "expr_cond e :: ('n, unit, 'b) catom cond"
+  let ?I = "\<lambda>(q :: unit) (v :: 'b). False"
+  have atoms: "a \<in> cond_atoms ?\<phi> \<Longrightarrow> Ex_free_atom a" for a
+    using expr_cond_Ex_free[of e] assms(1) by blast
+  have "cond_eval (catom_eval ?I) ?\<phi> d = Some b"
+    using assms(3) by (simp add: expr_cond_correct)
+  then have "cond_eval (catom_eval ?I) ?\<phi> d' = Some b"
+    by (rule verdict_stable_from_closure[OF atoms assms(2)])
+  then show ?thesis by (simp add: expr_cond_correct)
+qed
+
+corollary present_free_equitone_nd_from_closure: "present_free e \<Longrightarrow> equitone_nd (eval_nd e)"
+  unfolding equitone_nd_def using T2_nd_from_closure by fastforce
+
+text \<open>The evaluator reads a PRESENT-free expression on the flattened datum (\<open>eval_nd_flat\<close>),
+  so the same holds for its states.\<close>
+
+corollary T2_flat_from_closure:
+  assumes "present_free e" and "nd_le d d'" and "eval e (flat d) = Some b"
+  shows "eval e (flat d') = Some b"
+proof -
+  have "eval_nd e d = Some b" using assms(3) by (simp add: eval_nd_flat[OF assms(1)])
+  then have "eval_nd e d' = Some b" by (rule T2_nd_from_closure[OF assms(1,2)])
+  then show ?thesis by (simp add: eval_nd_flat[OF assms(1)])
+qed
+
+
+section \<open>The expressions of TRIEL_Core over flat states as terms\<close>
+
+text \<open>\<open>T2_monotone\<close> is stated on the flat states of TRIEL_Core, which need not come from a
+  nominative datum. For these the base predicate symbols are the comparisons, interpreted
+  as R-predicates (\<open>cmp_S\<close>, the counterpart of \<open>cmp_R\<close> with the operands read by \<open>evalV\<close>).
+  There is no constant among the base compositions, and \<open>\<down>z\<close> is undefined where \<open>z\<close> has
+  no value; the literal true is \<open>\<exists>x \<down>x\<close> for any name \<open>x\<close>, which is true on every named
+  set, since \<open>x\<close> has a value in \<open>d(x \<mapsto> a)\<close>.\<close>
+
+datatype ('n, 'v) ssym = SCmp crel "('n, 'v) vexp" "('n, 'v) vexp"
+
+definition cmp_S ::
+    "crel \<Rightarrow> ('n, 'v) vexp \<Rightarrow> ('n, 'v) vexp \<Rightarrow> ('n, 'v :: value_order) state rpred" where
+  "cmp_S r a c =
+     ({\<sigma>. \<exists>u w. evalV a \<sigma> = Some u \<and> evalV c \<sigma> = Some w \<and> crel_holds r u w},
+      {\<sigma>. \<exists>u w. evalV a \<sigma> = Some u \<and> evalV c \<sigma> = Some w \<and> \<not> crel_holds r u w})"
+
+fun ssym_R :: "('n, 'v) ssym \<Rightarrow> ('n, 'v :: value_order) state rpred" where
+  "ssym_R (SCmp r a c) = cmp_S r a c"
+
+fun ssym_default_free :: "('n, 'v) ssym \<Rightarrow> bool" where
+  "ssym_default_free (SCmp r a c) = (default_free a \<and> default_free c)"
+
+lemma eval_crel:
+  "eval (crel_expr r a c) \<sigma> =
+     (case evalV a \<sigma> of
+        None \<Rightarrow> None
+      | Some u \<Rightarrow> (case evalV c \<sigma> of None \<Rightarrow> None | Some w \<Rightarrow> Some (crel_holds r u w)))"
+  by (cases r) (simp_all cong: option.case_cong)
+
+lemma pval_cmp_S: "pval (cmp_S r a c) \<sigma> = eval (crel_expr r a c) \<sigma>"
+  by (cases "evalV a \<sigma>"; cases "evalV c \<sigma>") (auto simp: pval_def cmp_S_def eval_crel)
+
+lemma cmp_S_P_pred: "P_pred (cmp_S r a c)"
+  by (auto simp: P_pred_def cmp_S_def)
+
+lemma cmp_S_rmono:
+  assumes "default_free a" and "default_free c"
+  shows "rmono (\<sqsubseteq>) (cmp_S r a c)"
+proof -
+  have keep: "\<exists>u w. evalV a \<sigma>' = Some u \<and> evalV c \<sigma>' = Some w \<and> P u w"
+    if le: "\<sigma> \<sqsubseteq> \<sigma>'" and ex: "\<exists>u w. evalV a \<sigma> = Some u \<and> evalV c \<sigma> = Some w \<and> P u w"
+    for \<sigma> \<sigma>' P
+  proof -
+    from ex obtain u w where u: "evalV a \<sigma> = Some u" and w: "evalV c \<sigma> = Some w" and p: "P u w"
+      by blast
+    have "evalV a \<sigma>' = Some u"
+      using evalV_mono[OF assms(1) le] u by (simp add: approx_def)
+    moreover have "evalV c \<sigma>' = Some w"
+      using evalV_mono[OF assms(2) le] w by (simp add: approx_def)
+    ultimately show ?thesis using p by blast
+  qed
+  show ?thesis
+    unfolding rmono_iff cmp_S_def R_T_pair R_F_pair mem_Collect_eq
+    by (intro allI impI conjI; rule keep; assumption)
+qed
+
+theorem cmp_S_equitone: "default_free a \<Longrightarrow> default_free c \<Longrightarrow> equitone_R (\<sqsubseteq>) (cmp_S r a c)"
+  by (simp add: equitone_R_iff cmp_S_P_pred cmp_S_rmono)
+
+lemma ssym_R_P_pred: "P_pred (ssym_R s)"
+  by (cases s) (simp add: cmp_S_P_pred)
+
+lemma ssym_R_equitone: "ssym_default_free s \<Longrightarrow> equitone_R (\<sqsubseteq>) (ssym_R s)"
+  by (cases s) (simp add: cmp_S_equitone)
+
+lemma interp_ssym_P_pred: "P_pred (interp ssym_R \<Phi>)"
+  by (rule interp_P_pred) (rule ssym_R_P_pred)
+
+text \<open>\<open>\<exists>x \<down>x\<close> is true on every named set.\<close>
+
+lemma pval_ex_down: "pval (R_ex x (DownInd x)) \<sigma> = Some True"
+  by (simp add: pval_def R_ex_domains DownInd_def)
+
+text \<open>The translation, with the name \<open>x\<close> used for the literals. AND goes to
+  \<open>\<not>(\<not>\<Phi> \<or> \<not>\<Psi>)\<close> and IMPLIES to \<open>\<not>\<Phi> \<or> \<Psi>\<close>.\<close>
+
+primrec expr_fm :: "'n \<Rightarrow> ('n, 'v) expr \<Rightarrow> (('n, 'v) ssym, 'n) fm" where
+  "expr_fm x ETrue = FExists x (FDown x)"
+| "expr_fm x EFalse = FNot (FExists x (FDown x))"
+| "expr_fm x (EEq a c) = FPs (SCmp REq a c)"
+| "expr_fm x (ELt a c) = FPs (SCmp RLt a c)"
+| "expr_fm x (ELe a c) = FPs (SCmp RLe a c)"
+| "expr_fm x (ENot e) = FNot (expr_fm x e)"
+| "expr_fm x (EAnd e\<^sub>1 e\<^sub>2) = FNot (FOr (FNot (expr_fm x e\<^sub>1)) (FNot (expr_fm x e\<^sub>2)))"
+| "expr_fm x (EOr e\<^sub>1 e\<^sub>2) = FOr (expr_fm x e\<^sub>1) (expr_fm x e\<^sub>2)"
+| "expr_fm x (EImp e\<^sub>1 e\<^sub>2) = FOr (FNot (expr_fm x e\<^sub>1)) (expr_fm x e\<^sub>2)"
+| "expr_fm x (EPresent y) = FE y"
+
+theorem expr_fm_correct: "pval (interp ssym_R (expr_fm x e)) \<sigma> = eval e \<sigma>"
+  by (induction e)
+     (simp_all add: pval_ex_down pval_cmp_S pval_R_not_apply pval_R_or pval_Ex_R_present
+       interp_ssym_P_pred P_pred_R_not P_pred_R_or P_pred_R_ex DownInd_P_pred
+       kand_de_morgan kimp_kor_knot)
+
+lemma expr_fm_E_free: "present_free e \<Longrightarrow> E_free (expr_fm x e)"
+  by (induction e) simp_all
+
+lemma expr_fm_syms: "present_free e \<Longrightarrow> s \<in> fsyms (expr_fm x e) \<Longrightarrow> ssym_default_free s"
+  by (induction e) auto
+
+text \<open>Monotonicity on flat states (\<open>T2_monotone\<close>) from the closure: a PRESENT-free expression
+  translates to a formula without \<open>E\<^sub>z\<close> whose base predicates are comparisons without
+  DEFAULT, which are equitone P-predicates, so the formula denotes an equitone P-predicate
+  (\<open>interp_equitone_pw_syms\<close>), and its value is the value of the expression.\<close>
+
+theorem T2_from_closure:
+  fixes e :: "('n, 'v :: value_order) expr"
+  assumes "present_free e" and "\<sigma> \<sqsubseteq> \<sigma>'" and "eval e \<sigma> = Some b"
+  shows "eval e \<sigma>' = Some b"
+proof -
+  fix x :: 'n
+  let ?Q = "interp ssym_R (expr_fm x e)"
+  have "equitone_R (pw_le (=)) ?Q"
+  proof (rule interp_equitone_pw_syms[where vle = "(=)"])
+    fix a :: 'v
+    show "a = a" by (rule refl)
+  next
+    fix s assume "s \<in> fsyms (expr_fm x e)"
+    then show "equitone_R (pw_le (=)) (ssym_R s)"
+      by (simp add: pw_le_eq ssym_R_equitone expr_fm_syms[OF assms(1)])
+  next
+    show "E_free (expr_fm x e)" by (rule expr_fm_E_free[OF assms(1)])
+  qed
+  then have e: "equitone (pval ?Q)"
+    by (simp add: equitone_R_def pw_le_eq equitone_on_states)
+  have "pval ?Q \<sigma> = Some b"
+    using assms(3) by (simp add: expr_fm_correct)
+  with e assms(2) have "pval ?Q \<sigma>' = Some b"
+    unfolding equitone_def by fastforce
+  then show ?thesis by (simp add: expr_fm_correct)
+qed
+
+corollary present_free_equitone_from_closure:
+  assumes "present_free e"
+  shows "equitone (eval e)"
+  unfolding equitone_def
+proof (intro allI impI)
+  fix d d' assume "eval e d \<noteq> None \<and> d \<sqsubseteq> d'"
+  then obtain b where b: "eval e d = Some b" and le: "d \<sqsubseteq> d'" by auto
+  from T2_from_closure[OF assms le b] b show "eval e d' = eval e d" by simp
+qed
+
 end

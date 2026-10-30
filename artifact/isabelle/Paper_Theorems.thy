@@ -107,6 +107,11 @@ thm TRIEL_Compositions.comp_closure_equitone
 thm TRIEL_Compositions.interp_equitone
 thm TRIEL_Compositions.cond_fm_correct
 thm TRIEL_Compositions.cond_equitone_from_closure
+thm TRIEL_Compositions.expr_cond_correct
+thm TRIEL_Compositions.expr_cond_Ex_free
+thm TRIEL_Compositions.T2_nd_from_closure
+thm TRIEL_Compositions.expr_fm_correct
+thm TRIEL_Compositions.T2_from_closure
 thm TRIEL_Core.T5_present
 thm TRIEL_Ex.present_is_Ex
 thm TRIEL_Compositions.Ex_R_is_not_eps
@@ -186,6 +191,9 @@ local
     "TRIEL_Completions.stale_quote_completion",
     "TRIEL_Compositions.comp_closure_equitone", "TRIEL_Compositions.interp_equitone",
     "TRIEL_Compositions.cond_fm_correct", "TRIEL_Compositions.cond_equitone_from_closure",
+    "TRIEL_Compositions.expr_cond_correct", "TRIEL_Compositions.expr_cond_Ex_free",
+    "TRIEL_Compositions.T2_nd_from_closure", "TRIEL_Compositions.expr_fm_correct",
+    "TRIEL_Compositions.T2_from_closure",
     "TRIEL_Core.T5_present", "TRIEL_Ex.present_is_Ex", "TRIEL_Compositions.Ex_R_is_not_eps",
     "TRIEL_Breach.else_taken", "TRIEL_Breach.else_no_breach",
     "TRIEL_Breach.else_alt_breached", "TRIEL_Breach.else_final",
