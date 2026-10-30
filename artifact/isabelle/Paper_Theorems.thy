@@ -35,6 +35,7 @@ thm TRIEL_Invariants.sinv_final
 thm TRIEL_Breach.handle_breach_final
 thm TRIEL_Exec.run_final
 thm TRIEL_Exec.time_order_rejected
+thm TRIEL_Exec.monitor_line_final
 
 section \<open>Actions and violations in composite terms\<close>
 
@@ -54,6 +55,8 @@ thm TRIEL_Exec.term_semantics.reached_prohibition_watched
 thm TRIEL_Exec.term_semantics.then_mustnot_watched
 thm TRIEL_Exec.term_semantics.or_mustnot_watched
 thm TRIEL_Exec.term_semantics.violation_after_completion
+thm TRIEL_Exec.term_semantics.mem3_sound
+thm TRIEL_Exec.mem3_definite
 
 section \<open>Stability of verdicts and its limits\<close>
 
@@ -153,6 +156,8 @@ thm TRIEL_Breach.else_taken
 thm TRIEL_Breach.else_no_breach
 thm TRIEL_Breach.else_alt_breached
 thm TRIEL_Breach.else_final
+thm TRIEL_Breach.cure_restores
+thm TRIEL_Breach.cure_failed
 
 section \<open>Hidden data\<close>
 
@@ -198,7 +203,7 @@ local
   val names =
    ["TRIEL_Breach.ob_verdict_final", "TRIEL_Breach.pr_verdict_final",
     "TRIEL_Invariants.inv_final", "TRIEL_Invariants.sinv_final", "TRIEL_Breach.handle_breach_final",
-    "TRIEL_Exec.run_final", "TRIEL_Exec.time_order_rejected",
+    "TRIEL_Exec.run_final", "TRIEL_Exec.time_order_rejected", "TRIEL_Exec.monitor_line_final",
     "TRIEL_Terms.term_semantics.must_then_must_two_actions",
     "TRIEL_Terms.term_semantics.violated_reachable",
     "TRIEL_Terms.term_semantics.then_mustnot_violated",
@@ -211,6 +216,7 @@ local
     "TRIEL_Exec.term_semantics.reached_prohibition_watched",
     "TRIEL_Exec.term_semantics.then_mustnot_watched", "TRIEL_Exec.term_semantics.or_mustnot_watched",
     "TRIEL_Exec.term_semantics.violation_after_completion",
+    "TRIEL_Exec.term_semantics.mem3_sound", "TRIEL_Exec.mem3_definite",
     "TRIEL_Core.T2_monotone", "TRIEL_ND.T2_nd_monotone", "TRIEL_Ex.present_free_equitone",
     "TRIEL_Indicators.verdict_stable", "TRIEL_Indicators.verdict_stable_nd",
     "TRIEL_Indicators.cond_equitone", "TRIEL_Core.T3_present_not_monotone", "TRIEL_Core.present_flips",
@@ -249,6 +255,7 @@ local
     "TRIEL_Core.T5_present", "TRIEL_Ex.present_is_Ex", "TRIEL_Compositions.Ex_R_is_not_eps",
     "TRIEL_Breach.else_taken", "TRIEL_Breach.else_no_breach",
     "TRIEL_Breach.else_alt_breached", "TRIEL_Breach.else_final",
+    "TRIEL_Breach.cure_restores", "TRIEL_Breach.cure_failed",
     "TRIEL_Exec.run_noninterference", "TRIEL_Exec.run_erase", "TRIEL_Exec.erase_flat",
     "TRIEL_Exec.flow_safe_eval", "TRIEL_Exec.flow_safe_evalV"]
   val ctxt = \<^context>
