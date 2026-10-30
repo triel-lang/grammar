@@ -3628,11 +3628,15 @@ proof -
   have "tstamp (raw_trace obs' ! j) = tstamp (raw_trace obs ! j) \<and> evt (raw_trace obs' ! j) = evt (raw_trace obs ! j)
         \<and> st (raw_trace obs) j \<sqsubseteq> st (raw_trace obs') j" if j: "j < length obs" for j
   proof -
+    obtain d \<tau> e where oj: "obs ! j = (d, \<tau>, e)" by (cases "obs ! j") auto
+    obtain d' \<tau>' e' where oj': "obs' ! j = (d', \<tau>', e')" by (cases "obs' ! j") auto
     have "fst (snd (obs' ! j)) = fst (snd (obs ! j)) \<and> snd (snd (obs' ! j)) = snd (snd (obs ! j))
           \<and> flat (fst (obs ! j)) \<sqsubseteq> flat (fst (obs' ! j))"
       using o j unfolding obs_le_def by blast
-    then show ?thesis
-      using raw_trace_nth[OF j] raw_trace_nth[where j = j and obs = obs'] j l by (simp add: st_def)
+    then have eq: "\<tau>' = \<tau>" "e' = e" "flat d \<sqsubseteq> flat d'" by (simp_all add: oj oj')
+    have "raw_trace obs ! j = (flat d, \<tau>, e)" "raw_trace obs' ! j = (flat d', \<tau>', e')"
+      using j l by (simp_all add: raw_trace_def oj oj')
+    with eq show ?thesis by (simp add: st_def)
   qed
   with l show ?thesis unfolding data_le_def length_raw_trace by blast
 qed
@@ -3682,7 +3686,7 @@ proof -
     then have j1: "j - 1 < length obs" by simp
     show "(0 < j \<and> obs_time (obs' ! j) < obs_time (obs' ! (j - 1)))
           = (0 < j \<and> obs_time (obs ! j) < obs_time (obs ! (j - 1)))"
-      by (simp add: obs_time_obs_le[OF o j] obs_time_obs_le[OF o j1])
+      by (simp only: obs_time_obs_le[OF o j] obs_time_obs_le[OF o j1])
   qed
 qed
 
@@ -4019,7 +4023,7 @@ proof -
     unfolding \<pi>_def \<pi>'_def by (rule btrace_data_le[OF raw_trace_data_le[OF leO]])
   have tr: "is_trace \<pi>"
     unfolding \<pi>_def by (rule btrace_is_trace) (use to neO time_order_is_trace in blast)
-  have lp0: "0 < length \<pi>" using neO by (simp add: \<pi>_def length_raw_trace)
+  have lp0: "0 < length \<pi>" using ne by (simp add: \<pi>_def length_raw_trace)
   then have nep: "\<pi> \<noteq> []" by auto
   have t0: "time \<pi>' 0 = time \<pi> 0" by (rule data_le_time[OF lp lp0])
   have s0: "st \<pi> 0 \<sqsubseteq> st \<pi>' 0" by (rule data_le_st[OF lp lp0])

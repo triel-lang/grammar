@@ -792,8 +792,9 @@ proof (rule ccontr)
 qed
 
 corollary pr_verdict_decided_data_mono:
-  "present_free c \<Longrightarrow> data_le \<pi> \<pi>' \<Longrightarrow> pr_verdict s a c \<pi> \<noteq> Pending \<Longrightarrow> pr_verdict s a c \<pi>' \<noteq> Pending"
-  using pr_verdict_pending_data_mono by blast
+  assumes "present_free c" and "data_le \<pi> \<pi>'" and "pr_verdict s a c \<pi> \<noteq> Pending"
+  shows "pr_verdict s a c \<pi>' \<noteq> Pending"
+  using pr_verdict_pending_data_mono[OF assms(1,2)] assms(3) by blast
 
 text \<open>The time of a breach can only move earlier: the first forbidden action of \<open>\<pi>\<close> is still
   forbidden in \<open>\<pi>'\<close>, and an earlier action, whose condition was undefined in \<open>\<pi>\<close>, may have
@@ -1428,6 +1429,31 @@ proof -
     from this[unfolded else_handlers_ok_def, rule_format, of "Suc 0"] show False by (simp add: b)
   qed
 qed
+
+
+subsection \<open>Handlers and fallbacks do not read the data\<close>
+
+text \<open>The status after a breach and the status of an obligation with a fallback are built from
+  \<open>window\<close>, \<open>acted\<close> and \<open>passed\<close>, so they too are the same on every refinement of the trace.\<close>
+
+lemma continue_after_data_indep:
+  assumes le: "data_le \<pi> \<pi>'"
+  shows "continue_after \<tau>\<^sub>0 s a d \<tau>\<^sub>b c \<pi>' = continue_after \<tau>\<^sub>0 s a d \<tau>\<^sub>b c \<pi>"
+proof (cases c)
+  case None
+  then show ?thesis by simp
+next
+  case (Some b)
+  then show ?thesis by (cases b) (simp_all add: window_data_indep[OF le])
+qed
+
+theorem handle_breach_data_indep:
+  "data_le \<pi> \<pi>' \<Longrightarrow> handle_breach \<tau>\<^sub>0 lo s a d acts \<pi>' = handle_breach \<tau>\<^sub>0 lo s a d acts \<pi>"
+  by (simp add: handle_breach_def window_data_indep continue_after_data_indep)
+
+theorem else_verdict_data_indep:
+  "data_le \<pi> \<pi>' \<Longrightarrow> else_verdict s a d s' a' D' \<pi>' = else_verdict s a d s' a' D' \<pi>"
+  by (simp add: else_verdict_def acted_data_indep passed_data_indep ob_verdict_data_indep)
 
 
 section \<open>MAX_AGE and ON_STALE BLOCK\<close>
