@@ -59,7 +59,7 @@ The time, the activation time, the limit, and the optional amount, quote time an
 - `expected/`: these summaries for the recorded run.
 - `recorded/`: the raw outputs of that run.
 
-Both `expected/` and `recorded/` are the outputs of the tools as they ran, not expectations written beforehand.
+Both `expected/` and `recorded/` are the outputs of the tools as they ran, not expectations written beforehand. The one exception was temporary: the `MONITOR` lines of `expected/triel-further-traces.txt` were written by hand before the evaluator could print them, and committed before its first run; the run then printed the same lines, and `recorded/triel-further-traces.out` is that run.
 
 ## Running
 

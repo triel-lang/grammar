@@ -439,20 +439,26 @@ proof (rule enforced_no_breach)
   proof
     assume "blocks c (st (enforce s a c \<pi>) (j - 1))"
     with j have "blocked_action s a c (enforce s a c \<pi>) j" unfolding blocked_action_def by simp
-    with blocked_action_enforce show False by blast
+    with blocked_action_enforce[of s a c \<pi> j] show False by contradiction
   qed
 qed
 
-text \<open>The output of the monitor is a trace: times and states are kept.\<close>
+text \<open>The output of the monitor is a trace: times and states are kept, so the timestamps are
+  the same, in the same order.\<close>
+
+lemma enforce_tstamps: "map tstamp (enforce s a c \<pi>) = map tstamp \<pi>"
+  by (rule nth_equalityI) (simp_all add: enforce_nth time_def)
+
+theorem enforce_preserves_time_order:
+  "sorted (map tstamp (enforce s a c \<pi>)) \<longleftrightarrow> sorted (map tstamp \<pi>)"
+  by (simp add: enforce_tstamps)
 
 theorem enforce_is_trace:
   assumes tr: "is_trace \<pi>"
   shows "is_trace (enforce s a c \<pi>)"
 proof -
-  have eq: "map tstamp (enforce s a c \<pi>) = map tstamp \<pi>"
-    by (rule nth_equalityI) (simp_all add: enforce_nth time_def)
   have ne: "enforce s a c \<pi> \<noteq> []" using tr unfolding enforce_def is_trace_def by simp
-  from tr ne eq show ?thesis by (simp add: is_trace_def)
+  from tr ne show ?thesis by (simp add: is_trace_def enforce_tstamps)
 qed
 
 text \<open>The monitor is idempotent, and it changes exactly the blocked actions.\<close>
@@ -585,7 +591,39 @@ proof -
     then have "pr_verdict s a c \<pi>' \<noteq> Pending" by (auto simp: pr_verdict_def)
     with ok show False by simp
   qed
-  then show "enforce s a c \<pi> ! j = \<pi> ! j" using enforce_blocks_exactly[OF j(2)] by simp
+  then show "enforce s a c \<pi> ! j = \<pi> ! j" using enforce_blocks_exactly[OF j(2), of s a c] by simp
+qed
+
+text \<open>Blocking is antitone: what the monitor allows in a state it allows in every state with
+  more data, because a false condition stays false (T2).\<close>
+
+theorem blocks_data_mono:
+  assumes "present_free c" and "\<sigma> \<sqsubseteq> \<sigma>'" and "blocks c \<sigma>'"
+  shows "blocks c \<sigma>"
+proof (rule ccontr)
+  assume "\<not> blocks c \<sigma>"
+  then have "eval c \<sigma> = Some False" by (simp add: blocks_def)
+  from T2_monotone[OF assms(1,2) this] have "eval c \<sigma>' = Some False" .
+  with assms(3) show False by (simp add: blocks_def)
+qed
+
+text \<open>So, for a condition without PRESENT, the monitor blocks fewer actions on a trace whose
+  entries carry more data and the same times and events: an action blocked on the trace
+  with more data is blocked on the trace with less.\<close>
+
+theorem blocked_action_data_mono:
+  assumes pf: "present_free c" and len: "length \<pi>' = length \<pi>"
+    and ev: "\<And>i. i < length \<pi> \<Longrightarrow> evt (\<pi>' ! i) = evt (\<pi> ! i)"
+    and le: "\<And>i. i < length \<pi> \<Longrightarrow> st \<pi> i \<sqsubseteq> st \<pi>' i"
+    and b: "blocked_action s a c \<pi>' j"
+  shows "blocked_action s a c \<pi> j"
+proof -
+  from b len have j: "1 \<le> j" "j < length \<pi>" and d: "does s a (evt (\<pi>' ! j))"
+    and bl: "blocks c (st \<pi>' (j - 1))"
+    unfolding blocked_action_def by simp_all
+  have "j - 1 < length \<pi>" using j by simp
+  from blocks_data_mono[OF pf le[OF this] bl] have "blocks c (st \<pi> (j - 1))" .
+  with j d ev[OF j(2)] show ?thesis by (simp add: blocked_action_def)
 qed
 
 text \<open>The decisions of the monitor on a trace, as the evaluator reports them: for every
@@ -632,11 +670,9 @@ next
   have f: "filter (\<lambda>j. does s a (evt ((\<pi> @ \<rho>) ! j))) [1..<length \<pi>]
            = filter (\<lambda>j. does s a (evt (\<pi> ! j))) [1..<length \<pi>]"
     by (rule filter_cong) simp_all
-  have st': "\<And>x. x \<in> set [1..<length \<pi>] \<Longrightarrow> st (\<pi> @ \<rho>) (x - 1) = st \<pi> (x - 1)"
-    by (intro st_append) simp
   have m: "map (\<lambda>j. (j, blocks c (st (\<pi> @ \<rho>) (j - 1)))) (filter (\<lambda>j. does s a (evt (\<pi> ! j))) [1..<length \<pi>])
            = map (\<lambda>j. (j, blocks c (st \<pi> (j - 1)))) (filter (\<lambda>j. does s a (evt (\<pi> ! j))) [1..<length \<pi>])"
-    by (rule map_cong) (simp_all add: st')
+    by (rule map_cong) (auto simp: less_imp_diff_less)
   show ?thesis
     unfolding monitor_decisions_def u filter_append map_append f m by blast
 qed

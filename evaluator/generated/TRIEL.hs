@@ -2,12 +2,13 @@
 
 module
   TRIEL(Int(..), integer_of_int, Nat, integer_of_nat, Num, Rat, quotient_of,
-         Atom(..), Arg(..), Act(..), Outcome(..), Fmap(..), Nd(..), Ty(..),
-         Vexp(..), Expr(..), Verdict(..), Else_status(..), Continuation(..),
-         Status(..), Amount(..), Ract(..), Cstatus(..), Line(..), Prim(..),
-         Deadline(..), Inv(..), Sinv(..), Baction(..), Sterm(..), Pexp(..),
-         Pen(..), Fdecl(..), Spec(..), Polarity(..), Event(..), nat_of_integer,
-         num_of, run, dec_atom)
+         Atom(..), Arg(..), Act(..), Value_order, Outcome(..), Fmap(..), Nd(..),
+         Ty(..), Vexp(..), Expr(..), Verdict(..), Else_status(..),
+         Continuation(..), Status(..), Amount(..), Ract(..), Cstatus(..),
+         Line(..), Prim(..), Deadline(..), Inv(..), Sinv(..), Baction(..),
+         Sterm(..), Pexp(..), Pen(..), Fdecl(..), Spec(..), Polarity(..),
+         Event(..), nat_of_integer, num_of, run, dec_atom, enforce,
+         check_action)
   where {
 
 import Prelude ((==), (/=), (<), (<=), (>=), (>), (+), (-), (*), (/), (**),
@@ -662,7 +663,7 @@ data Line = LTimeOrder Nat | LActivation Bool | LBlock Bool
   | LMustElse Nat String Act (Maybe Int) String Act (Maybe Int) Else_status
   | LOnBreach Nat String (Maybe Nat)
   | LComposite Nat (Maybe Bool) (Maybe Bool) (Maybe Bool) Cstatus
-  | LInvariant String (Maybe Bool);
+  | LInvariant String (Maybe Bool) | LMonitor Nat [(Nat, Bool)];
 
 data Mode = Inst | Exec | Held;
 
@@ -1129,6 +1130,82 @@ else_order_ok t tau_0 sigma_0 blk =
         }))
     blk;
 
+is_prohibition :: forall a b c d e. Sterm a b c d e -> Bool;
+is_prohibition (SMustNot s a c) = True;
+is_prohibition (SMust v va vb vc) = False;
+is_prohibition (SMay v va vb) = False;
+is_prohibition (SThen v va) = False;
+is_prohibition (SOr v va) = False;
+is_prohibition (SAnd v va) = False;
+is_prohibition (SUnless v va vb) = False;
+is_prohibition (SOnBreach v va) = False;
+is_prohibition (SIf v va vb) = False;
+is_prohibition SSkip = False;
+is_prohibition (SRef v) = False;
+is_prohibition (SMustElse v va vb vc vd ve) = False;
+
+prohibitions :: forall a b c d e. [Sterm a b c d e] -> [Nat];
+prohibitions blk =
+  filter (\ i -> is_prohibition (nth blk i)) (upt zero_nat (size_list blk));
+
+blocks ::
+  forall a b. (Eq b, Value_order b) => Expr a b -> (a -> Maybe b) -> Bool;
+blocks c sigma = not (eval c sigma == Just False);
+
+does :: forall a b c. (Eq a, Eq b) => a -> b -> Event c a b -> Bool;
+does s a e = (case e of {
+               Deontic sa aa _ -> sa == s && aa == a;
+               Arrival _ -> False;
+               Tick -> False;
+             });
+
+evt :: forall a b c d e. (a -> Maybe b, (c, Event a d e)) -> Event a d e;
+evt (sigma, (tau, e)) = e;
+
+map_filter :: forall a b. (a -> Maybe b) -> [a] -> [b];
+map_filter f [] = [];
+map_filter f (x : xs) = (case f x of {
+                          Nothing -> map_filter f xs;
+                          Just y -> y : map_filter f xs;
+                        });
+
+monitor_decisions ::
+  forall a b c d.
+    (Eq a, Eq b, Eq d,
+      Value_order d) => a -> b -> Expr c d ->
+                                    [(c -> Maybe d, (Int, Event c a b))] ->
+                                      [(Nat, Bool)];
+monitor_decisions s a c pi =
+  map_filter
+    (\ x ->
+      (if does s a (evt (nth pi x))
+        then Just (x, blocks c (st pi (minus_nat x one_nat))) else Nothing))
+    (upt one_nat (size_list pi));
+
+monitor_line ::
+  [Sterm [String] Atom String Act (Pen [String] Atom)] ->
+    [([String] -> Maybe Atom, (Int, Event [String] String Act))] -> Nat -> Line;
+monitor_line blk pi i =
+  (case nth blk i of {
+    SMust _ _ _ _ -> LMonitor (suc i) [];
+    SMustNot s a c -> LMonitor (suc i) (monitor_decisions s a c pi);
+    SMay _ _ _ -> LMonitor (suc i) [];
+    SThen _ _ -> LMonitor (suc i) [];
+    SOr _ _ -> LMonitor (suc i) [];
+    SAnd _ _ -> LMonitor (suc i) [];
+    SUnless _ _ _ -> LMonitor (suc i) [];
+    SOnBreach _ _ -> LMonitor (suc i) [];
+    SIf _ _ _ -> LMonitor (suc i) [];
+    SSkip -> LMonitor (suc i) [];
+    SRef _ -> LMonitor (suc i) [];
+    SMustElse _ _ _ _ _ _ -> LMonitor (suc i) [];
+  });
+
+monitor_lines ::
+  [Sterm [String] Atom String Act (Pen [String] Atom)] ->
+    [([String] -> Maybe Atom, (Int, Event [String] String Act))] -> [Line];
+monitor_lines blk pi = map (monitor_line blk pi) (prohibitions blk);
+
 deadlines :: forall a b c d e. Sterm a b c d e -> [Deadline a];
 deadlines (SMust s a d f) = (case d of {
                               Nothing -> [];
@@ -1196,13 +1273,6 @@ wf_actions :: forall a b. [Baction a b] -> Bool;
 wf_actions acts =
   not (null acts) && less_eq_nat (size_list (filter is_cont acts)) one_nat;
 
-map_filter :: forall a b. (a -> Maybe b) -> [a] -> [b];
-map_filter f [] = [];
-map_filter f (x : xs) = (case f x of {
-                          Nothing -> map_filter f xs;
-                          Just y -> y : map_filter f xs;
-                        });
-
 wf_block :: forall a b c d e. (Eq c) => [Sterm a b c d e] -> Bool;
 wf_block blk =
   all (\ i ->
@@ -1264,16 +1334,6 @@ mrank Held = nat_of_integer (2 :: Integer);
 
 mmax :: Mode -> Mode -> Mode;
 mmax m_1 m_2 = (if less_eq_nat (mrank m_1) (mrank m_2) then m_2 else m_1);
-
-does :: forall a b c. (Eq a, Eq b) => a -> b -> Event c a b -> Bool;
-does s a e = (case e of {
-               Deontic sa aa _ -> sa == s && aa == a;
-               Arrival _ -> False;
-               Tick -> False;
-             });
-
-evt :: forall a b c d e. (a -> Maybe b, (c, Event a d e)) -> Event a d e;
-evt (sigma, (tau, e)) = e;
 
 forbidden ::
   forall a b c d e.
@@ -2149,7 +2209,8 @@ evaluate_trace sp obs =
                                      (upt zero_nat (size_list blk)) ++
                                      map (\ (n, iota) ->
    LInvariant n (sinv_eval time_of iota pi))
-                                       invs;
+                                       invs ++
+                                       monitor_lines blk pi;
                                Just e -> [LTypes (Just e)];
                              })));
   });
@@ -2201,5 +2262,35 @@ dec_atom :: Int -> Nat -> Atom;
 dec_atom m k =
   ANum (divide_rat (of_int m)
          (power (of_int (Int_of_integer (10 :: Integer))) k));
+
+blocked_action ::
+  forall a b c d.
+    (Eq a, Eq b, Eq d,
+      Value_order d) => a -> b -> Expr c d ->
+                                    [(c -> Maybe d, (Int, Event c a b))] ->
+                                      Nat -> Bool;
+blocked_action s a c pi j =
+  less_eq_nat one_nat j &&
+    less_nat j (size_list pi) &&
+      does s a (evt (nth pi j)) && blocks c (st pi (minus_nat j one_nat));
+
+enforce ::
+  forall a b c d.
+    (Eq a, Eq b, Eq d,
+      Value_order d) => a -> b -> Expr c d ->
+                                    [(c -> Maybe d, (Int, Event c a b))] ->
+                                      [(c -> Maybe d, (Int, Event c a b))];
+enforce s a c pi =
+  map (\ j ->
+        (if blocked_action s a c pi j then (st pi j, (time pi j, Tick))
+          else nth pi j))
+    (upt zero_nat (size_list pi));
+
+check_action :: Expr [String] Atom -> ([String] -> Maybe Atom) -> Bool;
+check_action c sigma = (case eval c sigma of {
+                         Nothing -> True;
+                         Just True -> True;
+                         Just False -> False;
+                       });
 
 }

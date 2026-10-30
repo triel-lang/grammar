@@ -90,6 +90,7 @@ thm TRIEL_Breach.undefined_guard_blocks_not_breach
 thm TRIEL_Breach.enforced_no_breach
 thm TRIEL_Breach.enforce_sound
 thm TRIEL_Breach.enforce_is_trace
+thm TRIEL_Breach.enforce_preserves_time_order
 thm TRIEL_Breach.enforce_idempotent
 thm TRIEL_Breach.enforce_blocks_exactly
 thm TRIEL_Breach.enforce_id_iff
@@ -98,6 +99,8 @@ thm TRIEL_Breach.enforce_undefined_blocks
 thm TRIEL_Breach.enforce_minimal
 thm TRIEL_Breach.monitor_decisions_enforce
 thm TRIEL_Breach.monitor_decisions_append
+thm TRIEL_Breach.blocks_data_mono
+thm TRIEL_Breach.blocked_action_data_mono
 thm TRIEL_Completions.enforce_allows_sound
 
 section \<open>Completions of the data\<close>
@@ -198,11 +201,13 @@ local
     "TRIEL_Exec.term_semantics.resolve_den", "TRIEL_Exec.term_semantics.block_den",
     "TRIEL_Exec.refs_ok_acyclic",
     "TRIEL_Breach.undefined_guard_blocks_not_breach", "TRIEL_Breach.enforced_no_breach",
-    "TRIEL_Breach.enforce_sound", "TRIEL_Breach.enforce_is_trace", "TRIEL_Breach.enforce_idempotent",
+    "TRIEL_Breach.enforce_sound", "TRIEL_Breach.enforce_is_trace",
+    "TRIEL_Breach.enforce_preserves_time_order", "TRIEL_Breach.enforce_idempotent",
     "TRIEL_Breach.enforce_blocks_exactly", "TRIEL_Breach.enforce_id_iff",
     "TRIEL_Breach.enforce_transparent", "TRIEL_Breach.enforce_undefined_blocks",
     "TRIEL_Breach.enforce_minimal", "TRIEL_Breach.monitor_decisions_enforce",
-    "TRIEL_Breach.monitor_decisions_append", "TRIEL_Completions.enforce_allows_sound",
+    "TRIEL_Breach.monitor_decisions_append", "TRIEL_Breach.blocks_data_mono",
+    "TRIEL_Breach.blocked_action_data_mono", "TRIEL_Completions.enforce_allows_sound",
     "TRIEL_Completions.monitor_sound_completions", "TRIEL_Completions.breach_certain_completions",
     "TRIEL_Completions.skip_reading_unsound", "TRIEL_Completions.absent_false_unsound",
     "TRIEL_Completions.kleene_not_complete", "TRIEL_Completions.kleene_sound_conn",

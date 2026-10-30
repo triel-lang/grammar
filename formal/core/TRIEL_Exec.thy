@@ -3538,7 +3538,7 @@ proof -
           case True
           obtain nm \<iota> where inv: "invs ! n = (nm, \<iota>)" by (cases "invs ! n")
           have l: "?lines p ! k = LInvariant nm (sinv_eval time_of \<iota> p)" for p
-            using True inv by (simp add: kn nth_append n_def)
+            unfolding kn using True inv by (simp add: nth_append)
           from dk obtain b where b: "sinv_eval time_of \<iota> \<pi> = Some b" by (auto simp: l)
           from sinv_final[OF tr'[unfolded pr] nep b] show ?thesis by (simp add: l pr b same_verdict_refl)
         next
@@ -3546,7 +3546,7 @@ proof -
           define m where "m = n - length invs"
           have ml: "m < length (prohibitions blk)" using nl False unfolding m_def by arith
           have l: "?lines p ! k = monitor_line blk p (prohibitions blk ! m)" for p
-            using False ml by (simp add: kn nth_append monitor_lines_def m_def n_def)
+            unfolding kn using False ml by (simp add: nth_append monitor_lines_def m_def)
           have "prohibitions blk ! m \<in> set (prohibitions blk)" using ml by (rule nth_mem)
           from monitor_line_final[OF this] show ?thesis by (simp add: l pr)
         qed
@@ -3561,6 +3561,22 @@ text \<open>A composite line reports \<open>mem3\<close> on the blocked trace. B
   \<open>mem3_definite\<close> they are always definite for terms without UNLESS and AND.\<close>
 
 
+subsection \<open>The monitor outside the evaluator\<close>
+
+text \<open>The decision of the fail-closed monitor on one action, at the types of the evaluator:
+  \<open>check_action c \<sigma>\<close> is true if the monitor of a prohibition with the condition \<open>c\<close> blocks an
+  action taken in a state \<open>\<sigma>\<close> after it, that is, unless \<open>c\<close> is false in \<open>\<sigma>\<close>. It is \<open>blocks\<close>
+  under the name it is exported with, executed by its code equation (\<open>check_action_code\<close>).
+  With \<open>enforce\<close> it lets the monitor be applied to a trace outside \<open>run\<close>.\<close>
+
+definition check_action :: "(path, atom) expr \<Rightarrow> (path, atom) state \<Rightarrow> bool" where
+  "check_action c \<sigma> \<longleftrightarrow> blocks c \<sigma>"
+
+lemma check_action_code [code]:
+  "check_action c \<sigma> = (case eval c \<sigma> of Some False \<Rightarrow> False | _ \<Rightarrow> True)"
+  by (auto simp: check_action_def blocks_def split: option.split bool.split)
+
+
 subsection \<open>Export\<close>
 
 export_code run Spec Fdecl Act ArgName ArgVal Pen PVal PAdd PSub PMul PNeg num_of
@@ -3573,7 +3589,7 @@ export_code run Spec Fdecl Act ArgName ArgVal Pen PVal PAdd PSub PMul PNeg num_o
   Must May MustNot
   LTimeOrder LActivation LBlock LTypes LMust LMustNot LMay LMustElse LOnBreach LComposite LInvariant LMonitor
   CAt COpen CUnknown Done Interrupted Violated
-  blocks enforce
+  check_action enforce
   EFulfilled EPending EElse
   SFulfilled SPending SBreached NoContinuation Terminated Cure Escalated
   Fulfilled Breached Pending
