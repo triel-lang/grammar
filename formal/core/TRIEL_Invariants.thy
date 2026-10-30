@@ -380,4 +380,19 @@ next
   from ew_data_mono[OF this len tm le e] D' SEventuallyWithin show ?thesis by simp
 qed
 
+text \<open>The same, with the hypothesis packed as \<open>data_le\<close> (TRIEL_Trace): the same entries, times
+  and events, and more data at each entry. This is the form the evaluator uses.\<close>
+
+corollary inv_data_mono_le:
+  assumes "present_free (inv_formula \<iota>)" and le: "data_le \<pi> \<pi>'" and "inv_eval \<iota> \<pi> = Some b"
+  shows "inv_eval \<iota> \<pi>' = Some b"
+  using assms(1) data_le_length[OF le] data_le_st[OF le] assms(3) by (rule inv_data_mono)
+
+corollary sinv_data_mono_le:
+  assumes "present_free (sinv_formula \<iota>)" and "\<pi> \<noteq> []" and le: "data_le \<pi> \<pi>'"
+    and "sinv_eval T \<iota> \<pi> = Some b"
+  shows "sinv_eval T \<iota> \<pi>' = Some b"
+  using assms(1) data_le_length[OF le] assms(2) data_le_time[OF le] data_le_st[OF le] assms(4)
+  by (rule sinv_data_mono)
+
 end

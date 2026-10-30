@@ -3577,6 +3577,576 @@ lemma check_action_code [code]:
   by (auto simp: check_action_def blocks_def split: option.split bool.split)
 
 
+subsection \<open>Verdicts survive more data in the report\<close>
+
+text \<open>Finality (\<open>run_final\<close>) is about appending observations. The second kind of stability is
+  about reading the same observations with more data: \<open>obs_le obs obs'\<close> says that \<open>obs'\<close> has
+  the observations of \<open>obs\<close>, with the same times and events, and at each one data with more
+  values (the information order on the flattened data). Hidden factors are removed from both
+  lists alike, and the blocking of stale factors reads only times and events, so the blocked
+  trace of \<open>obs'\<close> carries more data than the blocked trace of \<open>obs\<close> at every entry
+  (\<open>btrace_data_le\<close>). Activation on more data succeeds with the same deadlines. The verdicts
+  then behave as on traces: an obligation does not change; a breached prohibition stays
+  breached, at the same or an earlier time; a fulfilled permission stays fulfilled; a definite
+  invariant stays the same. For the conditions of prohibitions and permissions and the
+  formulas of invariants this needs PRESENT-freedom (\<open>present_free_spec\<close>); the lines of
+  composite terms are not covered, since \<open>IF\<close> takes its ELSE branch on an undefined
+  condition. The actions reported with a breach (penalties) are not compared: a penalty is
+  computed in the state of the breach, which can move.\<close>
+
+definition obs_le :: "observation list \<Rightarrow> observation list \<Rightarrow> bool" where
+  "obs_le obs obs' \<longleftrightarrow>
+     length obs' = length obs \<and>
+     (\<forall>j < length obs. fst (snd (obs' ! j)) = fst (snd (obs ! j)) \<and> snd (snd (obs' ! j)) = snd (snd (obs ! j))
+        \<and> flat (fst (obs ! j)) \<sqsubseteq> flat (fst (obs' ! j)))"
+
+text \<open>More data in the sense of nominative data (\<open>nd_le\<close>, section 7) gives more data in the
+  flattened state (\<open>flat_mono\<close>).\<close>
+
+lemma obs_leI_nd:
+  assumes "length obs' = length obs"
+    and "\<And>j. j < length obs \<Longrightarrow> fst (snd (obs' ! j)) = fst (snd (obs ! j)) \<and> snd (snd (obs' ! j)) = snd (snd (obs ! j))
+          \<and> nd_le (fst (obs ! j)) (fst (obs' ! j))"
+  shows "obs_le obs obs'"
+  unfolding obs_le_def using assms flat_mono by blast
+
+lemma obs_time_obs_le: "obs_le obs obs' \<Longrightarrow> j < length obs \<Longrightarrow> obs_time (obs' ! j) = obs_time (obs ! j)"
+  unfolding obs_le_def obs_time_def by blast
+
+lemma length_raw_trace: "length (raw_trace obs) = length obs"
+  by (simp add: raw_trace_def)
+
+lemma raw_trace_nth:
+  "j < length obs \<Longrightarrow> raw_trace obs ! j = (flat (fst (obs ! j)), fst (snd (obs ! j)), snd (snd (obs ! j)))"
+  by (simp add: raw_trace_def split: prod.splits)
+
+lemma raw_trace_data_le:
+  assumes o: "obs_le obs obs'"
+  shows "data_le (raw_trace obs) (raw_trace obs')"
+proof -
+  have l: "length obs' = length obs" using o by (simp add: obs_le_def)
+  have "tstamp (raw_trace obs' ! j) = tstamp (raw_trace obs ! j) \<and> evt (raw_trace obs' ! j) = evt (raw_trace obs ! j)
+        \<and> st (raw_trace obs) j \<sqsubseteq> st (raw_trace obs') j" if j: "j < length obs" for j
+  proof -
+    have "fst (snd (obs' ! j)) = fst (snd (obs ! j)) \<and> snd (snd (obs' ! j)) = snd (snd (obs ! j))
+          \<and> flat (fst (obs ! j)) \<sqsubseteq> flat (fst (obs' ! j))"
+      using o j unfolding obs_le_def by blast
+    then show ?thesis
+      using raw_trace_nth[OF j] raw_trace_nth[where j = j and obs = obs'] j l by (simp add: st_def)
+  qed
+  with l show ?thesis unfolding data_le_def length_raw_trace by blast
+qed
+
+lemma erase_flat_mono:
+  assumes "flat d \<sqsubseteq> flat d'"
+  shows "flat (erase H d) \<sqsubseteq> flat (erase H d')"
+  unfolding info_le_def
+proof
+  fix p assume "p \<in> dom (flat (erase H d))"
+  then have h: "\<not> hides H p" and "p \<in> dom (flat d)" by (auto simp: erase_flat domIff split: if_splits)
+  with assms have "flat d' p = flat d p" by (simp add: info_le_def)
+  with h show "flat (erase H d') p = flat (erase H d) p" by (simp add: erase_flat)
+qed
+
+lemma erase_obs_le:
+  assumes o: "obs_le obs obs'"
+  shows "obs_le (erase_obs H obs) (erase_obs H obs')"
+proof -
+  have l: "length obs' = length obs" using o by (simp add: obs_le_def)
+  have "fst (snd (erase_obs H obs' ! j)) = fst (snd (erase_obs H obs ! j))
+        \<and> snd (snd (erase_obs H obs' ! j)) = snd (snd (erase_obs H obs ! j))
+        \<and> flat (fst (erase_obs H obs ! j)) \<sqsubseteq> flat (fst (erase_obs H obs' ! j))" if j: "j < length obs" for j
+  proof -
+    have "fst (snd (obs' ! j)) = fst (snd (obs ! j)) \<and> snd (snd (obs' ! j)) = snd (snd (obs ! j))
+          \<and> flat (fst (obs ! j)) \<sqsubseteq> flat (fst (obs' ! j))"
+      using o j unfolding obs_le_def by blast
+    then show ?thesis
+      using erase_obs_nth[where j = j and obs = obs and H = H] erase_obs_nth[where j = j and obs = obs' and H = H] j l
+      by (simp add: erase_flat_mono)
+  qed
+  with l show ?thesis unfolding obs_le_def length_erase_obs by blast
+qed
+
+lemma time_order_obs_le:
+  assumes o: "obs_le obs obs'"
+  shows "time_order obs' = time_order obs"
+proof -
+  have l: "length obs' = length obs" using o by (simp add: obs_le_def)
+  show ?thesis
+    unfolding time_order_def l
+  proof (rule find_cong)
+    show "[0..<length obs] = [0..<length obs]" by (rule refl)
+  next
+    fix j assume "j \<in> set [0..<length obs]"
+    then have j: "j < length obs" by simp
+    then have j1: "j - 1 < length obs" by simp
+    show "(0 < j \<and> obs_time (obs' ! j) < obs_time (obs' ! (j - 1)))
+          = (0 < j \<and> obs_time (obs ! j) < obs_time (obs ! (j - 1)))"
+      by (simp add: obs_time_obs_le[OF o j] obs_time_obs_le[OF o j1])
+  qed
+qed
+
+text \<open>Freshness reads only times and events, so blocking the stale factors of two traces with
+  the same entries blocks the same names; the blocked states keep the information order.\<close>
+
+lemma fresh_data_le:
+  assumes le: "data_le \<pi> \<pi>'" and j: "j < length \<pi>"
+  shows "fresh m x \<pi>' j \<longleftrightarrow> fresh m x \<pi> j"
+proof -
+  have "evt (\<pi>' ! i) = Arrival x \<and> time \<pi>' j - time \<pi>' i \<le> m \<longleftrightarrow> evt (\<pi> ! i) = Arrival x \<and> time \<pi> j - time \<pi> i \<le> m"
+    if "i \<le> j" for i
+  proof -
+    have i: "i < length \<pi>" using that j by simp
+    show ?thesis by (simp add: data_le_evt[OF le i] data_le_time[OF le i] data_le_time[OF le j])
+  qed
+  then show ?thesis unfolding fresh_def by blast
+qed
+
+lemma blockp_data_le:
+  assumes le: "data_le \<pi> \<pi>'" and j: "j < length \<pi>"
+  shows "blockp M \<pi> j \<sqsubseteq> blockp M \<pi>' j"
+proof -
+  define ok where "ok = (\<lambda>p. case p of [] \<Rightarrow> True | f # q \<Rightarrow> (case M f of None \<Rightarrow> True | Some m \<Rightarrow> fresh m [f] \<pi> j))"
+  have e: "blockp M \<pi> j p = (if ok p then st \<pi> j p else None)" for p
+    by (simp add: blockp_def ok_def split: list.splits option.splits)
+  have e': "blockp M \<pi>' j p = (if ok p then st \<pi>' j p else None)" for p
+    by (simp add: blockp_def ok_def fresh_data_le[OF le j] split: list.splits option.splits)
+  show ?thesis
+    unfolding info_le_def
+  proof
+    fix p assume "p \<in> dom (blockp M \<pi> j)"
+    then obtain v where ok: "ok p" and v: "st \<pi> j p = Some v" by (auto simp: domIff e split: if_splits)
+    have "st \<pi>' j p = Some v" by (rule info_leD[OF data_le_st[OF le j] v])
+    with ok v show "blockp M \<pi>' j p = blockp M \<pi> j p" by (simp add: e e')
+  qed
+qed
+
+lemma btrace_data_le:
+  assumes le: "data_le \<pi> \<pi>'"
+  shows "data_le (btrace M \<pi>) (btrace M \<pi>')"
+proof -
+  have l: "length \<pi>' = length \<pi>" by (rule data_le_length[OF le])
+  have "tstamp (btrace M \<pi>' ! j) = tstamp (btrace M \<pi> ! j) \<and> evt (btrace M \<pi>' ! j) = evt (btrace M \<pi> ! j)
+        \<and> st (btrace M \<pi>) j \<sqsubseteq> st (btrace M \<pi>') j" if j: "j < length \<pi>" for j
+  proof -
+    have j': "j < length \<pi>'" using j l by simp
+    show ?thesis
+      using btrace_st[OF j] btrace_st[OF j'] blockp_data_le[OF le j] btrace_evt[OF j] btrace_evt[OF j']
+        data_le_evt[OF le j] btrace_time[OF j] btrace_time[OF j'] data_le_time[OF le j]
+      by (simp add: time_def)
+  qed
+  with l show ?thesis unfolding data_le_def btrace_length by blast
+qed
+
+text \<open>Activation on more data: every deadline that resolves still resolves to the same time
+  (\<open>resolve_mono\<close>), so the block, its fallbacks and the invariants stay activated.\<close>
+
+lemma start_of_mono:
+  assumes le: "\<sigma> \<sqsubseteq> \<sigma>'" and s: "start_of T \<tau>\<^sub>0 \<sigma> F = Some b"
+  shows "start_of T \<tau>\<^sub>0 \<sigma>' F = Some b"
+proof (cases F)
+  case None
+  with s show ?thesis by (simp add: start_of_def)
+next
+  case (Some f)
+  with s have "resolve T \<tau>\<^sub>0 \<sigma> f = Some b" by (simp add: start_of_def)
+  from resolve_mono[OF le this] Some show ?thesis by (simp add: start_of_def)
+qed
+
+lemma deadline_of_mono:
+  assumes le: "\<sigma> \<sqsubseteq> \<sigma>'" and s: "start_of T \<tau>\<^sub>0 \<sigma> F = Some b" and d: "deadline_of T \<tau>\<^sub>0 \<sigma> F D = Some d"
+  shows "deadline_of T \<tau>\<^sub>0 \<sigma>' F D = Some d"
+proof (cases D)
+  case None
+  with d show ?thesis by (simp add: deadline_of_def split: option.splits)
+next
+  case (Some d\<^sub>0)
+  with d s have "resolve T b \<sigma> d\<^sub>0 = Some d" by (simp add: deadline_of_def)
+  from resolve_mono[OF le this] start_of_mono[OF le s] Some show ?thesis by (simp add: deadline_of_def)
+qed
+
+lemma activates_mono:
+  assumes le: "\<sigma> \<sqsubseteq> \<sigma>'" and act: "activates T \<tau>\<^sub>0 \<sigma> blk"
+  shows "activates T \<tau>\<^sub>0 \<sigma>' blk"
+proof -
+  have "resolve T \<tau>\<^sub>0 \<sigma>' d \<noteq> None" if "t \<in> set blk" "d \<in> set (deadlines t)" for t d
+  proof -
+    have "resolve T \<tau>\<^sub>0 \<sigma> d \<noteq> None" using act that unfolding activates_def by blast
+    then obtain D where "resolve T \<tau>\<^sub>0 \<sigma> d = Some D" by blast
+    from resolve_mono[OF le this] show ?thesis by simp
+  qed
+  then show ?thesis unfolding activates_def by blast
+qed
+
+lemma inv_activates_mono:
+  assumes le: "\<sigma> \<sqsubseteq> \<sigma>'" and act: "inv_activates T \<tau>\<^sub>0 \<sigma> invs"
+  shows "inv_activates T \<tau>\<^sub>0 \<sigma>' invs"
+proof -
+  have "resolve T \<tau>\<^sub>0 \<sigma>' d \<noteq> None" if "\<iota> \<in> set invs" "d \<in> set (sinv_deadlines \<iota>)" for \<iota> d
+  proof -
+    have "resolve T \<tau>\<^sub>0 \<sigma> d \<noteq> None" using act that unfolding inv_activates_def by blast
+    then obtain D where "resolve T \<tau>\<^sub>0 \<sigma> d = Some D" by blast
+    from resolve_mono[OF le this] show ?thesis by simp
+  qed
+  then show ?thesis unfolding inv_activates_def by blast
+qed
+
+lemma else_order_okI:
+  assumes "\<And>s a d s' a' D' e e'. SMustElse s a d s' a' D' \<in> set blk \<Longrightarrow> resolve T \<tau>\<^sub>0 \<sigma> d = Some e \<Longrightarrow>
+             else_deadline T \<sigma> e D' = Some e' \<Longrightarrow> e < e'"
+  shows "else_order_ok T \<tau>\<^sub>0 \<sigma> blk"
+  unfolding else_order_ok_def using assms by (auto split: sterm.splits option.splits)
+
+lemma else_order_ok_mono:
+  assumes le: "\<sigma> \<sqsubseteq> \<sigma>'" and act: "activates T \<tau>\<^sub>0 \<sigma> blk" and ok: "else_order_ok T \<tau>\<^sub>0 \<sigma> blk"
+  shows "else_order_ok T \<tau>\<^sub>0 \<sigma>' blk"
+proof (rule else_order_okI)
+  fix s a d s' a' D' e e'
+  assume m: "SMustElse s a d s' a' D' \<in> set blk" and r': "resolve T \<tau>\<^sub>0 \<sigma>' d = Some e"
+    and d': "else_deadline T \<sigma>' e D' = Some e'"
+  from activates_resolves_else[OF act m] obtain e\<^sub>0 where r: "resolve T \<tau>\<^sub>0 \<sigma> d = Some e\<^sub>0"
+    and dd: "D' \<noteq> None \<longrightarrow> else_deadline T \<sigma> e\<^sub>0 D' \<noteq> None" by blast
+  from resolve_mono[OF le r] r' have e: "e\<^sub>0 = e" by simp
+  from d' obtain d\<^sub>0 where D': "D' = Some d\<^sub>0" by (cases D') (auto simp: else_deadline_def)
+  with dd e obtain e\<^sub>1 where r1: "resolve T e \<sigma> d\<^sub>0 = Some e\<^sub>1"
+    by (cases "resolve T e \<sigma> d\<^sub>0") (auto simp: else_deadline_def)
+  from resolve_mono[OF le r1] d' D' have "e\<^sub>1 = e'" by (simp add: else_deadline_def)
+  with r1 D' have "else_deadline T \<sigma> e D' = Some e'" by (simp add: else_deadline_def)
+  from else_order_window[OF ok m r[unfolded e] this] show "e < e'" .
+qed
+
+text \<open>The conditions a specification reads for its verdicts: those of its top-level
+  prohibitions and permissions, and the formulas of its invariants.\<close>
+
+fun norm_present_free :: "('n, 'v, 's, 'a, 'p) sterm \<Rightarrow> bool" where
+  "norm_present_free (SMustNot s a c) = present_free c"
+| "norm_present_free (SMay s a c) = present_free c"
+| "norm_present_free _ = True"
+
+fun present_free_spec :: "spec \<Rightarrow> bool" where
+  "present_free_spec (Spec fs blk invs) =
+     ((\<forall>t \<in> set blk. norm_present_free t) \<and> (\<forall>x \<in> set invs. present_free (sinv_formula (snd x))))"
+
+text \<open>How a line may change when the data is refined. The verdict of a prohibition is
+  \<open>pr_refines v v'\<close>: Pending may become anything, and Breached \<open>\<tau>\<close> becomes Breached \<open>\<tau>'\<close> with
+  \<open>\<tau>' \<le> \<tau>\<close>. The status of an obligation and of a fallback does not change; a fulfilled
+  permission and a definite invariant do not change; the reported actions and the lines of
+  composite terms are not compared.\<close>
+
+fun pr_refines :: "verdict \<Rightarrow> verdict \<Rightarrow> bool" where
+  "pr_refines Pending v' = True"
+| "pr_refines (Breached \<tau>) v' = (\<exists>\<tau>' \<le> \<tau>. v' = Breached \<tau>')"
+| "pr_refines Fulfilled v' = (v' = Fulfilled)"
+
+fun line_refines :: "line \<Rightarrow> line \<Rightarrow> bool" where
+  "line_refines (LMust i s a d sts acts) l' = (\<exists>acts'. l' = LMust i s a d sts acts')"
+| "line_refines (LMustNot i s a v acts) l' = (\<exists>v' acts'. l' = LMustNot i s a v' acts' \<and> pr_refines v v')"
+| "line_refines (LMay i s a v) l' = (\<exists>v'. l' = LMay i s a v' \<and> (v = Pending \<or> v' = v))"
+| "line_refines (LInvariant n b) l' = (\<exists>b'. l' = LInvariant n b' \<and> (b = None \<or> b' = b))"
+| "line_refines (LComposite n d it v p) l' = (\<exists>d' it' v' p'. l' = LComposite n d' it' v' p')"
+| "line_refines l l' = (l' = l)"
+
+lemma pr_refines_refl: "pr_refines v v"
+  by (cases v) auto
+
+lemma line_refines_refl: "line_refines l l"
+  by (cases l) (auto simp: pr_refines_refl)
+
+lemma pr_refines_not_pending: "pr_refines v v' \<Longrightarrow> v \<noteq> Pending \<Longrightarrow> v' \<noteq> Pending"
+  by (cases v) auto
+
+text \<open>A decided line, other than the line of a composite term, stays decided.\<close>
+
+lemma line_refines_decided:
+  assumes "line_refines l l'" and "decided l" and "\<And>n d it v p. l \<noteq> LComposite n d it v p"
+  shows "decided l'"
+  using assms by (cases l) (auto dest: pr_refines_not_pending)
+
+text \<open>The line of a top-level element on the same trace with more data, after an activation
+  on the same time and a state with more data.\<close>
+
+lemma term_line_data_mono:
+  assumes act: "activates time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 blk" and s0: "\<sigma>\<^sub>0 \<sqsubseteq> \<sigma>\<^sub>0'"
+    and tr: "is_trace \<pi>" and le: "data_le \<pi> \<pi>'" and i: "i < length blk"
+    and pf: "norm_present_free (blk ! i)"
+  shows "line_refines (term_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi> i) (term_line \<tau>\<^sub>0 \<sigma>\<^sub>0' blk \<pi>' i)"
+proof (cases "blk ! i")
+  case (SMust s a D F)
+  then have m: "SMust s a D F \<in> set blk" using i nth_mem by metis
+  from activates_resolves[OF act m] obtain b where b: "start_of time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 F = Some b"
+    and dd: "D \<noteq> None \<longrightarrow> deadline_of time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 F D \<noteq> None" by blast
+  have b': "start_of time_of \<tau>\<^sub>0 \<sigma>\<^sub>0' F = Some b" by (rule start_of_mono[OF s0 b])
+  show ?thesis
+  proof (cases D)
+    case None
+    have "deadline_of time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 F None = None" "deadline_of time_of \<tau>\<^sub>0 \<sigma>\<^sub>0' F None = None"
+      by (simp_all add: deadline_of_def b b')
+    with SMust None b b' show ?thesis
+      by (simp add: term_line_def must_line_def ob_verdict_data_indep[OF le])
+  next
+    case (Some d\<^sub>0)
+    with dd obtain d where d: "deadline_of time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 F D = Some d"
+      by (cases "deadline_of time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 F D") auto
+    have d': "deadline_of time_of \<tau>\<^sub>0 \<sigma>\<^sub>0' F D = Some d" by (rule deadline_of_mono[OF s0 b d])
+    with SMust b b' d show ?thesis
+      by (simp add: term_line_def must_line_def Let_def handle_breach_data_indep[OF le])
+  qed
+next
+  case (SMustNot s a c)
+  with pf have c: "present_free c" by simp
+  have "pr_refines (pr_verdict s a c \<pi>) (pr_verdict s a c \<pi>')"
+  proof (cases "pr_verdict s a c \<pi>")
+    case Pending
+    then show ?thesis by simp
+  next
+    case (Breached \<tau>)
+    from pr_verdict_data_mono[OF c tr le Breached] Breached show ?thesis by simp
+  next
+    case Fulfilled
+    with pr_verdict_not_fulfilled[of s a c \<pi>] show ?thesis by simp
+  qed
+  with SMustNot show ?thesis by (simp add: term_line_def)
+next
+  case (SMay s a c)
+  with pf have c: "present_free c" by simp
+  have "may_verdict s a c \<pi> = Pending \<or> may_verdict s a c \<pi>' = may_verdict s a c \<pi>"
+  proof (cases "may_verdict s a c \<pi>")
+    case Fulfilled
+    with may_verdict_data_mono(1)[OF c le] show ?thesis by simp
+  next
+    case Pending
+    then show ?thesis by simp
+  next
+    case (Breached \<tau>)
+    with may_never_breached[of s a c \<pi> \<tau>] show ?thesis by simp
+  qed
+  with SMay show ?thesis by (simp add: term_line_def)
+next
+  case (SMustElse s a d s' a' D')
+  then have m: "SMustElse s a d s' a' D' \<in> set blk" using i nth_mem by metis
+  from activates_resolves_else[OF act m] obtain e where e: "resolve time_of \<tau>\<^sub>0 \<sigma>\<^sub>0 d = Some e"
+    and dd: "D' \<noteq> None \<longrightarrow> else_deadline time_of \<sigma>\<^sub>0 e D' \<noteq> None" by blast
+  have e': "resolve time_of \<tau>\<^sub>0 \<sigma>\<^sub>0' d = Some e" by (rule resolve_mono[OF s0 e])
+  have ed: "else_deadline time_of \<sigma>\<^sub>0' e D' = else_deadline time_of \<sigma>\<^sub>0 e D'"
+  proof (cases D')
+    case None
+    then show ?thesis by (simp add: else_deadline_def)
+  next
+    case (Some d')
+    with dd obtain e\<^sub>1 where r1: "resolve time_of e \<sigma>\<^sub>0 d' = Some e\<^sub>1"
+      by (cases "resolve time_of e \<sigma>\<^sub>0 d'") (auto simp: else_deadline_def)
+    from resolve_mono[OF s0 r1] r1 Some show ?thesis by (simp add: else_deadline_def)
+  qed
+  from SMustElse e e' ed show ?thesis
+    by (simp add: term_line_def else_line_def Let_def else_verdict_data_indep[OF le])
+qed (simp_all add: term_line_def composite_line_def split: option.splits)
+
+text \<open>A line of a report is never a type line, and a report that passes the type check
+  contains \<open>LTypes None\<close>.\<close>
+
+lemma term_line_not_LTypes:
+  "term_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi> i \<noteq> LTypes x" "LTypes x \<noteq> term_line \<tau>\<^sub>0 \<sigma>\<^sub>0 blk \<pi> i"
+  by (cases "blk ! i"; simp add: term_line_def must_line_def else_line_def composite_line_def Let_def
+      split: option.splits)+
+
+lemma run_norm_accepted:
+  assumes "l \<in> set (run sp obs)" and "\<And>b. l \<noteq> LActivation b" and "\<And>b. l \<noteq> LBlock b"
+    and "\<And>j. l \<noteq> LTimeOrder j" and "\<And>x. l \<noteq> LTypes x"
+  shows "LTypes None \<in> set (run sp obs)"
+proof -
+  obtain fs blk invs where sp: "sp = Spec fs blk invs" by (cases sp)
+  show ?thesis
+    using assms unfolding sp run_def evaluate_def evaluate_trace_def
+    by (auto simp: Let_def split: option.splits if_splits)
+qed
+
+lemma run_decided_accepted:
+  assumes i: "i < length (run sp obs)" and dec: "decided (run sp obs ! i)"
+  shows "LTypes None \<in> set (run sp obs)"
+proof (rule run_norm_accepted[of "run sp obs ! i"])
+  show "run sp obs ! i \<in> set (run sp obs)" using i by (rule nth_mem)
+qed (use dec in auto)
+
+lemma run_LTypes_Some:
+  assumes "LTypes (Some e) \<in> set (run sp obs)"
+  shows "run sp obs = [LActivation True, LBlock True, LTypes (Some e)]"
+proof -
+  obtain fs blk invs where sp: "sp = Spec fs blk invs" by (cases sp)
+  show ?thesis
+    using assms unfolding sp run_def evaluate_def evaluate_trace_def
+    by (auto simp: Let_def term_line_not_LTypes split: option.splits if_splits prod.splits)
+qed
+
+text \<open>The report on the same observations with more data. If the observations \<open>obs\<close> were
+  accepted (their report has the line \<open>LTypes None\<close>), then either \<open>obs'\<close> is rejected for the
+  types of its data, or every line of the report on \<open>obs'\<close> refines the corresponding line of
+  the report on \<open>obs\<close>. \<open>obs'\<close> cannot be rejected for its time order or its activation: the
+  times are the same, and activation succeeds on more data.\<close>
+
+theorem run_data_mono:
+  assumes pf: "present_free_spec sp" and le: "obs_le obs obs'"
+    and ok: "LTypes None \<in> set (run sp obs)" and i: "i < length (run sp obs)"
+  shows "line_refines (run sp obs ! i) (run sp obs' ! i) \<or> (\<exists>e. LTypes (Some e) \<in> set (run sp obs'))"
+proof -
+  obtain fs blk invs where sp: "sp = Spec fs blk invs" by (cases sp)
+  let ?H = "hidden fs"
+  let ?O = "erase_obs ?H obs" and ?O' = "erase_obs ?H obs'"
+  have leO: "obs_le ?O ?O'" by (rule erase_obs_le[OF le])
+  have run: "run sp obs = evaluate sp ?O" "run sp obs' = evaluate sp ?O'"
+    by (simp_all add: run_def sp)
+  have to': "time_order ?O' = time_order ?O" by (rule time_order_obs_le[OF leO])
+  have to: "time_order ?O = None"
+  proof (rule ccontr)
+    assume "time_order ?O \<noteq> None"
+    then obtain j where "time_order ?O = Some j" by blast
+    then have "run sp obs = [LTimeOrder j]" by (simp add: run evaluate_def)
+    with ok show False by simp
+  qed
+  define M where "M = max_age fs"
+  define \<pi> where "\<pi> = btrace M (raw_trace ?O)"
+  define \<pi>' where "\<pi>' = btrace M (raw_trace ?O')"
+  have ne: "obs \<noteq> []"
+  proof
+    assume "obs = []"
+    then have "run sp obs = [LActivation False]"
+      by (simp add: run_def evaluate_def time_order_def evaluate_trace_def sp erase_obs_def)
+    with ok show False by simp
+  qed
+  then have neO: "?O \<noteq> []" by (simp add: erase_obs_def)
+  have lO: "length ?O' = length ?O" using leO by (simp add: obs_le_def)
+  have neO': "?O' \<noteq> []" using lO neO length_0_conv by metis
+  have lp: "data_le \<pi> \<pi>'"
+    unfolding \<pi>_def \<pi>'_def by (rule btrace_data_le[OF raw_trace_data_le[OF leO]])
+  have tr: "is_trace \<pi>"
+    unfolding \<pi>_def by (rule btrace_is_trace) (use to neO time_order_is_trace in blast)
+  have lp0: "0 < length \<pi>" using neO by (simp add: \<pi>_def length_raw_trace)
+  then have nep: "\<pi> \<noteq> []" by auto
+  have t0: "time \<pi>' 0 = time \<pi> 0" by (rule data_le_time[OF lp lp0])
+  have s0: "st \<pi> 0 \<sqsubseteq> st \<pi>' 0" by (rule data_le_st[OF lp lp0])
+  have ev: "evaluate sp ?O = evaluate_trace sp ?O" "evaluate sp ?O' = evaluate_trace sp ?O'"
+    using to to' by (simp_all add: evaluate_def)
+  let ?act = "\<lambda>\<sigma>. activates time_of (time \<pi> 0) \<sigma> blk
+                \<and> inv_activates time_of (time \<pi> 0) \<sigma> (map snd invs)
+                \<and> else_order_ok time_of (time \<pi> 0) \<sigma> blk"
+  let ?blk = "wf_block blk \<and> cont_free_prohibitions blk \<and> else_handlers_ok blk \<and> refs_ok blk"
+  let ?lines = "\<lambda>\<sigma> p. map (term_line (time \<pi> 0) \<sigma> blk p) [0..<length blk]
+                     @ map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> p)) invs"
+  have E: "evaluate_trace sp ?O =
+             (if \<not> ?act (st \<pi> 0) then [LActivation False]
+              else LActivation True # (if \<not> ?blk then [LBlock False] else LBlock True #
+                (case ill_typed fs ?O of Some e \<Rightarrow> [LTypes (Some e)]
+                 | None \<Rightarrow> LTypes None # ?lines (st \<pi> 0) \<pi>)))"
+    using neO by (simp add: evaluate_trace_def sp Let_def flip: \<pi>_def M_def)
+  have E': "evaluate_trace sp ?O' =
+             (if \<not> ?act (st \<pi>' 0) then [LActivation False]
+              else LActivation True # (if \<not> ?blk then [LBlock False] else LBlock True #
+                (case ill_typed fs ?O' of Some e \<Rightarrow> [LTypes (Some e)]
+                 | None \<Rightarrow> LTypes None # ?lines (st \<pi>' 0) \<pi>')))"
+    using neO' by (simp add: evaluate_trace_def sp Let_def t0 flip: \<pi>'_def M_def
+                       split: option.split)
+  have act: "?act (st \<pi> 0)" and blk: "?blk" and ty: "ill_typed fs ?O = None"
+    using ok unfolding run ev E by (auto split: if_splits option.splits)
+  have act': "?act (st \<pi>' 0)"
+    using act activates_mono[OF s0] inv_activates_mono[OF s0] else_order_ok_mono[OF s0] by blast
+  have R: "run sp obs = LActivation True # LBlock True # LTypes None # ?lines (st \<pi> 0) \<pi>"
+    unfolding run ev E using act blk ty by simp
+  show ?thesis
+  proof (cases "ill_typed fs ?O'")
+    case (Some e)
+    with act' blk have "LTypes (Some e) \<in> set (run sp obs')" unfolding run ev E' by simp
+    then show ?thesis by blast
+  next
+    case None
+    with act' blk have R': "run sp obs' = LActivation True # LBlock True # LTypes None # ?lines (st \<pi>' 0) \<pi>'"
+      unfolding run ev E' by simp
+    have "line_refines (run sp obs ! i) (run sp obs' ! i)"
+    proof (cases "3 \<le> i")
+      case False
+      then have "i = 0 \<or> i = Suc 0 \<or> i = Suc (Suc 0)" by presburger
+      then show ?thesis unfolding R R' by (auto simp: line_refines_refl)
+    next
+      case True
+      define k where "k = i - 3"
+      with True have k: "i = Suc (Suc (Suc k))" by arith
+      have kl: "k < length (?lines (st \<pi> 0) \<pi>)" using i unfolding R k by simp
+      have act0: "activates time_of (time \<pi> 0) (st \<pi> 0) blk" using act by blast
+      have "line_refines (?lines (st \<pi> 0) \<pi> ! k) (?lines (st \<pi>' 0) \<pi>' ! k)"
+      proof (cases "k < length blk")
+        case True
+        from pf have "\<forall>t \<in> set blk. norm_present_free t" by (simp add: sp)
+        from bspec[OF this nth_mem[OF True]] have npf: "norm_present_free (blk ! k)" .
+        from term_line_data_mono[OF act0 s0 tr lp True npf] True show ?thesis
+          by (simp add: nth_append)
+      next
+        case False
+        define n where "n = k - length blk"
+        have nl: "n < length invs" using kl False by (simp add: n_def)
+        obtain nm \<iota> where inv: "invs ! n = (nm, \<iota>)" by (cases "invs ! n")
+        have l: "?lines \<sigma> p ! k = LInvariant nm (sinv_eval time_of \<iota> p)" for \<sigma> p
+          using False nl inv by (simp add: nth_append n_def)
+        from pf have "\<forall>x \<in> set invs. present_free (sinv_formula (snd x))" by (simp add: sp)
+        from bspec[OF this nth_mem[OF nl]] inv have pfi: "present_free (sinv_formula \<iota>)" by simp
+        show ?thesis
+        proof (cases "sinv_eval time_of \<iota> \<pi>")
+          case None
+          then show ?thesis by (simp add: l)
+        next
+          case (Some b)
+          from sinv_data_mono_le[OF pfi nep lp Some] Some show ?thesis by (simp add: l)
+        qed
+      qed
+      then show ?thesis unfolding R R' k by simp
+    qed
+    then show ?thesis by (rule disjI1)
+  qed
+qed
+
+text \<open>Three readings of \<open>run_data_mono\<close> for a report on accepted observations. A decided line
+  of an obligation, a prohibition, a permission, a fallback or an invariant stays decided; a
+  breach of a prohibition reported at \<open>\<tau>\<close> is reported at some \<open>\<tau>' \<le> \<tau>\<close>; a prohibition that is
+  pending on the observations with more data was pending before. In each case the only
+  exception is that the richer observations fail the type check.\<close>
+
+corollary run_data_mono_decided:
+  assumes pf: "present_free_spec sp" and le: "obs_le obs obs'" and i: "i < length (run sp obs)"
+    and dec: "decided (run sp obs ! i)" and nc: "\<And>n d it v p. run sp obs ! i \<noteq> LComposite n d it v p"
+  shows "decided (run sp obs' ! i) \<or> (\<exists>e. LTypes (Some e) \<in> set (run sp obs'))"
+  using run_data_mono[OF pf le run_decided_accepted[OF i dec] i] line_refines_decided[OF _ dec nc]
+  by blast
+
+corollary run_data_mono_breach:
+  assumes pf: "present_free_spec sp" and le: "obs_le obs obs'" and i: "i < length (run sp obs)"
+    and l: "run sp obs ! i = LMustNot n s a (Breached \<tau>) acts"
+  shows "(\<exists>\<tau>' acts'. \<tau>' \<le> \<tau> \<and> run sp obs' ! i = LMustNot n s a (Breached \<tau>') acts')
+         \<or> (\<exists>e. LTypes (Some e) \<in> set (run sp obs'))"
+proof -
+  have dec: "decided (run sp obs ! i)" by (simp add: l)
+  from run_data_mono[OF pf le run_decided_accepted[OF i dec] i] show ?thesis
+    unfolding l by auto
+qed
+
+corollary run_data_mono_pending:
+  assumes pf: "present_free_spec sp" and le: "obs_le obs obs'"
+    and i: "i < length (run sp obs)" and i': "i < length (run sp obs')"
+    and l: "run sp obs ! i = LMustNot n s a v acts" and l': "run sp obs' ! i = LMustNot n s a Pending acts'"
+  shows "v = Pending"
+proof -
+  have "run sp obs ! i \<in> set (run sp obs)" using i by (rule nth_mem)
+  then have ok: "LTypes None \<in> set (run sp obs)" by (rule run_norm_accepted) (simp_all add: l)
+  from run_data_mono[OF pf le ok i] show ?thesis
+  proof
+    assume "line_refines (run sp obs ! i) (run sp obs' ! i)"
+    then show ?thesis unfolding l l' by (cases v) auto
+  next
+    assume "\<exists>e. LTypes (Some e) \<in> set (run sp obs')"
+    then obtain e where "LTypes (Some e) \<in> set (run sp obs')" ..
+    from run_LTypes_Some[OF this] i' have "run sp obs' ! i \<in> set [LActivation True, LBlock True, LTypes (Some e)]"
+      using nth_mem by metis
+    with l' show ?thesis by simp
+  qed
+qed
+
+
 subsection \<open>Export\<close>
 
 export_code run Spec Fdecl Act ArgName ArgVal Pen PVal PAdd PSub PMul PNeg num_of

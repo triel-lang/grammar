@@ -757,7 +757,10 @@ proof -
     case False
     then show ?thesis using data_le_length[OF le] by simp
   qed
-  then show ?thesis unfolding ob_verdict_def by (simp add: window_data_indep[OF le])
+  then have ex: "(\<exists>j. 1 \<le> j \<and> j < length \<pi>' \<and> does s a (evt (\<pi>' ! j)) \<and> after lo (time \<pi>' j))
+        \<longleftrightarrow> (\<exists>j. 1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> after lo (time \<pi> j))"
+    by blast
+  show ?thesis unfolding ob_verdict_def ex window_data_indep[OF le] by (rule refl)
 qed
 
 subsection \<open>Prohibitions and permissions\<close>
@@ -805,7 +808,8 @@ proof -
   define k where "k = (LEAST j. forbidden s a c \<pi> j)"
   have fk: "forbidden s a c \<pi> k" unfolding k_def using j by (rule LeastI)
   have kl: "k < length \<pi>" using fk by (rule forbidden_less)
-  have tau: "\<tau> = time \<pi> k" using b j by (auto simp: pr_verdict_def k_def)
+  have ex: "\<exists>j. forbidden s a c \<pi> j" using j by blast
+  have tau: "\<tau> = time \<pi> k" using b ex by (simp add: pr_verdict_def k_def)
   have fk': "forbidden s a c \<pi>' k" by (rule forbidden_data_mono[OF pf le fk])
   define k' where "k' = (LEAST j. forbidden s a c \<pi>' j)"
   have k'k: "k' \<le> k" unfolding k'_def using fk' by (rule Least_le)
@@ -867,12 +871,11 @@ proof -
     using idx[OF that] by (auto simp: \<pi>_def \<pi>'_def st_def info_le_def)
   show "data_le \<pi> \<pi>'"
     unfolding data_le_def
-  proof (intro conjI allI impI)
+  proof (rule conjI)
     show "length \<pi>' = length \<pi>" by (simp add: len)
   next
-    fix j assume "j < length \<pi>"
-    then show "tstamp (\<pi>' ! j) = tstamp (\<pi> ! j) \<and> evt (\<pi>' ! j) = evt (\<pi> ! j) \<and> st \<pi> j \<sqsubseteq> st \<pi>' j"
-      by (rule ent)
+    show "\<forall>j<length \<pi>. tstamp (\<pi>' ! j) = tstamp (\<pi> ! j) \<and> evt (\<pi>' ! j) = evt (\<pi> ! j) \<and> st \<pi> j \<sqsubseteq> st \<pi>' j"
+      using ent by blast
   qed
   have only1: "j = Suc 0" if f: "forbidden s a c\<^sub>0 \<rho> j" and l: "length \<rho> = Suc (Suc 0)" for c\<^sub>0 \<rho> j
   proof -
