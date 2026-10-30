@@ -49,7 +49,7 @@ The time, the activation time, the limit, and the optional amount, quote time an
 
 - `cedar5/`: one `forbid` over an attribute that may be absent, with three schemas (optional, required, not declared) and three guards (`has … &&`, `!(has …) || …`, `if has … then … else true`).
 - `gen/`: `mktraces.py` writes the Dogwood traces and `mkctx.py` writes the Cedar requests; `run.sh` runs both.
-- `triel/`: four further traces of the example for the TRIEL evaluator: no quote at all; no quote with the payment approved; no entry after 09:30; and a clock tick between the two deadlines. They are not among the 59 scenarios of `examples/core/scenarios`.
+- `triel/`: four further traces of the example for the TRIEL evaluator: no quote at all; no quote with the payment approved; no entry after 09:30; and a clock tick between the two deadlines. They are not among the 60 scenarios of `examples/core/scenarios`.
 - `run.sh`: runs everything and compares the outputs with `expected/`.
 - `summarize.py`: both tools list policies and diagnostics in an order that varies from run to run. For every command, `summarize.py` keeps:
   - for cedar: the decision or validation result, the sorted policies, errors and reasons (also those of a request that cannot be parsed), and the exit code;
