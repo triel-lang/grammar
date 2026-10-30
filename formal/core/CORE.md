@@ -502,8 +502,7 @@ Section 2.6 distinguishes the specification trace of §2.5 from the *implementat
   — This is the safety claim of §2.9, derived from T2.
 - **Verdicts on the same trace with more data** (`data_le`, section 4.1; decision 36).
   - **`acted_data_indep`, `passed_data_indep`, `window_data_indep`, `ob_verdict_data_indep`, `handle_breach_data_indep`, `else_verdict_data_indep`:** the verdict and the status of an obligation, with or without a handler or a fallback, read only times and events, so they are the same on every refinement of the trace.
-  - **`blocks_data_mono`:** for a `PRESENT`-free c, what the monitor allows in a state it allows in every state with more data (blocking is antitone).
-  - **`pr_verdict_pending_data_mono`, `pr_verdict_decided_data_mono`:** for a `PRESENT`-free c, a prohibition that is pending on the refinement was pending before: a breach is not withdrawn by more data.
+  - **`pr_verdict_pending_data_mono`, `pr_verdict_decided_data_mono`:** for a `PRESENT`-free c, a prohibition that is pending on the refinement was pending before: a breach is not withdrawn by more data (the counterpart, for the verdict, of `blocks_data_mono` above).
   - **`pr_verdict_data_mono`:** for a `PRESENT`-free c, on a trace (non-decreasing times), if s MUST_NOT a WHEN c is Breached τ, then on every refinement it is Breached τ′ for some τ′ ≤ τ. The first forbidden action stays forbidden, and an earlier action whose condition was ⊥ may have become forbidden, so the time of breach can move earlier, never later.
   - **`may_verdict_data_mono`:** for a `PRESENT`-free c, an exercised permission stays exercised, and one that is pending on the refinement was pending before.
   - **`pr_verdict_present_not_mono`:** with `PRESENT` a breach can be withdrawn. On the two entries activation, (s, a) at time 1, with x absent from the activation state, s MUST_NOT a WHEN NOT PRESENT(x) is Breached 1; on the refinement where x is present at activation it is Pending.
