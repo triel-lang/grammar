@@ -3588,7 +3588,8 @@ text \<open>Finality (\<open>run_final\<close>) is about appending observations.
   (\<open>btrace_data_le\<close>). Activation on more data succeeds with the same deadlines. The verdicts
   then behave as on traces: an obligation does not change; a breached prohibition stays
   breached, at the same or an earlier time; a fulfilled permission stays fulfilled; a definite
-  invariant stays the same. For the conditions of prohibitions and permissions and the
+  invariant stays the same; a monitor decides the same actions, and a decision can only change
+  from block to allow. For the conditions of prohibitions and permissions and the
   formulas of invariants this needs PRESENT-freedom (\<open>present_free_spec\<close>); the lines of
   composite terms are not covered, since \<open>IF\<close> takes its ELSE branch on an undefined
   condition. The actions reported with a breach (penalties) are not compared: a penalty is
@@ -3834,8 +3835,9 @@ fun present_free_spec :: "spec \<Rightarrow> bool" where
 text \<open>How a line may change when the data is refined. The verdict of a prohibition is
   \<open>pr_refines v v'\<close>: Pending may become anything, and Breached \<open>\<tau>\<close> becomes Breached \<open>\<tau>'\<close> with
   \<open>\<tau>' \<le> \<tau>\<close>. The status of an obligation and of a fallback does not change; a fulfilled
-  permission and a definite invariant do not change; the reported actions and the lines of
-  composite terms are not compared.\<close>
+  permission and a definite invariant do not change; the decisions of a monitor are made at the
+  same entries, and a decision can only change from block to allow (\<open>blocks_data_mono\<close>); the
+  reported actions and the lines of composite terms are not compared.\<close>
 
 fun pr_refines :: "verdict \<Rightarrow> verdict \<Rightarrow> bool" where
   "pr_refines Pending v' = True"
@@ -3848,13 +3850,14 @@ fun line_refines :: "line \<Rightarrow> line \<Rightarrow> bool" where
 | "line_refines (LMay i s a v) l' = (\<exists>v'. l' = LMay i s a v' \<and> (v = Pending \<or> v' = v))"
 | "line_refines (LInvariant n b) l' = (\<exists>b'. l' = LInvariant n b' \<and> (b = None \<or> b' = b))"
 | "line_refines (LComposite n d it v p) l' = (\<exists>d' it' v' p'. l' = LComposite n d' it' v' p')"
+| "line_refines (LMonitor i ds) l' = (\<exists>ds'. l' = LMonitor i ds' \<and> list_all2 (\<lambda>d d'. fst d' = fst d \<and> (snd d' \<longrightarrow> snd d)) ds ds')"
 | "line_refines l l' = (l' = l)"
 
 lemma pr_refines_refl: "pr_refines v v"
   by (cases v) auto
 
 lemma line_refines_refl: "line_refines l l"
-  by (cases l) (auto simp: pr_refines_refl)
+  by (cases l) (auto simp: pr_refines_refl list_all2_conv_all_nth)
 
 lemma pr_refines_not_pending: "pr_refines v v' \<Longrightarrow> v \<noteq> Pending \<Longrightarrow> v' \<noteq> Pending"
   by (cases v) auto
@@ -3945,6 +3948,39 @@ next
     by (simp add: term_line_def else_line_def Let_def else_verdict_data_indep[OF le])
 qed (simp_all add: term_line_def composite_line_def split: option.splits)
 
+text \<open>The line of a monitor on the same trace with more data: the same actions are decided,
+  and an action blocked on the richer data was blocked before.\<close>
+
+lemma monitor_decisions_data_mono:
+  assumes pf: "present_free c" and le: "data_le \<pi> \<pi>'"
+  shows "list_all2 (\<lambda>d d'. fst d' = fst d \<and> (snd d' \<longrightarrow> snd d))
+           (monitor_decisions s a c \<pi>) (monitor_decisions s a c \<pi>')"
+proof -
+  let ?js = "filter (\<lambda>j. does s a (evt (\<pi> ! j))) [1..<length \<pi>]"
+  have f: "filter (\<lambda>j. does s a (evt (\<pi>' ! j))) [1..<length \<pi>'] = ?js"
+    unfolding data_le_length[OF le] by (rule filter_cong) (simp_all add: data_le_evt[OF le])
+  have "blocks c (st \<pi>' (?js ! k - 1)) \<longrightarrow> blocks c (st \<pi> (?js ! k - 1))" if k: "k < length ?js" for k
+  proof -
+    have "?js ! k \<in> set ?js" using k by (rule nth_mem)
+    then have "?js ! k < length \<pi>" by simp
+    then have "?js ! k - 1 < length \<pi>" by simp
+    from blocks_data_mono[OF pf data_le_st[OF le this]] show ?thesis by simp
+  qed
+  then show ?thesis unfolding monitor_decisions_def f by (simp add: list_all2_conv_all_nth)
+qed
+
+lemma monitor_line_data_mono:
+  assumes le: "data_le \<pi> \<pi>'" and pf: "norm_present_free (blk ! i)"
+  shows "line_refines (monitor_line blk \<pi> i) (monitor_line blk \<pi>' i)"
+proof (cases "blk ! i")
+  case (SMustNot s a c)
+  with pf have "present_free c" by simp
+  from monitor_decisions_data_mono[OF this le] SMustNot show ?thesis by (simp add: monitor_line_def)
+qed (simp_all add: monitor_line_def)
+
+lemma monitor_line_not_LTypes: "LTypes x \<noteq> monitor_line blk \<pi> i"
+  by (cases "blk ! i") (simp_all add: monitor_line_def)
+
 text \<open>A line of a report is never a type line, and a report that passes the type check
   contains \<open>LTypes None\<close>.\<close>
 
@@ -3978,7 +4014,8 @@ proof -
   obtain fs blk invs where sp: "sp = Spec fs blk invs" by (cases sp)
   show ?thesis
     using assms unfolding sp run_def evaluate_def evaluate_trace_def
-    by (auto simp: Let_def term_line_not_LTypes split: option.splits if_splits prod.splits)
+    by (auto simp: Let_def term_line_not_LTypes monitor_lines_def monitor_line_not_LTypes
+        split: option.splits if_splits prod.splits)
 qed
 
 text \<open>The report on the same observations with more data. If the observations \<open>obs\<close> were
@@ -4034,7 +4071,8 @@ proof -
                 \<and> else_order_ok time_of (time \<pi> 0) \<sigma> blk"
   let ?blk = "wf_block blk \<and> cont_free_prohibitions blk \<and> else_handlers_ok blk \<and> refs_ok blk"
   let ?lines = "\<lambda>\<sigma> p. map (term_line (time \<pi> 0) \<sigma> blk p) [0..<length blk]
-                     @ map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> p)) invs"
+                     @ map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> p)) invs
+                     @ monitor_lines blk p"
   have E: "evaluate_trace sp ?O =
              (if \<not> ?act (st \<pi> 0) then [LActivation False]
               else LActivation True # (if \<not> ?blk then [LBlock False] else LBlock True #
@@ -4084,19 +4122,39 @@ proof -
       next
         case False
         define n where "n = k - length blk"
-        have nl: "n < length invs" using kl False by (simp add: n_def)
-        obtain nm \<iota> where inv: "invs ! n = (nm, \<iota>)" by (cases "invs ! n")
-        have l: "?lines \<sigma> p ! k = LInvariant nm (sinv_eval time_of \<iota> p)" for \<sigma> p
-          using False nl inv by (simp add: nth_append n_def)
-        from pf have "\<forall>x \<in> set invs. present_free (sinv_formula (snd x))" by (simp add: sp)
-        from bspec[OF this nth_mem[OF nl]] inv have pfi: "present_free (sinv_formula \<iota>)" by simp
+        let ?rest = "\<lambda>p. map (\<lambda>(n, \<iota>). LInvariant n (sinv_eval time_of \<iota> p)) invs @ monitor_lines blk p"
+        have kn: "?lines \<sigma> p ! k = ?rest p ! n" for \<sigma> p
+          using False by (simp add: nth_append n_def)
+        have nl: "n < length invs + length (prohibitions blk)"
+          using kl False by (simp add: n_def monitor_lines_def)
         show ?thesis
-        proof (cases "sinv_eval time_of \<iota> \<pi>")
-          case None
-          then show ?thesis by (simp add: l)
+        proof (cases "n < length invs")
+          case True
+          obtain nm \<iota> where inv: "invs ! n = (nm, \<iota>)" by (cases "invs ! n")
+          have l: "?lines \<sigma> p ! k = LInvariant nm (sinv_eval time_of \<iota> p)" for \<sigma> p
+            unfolding kn using True inv by (simp add: nth_append)
+          from pf have "\<forall>x \<in> set invs. present_free (sinv_formula (snd x))" by (simp add: sp)
+          from bspec[OF this nth_mem[OF True]] inv have pfi: "present_free (sinv_formula \<iota>)" by simp
+          show ?thesis
+          proof (cases "sinv_eval time_of \<iota> \<pi>")
+            case None
+            then show ?thesis by (simp add: l)
+          next
+            case (Some b)
+            from sinv_data_mono_le[OF pfi nep lp Some] Some show ?thesis by (simp add: l)
+          qed
         next
-          case (Some b)
-          from sinv_data_mono_le[OF pfi nep lp Some] Some show ?thesis by (simp add: l)
+          case False
+          define m where "m = n - length invs"
+          have ml: "m < length (prohibitions blk)" using nl False unfolding m_def by arith
+          have l: "?lines \<sigma> p ! k = monitor_line blk p (prohibitions blk ! m)" for \<sigma> p
+            unfolding kn using False ml by (simp add: nth_append monitor_lines_def m_def)
+          have "prohibitions blk ! m \<in> set (prohibitions blk)" using ml by (rule nth_mem)
+          then have "prohibitions blk ! m < length blk" by (simp add: prohibitions_def)
+          from pf have "\<forall>t \<in> set blk. norm_present_free t" by (simp add: sp)
+          from bspec[OF this nth_mem[OF \<open>prohibitions blk ! m < length blk\<close>]]
+          have "norm_present_free (blk ! (prohibitions blk ! m))" .
+          from monitor_line_data_mono[OF lp this] show ?thesis by (simp add: l)
         qed
       qed
       then show ?thesis unfolding R R' k by simp

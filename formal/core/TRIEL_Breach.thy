@@ -765,20 +765,9 @@ qed
 
 subsection \<open>Prohibitions and permissions\<close>
 
-text \<open>Blocking is antitone: what the monitor allows in a state it allows in every state with
-  more data, because a false condition stays false (T2).\<close>
-
-theorem blocks_data_mono:
-  assumes "present_free c" and "\<sigma> \<sqsubseteq> \<sigma>'" and "blocks c \<sigma>'"
-  shows "blocks c \<sigma>"
-proof (rule ccontr)
-  assume "\<not> blocks c \<sigma>"
-  then have "eval c \<sigma> = Some False" by (simp add: blocks_def)
-  from T2_monotone[OF assms(1,2) this] have "eval c \<sigma>' = Some False" .
-  with assms(3) show False by (simp add: blocks_def)
-qed
-
-text \<open>A breach is not withdrawn by more data: if \<open>\<pi>'\<close> is pending, so was \<open>\<pi>\<close>.\<close>
+text \<open>The monitor blocks fewer actions on a refinement (\<open>blocks_data_mono\<close>,
+  \<open>blocked_action_data_mono\<close> above); here the same for the verdict, in the other direction.
+  A breach is not withdrawn by more data: if \<open>\<pi>'\<close> is pending, so was \<open>\<pi>\<close>.\<close>
 
 theorem pr_verdict_pending_data_mono:
   assumes pf: "present_free c" and le: "data_le \<pi> \<pi>'" and p: "pr_verdict s a c \<pi>' = Pending"
