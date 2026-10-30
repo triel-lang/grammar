@@ -3538,7 +3538,7 @@ proof -
           case True
           obtain nm \<iota> where inv: "invs ! n = (nm, \<iota>)" by (cases "invs ! n")
           have l: "?lines p ! k = LInvariant nm (sinv_eval time_of \<iota> p)" for p
-            using True inv by (simp add: kn nth_append)
+            using True inv by (simp add: kn nth_append n_def)
           from dk obtain b where b: "sinv_eval time_of \<iota> \<pi> = Some b" by (auto simp: l)
           from sinv_final[OF tr'[unfolded pr] nep b] show ?thesis by (simp add: l pr b same_verdict_refl)
         next
@@ -3546,7 +3546,7 @@ proof -
           define m where "m = n - length invs"
           have ml: "m < length (prohibitions blk)" using nl False unfolding m_def by arith
           have l: "?lines p ! k = monitor_line blk p (prohibitions blk ! m)" for p
-            using False ml by (simp add: kn nth_append monitor_lines_def m_def)
+            using False ml by (simp add: kn nth_append monitor_lines_def m_def n_def)
           have "prohibitions blk ! m \<in> set (prohibitions blk)" using ml by (rule nth_mem)
           from monitor_line_final[OF this] show ?thesis by (simp add: l pr)
         qed
