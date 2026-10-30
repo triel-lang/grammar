@@ -72,7 +72,7 @@ jobs:
       # build fails, the error lines are posted as a comment on the commit, so
       # that they can be read through the API.
       - name: Post the error lines as a commit comment
-        if: failure()
+        if: failure() && github.event_name == 'push'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -83,7 +83,7 @@ jobs:
             echo "Isabelle build of formal/core failed (run ${{ github.run_id }}). Error lines:"
             echo
             echo '```'
-            grep -n -A12 '^\*\*\*' "$log" | head -c 60000
+            grep -n -A12 '^\*\*\*' "$log" | head -c 60000 || { echo "(no *** lines; last lines of the log)"; tail -n 40 "$log"; }
             echo '```'
           } > "$RUNNER_TEMP/comment.md"
           gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
