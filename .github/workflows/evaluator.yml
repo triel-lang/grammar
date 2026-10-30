@@ -12,6 +12,8 @@ env:
 jobs:
   evaluate:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
 
@@ -45,6 +47,28 @@ jobs:
       # the checked theories.
       - name: Build TRIEL_Core and export the evaluator
         run: ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -e -v -D formal/core
+
+      # A cloud session cannot run Isabelle and cannot read the artifacts of
+      # this job. When the committed code differs from the exported code on a
+      # stage branch, the exported file is posted on the commit, gzip-compressed
+      # and base64-encoded, in parts of at most 60 000 characters, so that the
+      # session can commit it.
+      - name: Post the exported code as commit comments when it differs
+        if: startsWith(github.ref_name, 'stage')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- evaluator/generated; then exit 0; fi
+          gzip -9 -c evaluator/generated/TRIEL.hs | base64 -w0 > "$RUNNER_TEMP/TRIEL.hs.gz.b64"
+          split -b 60000 -d "$RUNNER_TEMP/TRIEL.hs.gz.b64" "$RUNNER_TEMP/part."
+          n=$(ls "$RUNNER_TEMP"/part.* | wc -l)
+          i=0
+          for f in "$RUNNER_TEMP"/part.*; do
+            i=$((i+1))
+            { echo "exported TRIEL.hs (gzip, base64) part $i of $n, sha256 of the file: $(sha256sum evaluator/generated/TRIEL.hs | cut -c1-64)"; echo; cat "$f"; } > "$RUNNER_TEMP/body.txt"
+            gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" -F body=@"$RUNNER_TEMP/body.txt" > /dev/null
+          done
 
       - name: The committed code is the exported code
         run: git diff --exit-code -- evaluator/generated
