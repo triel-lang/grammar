@@ -1,0 +1,15 @@
+; There is no notification within 72 hours. On 30 May, 5 days after
+; activation, the controller notifies the authority, with the number of
+; records affected and the reasons for the delay. The entry of 30 May is
+; strictly after the deadline, 28 May 10:00, so the obligation is breached at
+; the deadline; the same notification is in the cure window (28 May 10:00,
+; 4 June 10:00], so the breach is cured (cure_restores): BREACHED, then CURE
+; FULFILLED. The breach stays on record. The factor delay_reasons is only
+; recorded; no verdict reads it.
+(scenario gdpr_notified_day_5
+  (spec "examples/core/gdpr_art33_notification.triel")
+  (entry "2026-05-25T10:00:00Z" (activate)
+    (data))
+  (entry "2026-05-30T10:00:00Z" (act controller (notify (name authority)) must)
+    (data (affected_records (int 1200))
+          (delay_reasons (str "forensic analysis of the affected systems")))))

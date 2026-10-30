@@ -1,54 +1,75 @@
 -- TRIEL example inside the formal core: the notification of a personal data
 -- breach to the supervisory authority, after Article 33 of the GDPR, as an
--- obligation with a fallback (WITHIN ... ELSE).
+-- obligation with a deadline and a cure (ON_BREACH ... CURE_BY).
+--
+-- This is a stylised reading of the article, not a formalisation of it.
+-- Article 33(1) requires the controller to notify the authority without undue
+-- delay and, where feasible, not later than 72 hours after having become aware
+-- of the breach; where the notification is not made within 72 hours, it shall
+-- be accompanied by reasons for the delay. The example reads this as a
+-- deadline of 72 hours whose lapse is a breach, which a later notification
+-- cures but does not undo.
 --
 -- Durations count from the activation of the specification
 -- (formal/core/CORE.md, section 8.3, point 5). Here the activation is the
 -- moment when the controller became aware of the breach, so the controller
--- must notify the authority within 72 hours of it.
+-- must notify the authority within 72 hours of it; a notification exactly at
+-- the deadline fulfils (fulfilled_at_deadline).
 --
--- If it has not by then, the obligation is not breached: the fallback comes
--- into force at the first deadline, and a duration in its deadline counts from
--- that deadline (else_alt_duration). The notification with the reasons for
--- the delay is therefore due within 72 hours + 7 days of the activation, and
--- only a notification with reasons after the first deadline fulfils it
--- (else_alt_after).
+-- Once the trace passes the deadline without a notification, the obligation
+-- is breached at the deadline, and the breach stays on record. The handler
+-- opens a cure window of 7 days from the moment of breach (section 8.1,
+-- "Status after a breach"): a notification in that window cures the breach,
+-- which is then reported as BREACHED ... CURE FULFILLED (cure_restores); a
+-- cure window that passes without one is a second breach, and it is final
+-- (cure_failed, section 8.3, point 9). The cure window is (d, d + 7 days]:
+-- only a notification strictly after the deadline cures, and one at or before
+-- the deadline fulfils the obligation itself, so nothing is cured.
 --
--- The 7 days are an assumption of this example: Article 33 sets no such
--- period. It requires notification without undue delay and, where feasible,
--- within 72 hours, and a notification made later must give the reasons for
--- the delay.
+-- The 7 days are an assumption of this example: Article 33 sets no period for
+-- a late notification, and the core needs a duration in CURE_BY. The cure is
+-- the same action as the obligation, notify(authority): the core does not
+-- distinguish a late notification with reasons from one without. The reasons
+-- are recorded in the factor delay_reasons, which no verdict reads; that a
+-- late notification must be accompanied by them is a condition on its
+-- content, outside this example.
 --
--- Article 33 also exempts a breach that is unlikely to result in a risk to
--- the rights and freedoms of natural persons. That exemption needs a
--- conditional term whose branch has a deadline, which is outside the core:
--- the translator rejects a deadline in a composite term, and WITHIN ... ELSE
--- in a composite term (formal/core/CORE.md, section 10.6, rule 12), so the
--- exemption is not part of this example.
+-- Article 33(1) also exempts a breach that is unlikely to result in a risk to
+-- the rights and freedoms of natural persons, and Article 33(4) allows the
+-- information to be provided in phases. The exemption needs a conditional
+-- term whose branch has a deadline, which is outside the core: the translator
+-- rejects a deadline in a composite term, the branches of IF and WHEN
+-- included (formal/core/CORE.md, section 10.6, further rejections). Neither
+-- is part of this example.
 --
 -- The SUBJECTS block declares the controller, the subject of the terms
--- (formal/core/CORE.md, section 9, decision 29), and the authority, which an
--- action argument may name only if it is declared (section 10.6, rule 9). No
--- factor comes from an ORACLE and there is no PENALTY, so neither
--- PROVENANCE_REQUIRED nor CURRENCY is required (decision 28). Every construct
--- in this file is translated into the Isabelle/HOL core (formal/core) and
--- evaluated by the exported evaluator (evaluator/).
+-- (formal/core/CORE.md, section 9, decision 29), the authority, which an
+-- action argument may name only if it is declared (section 10.6, rule 9),
+-- and the data subjects, whom Article 34 may require the controller to
+-- inform: they are declared so that a scenario can show that a communication
+-- to them is not the notification to the authority. No factor comes from an
+-- ORACLE and there is no PENALTY, so neither PROVENANCE_REQUIRED nor CURRENCY
+-- is required (decision 28). Every construct in this file is translated into
+-- the Isabelle/HOL core (formal/core) and evaluated by the exported evaluator
+-- (evaluator/).
 
 SPECIFICATION gdpr_art33_notification VERSION 1.0.0
     JURISDICTION "EU"
 
 SUBJECTS {
-  controller : PARTY,
-  authority  : REGULATOR
+  controller    : PARTY,
+  authority     : REGULATOR,
+  data_subjects : PARTY
 }
 
 TERMS {
-  controller MUST notify(authority) WITHIN 72 HOURS
-    ELSE controller MUST notify_with_reasons(authority) BY 7 DAYS
+  controller MUST notify(authority) WITHIN 72 HOURS;
+  controller ON_BREACH CURE_BY 7 DAYS
 }
 
 FACTORS {
-  affected_records : Integer METADATA SOURCE controller
+  affected_records : Integer METADATA SOURCE controller,
+  delay_reasons    : Optional<String> METADATA SOURCE controller
 }
 
 INVARIANTS {

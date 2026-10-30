@@ -1,6 +1,6 @@
 ; The controller becomes aware of the breach at activation, 25 May 10:00, and
 ; notifies the authority 48 hours later, with the number of records affected.
-; The obligation is fulfilled, and the fallback never comes into force.
+; The obligation is fulfilled, and the handler never fires.
 (scenario gdpr_notified_48h
   (spec "examples/core/gdpr_art33_notification.triel")
   (entry "2026-05-25T10:00:00Z" (activate)

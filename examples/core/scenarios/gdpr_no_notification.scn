@@ -1,7 +1,9 @@
 ; Nobody notifies the authority, and the number of records affected is never
-; given. On 5 June the fallback, in force from 28 May 10:00, has passed its
-; deadline of 72 hours + 7 days after activation, 4 June 10:00: it is
-; breached at that deadline. The first obligation itself is not breached.
+; given. The entry of 5 June is strictly after the deadline, 28 May 10:00, so
+; the obligation is breached at the deadline (deadline_missed_breach). The
+; cure window, 7 days from the moment of breach, ends on 4 June 10:00; the
+; same entry is strictly after it with no notification, so the cure is
+; breached at its deadline too, and that second breach is final (cure_failed).
 (scenario gdpr_no_notification
   (spec "examples/core/gdpr_art33_notification.triel")
   (entry "2026-05-25T10:00:00Z" (activate)

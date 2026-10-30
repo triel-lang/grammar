@@ -1,0 +1,16 @@
+; The controller notifies the authority, with the reasons for the delay, on
+; 5 June 10:00, 11 days after activation. The deadline, 28 May 10:00, has
+; passed without a notification: the obligation is breached at the deadline.
+; The cure window of 7 days from the breach ended on 4 June 10:00, 72 hours +
+; 7 days after activation, and the notification comes after it, so it does not
+; cure: the entry of 5 June is strictly after the end of the window, and the
+; cure is breached at that end. A failed cure is a second breach and is final
+; (cure_failed, formal/core/CORE.md, section 8.3, point 9): no handler applies
+; to it, and the late notification changes nothing in the report.
+(scenario gdpr_notified_day_11
+  (spec "examples/core/gdpr_art33_notification.triel")
+  (entry "2026-05-25T10:00:00Z" (activate)
+    (data))
+  (entry "2026-06-05T10:00:00Z" (act controller (notify (name authority)) must)
+    (data (affected_records (int 1200))
+          (delay_reasons (str "forensic analysis of the affected systems")))))

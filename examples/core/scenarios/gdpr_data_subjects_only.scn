@@ -1,0 +1,18 @@
+; The controller informs the data subjects 24 hours after activation and never
+; the authority. An event matches a norm only with the same subject, action
+; name and arguments (examples/core/README.md, convention 8): notify(
+; data_subjects) is not notify(authority), so it neither fulfils the
+; obligation nor, being before the deadline, could it cure anything: the cure
+; window opens only at the moment of breach. On 5 June the obligation is
+; breached at its deadline, 28 May 10:00, and the cure window, which ended on
+; 4 June 10:00, has passed without a notification to the authority: the cure
+; is breached too. The communication to the data subjects of Article 34 is a
+; separate obligation, not encoded in this example.
+(scenario gdpr_data_subjects_only
+  (spec "examples/core/gdpr_art33_notification.triel")
+  (entry "2026-05-25T10:00:00Z" (activate)
+    (data))
+  (entry "2026-05-26T10:00:00Z" (act controller (notify (name data_subjects)) must)
+    (data (affected_records (int 1200))))
+  (entry "2026-06-05T10:00:00Z" (tick)
+    (data (affected_records (int 1200)))))
