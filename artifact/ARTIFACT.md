@@ -137,8 +137,8 @@ paper and added to the list, 764 proved statements and 106
 listed theorems in all, whose runs are not in the table. On these sources (29
 examples, 60 scenarios), three runs of the job `artifact` on 30 October 2026, on
 `ubuntu-24.04` runners with 4 CPUs and 15.6 GiB, took for `run.sh`, from the
-line with the CPUs to the line `RESULT: all 11 steps passed`: 1125 s (322fbfd),
-1265 s and 1308 s (e6dda81), with memory peaks of 6.87, 7.11 and 7.02 GiB. Since
+line with the CPUs to the line `RESULT: all 11 steps passed`: 1125 s, 1265 s and
+1308 s, with memory peaks of 6.87, 7.11 and 7.02 GiB (the last two of one tree). Since
 then one theorem already proved (`present_free_equitone_nd`) and five
 functions have been added to the list. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
 the step pytest: the test that every name in backquotes in `CORE.md` is defined
