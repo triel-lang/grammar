@@ -88,10 +88,10 @@ for t in within_limit approved; do
   cmd dogwood replay temporal_24h.dw --policy-schema schema.cedarschema --event-schema events.dwschema --trace "traces/$t.log"
 done
 
-# --- Cedar: the example, unguarded, guarded and fail-closed --------------------
+# --- Cedar: the example, unguarded, guarded, fail-closed and as a permit -----
 
 cd "$WORK/cedar"
-for p in invoice invoice_guarded invoice_failclosed; do
+for p in invoice invoice_guarded invoice_failclosed invoice_permit; do
   group "cedar-$p"
   cmd cedar validate --schema schema.cedarschema --policies "$p.cedar" -f plain
   for r in $REQUESTS; do

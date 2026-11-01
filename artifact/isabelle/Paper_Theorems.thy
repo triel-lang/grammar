@@ -63,6 +63,7 @@ section \<open>Stability of verdicts and its limits\<close>
 thm TRIEL_Core.T2_monotone
 thm TRIEL_ND.T2_nd_monotone
 thm TRIEL_Ex.present_free_equitone
+thm TRIEL_ND.present_free_equitone_nd
 thm TRIEL_Indicators.verdict_stable
 thm TRIEL_Indicators.verdict_stable_nd
 thm TRIEL_Indicators.cond_equitone
@@ -193,6 +194,14 @@ thm TRIEL_Completions.completion_def
 thm TRIEL_Completions.evalG.simps
 thm TRIEL_Completions.sound_conn_def
 
+text \<open>The functions of the evaluator that the paper names in its pipeline.\<close>
+
+thm TRIEL_Exec.evaluate_trace_def
+thm TRIEL_Exec.term_line_def
+thm TRIEL_Exec.composite_line_def
+thm TRIEL_Exec.check_action_def
+thm TRIEL_Invariants.sinv_eval.simps
+
 section \<open>No oracles\<close>
 
 text \<open>The same names once more: none of these theorems may depend on an oracle. The
@@ -217,7 +226,7 @@ local
     "TRIEL_Exec.term_semantics.then_mustnot_watched", "TRIEL_Exec.term_semantics.or_mustnot_watched",
     "TRIEL_Exec.term_semantics.violation_after_completion",
     "TRIEL_Exec.term_semantics.mem3_sound", "TRIEL_Exec.mem3_definite",
-    "TRIEL_Core.T2_monotone", "TRIEL_ND.T2_nd_monotone", "TRIEL_Ex.present_free_equitone",
+    "TRIEL_Core.T2_monotone", "TRIEL_ND.T2_nd_monotone", "TRIEL_Ex.present_free_equitone", "TRIEL_ND.present_free_equitone_nd",
     "TRIEL_Indicators.verdict_stable", "TRIEL_Indicators.verdict_stable_nd",
     "TRIEL_Indicators.cond_equitone", "TRIEL_Core.T3_present_not_monotone", "TRIEL_Core.present_flips",
     "TRIEL_Indicators.Ex_breaks_stability", "TRIEL_Core.T3_default_not_monotone",

@@ -44,6 +44,7 @@ The time, the activation time, the limit, and the optional amount, quote time an
 - `invoice.cedar`: unguarded.
 - `invoice_guarded.cedar`: every optional attribute guarded with `has … &&`, as the validator asks.
 - `invoice_failclosed.cedar`: the prohibition holds unless its condition `amount_eur > limit_eur AND NOT owner_approved` is known to be false in strong Kleene logic. That is, it holds unless the amount is known and not over the limit, or the approval is known and true. The amount counts as known only while its quote is at most one hour old. This follows `MAX_AGE 1 HOURS ON_STALE BLOCK` with one difference: Cedar measures the age at the time of the request (`now`), whereas TRIEL judges the prohibition in the state of the entry before the action, so it measures the age at that entry. The two agree on every recorded trace; the stale-quote trace has a tick at 10:45 before the payment at 11:00. This is how the fail-closed monitor of the TRIEL core reads the prohibition. The policy validates.
+- `invoice_permit.cedar`: no `forbid`; the limit is a condition of the agent's `permit`: the agent may pay if the amount is known, its quote is at most one hour old and the amount is not over the limit, or if the approval is known and true. A request that satisfies no `permit` is denied by default, so a missing amount, quote or approval denies. The policy validates.
 
 ### Other files
 
@@ -92,6 +93,8 @@ The payment is entry 2 in the traces with a quote (activation, quote, payment), 
 **Unguarded and guarded policies.** Both validators reject the unguarded policies. `cedar authorize` and `dogwood replay` evaluate them all the same: they skip the erroring `forbid` and report the error. With the guards that the validator asks for, the policies validate, and a `forbid` over an absent attribute is not satisfied, so the payment is allowed without an error.
 
 **Fail-closed Cedar.** `invoice_failclosed.cedar` gives the decisions of the TRIEL monitor on every request: it denies exactly where the `MONITOR 2` line says `BLOCK`, and allows a payment approved while the quote is missing, whose condition is false (`ALLOW`).
+
+**The limit in the permit.** `invoice_permit.cedar` gives, on all ten requests, with and without the schema, the same decisions as `invoice_failclosed.cedar`, and so those of the TRIEL monitor (`expected/cedar-invoice_permit.txt`): by default deny, a missing fact denies a permission. This is the column "Cedar permit" of Table I of the paper.
 
 **The minimal test in `cedar5/`.** Two more ways make a prohibition hold when the attribute is absent:
 - `if context has … then … else true`, which validates and denies;
