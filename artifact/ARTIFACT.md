@@ -140,7 +140,10 @@ examples, 60 scenarios), three runs of the job `artifact` on 30 October 2026, on
 line with the CPUs to the line `RESULT: all 11 steps passed`: 1125 s, 1265 s and
 1308 s, with memory peaks of 6.87, 7.11 and 7.02 GiB (the last two of one tree). Since
 then one theorem already proved (`present_free_equitone_nd`) and five
-functions have been added to the list. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
+functions have been added to the list. On these sources with the list complete (107 listed
+theorems), the run of the job `artifact` on 3 November 2026, on the same
+runners, took 1009 s for `run.sh` and 20:55 min for the whole job, with a
+memory peak of 7.07 GiB. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
 the step pytest: the test that every name in backquotes in `CORE.md` is defined
 in the theories failed on the name of a file, since corrected; they are not in
 the table. The time on a shared
