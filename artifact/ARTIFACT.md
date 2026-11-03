@@ -141,9 +141,9 @@ line with the CPUs to the line `RESULT: all 11 steps passed`: 1125 s, 1265 s and
 1308 s, with memory peaks of 6.87, 7.11 and 7.02 GiB (the last two of one tree). Since
 then one theorem already proved (`present_free_equitone_nd`) and five
 functions have been added to the list. On these sources with the list complete (107 listed
-theorems), the run of the job `artifact` on 3 November 2026, on the same
-runners, took 1009 s for `run.sh` and 20:55 min for the whole job, with a
-memory peak of 7.07 GiB. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
+theorems), two runs of the job `artifact` on 3 November 2026, on the same
+runners, took 1009 s and 823 s for `run.sh` and 20:55 and 17:08 min for the
+whole job, with memory peaks of 7.07 and 6.79 GiB. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
 the step pytest: the test that every name in backquotes in `CORE.md` is defined
 in the theories failed on the name of a file, since corrected; they are not in
 the table. The time on a shared
@@ -354,14 +354,14 @@ The results rest on the following, which are not proved here:
   the Haskell code to the HOL definitions is the code generator's, not a theorem
   of this development.
 - **GHC 9.6.7** and its runtime, which build and run the evaluator.
-- **`evaluator/Main.hs`** (hand-written, 410 lines): reads the input
+- **`evaluator/Main.hs`** (hand-written, 416 lines): reads the input
   S-expression and prints the report. Every verdict is computed by the exported
   function `run`, but the reading and the printing are not proved.
 - **`parser/triel_to_core.py` is not proved.** It is the translator from TRIEL
   specifications to terms of the core, written in Python. Nothing proves that it
   translates a specification into the core term with the intended meaning, or
   that it rejects exactly the constructs outside the core. It is checked only
-  by tests: the 329 tests of `parser/test_triel_to_core.py`, the classification
+  by tests: the 331 tests of `parser/test_triel_to_core.py`, the classification
   of the 29 examples, and the 60 scenarios. The same holds for
   `parser/triel_eval.py`, which converts a scenario into the input of the
   evaluator, and for the grammar `parser/triel.lark` with the parser library
