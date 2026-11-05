@@ -1,0 +1,12 @@
+; At 09:20:00 the host reports a campaign of 3000 but no budget limit. The
+; comparison with an absent limit is undefined, so the monitor blocks the
+; campaign and nothing is breached; an absent limit does not make the
+; invariant false either, so it stays undefined.
+(scenario mandate_budget_limit_absent
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T09:20:00Z" (tick)
+    (data (reorder_point (int 10)) (campaign_budget (dec 3000.00))))
+  (entry "2026-11-10T09:20:01Z" (act agent apply_campaign must_not)
+    (data (reorder_point (int 10)) (campaign_budget (dec 3000.00)))))

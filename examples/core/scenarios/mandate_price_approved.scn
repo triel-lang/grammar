@@ -1,10 +1,11 @@
-; The same change of 35 percent, approved by the owner: NOT change_approved is
-; false, so the condition is false and the monitor allows the change.
+; The same change of 35 percent, approved by the owner: NOT
+; price_change_approved is false, so the condition is false and the monitor
+; allows the change.
 (scenario mandate_price_approved
   (spec "examples/core/merchant_mandate.triel")
   (entry "2026-11-10T09:00:00Z" (activate)
     (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
   (entry "2026-11-10T09:10:00Z" (tick)
-    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (price_delta_pct (dec 35.0)) (change_approved (bool true))))
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (price_delta_pct (dec 35.0)) (price_change_approved (bool true))))
   (entry "2026-11-10T09:10:01Z" (act agent apply_price_change must_not)
-    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (price_delta_pct (dec 35.0)) (change_approved (bool true)))))
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (price_delta_pct (dec 35.0)) (price_change_approved (bool true)))))

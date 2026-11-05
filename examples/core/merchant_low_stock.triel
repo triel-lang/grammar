@@ -7,23 +7,32 @@
 -- gdpr_art33_notification.triel and sensor_overheat.triel. The agent must
 -- prepare a restock within 4 hours of the alert; preparing it exactly at the
 -- deadline fulfils the obligation. A missed deadline is a breach, which
--- notifies the owner and closes the obligation: NOTIFY is informational and
--- does not hand the obligation to anyone (section 8.3, point 10, for the
--- handler that does). Whether the restock is then applied is decided by the
--- prohibitions of merchant_mandate.triel.
+-- notifies the owner; NOTIFY is informational, so the obligation stays
+-- breached and is closed (section 8.3, point 12), and a restock prepared later
+-- changes nothing (low_stock_late_restock). Preparing a restock (stage_restock)
+-- and applying it (apply_restock) are different actions: whether the restock
+-- is then applied is decided by the prohibitions of merchant_mandate.triel,
+-- which read the stock level at the application, under its freshness rule, so
+-- a level that was low at the alert may be stale by then and the restock
+-- blocked until the owner approves it.
 --
--- The invariant states that the stock level reported with the alert is
--- known: EVENTUALLY(PRESENT(stock_units)) within the 4 hours. Missing data
+-- The invariant states that a stock level is known at some entry within the
+-- 4 hours: EVENTUALLY(PRESENT(stock_units)) WITHIN 4 HOURS. In this file
+-- stock_units has no MAX_AGE, so PRESENT reads the data as given. Missing data
 -- neither fulfil nor violate EVENTUALLY ... WITHIN (convention 11); here the
--- condition is PRESENT, which is always defined, so the invariant is T once a
--- stock level is present in time and F once the 4 hours pass without one.
+-- condition is PRESENT, which is always defined (eval_present_defined), so the
+-- invariant is T once a stock level is present in time and F once the 4 hours
+-- pass without one. F is a statement about the data, not about the stock: a
+-- condition with PRESENT is outside the theorems on more data, and adding a
+-- level to an entry of the window turns F into T (T3_present_not_monotone).
 --
 -- An alert raised in the middle of a longer trace is not handled here: inside
--- the core a duration counts from the activation, and a deadline inside a
--- branch of IF or WHEN is rejected (formal/core/CORE.md, section 10.6, further
--- rejections), so the host starts one activation per alert. Every construct in
--- this file is translated into the Isabelle/HOL core (formal/core) and
--- evaluated by the exported evaluator (evaluator/).
+-- the core a duration counts from the activation, a deadline inside a branch
+-- of IF or WHEN is rejected (formal/core/CORE.md, section 10.6, further
+-- rejections), and ON ... DO, which waits for an event, is outside the core;
+-- so the host starts one activation per alert. Every construct in this file is
+-- translated into the Isabelle/HOL core (formal/core) and evaluated by the
+-- exported evaluator (evaluator/).
 
 SPECIFICATION merchant_low_stock VERSION 1.0.0
 

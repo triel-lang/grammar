@@ -1,0 +1,11 @@
+; A change of 12.5 percent for which the host reports no approval: the
+; approval is absent, but the first operand is false, and false AND undefined
+; is false, so the monitor allows the change.
+(scenario mandate_price_within_limit_no_approval
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T09:10:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (price_delta_pct (dec 12.5))))
+  (entry "2026-11-10T09:10:01Z" (act agent apply_price_change must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (price_delta_pct (dec 12.5)))))

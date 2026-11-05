@@ -1,0 +1,10 @@
+; A campaign with a budget of exactly 5000, the limit: 5000 is not above 5000,
+; so the monitor allows it.
+(scenario mandate_campaign_at_limit
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T09:20:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (campaign_budget (dec 5000.00))))
+  (entry "2026-11-10T09:20:01Z" (act agent apply_campaign must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (campaign_budget (dec 5000.00)))))

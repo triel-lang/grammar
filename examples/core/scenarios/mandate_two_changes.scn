@@ -1,0 +1,20 @@
+; Two different changes in one trace. A price change of 12.5 percent is applied
+; at 09:10:01 and allowed by the price rule. A restock is applied at 10:20:01
+; with a fresh stock level of 25, above the reorder point, without approval:
+; the restock rule is breached and blocks it. Each monitor decides only the
+; applications of its own action: the price monitor does not see the restock,
+; and the restock monitor does not see the price change.
+(scenario mandate_two_changes
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T09:10:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (price_delta_pct (dec 12.5)) (price_change_approved (bool false))))
+  (entry "2026-11-10T09:10:01Z" (act agent apply_price_change must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (price_delta_pct (dec 12.5)) (price_change_approved (bool false))))
+  (entry "2026-11-10T10:00:00Z" (arrive stock_units)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 25))))
+  (entry "2026-11-10T10:20:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 25)) (restock_approved (bool false))))
+  (entry "2026-11-10T10:20:01Z" (act agent apply_restock must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 25)) (restock_approved (bool false)))))

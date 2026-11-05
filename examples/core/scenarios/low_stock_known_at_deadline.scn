@@ -1,0 +1,10 @@
+; A stock level is reported exactly at the deadline, 13:00:00, and no restock
+; is prepared. An entry at the deadline is inside the window, so the invariant
+; is true; the obligation is not yet breached, since no entry is after the
+; deadline.
+(scenario low_stock_known_at_deadline
+  (spec "examples/core/merchant_low_stock.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data))
+  (entry "2026-11-10T13:00:00Z" (tick)
+    (data (stock_units (int 3)))))
