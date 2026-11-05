@@ -1,0 +1,15 @@
+SPEC merchant_mandate
+METADATA PROVENANCE_REQUIRED true
+METADATA SOURCE stock_units inventory_feed
+ACTIVATION OK
+BLOCK OK
+TYPES OK
+TERM 1 MUST_NOT agent apply_price_change : PENDING
+TERM 2 ON_BREACH agent : BOUND 1
+TERM 3 MUST_NOT agent apply_restock : PENDING
+TERM 4 MUST_NOT agent apply_campaign : PENDING
+TERM 5 ON_BREACH agent : BOUND 4
+INVARIANT budget_limit_set : U
+MONITOR 1 : ENTRY 2 BLOCK
+MONITOR 3 : NO ACTION
+MONITOR 4 : NO ACTION

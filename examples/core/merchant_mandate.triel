@@ -1,0 +1,72 @@
+-- TRIEL example inside the formal core: the mandate of an AI agent that runs
+-- a shop for its owner. The agent prepares changes to the store (a price, a
+-- restock, an advertising campaign) and then applies them; the prohibitions
+-- below decide whether a prepared change may be applied. The factors describe
+-- the change about to be applied, as the system that hosts the agent reports
+-- it, and the state of the store.
+--
+-- - A price change of more than 20 percent, up or down, may be applied only
+--   with the owner's approval. The size of the change is computed by the host
+--   and given as a factor: conditions compare values and do not compute them.
+-- - A restock may not be applied while the stock is above the reorder point,
+--   unless the owner approves it. The stock level comes from an inventory
+--   feed, an ORACLE, so PROVENANCE_REQUIRED is true (TECHNICAL_REPORT.md
+--   section 2.9). It is fresh for one hour after it arrives (MAX_AGE 1 HOURS
+--   ON_STALE BLOCK, fresh_at_max_age); a stock level that is older, or present
+--   at activation without an arrival, is absent (stale_absent; examples/core/
+--   README.md, conventions 3 and 4). Then the condition of the prohibition is
+--   undefined unless the owner has approved the restock: without approval the
+--   fail-closed monitor blocks it, and with approval the condition is false
+--   (strong Kleene: undefined AND false is false), so the restock goes ahead.
+--   The verdict of the prohibition records a breach only when its condition
+--   is true, so a blocked restock is not a breach
+--   (undefined_guard_blocks_not_breach).
+-- - A campaign may not be applied with a budget above the owner's limit; no
+--   approval lifts this one.
+--
+-- A breach of the price rule or of the campaign rule notifies the owner. Each
+-- condition is read in the state of the entry just before the change is
+-- applied; a factor that is absent there, such as an approval not given,
+-- makes a condition that needs it undefined, and the change is blocked. The
+-- invariant states that the budget limit is positive: it is F once a limit
+-- that is not positive is reported, and U otherwise, since ALWAYS cannot be
+-- confirmed on a finite trace (LTL3 verdicts).
+--
+-- What the example does not say: whether a change is a good one (the host and
+-- the owner decide that), and how a blocked change reaches the owner (the
+-- monitor only reports BLOCK; routing it to the owner is the host's job).
+-- Reacting to a low-stock alert within a time limit is in
+-- merchant_low_stock.triel: a duration counts from the activation, so that
+-- obligation needs an activation of its own, the alert. Every construct in
+-- this file is translated into the Isabelle/HOL core (formal/core) and
+-- evaluated by the exported evaluator (evaluator/).
+
+SPECIFICATION merchant_mandate VERSION 1.0.0
+    PROVENANCE_REQUIRED: true
+
+SUBJECTS {
+  owner          : PARTY,
+  agent          : SYSTEM,
+  inventory_feed : ORACLE
+}
+
+TERMS {
+  agent MUST_NOT apply_price_change WHEN price_delta_pct > 20 AND NOT change_approved;
+  agent ON_BREACH NOTIFY owner;
+  agent MUST_NOT apply_restock WHEN stock_units > reorder_point AND NOT change_approved;
+  agent MUST_NOT apply_campaign WHEN campaign_budget > budget_limit;
+  agent ON_BREACH NOTIFY owner
+}
+
+FACTORS {
+  price_delta_pct : Decimal METADATA,
+  change_approved : Boolean METADATA,
+  stock_units     : Integer METADATA SOURCE inventory_feed MAX_AGE 1 HOURS ON_STALE BLOCK,
+  reorder_point   : Integer METADATA,
+  campaign_budget : Decimal METADATA,
+  budget_limit    : Decimal METADATA
+}
+
+INVARIANTS {
+  budget_limit_set : SAFETY : ALWAYS(budget_limit > 0)
+}

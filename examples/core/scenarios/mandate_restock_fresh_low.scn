@@ -1,0 +1,13 @@
+; A stock level of 4, below the reorder point of 10, arrives at 10:00:00 and
+; is 20 minutes old at 10:20:00, so it is fresh. The restock is applied at
+; 10:20:01 without approval: the condition is false, so the monitor allows it.
+(scenario mandate_restock_fresh_low
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T10:00:00Z" (arrive stock_units)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4))))
+  (entry "2026-11-10T10:20:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4)) (change_approved (bool false))))
+  (entry "2026-11-10T10:20:01Z" (act agent apply_restock must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4)) (change_approved (bool false)))))

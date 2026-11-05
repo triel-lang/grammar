@@ -1,0 +1,12 @@
+; A change of 35 percent for which the host reports no approval at all: the
+; approval is absent, so the condition is true AND undefined, which is
+; undefined. The monitor blocks the change, and the verdict records no breach,
+; since the condition is not true (undefined_guard_blocks_not_breach).
+(scenario mandate_price_approval_missing
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T09:10:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (price_delta_pct (dec 35.0))))
+  (entry "2026-11-10T09:10:01Z" (act agent apply_price_change must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (price_delta_pct (dec 35.0)))))

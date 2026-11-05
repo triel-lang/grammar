@@ -1,0 +1,13 @@
+; The same stale stock level, but the owner has approved the restock: the
+; condition is undefined AND false, which is false in strong Kleene logic, so
+; the monitor allows the restock.
+(scenario mandate_restock_stale_approved
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T09:05:00Z" (arrive stock_units)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4))))
+  (entry "2026-11-10T10:30:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4)) (change_approved (bool true))))
+  (entry "2026-11-10T10:30:01Z" (act agent apply_restock must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4)) (change_approved (bool true)))))

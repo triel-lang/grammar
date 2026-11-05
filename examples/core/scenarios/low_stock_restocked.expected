@@ -1,0 +1,7 @@
+SPEC merchant_low_stock
+ACTIVATION OK
+BLOCK OK
+TYPES OK
+TERM 1 MUST agent stage_restock DEADLINE 1794315600 : FULFILLED
+TERM 2 ON_BREACH agent : BOUND 1
+INVARIANT stock_known : T

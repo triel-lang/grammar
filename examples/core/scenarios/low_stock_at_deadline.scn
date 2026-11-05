@@ -1,0 +1,11 @@
+; The alert comes without a stock level; one is reported at 11:00:00, within
+; the 4 hours, so the invariant is true. The agent prepares the restock at
+; 13:00:00, exactly at the deadline, which fulfils the obligation.
+(scenario low_stock_at_deadline
+  (spec "examples/core/merchant_low_stock.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data))
+  (entry "2026-11-10T11:00:00Z" (tick)
+    (data (stock_units (int 3))))
+  (entry "2026-11-10T13:00:00Z" (act agent stage_restock must)
+    (data (stock_units (int 3)))))

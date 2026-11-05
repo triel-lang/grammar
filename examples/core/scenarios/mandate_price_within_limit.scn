@@ -1,0 +1,14 @@
+; The host reports a prepared price change of 12.5 percent, without the
+; owner's approval, and the agent applies it one second later. The condition
+; of the price rule, read in the state of 09:10:00, is false (12.5 is not more
+; than 20), so the monitor allows the change and nothing is breached. The
+; budget limit stays positive, and ALWAYS is not confirmed on a finite trace,
+; so the invariant is undefined.
+(scenario mandate_price_within_limit
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T09:10:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (price_delta_pct (dec 12.5)) (change_approved (bool false))))
+  (entry "2026-11-10T09:10:01Z" (act agent apply_price_change must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (price_delta_pct (dec 12.5)) (change_approved (bool false)))))

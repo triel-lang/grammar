@@ -1,0 +1,16 @@
+; Two campaigns are applied. The first, with a budget of 3000, is within the
+; limit of 5000, and the monitor allows it. The second, with a budget of 7500,
+; is above the limit: the campaign rule is breached at the change, the owner is
+; notified, and the monitor blocks it. No approval is read by this rule.
+(scenario mandate_campaign_budget
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T09:20:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (campaign_budget (dec 3000.00))))
+  (entry "2026-11-10T09:20:01Z" (act agent apply_campaign must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (campaign_budget (dec 3000.00))))
+  (entry "2026-11-10T09:30:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (campaign_budget (dec 7500.00))))
+  (entry "2026-11-10T09:30:01Z" (act agent apply_campaign must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (campaign_budget (dec 7500.00)))))

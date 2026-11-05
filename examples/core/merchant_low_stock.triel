@@ -1,0 +1,46 @@
+-- TRIEL example inside the formal core: the reaction of an AI agent that runs
+-- a shop to a low-stock alert. It is the companion of merchant_mandate.triel.
+--
+-- One activation of the specification is one alert: the activation entry is
+-- the moment the alert is raised, and every duration counts from it
+-- (formal/core/CORE.md, section 8.3, point 5), as in
+-- gdpr_art33_notification.triel and sensor_overheat.triel. The agent must
+-- prepare a restock within 4 hours of the alert; preparing it exactly at the
+-- deadline fulfils the obligation. A missed deadline is a breach, which
+-- notifies the owner and closes the obligation: NOTIFY is informational and
+-- does not hand the obligation to anyone (section 8.3, point 10, for the
+-- handler that does). Whether the restock is then applied is decided by the
+-- prohibitions of merchant_mandate.triel.
+--
+-- The invariant states that the stock level reported with the alert is
+-- known: EVENTUALLY(PRESENT(stock_units)) within the 4 hours. Missing data
+-- neither fulfil nor violate EVENTUALLY ... WITHIN (convention 11); here the
+-- condition is PRESENT, which is always defined, so the invariant is T once a
+-- stock level is present in time and F once the 4 hours pass without one.
+--
+-- An alert raised in the middle of a longer trace is not handled here: inside
+-- the core a duration counts from the activation, and a deadline inside a
+-- branch of IF or WHEN is rejected (formal/core/CORE.md, section 10.6, further
+-- rejections), so the host starts one activation per alert. Every construct in
+-- this file is translated into the Isabelle/HOL core (formal/core) and
+-- evaluated by the exported evaluator (evaluator/).
+
+SPECIFICATION merchant_low_stock VERSION 1.0.0
+
+SUBJECTS {
+  owner : PARTY,
+  agent : SYSTEM
+}
+
+TERMS {
+  agent MUST stage_restock WITHIN 4 HOURS;
+  agent ON_BREACH NOTIFY owner
+}
+
+FACTORS {
+  stock_units : Integer METADATA
+}
+
+INVARIANTS {
+  stock_known : LIVENESS : EVENTUALLY(PRESENT(stock_units)) WITHIN 4 HOURS
+}

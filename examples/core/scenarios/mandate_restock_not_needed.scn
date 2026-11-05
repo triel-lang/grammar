@@ -1,0 +1,14 @@
+; A fresh stock level of 25, above the reorder point, and a restock applied
+; without approval: the condition is true, so the restock rule is breached at
+; the change and the monitor blocks it. The restock rule has no handler, so
+; nobody is notified.
+(scenario mandate_restock_not_needed
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T10:00:00Z" (arrive stock_units)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 25))))
+  (entry "2026-11-10T10:20:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 25)) (change_approved (bool false))))
+  (entry "2026-11-10T10:20:01Z" (act agent apply_restock must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 25)) (change_approved (bool false)))))
