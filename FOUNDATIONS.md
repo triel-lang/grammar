@@ -8,7 +8,7 @@ TRIEL draws on several traditions of logic and formal methods. It is a separate 
 
 **Free logic.** `PRESENT(x)` is the existence predicate of free logic [F1, F2; survey F3]: it is true where `x` has a value and false where it has none (`present_is_Ex`, `Ex_ind_exists`). It is not monotone (`T3_present_not_monotone`), so the results about completions and stable verdicts exclude it. The quantifiers of free logic are not part of TRIEL.
 
-**The composition-nominative approach.** TRIEL takes several definitions from the logics of partial quasiary predicates of Nikitchenko, Shkilniak and colleagues: named data, equitone predicates (whose definite values survive the arrival of data) and the indicator predicates for definedness, and applies them to one specification language. The rule that a specification writes the total indicator E_x for data absent for good and the partial indicator ↓x for data not yet known is TRIEL's own design choice, not a claim about the approach. With these definitions, the closure of the equitone predicates under all base compositions is checked in full (`comp_closure_equitone`), every expression of the TRIEL core translates to a formula of the composition algebra with the same value (`cond_fm_correct`, `expr_cond_correct`), so that the stability of definite values under more data follows from the closure (`T2_nd_from_closure`), and nested records follow the Mizar formalisation of nominative data. The next section gives the references and the construct-by-construct account.
+**The composition-nominative approach.** TRIEL takes several definitions from the logics of partial quasiary predicates of Nikitchenko, Shkilniak and colleagues: named data, equitone predicates (whose definite values survive the arrival of data) and the indicator predicates for definedness, and applies them to one specification language. The rule that a specification writes `PRESENT(x)`, the total indicator E_x, for data absent for good and `x == x`, the partial indicator ↓x, for data not yet known is TRIEL's own design choice, not a claim about the approach (`formal/core/CORE.md`, section 7.2 and section 9, decisions 1 and 11). With these definitions, the closure of the equitone predicates under all base compositions is checked in full (`comp_closure_equitone`), every expression of the TRIEL core translates to a formula of the composition algebra with the same value (`cond_fm_correct`, `expr_cond_correct`), so that the stability of definite values under more data follows from the closure (`T2_nd_from_closure`), and nested records follow the Mizar formalisation of nominative data. The next section gives the references and the construct-by-construct account.
 
 **Deontic logic and contrary-to-duty obligations.** The vocabulary of obligations, permissions and prohibitions comes from deontic logic [D1], and the handling of breach from the study of contrary-to-duty obligations [D2, D3]: what is required once a duty has been violated. Governatori and Rotolo [D4] describe chains of reparations, and defeasible deontic logic has reasoners such as SPINdle [D5]. TRIEL gives a breach its handlers (`CURE_BY`, `ESCALATE_TO`, `NOTIFY`, `PENALTY`) and a fallback obligation (`WITHIN … ELSE`) on traces of events, with final verdicts (`window_final`, `handle_breach_final`, `else_taken`, `cure_restores`, `escalation_keeps_breach`). TRIEL is not a deontic logic: it gives verdicts on traces and has no rules of inference between norms, no defeasibility and no priorities between norms.
 
@@ -54,7 +54,7 @@ TRIEL draws on several traditions of logic and formal methods. It is a separate 
 
 ## The composition-nominative approach
 
-TRIEL takes from these works its definitions of partial truth values, named and nested data, equitone predicates and the indicator predicates for definedness. It applies them to one specification language; the rule that a specification writes the total indicator E_x for data absent for good and the partial indicator ↓x for data not yet known is TRIEL's own design choice, not a claim about these works.
+TRIEL takes from these works its definitions of partial truth values, named and nested data, equitone predicates and the indicator predicates for definedness. It applies them to one specification language; the rule that a specification writes `PRESENT(x)`, the total indicator E_x, for data absent for good and `x == x`, the partial indicator ↓x, for data not yet known is TRIEL's own design choice, not a claim about these works (`formal/core/CORE.md`, section 7.2 and section 9, decisions 1 and 11).
 
 ### References
 
@@ -73,7 +73,7 @@ Section numbers (§) refer to the book [1]. Page numbers are omitted because the
 
 The table states, for each TRIEL construct, which part of these works it takes definitions from and how far the connection goes:
 
-* **Adopted** — the definition from these works is used as is, in TRIEL's reading.
+* **Adopted** — the definition from these works is used as is, applied to TRIEL's data and conditions.
 * **Defined here** — these works provide related definitions; the TRIEL-specific definition is given in `TECHNICAL_REPORT.md`.
 * **Open** — no settled definition yet; these works provide at most background.
 
