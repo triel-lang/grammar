@@ -848,7 +848,7 @@ A factor read from a sensor is sampled at the arrival entries of a trace. Betwee
 
 - **`evalI_point`:** for a state whose values are numbers (`numeric`) and a condition whose constants are numbers (`num_expr`), `evalI e (point σ)` = ⟦e⟧σ. The evaluation of the core is the case of exact readings. `evalR_eval`: on the same states and conditions, `evalR e (real_state σ)` = ⟦e⟧σ; the real reading is the same semantics.
 - **`evalI_sound`, `evalI_sound_value`:** e PRESENT-free ∧ `inside I ρ` ⟹ `evalI e I` ≼ `evalR e ρ`: a definite value on the intervals is the value on every real valuation inside them.
-- **`evalI_mono`:** e PRESENT-free ∧ `narrows I I′` ∧ `proper I′` ⟹ `evalI e I` ≼ `evalI e I′`: a definite value survives narrowing. (With an empty interval allowed in I′, = could jump from ⊥ to T.)
+- **`evalI_mono`:** e PRESENT-free ∧ `narrows I I′` ∧ `proper I′` ⟹ `evalI e I` ≼ `evalI e I′`: a definite value survives narrowing. (With an empty interval allowed in I′, a comparison could jump from F to T.)
 - **`blocksI_point`:** on numeric data and conditions, `blocksI c (point σ)` ⟺ `blocks c σ`.
 
 *Envelopes and enclosures.*
@@ -890,7 +890,7 @@ A factor read from a sensor is sampled at the arrival entries of a trace. Betwee
 - **`blocked_actionI_no_bounds`, `forbiddenI_no_bounds`, `pr_verdictI_no_bounds`, `inv_evalI_no_bounds`, `ew_evalI_no_bounds`:** without rate bounds, on numeric data and conditions, the monitor and the verdicts on enclosures are those of the core.
 - **`always_false_signals`, `eventually_true_signals`, `ew_true_signals`:** for a PRESENT-free φ, `ALWAYS φ` on enclosures is F only if at some entry every admissible family violates φ at the time of that entry; `EVENTUALLY φ` and `EVENTUALLY φ WITHIN d` are T only if at some entry (of the window) every admissible family satisfies φ at the time of that entry.
 - **`ew_false_signals`:** `EVENTUALLY φ WITHIN d` on enclosures is F only after the deadline, and then at every entry of the window every admissible family violates φ at the time of that entry. It says nothing about the times between the entries.
-- **`ew_evalI_F_sound`:** the continuous false verdict of `EVENTUALLY (x < c) WITHIN d`: if `ew_below_false R x c D π` then for every family admissible for all the samples of the trace and every real time t from the activation time to D, `evalR (x < c)` on the induced valuation at t is F: the quantity was at or above c at every time of the window, for every signal under the bound through the samples. **`ew_below_false_final`:** with non-negative bounds, the verdict stays on every longer consistent trace. This reading uses every sample of the trace, later ones included; it is not causal.
+- **`ew_evalI_F_sound`:** the continuous false verdict of `EVENTUALLY (x < c) WITHIN d`: if `ew_below_false R x c D π` then for every family admissible for all the samples of the trace and every real time t from the activation time to D, `evalR (x < c)` on the induced valuation at t is F: the quantity was at or above c at every time of the window, for every signal under the bound through the samples. **`ew_below_false_final`:** with non-negative bounds and a deadline not before the activation, the verdict stays on every longer consistent trace. This reading uses every sample of the trace, later ones included; it is not causal.
 
 *Finality.*
 

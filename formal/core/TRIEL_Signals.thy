@@ -1675,8 +1675,9 @@ lemma ieq_narrows:
   shows "ieq (u, v) (u', v') = Some b"
   using assms by (auto simp: ieq_def split: if_splits)
 
-text \<open>Narrowing an interval to an empty one would make \<open>=\<close> jump from undefined to true, so
-  monotonicity is stated for interval states whose intervals are non-empty.\<close>
+text \<open>Narrowing an interval to an empty one could turn a false comparison into a true one
+  (with \<open>[5, 6] < [1, 2]\<close> false and \<open>[5, 4] < [6, 2]\<close> true), so monotonicity is stated for
+  interval states whose intervals are non-empty.\<close>
 
 definition proper :: "'n istate \<Rightarrow> bool" where
   "proper I \<longleftrightarrow> (\<forall>x p q. I x = Some (p, q) \<longrightarrow> p \<le> q)"

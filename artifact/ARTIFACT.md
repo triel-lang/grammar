@@ -5,7 +5,7 @@
 This artifact reproduces the machine-checked results and the executable checks
 behind the paper. It contains:
 
-- `formal/core/`: the core of TRIEL 2.5.1 (the errata to 2.5) in Isabelle/HOL, 13 theories (session
+- `formal/core/`: the core of TRIEL 2.5.1 (the errata to 2.5) in Isabelle/HOL, 14 theories (session
   `TRIEL_Core`). All theorems are proved; there is no `sorry`, `oops` or
   `axiomatization`.
 - `evaluator/`: an evaluator of the core. Its Haskell code
@@ -90,13 +90,13 @@ are of sources with 28 examples and 54 scenarios. Over these runs:
 
 | Phase | Range over the seventeen runs |
 |---|---|
-| Job `artifact` (disk clean-up, image build and `run.sh`) | 16:14 to 23:39 min |
+| Job `artifact` (disk clean-up, image build and `run.sh`) | 16:14 to 34:00 min |
 | Image build (`docker build`, base images included) | 1:14 to 2:18 min |
-| `run.sh`, all 11 steps | 766 to 1221 s (12.8 to 20.4 min) |
-| of which: clean Isabelle build of `TRIEL_Core` | 85 to 132 s |
-| of which: the scenarios | 124 to 211 s |
-| of which: translator and driver tests (pytest) | 318 to 518 s |
-| of which: parsing of the examples with the ambiguity check | 123 to 217 s |
+| `run.sh`, all 11 steps | 766 to 1855 s (12.8 to 30.9 min) |
+| of which: clean Isabelle build of `TRIEL_Core` | 85 to 197 s |
+| of which: the scenarios | 124 to 389 s |
+| of which: translator and driver tests (pytest) | 318 to 873 s |
+| of which: parsing of the examples with the ambiguity check | 123 to 247 s |
 | of which: ambiguity regression tests | 67 to 118 s |
 | Memory peak of the container | 6.73 to 7.20 GiB |
 
@@ -119,6 +119,7 @@ are of sources with 28 examples and 54 scenarios. Over these runs:
 | #73 | 2026-10-27 | 13 | 22:36 | 1:17 | 1221 s | 7.05 GiB |
 | #74 | 2026-10-27 | 13 | 16:30 | 1:41 | 770 s | 7.20 GiB |
 | #75 | 2026-10-27 | 13 | 23:28 | 1:21 | 1219 s | 7.01 GiB |
+| #169 | 2026-11-05 | 14 | 34:00 | 1:20 | 1855 s | 7.07 GiB |
 
 Runs #61 to #63 are of the same commit. #67 to #73 are of drafts of this
 version with the new theory before its last three theorems (646 statements,
@@ -149,7 +150,9 @@ scenarios have been added (32 examples, 97 scenarios, 405 translator and
 driver tests); their runs are not in the table. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
 the step pytest: the test that every name in backquotes in `CORE.md` is defined
 in the theories failed on the name of a file, since corrected; they are not in
-the table. The time on a shared
+the table. Stage 43 added the theory `TRIEL_Signals.thy` (continuous signals between
+samples, section 11 of `formal/core/CORE.md`), 14 theories and 960 proved
+statements; the run #169 of the job `artifact` on that tree is in the table. The time on a shared
 runner varies from run to run, and so does its CPU.
 
 ## Running
@@ -178,8 +181,8 @@ Expected end of the output:
 
 ```
 === Summary
-theories checked by Isabelle (TRIEL_Core)    13 (.thy files in formal/core: 13)
-proved statements (lemma/theorem/corollary)  764
+theories checked by Isabelle (TRIEL_Core)    14 (.thy files in formal/core: 14)
+proved statements (lemma/theorem/corollary)  960
 paper theorems found, without oracles        107 of 107
 scenarios matching .expected                 97 of 97
 examples accepted by the core                30 of 32
@@ -317,7 +320,7 @@ variables `?x`.
 
 | Claim | Command | Expected output |
 |---|---|---|
-| The core is machine-checked: 13 theories, 764 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `13 (.thy files in formal/core: 13)`, `764`; `no sorry, oops or axiomatization ...` |
+| The core is machine-checked: 14 theories, 960 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `14 (.thy files in formal/core: 14)`, `960`; `no sorry, oops or axiomatization ...` |
 | The evaluator is the code exported from the checked theories | `cat results/03-exported-code.log` | `evaluator/generated is the exported code` |
 | The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `97` |
 | 30 of the 32 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `30`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
