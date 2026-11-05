@@ -2862,5 +2862,45 @@ lemma never_false_signals:
   "qvalley (1 / 20) (1794211500, 195 / 2) (1794211800, 195 / 2) = 90"
   by code_simp+
 
+text \<open>The trace of item 8 of section 2.6 of the research note: the same readings of 97.5
+  at 08:00:05, 08:05:00 and 08:10:00, and one more at the activation entry 08:00:00. The
+  core has a fresh reading above the limit at every entry of the window, so the invariant
+  is false today, at the deadline; on enclosures at the entries it is false as well, the
+  enclosure at the stop, where no reading arrives, being [97.0, 98.0]. The continuous
+  reading does not follow: with the bound 0.1 the lower envelope falls to 82.75 between
+  08:00:05 and 08:05:00, below the limit, and the continuous verdict is not false, since a
+  signal under the bound through these readings is below the limit at some time between
+  two entries; with the bound 0.05 the lower envelope stays at or above 90 throughout the
+  window (the valley between 08:00:05 and 08:05:00 is 90.125, between the last two
+  readings exactly 90), and the continuous verdict is false. So the false verdict at the
+  entries and the continuous false verdict are different statements, neither weaker than
+  the other: \<open>never_false_trace\<close> is undefined at the entries and not false continuously,
+  this trace false at the entries and, under the bound 0.1, not false continuously.\<close>
+
+definition fresh_window_trace :: ctrace where
+  "fresh_window_trace =
+     [(sensor_data (195 / 2), 1794211200, Arrival temp),
+      (sensor_data (195 / 2), 1794211205, Arrival temp),
+      (sensor_data (195 / 2), 1794211210, stop_drive),
+      (sensor_data (195 / 2), 1794211500, Arrival temp),
+      (sensor_data (195 / 2), 1794211800, Arrival temp),
+      (sensor_data (195 / 2), 1794211801, Tick)]"
+
+value "ew_eval (ELt (VName temp) (VName lim)) 1794211800 fresh_window_trace"
+value "ew_evalI sensor_bounds (ELt (VName temp) (VName lim)) 1794211800 fresh_window_trace"
+value "enclosed sensor_bounds fresh_window_trace 2 temp"
+value "ew_below_false sensor_bounds temp 90 1794211800 fresh_window_trace"
+value "ew_below_false slow_bounds temp 90 1794211800 fresh_window_trace"
+
+lemma fresh_window_signals:
+  "ew_eval (ELt (VName temp) (VName lim)) 1794211800 fresh_window_trace = Some False"
+  "ew_evalI sensor_bounds (ELt (VName temp) (VName lim)) 1794211800 fresh_window_trace = Some False"
+  "enclosed sensor_bounds fresh_window_trace 2 temp = Some (IvNum 97 98)"
+  "consistent_trace sensor_bounds fresh_window_trace"
+  "\<not> ew_below_false sensor_bounds temp 90 1794211800 fresh_window_trace"
+  "ew_below_false slow_bounds temp 90 1794211800 fresh_window_trace"
+  "qvalley (1 / 20) (1794211205, 195 / 2) (1794211500, 195 / 2) = 721 / 8"
+  by code_simp+
+
 
 end
