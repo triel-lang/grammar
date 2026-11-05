@@ -1,0 +1,17 @@
+; A reading of 85.0, below the limit, arrives at 08:04:00. At 08:04:05 it is
+; exactly 5 seconds old, MAX_AGE included, so it is still fresh. The arm moves
+; at 08:04:06, when the reading is 6 seconds old; the condition of the
+; prohibition is read in the state of 08:04:05, not at the movement, so it is
+; false and the monitor allows the movement.
+(scenario sensor_max_age_boundary
+  (spec "examples/core/sensor_overheat.triel")
+  (entry "2026-11-09T08:00:00Z" (activate)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:10Z" (act controller stop_drive must)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:04:00Z" (arrive motor_temp)
+    (data (motor_temp (dec 85.0)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:04:05Z" (tick)
+    (data (motor_temp (dec 85.0)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:04:06Z" (act arm move must_not)
+    (data (motor_temp (dec 85.0)) (limit_c (dec 90.0)))))

@@ -1,0 +1,21 @@
+; The test of the claim that the invariant is never F. Fresh readings of 97.5,
+; above the limit, are known at every entry up to the deadline 08:10:00
+; except the activation entry: at 08:00:05, at 08:00:10 (5 seconds old), at
+; 08:05:00 and at 08:10:00. A reading below the limit comes only at 08:10:01,
+; after the deadline. Without the activation entry this trace would make the
+; invariant false; with it, the condition is undefined at one entry inside the
+; 10 minutes, so the invariant is undefined.
+(scenario sensor_never_false
+  (spec "examples/core/sensor_overheat.triel")
+  (entry "2026-11-09T08:00:00Z" (activate)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:05Z" (arrive motor_temp)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:10Z" (act controller stop_drive must)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:05:00Z" (arrive motor_temp)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:10:00Z" (arrive motor_temp)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:10:01Z" (arrive motor_temp)
+    (data (motor_temp (dec 85.0)) (limit_c (dec 90.0)))))

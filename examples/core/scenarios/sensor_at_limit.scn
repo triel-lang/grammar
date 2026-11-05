@@ -1,0 +1,18 @@
+; The controller stops the drive in time. A fresh reading exactly at the limit,
+; 90.0, arrives at 08:00:20, and the arm moves one second later: "at or above
+; the limit" includes the limit, so the condition is true, the prohibition is
+; breached at the movement and the monitor blocks it. No reading below the
+; limit arrives, and the reading at activation is absent, so the invariant is
+; undefined.
+(scenario sensor_at_limit
+  (spec "examples/core/sensor_overheat.triel")
+  (entry "2026-11-09T08:00:00Z" (activate)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:10Z" (act controller stop_drive must)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:20Z" (arrive motor_temp)
+    (data (motor_temp (dec 90.0)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:21Z" (act arm move must_not)
+    (data (motor_temp (dec 90.0)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:11:00Z" (tick)
+    (data (motor_temp (dec 90.0)) (limit_c (dec 90.0)))))

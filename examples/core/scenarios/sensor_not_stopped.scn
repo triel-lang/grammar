@@ -5,8 +5,9 @@
 ; breached at the deadline and escalated; the safety engineer stops the drive
 ; at 08:00:45, within 30 seconds of the breach, which fulfils the escalated
 ; obligation, while the breach of the controller stays on record. No fresh
-; reading below the limit arrives by 08:10:00, and the reading at activation
-; is absent, so the invariant is undefined, not false.
+; reading below the limit arrives by 08:10:00, but the invariant is undefined,
+; not false: the reading at activation is absent, and so is the reading at
+; 08:00:45, 25 seconds after its arrival.
 (scenario sensor_not_stopped
   (spec "examples/core/sensor_overheat.triel")
   (entry "2026-11-09T08:00:00Z" (activate)

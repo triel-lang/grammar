@@ -1,0 +1,16 @@
+; The bounds of the escalated window (08:00:30, 08:01:00]. The safety engineer
+; stops the drive at 08:00:30, the moment of the breach, which is outside the
+; window. The controller stops it at 08:00:40, after its own deadline, which
+; fulfils nothing. The engineer stops it again at 08:01:00, the end of the
+; window, which fulfils the escalated obligation; the breach of the controller
+; stays on record.
+(scenario sensor_escalation_window
+  (spec "examples/core/sensor_overheat.triel")
+  (entry "2026-11-09T08:00:00Z" (activate)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:30Z" (act safety_engineer stop_drive must)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:40Z" (act controller stop_drive must)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:01:00Z" (act safety_engineer stop_drive must)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0)))))

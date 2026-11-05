@@ -1,0 +1,12 @@
+; Nobody stops the drive. The obligation of the controller is breached at
+; 08:00:30 and escalated; the safety engineer does not stop the drive by
+; 08:01:00 either, so the escalated obligation is breached too. The arm does
+; not move, so the monitor has no action to decide.
+(scenario sensor_escalation_missed
+  (spec "examples/core/sensor_overheat.triel")
+  (entry "2026-11-09T08:00:00Z" (activate)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:20Z" (arrive motor_temp)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:01:01Z" (tick)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0)))))
