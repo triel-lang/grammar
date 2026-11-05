@@ -2902,5 +2902,4 @@ lemma fresh_window_signals:
   "qvalley (1 / 20) (1794211205, 195 / 2) (1794211500, 195 / 2) = 721 / 8"
   by code_simp+
 
-
 end
