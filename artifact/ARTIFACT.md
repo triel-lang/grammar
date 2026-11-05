@@ -152,8 +152,8 @@ driver tests); their runs are not in the table. In the runs #64 to #66 of drafts
 the step pytest: the test that every name in backquotes in `CORE.md` is defined
 in the theories failed on the name of a file, since corrected; they are not in
 the table. Stage 43 added the theory `TRIEL_Signals.thy` (continuous signals between
-samples, section 11 of `formal/core/CORE.md`), 14 theories and 960 proved
-statements; the run #169 of the job `artifact` on that tree is in the table. The time on a shared
+samples, section 11 of `formal/core/CORE.md`), 14 theories and 984 proved
+statements after the changes of its independent review; the run #169 of the job `artifact` on the tree before the review is in the table. The time on a shared
 runner varies from run to run, and so does its CPU.
 
 ## Running
@@ -183,7 +183,7 @@ Expected end of the output:
 ```
 === Summary
 theories checked by Isabelle (TRIEL_Core)    14 (.thy files in formal/core: 14)
-proved statements (lemma/theorem/corollary)  960
+proved statements (lemma/theorem/corollary)  984
 paper theorems found, without oracles        107 of 107
 scenarios matching .expected                 97 of 97
 examples accepted by the core                30 of 32
@@ -321,7 +321,7 @@ variables `?x`.
 
 | Claim | Command | Expected output |
 |---|---|---|
-| The core is machine-checked: 14 theories, 960 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `14 (.thy files in formal/core: 14)`, `960`; `no sorry, oops or axiomatization ...` |
+| The core is machine-checked: 14 theories, 984 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `14 (.thy files in formal/core: 14)`, `984`; `no sorry, oops or axiomatization ...` |
 | The evaluator is the code exported from the checked theories | `cat results/03-exported-code.log` | `evaluator/generated is the exported code` |
 | The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `97` |
 | 30 of the 32 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `30`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
