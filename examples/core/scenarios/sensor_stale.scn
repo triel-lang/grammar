@@ -1,0 +1,19 @@
+; The controller stops the drive 5 seconds after the alarm. A reading of 85.0,
+; below the limit, arrives at 08:04:00, within the 10 minutes, so the
+; invariant is true. At 08:04:10 the reading is 10 seconds old, older than
+; MAX_AGE 5 SECONDS, and so absent. The arm moves at 08:04:11; the condition
+; of the prohibition is read in the state of 08:04:10, where the temperature
+; is absent, so the monitor blocks the movement, although the last value was
+; below the limit, and the prohibition is not breached.
+(scenario sensor_stale
+  (spec "examples/core/sensor_overheat.triel")
+  (entry "2026-11-09T08:00:00Z" (activate)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:05Z" (act controller stop_drive must)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:04:00Z" (arrive motor_temp)
+    (data (motor_temp (dec 85.0)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:04:10Z" (tick)
+    (data (motor_temp (dec 85.0)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:04:11Z" (act arm move must_not)
+    (data (motor_temp (dec 85.0)) (limit_c (dec 90.0)))))

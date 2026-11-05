@@ -1,0 +1,19 @@
+; The overheat alarm comes with a reading of 97.5 at activation, and the
+; sensor then falls silent: the last value stays in the data, but no reading
+; arrives. A value present at activation without an arrival is stale, so the
+; temperature is absent at every entry. The controller stops the drive in
+; time. The arm moves at 08:00:20; the condition of the prohibition is read in
+; the state before the movement, where the temperature is absent, so it is
+; undefined: the monitor blocks the movement and the prohibition is not
+; breached. Past the 10-minute deadline the invariant is still undefined, not
+; false.
+(scenario sensor_silent
+  (spec "examples/core/sensor_overheat.triel")
+  (entry "2026-11-09T08:00:00Z" (activate)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:10Z" (act controller stop_drive must)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:20Z" (act arm move must_not)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:11:00Z" (tick)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0)))))

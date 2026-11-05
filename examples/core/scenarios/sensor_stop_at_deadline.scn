@@ -1,0 +1,10 @@
+; The controller stops the drive exactly at the deadline, 30 seconds after the
+; alarm: a stop at the deadline fulfils the obligation. The arm does not move,
+; so the monitor has no action to decide. No fresh reading arrives, and the
+; trace ends before the 10-minute deadline, so the invariant is undefined.
+(scenario sensor_stop_at_deadline
+  (spec "examples/core/sensor_overheat.triel")
+  (entry "2026-11-09T08:00:00Z" (activate)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:30Z" (act controller stop_drive must)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0)))))

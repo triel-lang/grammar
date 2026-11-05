@@ -1,0 +1,21 @@
+; A fresh reading of 97.5 arrives at 08:00:20, and the arm moves one second
+; later: the condition of the prohibition, read in the state of 08:00:20, is
+; true, so the prohibition is breached at the movement and the monitor blocks
+; it. The controller does not stop the drive by 08:00:30, so the obligation is
+; breached at the deadline and escalated; the safety engineer stops the drive
+; at 08:00:45, within 30 seconds of the breach, which fulfils the escalated
+; obligation, while the breach of the controller stays on record. No fresh
+; reading below the limit arrives by 08:10:00, and the reading at activation
+; is absent, so the invariant is undefined, not false.
+(scenario sensor_not_stopped
+  (spec "examples/core/sensor_overheat.triel")
+  (entry "2026-11-09T08:00:00Z" (activate)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:20Z" (arrive motor_temp)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:21Z" (act arm move must_not)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:00:45Z" (act safety_engineer stop_drive must)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0))))
+  (entry "2026-11-09T08:11:00Z" (tick)
+    (data (motor_temp (dec 97.5)) (limit_c (dec 90.0)))))

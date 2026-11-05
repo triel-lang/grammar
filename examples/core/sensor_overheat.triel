@@ -1,0 +1,76 @@
+-- TRIEL example inside the formal core: a physical system with a sensor. The
+-- drive motor of an industrial robot arm overheats, and the specification
+-- states what the cell must do about it.
+--
+-- One activation of the specification is one incident: the activation entry
+-- is the moment the overheat alarm is raised, and every duration counts from
+-- it (formal/core/CORE.md, section 8.3, point 5), as in
+-- gdpr_art33_notification.triel. The cell controller must stop the drive
+-- within 30 seconds of the alarm; a stop exactly at the deadline fulfils the
+-- obligation. A missed deadline is a breach, which stays on record, and the
+-- obligation is escalated: the safety engineer must then stop the drive
+-- within 30 seconds of the breach (formal/core/CORE.md, section 8.3, point 10).
+-- The arm must not move while the motor temperature is at or above the limit.
+-- The temperature should come back below the limit within 10 minutes of the
+-- alarm.
+--
+-- The temperature is quoted by a sensor, an ORACLE, so PROVENANCE_REQUIRED is
+-- true (TECHNICAL_REPORT.md section 2.9). A reading is fresh for 5 seconds
+-- after it arrives (MAX_AGE 5 SECONDS ON_STALE BLOCK); a reading that is older,
+-- or present at activation without an arrival, is absent (examples/core/
+-- README.md, conventions 3 and 4). So when the sensor is silent, or its data
+-- are stale, the temperature is absent and:
+--
+-- - the condition of the prohibition is undefined. The verdict of the
+--   prohibition records a breach only when its condition is true, so it stays
+--   PENDING; the fail-closed monitor of the prohibition blocks the movement,
+--   since the condition is not known to be false (MONITOR ... BLOCK;
+--   undefined_guard_blocks_not_breach);
+-- - the invariant is undefined (U): missing data neither fulfil nor violate
+--   EVENTUALLY ... WITHIN (convention 11).
+--
+-- No reading is fresh at the activation entry, since its event is the
+-- activation and not an arrival. So in this specification the invariant is
+-- never F: it is T once a fresh reading below the limit arrives in time, and
+-- U otherwise. F would say that the temperature was below the limit at no
+-- entry up to the deadline, the alarm included, and no fresh reading shows
+-- that.
+--
+-- Only the monitor of the prohibition stops the arm; the invariant reports,
+-- it does not block.
+--
+-- Limit of version 2.5.1: a condition "at or above the limit for longer than
+-- N seconds", counted from an arbitrary moment of the trace, is not expressible.
+-- It would need a deadline inside a branch of IF or WHEN, which the translator
+-- rejects (formal/core/CORE.md, section 10.6, rule 7), and the condition of IF
+-- or WHEN is read once, in the first state of the trace (convention 6). The
+-- example therefore counts from the activation by the alarm. Conditions
+-- compare values and do not compute them: the sensor quotes the temperature,
+-- and the specification does not model the motor. Every construct in this
+-- file is translated into the Isabelle/HOL core (formal/core) and evaluated by
+-- the exported evaluator (evaluator/).
+
+SPECIFICATION sensor_overheat VERSION 1.0.0
+    PROVENANCE_REQUIRED: true
+
+SUBJECTS {
+  controller      : SYSTEM,
+  arm             : SYSTEM,
+  temp_sensor     : ORACLE,
+  safety_engineer : PARTY
+}
+
+TERMS {
+  controller MUST stop_drive WITHIN 30 SECONDS;
+  controller ON_BREACH ESCALATE_TO safety_engineer;
+  arm MUST_NOT move WHEN motor_temp >= limit_c
+}
+
+FACTORS {
+  motor_temp : Decimal METADATA SOURCE temp_sensor MAX_AGE 5 SECONDS ON_STALE BLOCK,
+  limit_c    : Decimal METADATA
+}
+
+INVARIANTS {
+  cooled_down : LIVENESS : EVENTUALLY(motor_temp < limit_c) WITHIN 10 MINUTES
+}
