@@ -898,7 +898,8 @@ definition adm :: "rat \<Rightarrow> samples \<Rightarrow> (real \<Rightarrow> r
   "adm L S f \<longleftrightarrow> lip (of_rat L) f \<and> through (real_samples S) f"
 
 definition consistent :: "rat \<Rightarrow> samples \<Rightarrow> bool" where
-  "consistent L S \<longleftrightarrow> (\<forall>p \<in> S. \<forall>q \<in> S. \<bar>snd p - snd q\<bar> \<le> L * \<bar>of_int (fst p) - of_int (fst q)\<bar>)"
+  "consistent L S \<longleftrightarrow>
+     0 \<le> L \<and> (\<forall>p \<in> S. \<forall>q \<in> S. \<bar>snd p - snd q\<bar> \<le> L * \<bar>of_int (fst p) - of_int (fst q)\<bar>)"
 
 definition qcone_up :: "rat \<Rightarrow> rat \<Rightarrow> int \<times> rat \<Rightarrow> rat" where
   "qcone_up L t p = snd p + L * \<bar>t - of_int (fst p)\<bar>"
@@ -927,7 +928,13 @@ lemma real_samples_empty [simp]: "real_samples S = {} \<longleftrightarrow> S = 
 lemma real_samples_mono: "S \<subseteq> S' \<Longrightarrow> real_samples S \<subseteq> real_samples S'"
   by (auto simp: real_samples_def)
 
-lemma consistent_rcons: "consistent L S \<longleftrightarrow> rcons (of_rat L) (real_samples S)"
+lemma consistent_nonneg: "consistent L S \<Longrightarrow> 0 \<le> L"
+  by (simp add: consistent_def)
+
+lemma consistent_nonneg_real: "consistent L S \<Longrightarrow> 0 \<le> (of_rat L :: real)"
+  by (simp add: consistent_def)
+
+lemma consistent_rcons: "consistent L S \<longleftrightarrow> 0 \<le> L \<and> rcons (of_rat L) (real_samples S)"
 proof -
   have "(\<bar>snd p - snd q\<bar> \<le> L * \<bar>of_int (fst p) - of_int (fst q)\<bar>) \<longleftrightarrow>
         (\<bar>of_rat (snd p) - of_rat (snd q)\<bar> \<le> of_rat L * \<bar>(of_int (fst p) :: real) - of_int (fst q)\<bar>)"
@@ -945,6 +952,9 @@ proof -
   then show ?thesis by (simp add: consistent_def rcons_def real_samples_def)
 qed
 
+lemma consistent_rconsD: "consistent L S \<Longrightarrow> rcons (of_rat L) (real_samples S)"
+  by (simp add: consistent_rcons)
+
 lemma consistent_subset: "S \<subseteq> S' \<Longrightarrow> consistent L S' \<Longrightarrow> consistent L S"
   by (auto simp: consistent_def)
 
@@ -959,9 +969,6 @@ lemma qcone_lo_cast: "of_rat (qcone_lo L t p) = cone_lo (of_rat L) (of_rat t) (o
 
 lemma mono_of_rat: "mono (of_rat :: rat \<Rightarrow> real)"
   by (simp add: mono_def of_rat_less_eq)
-
-lemma of_rat_nonneg: "0 \<le> q \<Longrightarrow> 0 \<le> (of_rat q :: real)"
-  using of_rat_less_eq[of 0 q] by simp
 
 lemma hi_cast:
   assumes "finite S" "S \<noteq> {}"
@@ -1015,7 +1022,7 @@ proof -
   have ne: "S \<noteq> {}" using assms(3) by blast
   let ?p = "(of_int (fst p), of_rat (snd p)) :: real \<times> real"
   have pS: "?p \<in> real_samples S" using assms(3) by (auto simp: real_samples_def)
-  have c: "rcons (of_rat L) (real_samples S)" using assms(2) by (simp add: consistent_rcons)
+  have c: "rcons (of_rat L) (real_samples S)" using assms(2) by (rule consistent_rconsD)
   have "of_rat (lo L S (of_int (fst p))) = lower (of_rat L) (real_samples S) (fst ?p)"
     by (simp add: lo_cast[OF assms(1) ne] of_rat_of_int_eq)
   also have "\<dots> = snd ?p" by (rule lower_sample[OF _ c pS]) (simp add: assms(1))
@@ -1027,14 +1034,18 @@ proof -
   show ?thesis by (simp add: enc_def lo hi)
 qed
 
-text \<open>For consistent samples under a non-negative bound the enclosure is never empty.\<close>
+text \<open>For consistent samples the enclosure is never empty. Consistency includes \<open>0 \<le> L\<close>:
+  under a negative bound no signal exists (\<open>adm_nonneg\<close> below), and \<open>consistent\<close> says so
+  for every set of samples, the empty set included, so that a negative bound is rejected
+  with the samples.\<close>
 
 theorem enc_nonempty:
-  assumes "finite S" "S \<noteq> {}" "0 \<le> L" "consistent L S"
+  assumes "finite S" "S \<noteq> {}" "consistent L S"
   shows "lo L S t \<le> hi L S t"
 proof -
   have "lower (of_rat L) (real_samples S) (of_rat t) \<le> upper (of_rat L) (real_samples S) (of_rat t)"
-    using assms by (intro lower_le_upper) (simp_all add: of_rat_nonneg consistent_rcons)
+    by (rule lower_le_upper[OF _ _ consistent_nonneg_real[OF assms(3)] consistent_rconsD[OF assms(3)]])
+       (simp_all add: assms(1,2))
   then have "(of_rat (lo L S t) :: real) \<le> of_rat (hi L S t)"
     by (simp add: lo_cast[OF assms(1,2)] hi_cast[OF assms(1,2)])
   then show ?thesis by (simp add: of_rat_less_eq)
@@ -1046,32 +1057,52 @@ text \<open>Non-vacuity: a consistent set of samples has an admissible signal, s
   enclosure is exactly the set of values the admissible signals take.\<close>
 
 theorem adm_exists:
-  assumes "finite S" "0 \<le> L" "consistent L S"
+  assumes "finite S" "consistent L S"
   shows "\<exists>f. adm L S f"
   using rcons_iff_lip[of "real_samples S" "of_rat L"] assms
-  by (simp add: adm_def consistent_rcons of_rat_less_eq)
+  by (simp add: adm_def consistent_rcons)
 
 theorem enc_tight:
-  assumes "finite S" "S \<noteq> {}" "0 \<le> L" "consistent L S"
+  assumes "finite S" "S \<noteq> {}" "consistent L S"
     and "of_rat (lo L S t) \<le> w" "w \<le> of_rat (hi L S t)"
   shows "\<exists>f. adm L S f \<and> f (of_rat t) = w"
   using envelope_tight[of "real_samples S" "of_rat L" "of_rat t" w] assms
-  by (simp add: adm_def consistent_rcons of_rat_less_eq lo_cast hi_cast)
+  by (simp add: adm_def consistent_rcons lo_cast hi_cast)
 
 corollary enc_values:
-  assumes "finite S" "S \<noteq> {}" "0 \<le> L" "consistent L S"
+  assumes "finite S" "S \<noteq> {}" "consistent L S"
   shows "{f (of_rat t) | f. adm L S f} = {w. of_rat (lo L S t) \<le> w \<and> w \<le> of_rat (hi L S t)}"
   using adm_in_enc[OF assms(1,2)] enc_tight[OF assms] by blast
 
+text \<open>A signal under a bound makes the bound non-negative: the bound is a bound on a
+  distance.\<close>
+
+lemma adm_nonneg: "adm L S f \<Longrightarrow> 0 \<le> L"
+proof -
+  assume "adm L S f"
+  then have "lip (of_rat L) f" by (simp add: adm_def)
+  from lipD[OF this, of 1 0] have "\<bar>f 1 - f 0\<bar> \<le> of_rat L" by simp
+  with abs_ge_zero[of "f 1 - f 0"] have "(0 :: real) \<le> of_rat L" by linarith
+  then show "0 \<le> L" by simp
+qed
+
 text \<open>The theorem \<open>adm_exists\<close> also says that consistency is exactly admissibility of some
-  signal, so a set of samples that no signal under \<open>L\<close> can pass through is detected by
-  the executable check.\<close>
+  signal, so a set of samples that no signal under \<open>L\<close> can pass through, and a bound
+  under which no signal exists, are detected by the executable check.\<close>
 
 theorem consistent_iff_adm:
-  assumes "finite S" "0 \<le> L"
+  assumes "finite S"
   shows "consistent L S \<longleftrightarrow> (\<exists>f. adm L S f)"
-  using rcons_iff_lip[of "real_samples S" "of_rat L"] assms
-  by (simp add: adm_def consistent_rcons of_rat_less_eq)
+proof
+  assume "consistent L S"
+  then show "\<exists>f. adm L S f" by (rule adm_exists[OF assms])
+next
+  assume "\<exists>f. adm L S f"
+  then obtain f where f: "adm L S f" ..
+  have "0 \<le> L" by (rule adm_nonneg[OF f])
+  with rcons_iff_lip[of "real_samples S" "of_rat L"] f assms show "consistent L S"
+    by (auto simp: adm_def consistent_rcons)
+qed
 
 
 subsection \<open>Between two samples, in rational arithmetic\<close>
@@ -1121,25 +1152,26 @@ lemma qcone_lo_cast': "of_rat (qcone_lo L t p) = cone_lo (of_rat L) (of_rat t) (
   by (simp add: real_sample_def qcone_lo_cast)
 
 theorem enc_neighbours:
-  assumes "finite S" "0 \<le> L" "consistent L S" "qneighbours S p q" "of_int (fst p) \<le> t" "t \<le> of_int (fst q)"
+  assumes "finite S" "consistent L S" "qneighbours S p q" "of_int (fst p) \<le> t" "t \<le> of_int (fst q)"
   shows "hi L S t = min (qcone_up L t p) (qcone_up L t q)"
     and "lo L S t = max (qcone_lo L t p) (qcone_lo L t q)"
 proof -
-  have ne: "S \<noteq> {}" using assms(4) by (auto simp: qneighbours_def)
+  have ne: "S \<noteq> {}" using assms(3) by (auto simp: qneighbours_def)
   have n: "neighbours (real_samples S) (real_sample p) (real_sample q)"
-    using assms(4) by (simp add: qneighbours_cast)
+    using assms(3) by (simp add: qneighbours_cast)
   have t: "fst (real_sample p) \<le> of_rat t" "of_rat t \<le> fst (real_sample q)"
-    using assms(5,6) by (simp_all add: real_sample_def of_int_le_of_rat_iff of_rat_le_of_int_iff)
+    using assms(4,5) by (simp_all add: real_sample_def of_int_le_of_rat_iff of_rat_le_of_int_iff)
   have fin: "finite (real_samples S)" using assms(1) by simp
-  have rc: "rcons (of_rat L) (real_samples S)" using assms(3) by (simp add: consistent_rcons)
+  have L0: "0 \<le> (of_rat L :: real)" by (rule consistent_nonneg_real[OF assms(2)])
+  have rc: "rcons (of_rat L) (real_samples S)" by (rule consistent_rconsD[OF assms(2)])
   have "(of_rat (hi L S t) :: real) = upper (of_rat L) (real_samples S) (of_rat t)" by (rule hi_cast[OF assms(1) ne])
   also have "\<dots> = min (cone_up (of_rat L) (of_rat t) (real_sample p)) (cone_up (of_rat L) (of_rat t) (real_sample q))"
-    by (rule upper_neighbours[OF fin of_rat_nonneg[OF assms(2)] rc n t])
+    by (rule upper_neighbours[OF fin L0 rc n t])
   also have "\<dots> = of_rat (min (qcone_up L t p) (qcone_up L t q))" by (simp add: of_rat_min qcone_up_cast')
   finally show "hi L S t = min (qcone_up L t p) (qcone_up L t q)" by (simp add: of_rat_eq_iff)
   have "(of_rat (lo L S t) :: real) = lower (of_rat L) (real_samples S) (of_rat t)" by (rule lo_cast[OF assms(1) ne])
   also have "\<dots> = max (cone_lo (of_rat L) (of_rat t) (real_sample p)) (cone_lo (of_rat L) (of_rat t) (real_sample q))"
-    by (rule lower_neighbours[OF fin of_rat_nonneg[OF assms(2)] rc n t])
+    by (rule lower_neighbours[OF fin L0 rc n t])
   also have "\<dots> = of_rat (max (qcone_lo L t p) (qcone_lo L t q))" by (simp add: of_rat_max qcone_lo_cast')
   finally show "lo L S t = max (qcone_lo L t p) (qcone_lo L t q)" by (simp add: of_rat_eq_iff)
 qed
@@ -1200,7 +1232,7 @@ proof -
   have ne: "S \<noteq> {}" using assms(4) by (auto simp: qneighbours_def)
   have fin: "finite (real_samples S)" using assms(1) by simp
   have Lpos: "0 < (of_rat L :: real)" using assms(2) by (simp add: of_rat_pos_iff)
-  have rc: "rcons (of_rat L) (real_samples S)" using assms(3) by (simp add: consistent_rcons)
+  have rc: "rcons (of_rat L) (real_samples S)" by (rule consistent_rconsD[OF assms(3)])
   have n: "neighbours (real_samples S) (real_sample p) (real_sample q)" using assms(4) by (simp add: qneighbours_cast)
   note vt = lower_valley_attained[OF fin Lpos rc n]
   show "of_int (fst p) \<le> qvalley_time L p q"
@@ -1234,18 +1266,14 @@ proof -
 qed
 
 theorem above_cert_iff:
-  assumes "finite S" "S \<noteq> {}" "0 \<le> L" "consistent L S" "a \<le> b"
+  assumes "finite S" "S \<noteq> {}" "consistent L S" "a \<le> b"
   shows "above_cert L S a b c \<longleftrightarrow> above_on (of_rat L) (real_samples S) (of_rat a) (of_rat b) (of_rat c)"
-  using above_check_iff[of "real_samples S" "of_rat L" "of_rat a" "of_rat b" "of_rat c"] assms
-  by (simp add: above_cert_cast of_rat_nonneg consistent_rcons of_rat_less_eq)
-
-lemma adm_nonneg: "adm L S f \<Longrightarrow> 0 \<le> L"
 proof -
-  assume "adm L S f"
-  then have "lip (of_rat L) f" by (simp add: adm_def)
-  from lipD[OF this, of 1 0] have "\<bar>f 1 - f 0\<bar> \<le> of_rat L" by simp
-  with abs_ge_zero[of "f 1 - f 0"] have "(0 :: real) \<le> of_rat L" by linarith
-  then show "0 \<le> L" using of_rat_less_eq[of 0 L] by simp
+  have "above_check (of_rat L) (real_samples S) (of_rat a) (of_rat b) (of_rat c) \<longleftrightarrow>
+        above_on (of_rat L) (real_samples S) (of_rat a) (of_rat b) (of_rat c)"
+    by (rule above_check_iff[OF _ _ consistent_nonneg_real[OF assms(3)] consistent_rconsD[OF assms(3)]])
+       (simp_all add: assms(1,2,4) of_rat_less_eq)
+  then show ?thesis by (simp add: above_cert_cast[OF assms(1,2)])
 qed
 
 text \<open>Soundness of the decision for every admissible signal, and finality under more
@@ -1260,24 +1288,24 @@ proof -
   have ck: "above_check (of_rat L) (real_samples S) (of_rat a) (of_rat b) (of_rat c)"
     using assms(3) by (simp add: above_cert_cast[OF assms(1,2)])
   have "above_on (of_rat L) (real_samples S) (of_rat a) (of_rat b) (of_rat c)"
-    by (rule above_check_sound[OF _ _ _ rc ck]) (simp_all add: assms(1,2) of_rat_nonneg adm_nonneg[OF assms(4)])
+    by (rule above_check_sound[OF _ _ _ rc ck]) (simp_all add: assms(1,2) adm_nonneg[OF assms(4)])
   then have "of_rat c \<le> lower (of_rat L) (real_samples S) t" using assms(5,6) by (simp add: above_on_def)
   also have "\<dots> \<le> f t" using assms(1,2,4) by (intro lower_le_lip) (simp_all add: adm_def)
   finally show ?thesis .
 qed
 
 theorem above_cert_mono:
-  assumes "finite S'" "S \<subseteq> S'" "S \<noteq> {}" "0 \<le> L" "consistent L S'" "a \<le> b" "above_cert L S a b c"
+  assumes "finite S'" "S \<subseteq> S'" "S \<noteq> {}" "consistent L S'" "a \<le> b" "above_cert L S a b c"
   shows "above_cert L S' a b c"
 proof -
   have fS: "finite S" using assms(2,1) by (rule finite_subset)
-  have cS: "consistent L S" using assms(2,5) by (rule consistent_subset)
+  have cS: "consistent L S" using assms(2,4) by (rule consistent_subset)
   have "above_on (of_rat L) (real_samples S) (of_rat a) (of_rat b) (of_rat c)"
-    using assms(7) by (simp add: above_cert_iff[OF fS assms(3,4) cS assms(6)])
+    using assms(6) by (simp add: above_cert_iff[OF fS assms(3) cS assms(5)])
   then have "above_on (of_rat L) (real_samples S') (of_rat a) (of_rat b) (of_rat c)"
     using assms(1,2,3) by (intro above_on_mono[of "real_samples S'" "real_samples S"]) (simp_all add: real_samples_mono)
   moreover have "S' \<noteq> {}" using assms(2,3) by blast
-  ultimately show ?thesis by (simp add: above_cert_iff[OF assms(1) _ assms(4,5,6)])
+  ultimately show ?thesis by (simp add: above_cert_iff[OF assms(1) _ assms(4,5)])
 qed
 
 
@@ -1867,11 +1895,16 @@ theorem blocksI_point: "blocksI c (point \<sigma>) \<longleftrightarrow> blocks 
 
 section \<open>Enclosures on a trace\<close>
 
-text \<open>The rate bounds are a partial map \<open>R\<close> from names to rational bounds: \<open>R x = Some L\<close>
-  declares the bound \<open>L\<close> on the quantity behind \<open>x\<close>. The samples of \<open>x\<close> up to entry \<open>j\<close>
+text \<open>The rate bounds are a finite list \<open>R\<close> of pairs of a name and a rational bound, read
+  as a partial map by \<open>map_of\<close>: \<open>map_of R x = Some L\<close> declares the bound \<open>L\<close> on the
+  quantity behind \<open>x\<close>, and a name declared twice has its first bound. The list is finite
+  so that consistency, which quantifies over the declared names, is executable: a declared
+  name is checked with or without samples. The samples of \<open>x\<close> up to entry \<open>j\<close>
   are the numeric values of \<open>x\<close> at the entries up to \<open>j\<close> whose event is an arrival of
   \<open>x\<close>, each with the time of its entry: the reading of arrivals of \<open>fresh\<close>. A value present
   without an arrival is not a sample.\<close>
+
+type_synonym 'n bounds = "('n \<times> rat) list"
 
 definition samples :: "('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> 'n \<Rightarrow> samples" where
   "samples \<pi> j x = {(time \<pi> i, q) | i q. i \<le> j \<and> evt (\<pi> ! i) = Arrival x \<and> st \<pi> i x = Some (ANum q)}"
@@ -1906,19 +1939,19 @@ text \<open>The interval state of entry \<open>j\<close>, read at a rational tim
   name with a bound and no sample, nothing; for a name without a bound, the point of its
   value at \<open>j\<close>. The interval state of entry \<open>j\<close> is read at the time of the entry.\<close>
 
-definition enclosed_at :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> rat \<Rightarrow> 'n istate" where
+definition enclosed_at :: "'n bounds \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> rat \<Rightarrow> 'n istate" where
   "enclosed_at R \<pi> j t x =
-     (case R x of
+     (case map_of R x of
         None \<Rightarrow> point (st \<pi> j) x
       | Some L \<Rightarrow> if samples \<pi> j x = {} then None
                   else Some (IvNum (lo L (samples \<pi> j x) t) (hi L (samples \<pi> j x) t)))"
 
-definition enclosed :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> 'n istate" where
+definition enclosed :: "'n bounds \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> 'n istate" where
   "enclosed R \<pi> j = enclosed_at R \<pi> j (of_int (time \<pi> j))"
 
 text \<open>Without rate bounds the interval state is the point state of the entry.\<close>
 
-theorem enclosed_no_bounds: "enclosed (\<lambda>_. None) \<pi> j = point (st \<pi> j)"
+theorem enclosed_no_bounds: "enclosed [] \<pi> j = point (st \<pi> j)"
   by (simp add: enclosed_def enclosed_at_def fun_eq_iff)
 
 text \<open>Finality of the interval states: the samples up to an entry are those of every
@@ -1933,10 +1966,10 @@ theorem enclosed_append: "j < length \<pi> \<Longrightarrow> enclosed R (\<pi> @
 text \<open>Consistency of the samples with the bounds, up to an entry and on a whole trace. A
   prefix of a consistent trace is consistent.\<close>
 
-definition consistent_upto :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> bool" where
-  "consistent_upto R \<pi> j \<longleftrightarrow> (\<forall>x L. R x = Some L \<longrightarrow> consistent L (samples \<pi> j x))"
+definition consistent_upto :: "'n bounds \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> bool" where
+  "consistent_upto R \<pi> j \<longleftrightarrow> (\<forall>x L. map_of R x = Some L \<longrightarrow> consistent L (samples \<pi> j x))"
 
-definition consistent_trace :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> bool" where
+definition consistent_trace :: "'n bounds \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> bool" where
   "consistent_trace R \<pi> \<longleftrightarrow> consistent_upto R \<pi> (length \<pi> - 1)"
 
 lemma consistent_upto_mono:
@@ -1944,7 +1977,7 @@ lemma consistent_upto_mono:
   shows "consistent_upto R \<pi> i"
   unfolding consistent_upto_def
 proof (intro allI impI)
-  fix x L assume "R x = Some L"
+  fix x L assume "map_of R x = Some L"
   with assms(2) have "consistent L (samples \<pi> j x)" by (simp add: consistent_upto_def)
   then show "consistent L (samples \<pi> i x)" by (rule consistent_subset[OF samples_mono[OF assms(1)]])
 qed
@@ -1963,7 +1996,7 @@ text \<open>At an arrival of \<open>x\<close> with consistent samples the interv
   readings on states for that name.\<close>
 
 theorem enclosed_at_sample:
-  assumes "R x = Some L" "consistent_upto R \<pi> j" "evt (\<pi> ! j) = Arrival x" "st \<pi> j x = Some (ANum q)"
+  assumes "map_of R x = Some L" "consistent_upto R \<pi> j" "evt (\<pi> ! j) = Arrival x" "st \<pi> j x = Some (ANum q)"
   shows "enclosed R \<pi> j x = Some (IvNum q q)" and "enclosed R \<pi> j x = point (st \<pi> j) x"
 proof -
   have p: "(time \<pi> j, q) \<in> samples \<pi> j x" using assms(3,4) by (rule samples_arrival[OF order_refl])
@@ -1984,12 +2017,12 @@ text \<open>A family of signals, one per name, is admissible at entry \<open>j\<
   it induces at time \<open>t\<close> reads each name with a bound from its signal, and each other name
   from the state of entry \<open>j\<close>.\<close>
 
-definition adm_family :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n \<Rightarrow> real \<Rightarrow> real) \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> bool" where
-  "adm_family R F \<pi> j \<longleftrightarrow> (\<forall>x L. R x = Some L \<longrightarrow> adm L (samples \<pi> j x) (F x))"
+definition adm_family :: "'n bounds \<Rightarrow> ('n \<Rightarrow> real \<Rightarrow> real) \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> bool" where
+  "adm_family R F \<pi> j \<longleftrightarrow> (\<forall>x L. map_of R x = Some L \<longrightarrow> adm L (samples \<pi> j x) (F x))"
 
-definition signal_state :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n \<Rightarrow> real \<Rightarrow> real) \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat
+definition signal_state :: "'n bounds \<Rightarrow> ('n \<Rightarrow> real \<Rightarrow> real) \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat
     \<Rightarrow> real \<Rightarrow> 'n rstate" where
-  "signal_state R F \<pi> j t x = (case R x of None \<Rightarrow> real_state (st \<pi> j) x | Some L \<Rightarrow> Some (RNum (F x t)))"
+  "signal_state R F \<pi> j t x = (case map_of R x of None \<Rightarrow> real_state (st \<pi> j) x | Some L \<Rightarrow> Some (RNum (F x t)))"
 
 text \<open>The induced valuation at the time of the entry lies inside the interval state of
   the entry: the enclosure part is \<open>adm_in_enc\<close>, the rest is the point state.\<close>
@@ -2004,7 +2037,7 @@ theorem enclosed_inside:
 proof (intro allI impI)
   fix x i assume e: "enclosed R \<pi> j x = Some i"
   show "\<exists>r. signal_state R F \<pi> j (of_int (time \<pi> j)) x = Some r \<and> inval i r"
-  proof (cases "R x")
+  proof (cases "map_of R x")
     case None
     with e have "point (st \<pi> j) x = Some i" by (simp add: enclosed_def enclosed_at_def)
     with None show ?thesis by (auto simp: signal_state_def dest: point_inside_real_state)
@@ -2027,23 +2060,21 @@ theorem evalI_sound_signals:
   shows "evalR c (signal_state R F \<pi> j (of_int (time \<pi> j))) = Some b"
   by (rule evalI_sound_value[OF assms(1) enclosed_inside[OF assms(2)] assms(3)])
 
-text \<open>Non-vacuity on a trace: with consistent samples and non-negative bounds there is an
-  admissible family.\<close>
-
-definition bounds_nonneg :: "('n \<Rightarrow> rat option) \<Rightarrow> bool" where
-  "bounds_nonneg R \<longleftrightarrow> (\<forall>x L. R x = Some L \<longrightarrow> 0 \<le> L)"
+text \<open>Non-vacuity on a trace: with consistent samples there is an admissible family. A
+  negative bound is inconsistent with every set of samples, so no hypothesis on the bounds
+  is needed beyond consistency.\<close>
 
 theorem adm_family_exists:
-  assumes "bounds_nonneg R" "consistent_upto R \<pi> j"
+  assumes "consistent_upto R \<pi> j"
   shows "\<exists>F. adm_family R F \<pi> j"
 proof -
-  have ex: "\<exists>f. adm L (samples \<pi> j x) f" if "R x = Some L" for x L
-    using assms that by (intro adm_exists[OF samples_finite]) (simp_all add: bounds_nonneg_def consistent_upto_def)
-  have "adm_family R (\<lambda>x. SOME f. adm (the (R x)) (samples \<pi> j x) f) \<pi> j"
+  have ex: "\<exists>f. adm L (samples \<pi> j x) f" if "map_of R x = Some L" for x L
+    using assms that by (intro adm_exists[OF samples_finite]) (simp add: consistent_upto_def)
+  have "adm_family R (\<lambda>x. SOME f. adm (the (map_of R x)) (samples \<pi> j x) f) \<pi> j"
     unfolding adm_family_def
   proof (intro allI impI)
-    fix x L assume R: "R x = Some L"
-    from someI_ex[OF ex[OF R]] show "adm L (samples \<pi> j x) (SOME f. adm (the (R x)) (samples \<pi> j x) f)"
+    fix x L assume R: "map_of R x = Some L"
+    from someI_ex[OF ex[OF R]] show "adm L (samples \<pi> j x) (SOME f. adm (the (map_of R x)) (samples \<pi> j x) f)"
       by (simp add: R)
   qed
   then show ?thesis by blast
@@ -2058,19 +2089,19 @@ text \<open>The monitor of \<open>s MUST_NOT a WHEN c\<close> on enclosures read
   \<open>c\<close> is false on that interval state. The verdict records a breach at the first action
   before which \<open>c\<close> is true on the interval state.\<close>
 
-definition blocked_actionI :: "('n \<Rightarrow> rat option) \<Rightarrow> 's \<Rightarrow> 'a \<Rightarrow> ('n, atom) expr \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> bool" where
+definition blocked_actionI :: "'n bounds \<Rightarrow> 's \<Rightarrow> 'a \<Rightarrow> ('n, atom) expr \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> bool" where
   "blocked_actionI R s a c \<pi> j \<longleftrightarrow>
      1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> blocksI c (enclosed R \<pi> (j - 1))"
 
-definition forbiddenI :: "('n \<Rightarrow> rat option) \<Rightarrow> 's \<Rightarrow> 'a \<Rightarrow> ('n, atom) expr \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> bool" where
+definition forbiddenI :: "'n bounds \<Rightarrow> 's \<Rightarrow> 'a \<Rightarrow> ('n, atom) expr \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> bool" where
   "forbiddenI R s a c \<pi> j \<longleftrightarrow>
      1 \<le> j \<and> j < length \<pi> \<and> does s a (evt (\<pi> ! j)) \<and> evalI c (enclosed R \<pi> (j - 1)) = Some True"
 
-definition pr_verdictI :: "('n \<Rightarrow> rat option) \<Rightarrow> 's \<Rightarrow> 'a \<Rightarrow> ('n, atom) expr \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> verdict" where
+definition pr_verdictI :: "'n bounds \<Rightarrow> 's \<Rightarrow> 'a \<Rightarrow> ('n, atom) expr \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> verdict" where
   "pr_verdictI R s a c \<pi> =
      (if \<exists>j. forbiddenI R s a c \<pi> j then Breached (time \<pi> (LEAST j. forbiddenI R s a c \<pi> j)) else Pending)"
 
-definition monitor_decisionsI :: "('n \<Rightarrow> rat option) \<Rightarrow> 's \<Rightarrow> 'a \<Rightarrow> ('n, atom) expr \<Rightarrow> ('n, atom, 's, 'a) itrace
+definition monitor_decisionsI :: "'n bounds \<Rightarrow> 's \<Rightarrow> 'a \<Rightarrow> ('n, atom) expr \<Rightarrow> ('n, atom, 's, 'a) itrace
     \<Rightarrow> (nat \<times> bool) list" where
   "monitor_decisionsI R s a c \<pi> =
      map (\<lambda>j. (j, blocksI c (enclosed R \<pi> (j - 1)))) (filter (\<lambda>j. does s a (evt (\<pi> ! j))) [1..<length \<pi>])"
@@ -2103,23 +2134,23 @@ text \<open>Without rate bounds the monitor and the verdict are those of the cor
   trace and every condition.\<close>
 
 theorem blocked_actionI_no_bounds:
-  "blocked_actionI (\<lambda>_. None) s a c \<pi> j \<longleftrightarrow> blocked_action s a c \<pi> j"
+  "blocked_actionI [] s a c \<pi> j \<longleftrightarrow> blocked_action s a c \<pi> j"
   by (simp add: blocked_actionI_def blocked_action_def enclosed_no_bounds blocksI_point)
 
 theorem forbiddenI_no_bounds:
-  "forbiddenI (\<lambda>_. None) s a c \<pi> j \<longleftrightarrow> forbidden s a c \<pi> j"
+  "forbiddenI [] s a c \<pi> j \<longleftrightarrow> forbidden s a c \<pi> j"
   by (simp add: forbiddenI_def forbidden_def enclosed_no_bounds evalI_point)
 
 theorem pr_verdictI_no_bounds:
-  "pr_verdictI (\<lambda>_. None) s a c \<pi> = pr_verdict s a c \<pi>"
+  "pr_verdictI [] s a c \<pi> = pr_verdict s a c \<pi>"
 proof -
-  have "forbiddenI (\<lambda>_. None) s a c \<pi> = forbidden s a c \<pi>"
+  have "forbiddenI [] s a c \<pi> = forbidden s a c \<pi>"
     by (rule ext) (rule forbiddenI_no_bounds)
   then show ?thesis by (simp add: pr_verdictI_def pr_verdict_def)
 qed
 
 theorem monitor_decisionsI_no_bounds:
-  "monitor_decisionsI (\<lambda>_. None) s a c \<pi> = monitor_decisions s a c \<pi>"
+  "monitor_decisionsI [] s a c \<pi> = monitor_decisions s a c \<pi>"
   by (simp add: monitor_decisionsI_def monitor_decisions_def enclosed_no_bounds blocksI_point)
 
 
@@ -2190,14 +2221,14 @@ text \<open>\<open>ALWAYS\<close>, \<open>EVENTUALLY\<close> and \<open>NEXT\<cl
   read on the interval states of the entries as \<open>inv_eval\<close> and \<open>ew_eval\<close> read the
   states.\<close>
 
-fun inv_evalI :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n, atom) inv \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> bool option" where
+fun inv_evalI :: "'n bounds \<Rightarrow> ('n, atom) inv \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> bool option" where
   "inv_evalI R (Always \<phi>) \<pi> =
      (if \<exists>j < length \<pi>. evalI \<phi> (enclosed R \<pi> j) = Some False then Some False else None)"
 | "inv_evalI R (Eventually \<phi>) \<pi> =
      (if \<exists>j < length \<pi>. evalI \<phi> (enclosed R \<pi> j) = Some True then Some True else None)"
 | "inv_evalI R (Next \<phi>) \<pi> = (if 1 < length \<pi> then evalI \<phi> (enclosed R \<pi> 1) else None)"
 
-definition ew_evalI :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n, atom) expr \<Rightarrow> int \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> bool option" where
+definition ew_evalI :: "'n bounds \<Rightarrow> ('n, atom) expr \<Rightarrow> int \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> bool option" where
   "ew_evalI R \<phi> D \<pi> =
      (if \<exists>j < length \<pi>. time \<pi> j \<le> D \<and> evalI \<phi> (enclosed R \<pi> j) = Some True then Some True
       else if passed D \<pi> \<and> (\<forall>j < length \<pi>. time \<pi> j \<le> D \<longrightarrow> evalI \<phi> (enclosed R \<pi> j) = Some False)
@@ -2206,13 +2237,13 @@ definition ew_evalI :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n, atom) e
 
 text \<open>Without rate bounds they are the invariants of the core.\<close>
 
-lemma evalI_point_entry: "evalI \<phi> (enclosed (\<lambda>_. None) \<pi> j) = eval \<phi> (st \<pi> j)"
+lemma evalI_point_entry: "evalI \<phi> (enclosed [] \<pi> j) = eval \<phi> (st \<pi> j)"
   unfolding enclosed_no_bounds by (rule evalI_point)
 
-theorem inv_evalI_no_bounds: "inv_evalI (\<lambda>_. None) \<iota> \<pi> = inv_eval \<iota> \<pi>"
+theorem inv_evalI_no_bounds: "inv_evalI [] \<iota> \<pi> = inv_eval \<iota> \<pi>"
   by (cases \<iota>) (simp_all add: evalI_point_entry)
 
-theorem ew_evalI_no_bounds: "ew_evalI (\<lambda>_. None) \<phi> D \<pi> = ew_eval \<phi> D \<pi>"
+theorem ew_evalI_no_bounds: "ew_evalI [] \<phi> D \<pi> = ew_eval \<phi> D \<pi>"
   unfolding ew_evalI_def ew_eval_def evalI_point_entry by (rule refl)
 
 text \<open>The verdicts are sound for every admissible family at the entries that decide them:
@@ -2346,7 +2377,7 @@ text \<open>Samples that no signal under the declared bounds can pass through ma
   inconsistent by a later sample; that is a property of the data, and the decided
   verdicts of the shorter trace are not contradicted, only withheld.\<close>
 
-definition checked :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> 'r \<Rightarrow> 'r option" where
+definition checked :: "'n bounds \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> 'r \<Rightarrow> 'r option" where
   "checked R \<pi> v = (if consistent_trace R \<pi> then Some v else None)"
 
 lemma checked_rejected: "checked R \<pi> v = None \<longleftrightarrow> \<not> consistent_trace R \<pi>"
@@ -2388,10 +2419,10 @@ text \<open>The false verdict of \<open>EVENTUALLY \<phi> WITHIN d\<close> on en
   enclosure at earlier times. It is sound, and it is final under more consistent
   samples.\<close>
 
-definition ew_below_false :: "('n \<Rightarrow> rat option) \<Rightarrow> 'n \<Rightarrow> rat \<Rightarrow> int \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> bool" where
+definition ew_below_false :: "'n bounds \<Rightarrow> 'n \<Rightarrow> rat \<Rightarrow> int \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> bool" where
   "ew_below_false R x c D \<pi> \<longleftrightarrow>
      passed D \<pi> \<and>
-     (case R x of
+     (case map_of R x of
         None \<Rightarrow> False
       | Some L \<Rightarrow> samples \<pi> (length \<pi> - 1) x \<noteq> {} \<and>
                  above_cert L (samples \<pi> (length \<pi> - 1) x) (of_int (time \<pi> 0)) (of_int D) c)"
@@ -2401,7 +2432,7 @@ theorem ew_evalI_F_sound:
     and "of_int (time \<pi> 0) \<le> t" "t \<le> of_int D"
   shows "evalR (ELt (VName x) (VConst (ANum c))) (signal_state R F \<pi> (length \<pi> - 1) t) = Some False"
 proof -
-  from assms(1) obtain L where L: "R x = Some L"
+  from assms(1) obtain L where L: "map_of R x = Some L"
     and ne: "samples \<pi> (length \<pi> - 1) x \<noteq> {}"
     and cert: "above_cert L (samples \<pi> (length \<pi> - 1) x) (of_int (time \<pi> 0)) (of_int D) c"
     by (auto simp: ew_below_false_def split: option.splits)
@@ -2412,10 +2443,10 @@ proof -
 qed
 
 theorem ew_below_false_final:
-  assumes "ew_below_false R x c D \<pi>" "\<pi> \<noteq> []" "bounds_nonneg R" "consistent_trace R (\<pi> @ \<rho>)" "time \<pi> 0 \<le> D"
+  assumes "ew_below_false R x c D \<pi>" "\<pi> \<noteq> []" "consistent_trace R (\<pi> @ \<rho>)" "time \<pi> 0 \<le> D"
   shows "ew_below_false R x c D (\<pi> @ \<rho>)"
 proof -
-  from assms(1) obtain L where L: "R x = Some L"
+  from assms(1) obtain L where L: "map_of R x = Some L"
     and ne: "samples \<pi> (length \<pi> - 1) x \<noteq> {}"
     and cert: "above_cert L (samples \<pi> (length \<pi> - 1) x) (of_int (time \<pi> 0)) (of_int D) c"
     and p: "passed D \<pi>"
@@ -2424,11 +2455,10 @@ proof -
   have lt: "length \<pi> - 1 < length \<pi>" using assms(2) by simp
   have sub: "?S \<subseteq> ?S'"
     using samples_append[OF lt, of \<rho> x] samples_mono[of "length \<pi> - 1" "length (\<pi> @ \<rho>) - 1" "\<pi> @ \<rho>" x] by simp
-  have L0: "0 \<le> L" using assms(3) L by (simp add: bounds_nonneg_def)
-  have c': "consistent L ?S'" using assms(4) L by (simp add: consistent_trace_def consistent_upto_def)
-  have ab: "(of_int (time \<pi> 0) :: rat) \<le> of_int D" using assms(5) by simp
+  have c': "consistent L ?S'" using assms(3) L by (simp add: consistent_trace_def consistent_upto_def)
+  have ab: "(of_int (time \<pi> 0) :: rat) \<le> of_int D" using assms(4) by simp
   have cert': "above_cert L ?S' (of_int (time \<pi> 0)) (of_int D) c"
-    by (rule above_cert_mono[OF samples_finite sub ne L0 c' ab cert])
+    by (rule above_cert_mono[OF samples_finite sub ne c' ab cert])
   have t0: "time (\<pi> @ \<rho>) 0 = time \<pi> 0" using assms(2) by simp
   show ?thesis unfolding ew_below_false_def t0 using passed_append[OF p] L cert' sub ne by auto
 qed
@@ -2499,7 +2529,7 @@ lemma samples_code [code]: "samples \<pi> j x = set (sample_list \<pi> j x)"
 
 lemma consistent_code [code]:
   "consistent L (set ps) \<longleftrightarrow>
-     list_all (\<lambda>p. list_all (\<lambda>q. \<bar>snd p - snd q\<bar> \<le> L * \<bar>of_int (fst p) - of_int (fst q)\<bar>) ps) ps"
+     0 \<le> L \<and> list_all (\<lambda>p. list_all (\<lambda>q. \<bar>snd p - snd q\<bar> \<le> L * \<bar>of_int (fst p) - of_int (fst q)\<bar>) ps) ps"
   by (simp add: consistent_def list_all_iff)
 
 lemma lo_code [code]: "lo L (set (p # ps)) t = fold max (map (qcone_lo L t) ps) (qcone_lo L t p)"
@@ -2516,7 +2546,7 @@ qed
 
 lemma enclosed_at_code [code]:
   "enclosed_at R \<pi> j t x =
-     (case R x of
+     (case map_of R x of
         None \<Rightarrow> point (st \<pi> j) x
       | Some L \<Rightarrow> (case sample_list \<pi> j x of
                     [] \<Rightarrow> None
@@ -2562,62 +2592,24 @@ lemma ew_evalI_code [code]:
       else None)"
   unfolding ew_evalI_def by auto
 
-text \<open>Consistency quantifies over all names; only the names that arrive up to the entry
-  have samples, and an empty set of samples is consistent.\<close>
-
-definition arrivals :: "('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> 'n list" where
-  "arrivals \<pi> j = concat (map (\<lambda>i. case evt (\<pi> ! i) of Arrival x \<Rightarrow> [x] | _ \<Rightarrow> []) [0..<Suc j])"
-
-lemma arrivals_0: "arrivals \<pi> 0 = (case evt (\<pi> ! 0) of Arrival x \<Rightarrow> [x] | _ \<Rightarrow> [])"
-  by (simp add: arrivals_def)
-
-lemma arrivals_Suc: "arrivals \<pi> (Suc j) = arrivals \<pi> j @ (case evt (\<pi> ! Suc j) of Arrival x \<Rightarrow> [x] | _ \<Rightarrow> [])"
-  by (simp add: arrivals_def)
-
-lemma arrivals_member:
-  assumes "i \<le> j" "evt (\<pi> ! i) = Arrival x"
-  shows "x \<in> set (arrivals \<pi> j)"
-  using assms
-proof (induction j)
-  case 0
-  then show ?case by (simp add: arrivals_0)
-next
-  case (Suc j)
-  show ?case
-  proof (cases "i \<le> j")
-    case True
-    with Suc show ?thesis by (simp add: arrivals_Suc)
-  next
-    case False
-    with Suc.prems have "i = Suc j" by simp
-    with Suc.prems(2) show ?thesis by (simp add: arrivals_Suc)
-  qed
-qed
-
-lemma samples_no_arrival: "x \<notin> set (arrivals \<pi> j) \<Longrightarrow> samples \<pi> j x = {}"
-  by (auto simp: samples_def dest: arrivals_member)
+text \<open>Consistency quantifies over the declared names, the names of the list \<open>R\<close>: a
+  declared name without samples is checked too, and rejected if its bound is negative.\<close>
 
 lemma consistent_upto_code [code]:
   "consistent_upto R \<pi> j \<longleftrightarrow>
-     (\<forall>x \<in> set (arrivals \<pi> j). case R x of None \<Rightarrow> True | Some L \<Rightarrow> consistent L (samples \<pi> j x))"
+     (\<forall>x \<in> set (map fst R). case map_of R x of None \<Rightarrow> True | Some L \<Rightarrow> consistent L (samples \<pi> j x))"
 proof
   assume "consistent_upto R \<pi> j"
-  then show "\<forall>x \<in> set (arrivals \<pi> j). case R x of None \<Rightarrow> True | Some L \<Rightarrow> consistent L (samples \<pi> j x)"
+  then show "\<forall>x \<in> set (map fst R). case map_of R x of None \<Rightarrow> True | Some L \<Rightarrow> consistent L (samples \<pi> j x)"
     by (auto simp: consistent_upto_def split: option.splits)
 next
-  assume a: "\<forall>x \<in> set (arrivals \<pi> j). case R x of None \<Rightarrow> True | Some L \<Rightarrow> consistent L (samples \<pi> j x)"
+  assume a: "\<forall>x \<in> set (map fst R). case map_of R x of None \<Rightarrow> True | Some L \<Rightarrow> consistent L (samples \<pi> j x)"
   show "consistent_upto R \<pi> j"
     unfolding consistent_upto_def
   proof (intro allI impI)
-    fix x L assume R: "R x = Some L"
-    show "consistent L (samples \<pi> j x)"
-    proof (cases "x \<in> set (arrivals \<pi> j)")
-      case True
-      with a R show ?thesis by auto
-    next
-      case False
-      then show ?thesis by (simp add: samples_no_arrival consistent_def)
-    qed
+    fix x L assume R: "map_of R x = Some L"
+    have "x \<in> set (map fst R)" using imageI[OF map_of_SomeD[OF R], of fst] by simp
+    with a R show "consistent L (samples \<pi> j x)" by auto
   qed
 qed
 
@@ -2634,8 +2626,8 @@ text \<open>The scenarios of \<open>examples/core/sensor_overheat.triel\<close>,
 definition temp :: path where "temp = [STR ''motor_temp'']"
 definition lim :: path where "lim = [STR ''limit_c'']"
 
-definition sensor_bounds :: "path \<Rightarrow> rat option" where
-  "sensor_bounds x = (if x = temp then Some (1 / 10) else None)"
+definition sensor_bounds :: "path bounds" where
+  "sensor_bounds = [(temp, 1 / 10)]"
 
 definition over_limit :: "(path, atom) expr" where
   "over_limit = ELe (VName lim) (VName temp)"
@@ -2762,6 +2754,42 @@ lemma fall_rejected:
   "checked sensor_bounds fall_trace (inv_evalI sensor_bounds (Eventually (ELt (VName temp) (VName lim))) fall_trace) = None"
   by code_simp+
 
+text \<open>A negative bound is not a rate bound: no signal is under it (\<open>adm_nonneg\<close>). With the
+  bound \<open>-1\<close> on the temperature and one reading of 85.0 at 08:00:00, the pair computed at
+  08:00:10 is (95, 75), not an interval; the condition is true on it, and the monitor on
+  these pairs would record at 08:00:11 a breach that no signal supports. \<open>consistent\<close>
+  requires a non-negative bound, so the trace is rejected by \<open>checked\<close> and gets no
+  verdict; and a trace in which the temperature never arrives is rejected the same way,
+  since the declared name is checked with or without samples.\<close>
+
+definition negative_bounds :: "path bounds" where
+  "negative_bounds = [(temp, - 1)]"
+
+definition negative_trace :: ctrace where
+  "negative_trace =
+     [(sensor_data 85, 1794211200, Arrival temp),
+      (sensor_data 85, 1794211210, Tick),
+      (sensor_data 85, 1794211211, arm_move)]"
+
+definition no_sample_trace :: ctrace where
+  "no_sample_trace = [([lim \<mapsto> ANum 90], 1794211200, Tick)]"
+
+value "enclosed negative_bounds negative_trace 1 temp"
+value "pr_verdictI negative_bounds (STR ''arm'') (Act (STR ''move'') []) over_limit negative_trace"
+value "checked negative_bounds negative_trace (pr_verdictI negative_bounds (STR ''arm'') (Act (STR ''move'') []) over_limit negative_trace)"
+value "consistent_trace negative_bounds no_sample_trace"
+
+lemma negative_bound_rejected:
+  "enclosed negative_bounds negative_trace 1 temp = Some (IvNum 95 75)"
+  "pr_verdictI negative_bounds (STR ''arm'') (Act (STR ''move'') []) over_limit negative_trace = Breached 1794211211"
+  "\<not> consistent_trace negative_bounds negative_trace"
+  "checked negative_bounds negative_trace
+     (pr_verdictI negative_bounds (STR ''arm'') (Act (STR ''move'') []) over_limit negative_trace) = None"
+  "\<not> consistent_trace negative_bounds no_sample_trace"
+  "checked negative_bounds no_sample_trace (inv_evalI negative_bounds (Always over_limit) no_sample_trace) = None"
+  "consistent_trace sensor_bounds no_sample_trace"
+  by code_simp+
+
 text \<open>A Boolean factor in the condition of a prohibition: \<open>arm MUST_NOT move WHEN over_limit\<close>,
   whose condition is translated to \<open>over_limit == true\<close> (section 10.6 of CORE.md, rule 2),
   with a string factor beside it. Neither has a rate bound, so the interval state carries
@@ -2818,8 +2846,8 @@ definition never_false_trace :: ctrace where
       (sensor_data (195 / 2), 1794211800, Arrival temp),
       (sensor_data (195 / 2), 1794211801, Tick)]"
 
-definition slow_bounds :: "path \<Rightarrow> rat option" where
-  "slow_bounds x = (if x = temp then Some (1 / 20) else None)"
+definition slow_bounds :: "path bounds" where
+  "slow_bounds = [(temp, 1 / 20)]"
 
 value "ew_evalI sensor_bounds (ELt (VName temp) (VName lim)) 1794211800 never_false_trace"
 value "ew_below_false sensor_bounds temp 90 1794211800 never_false_trace"
@@ -2833,5 +2861,6 @@ lemma never_false_signals:
   "qvalley (1 / 10) (1794211205, 195 / 2) (1794211500, 195 / 2) = 331 / 4"
   "qvalley (1 / 20) (1794211500, 195 / 2) (1794211800, 195 / 2) = 90"
   by code_simp+
+
 
 end
