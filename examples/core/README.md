@@ -1,6 +1,6 @@
 # Examples inside the formal core
 
-The fourteen specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
+The fifteen specifications in this folder use only constructs that the translator `parser/triel_to_core.py` turns into terms of the Isabelle/HOL core in [`formal/core`](../../formal/core/CORE.md):
 
 - `core_deadline_cure.triel`: a deadline, its breach, and a cure;
 - `core_unless_records.triel`: a sequence under UNLESS, with the guard read from a nested record;
@@ -16,6 +16,7 @@ The fourteen specifications in this folder use only constructs that the translat
 - `core_hidden.triel`: a hidden `ZK<Integer>` factor, named as an action argument and never read, a `ZK<String>` factor `WITHOUT REVEALING ALL` read like an ordinary factor, and `PROOF_SYSTEM`, `CURVE`, `DID`, `PROVES`, `HASH` with a salt and `BOUND_TO` printed as metadata;
 - `core_invoice_agent.triel`: an AI agent that pays an invoice for its owner: `WITHIN … ELSE` with the owner as the fallback, a prohibition whose condition compares a Decimal factor quoted by an oracle under `ON_STALE BLOCK` and reads an approval that may be absent, a breach handler that notifies the owner, and `PROVENANCE_REQUIRED`;
 - `gdpr_art33_notification.triel`: the notification of a personal data breach to the supervisory authority after Article 33 of the GDPR, in a stylised reading: `WITHIN 72 HOURS` from activation, the moment the controller became aware of the breach, with `ON_BREACH CURE_BY 7 DAYS`. A missed deadline is a breach, which stays on record; a notification within 7 days of the breach cures it (`BREACHED … CURE FULFILLED`), and a cure window that passes without one is a second, final breach. The 7 days are an assumption of the example, not a period of Article 33; the reasons for the delay are a factor that no verdict reads; the risk exception and the phased notification of Article 33 are outside the example.
+- `sensor_overheat.triel`: a physical system with a sensor: the overheat alarm of the drive motor of a robot arm activates the specification, the controller must stop the drive `WITHIN 30 SECONDS`, escalated to the safety engineer on a breach, and the arm `MUST_NOT move` while the temperature, quoted by a sensor under `MAX_AGE 5 SECONDS ON_STALE BLOCK`, is at or above the limit. When the sensor is silent or its reading is stale, the monitor of the prohibition blocks the movement while its verdict stays `PENDING`, and the invariant `EVENTUALLY … WITHIN 10 MINUTES` is undefined, not false; no reading is fresh at the activation entry, so in this specification the invariant is never false. A condition held for longer than N seconds from an arbitrary moment of the trace is not expressible in version 2.5.1 (`formal/core/CORE.md`, section 10.6, rule 7), so durations count from the alarm.
 
 The scenario `age_verification_breach` runs `examples/age_verification.triel`, whose hidden `age` factor the core accepts.
 
