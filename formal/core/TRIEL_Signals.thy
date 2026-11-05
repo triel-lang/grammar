@@ -1283,32 +1283,50 @@ qed
 
 section \<open>Interval evaluation\<close>
 
-text \<open>An interval state maps a name to a closed interval of rationals, given by its
-  bounds, or to nothing. The point state of a state maps a name with a numeric value to
-  the interval of that value alone; a name with a value that is not a number is unmapped,
-  like an absent name.\<close>
+text \<open>An interval state maps a name to an interval value, or to nothing. An interval value
+  is a closed interval of rationals, given by its bounds, for a quantity that is a number,
+  or an exact value of another kind, a Boolean, a string or a time, which no rate bound
+  applies to and which an interval state carries as a state does. The point state of a
+  state maps a numeric value to the interval of that value alone and every other value to
+  itself; it has the domain of the state.\<close>
 
-type_synonym 'n istate = "'n \<rightharpoonup> rat \<times> rat"
+datatype ival = IvNum rat rat | IvBool bool | IvStr String.literal | IvTime int
+
+type_synonym 'n istate = "'n \<rightharpoonup> ival"
+
+fun ival_of :: "atom \<Rightarrow> ival" where
+  "ival_of (ANum q) = IvNum q q"
+| "ival_of (ABool b) = IvBool b"
+| "ival_of (AStr s) = IvStr s"
+| "ival_of (ATime t) = IvTime t"
 
 definition point :: "('n, atom) state \<Rightarrow> 'n istate" where
-  "point \<sigma> x = (case \<sigma> x of None \<Rightarrow> None | Some v \<Rightarrow> (case num_of v of None \<Rightarrow> None | Some q \<Rightarrow> Some (q, q)))"
+  "point \<sigma> x = map_option ival_of (\<sigma> x)"
 
-text \<open>A comparison of two intervals is true when it holds for every pair of values in
-  them, false when it fails for every pair, and undefined otherwise.\<close>
+text \<open>A comparison of two numeric intervals is true when it holds for every pair of values
+  in them, false when it fails for every pair, and undefined otherwise. Two exact values
+  are equal when they are the same value; a number and a value of another kind are never
+  equal; and an ordering comparison with an operand that is not a number is false, as
+  \<open>vless\<close> and \<open>vleq\<close> are false on such operands in the core.\<close>
 
-definition ilt :: "rat \<times> rat \<Rightarrow> rat \<times> rat \<Rightarrow> bool option" where
-  "ilt a b = (if snd a < fst b then Some True else if snd b \<le> fst a then Some False else None)"
+fun ilt :: "ival \<Rightarrow> ival \<Rightarrow> bool option" where
+  "ilt (IvNum p q) (IvNum p' q') = (if q < p' then Some True else if q' \<le> p then Some False else None)"
+| "ilt _ _ = Some False"
 
-definition ile :: "rat \<times> rat \<Rightarrow> rat \<times> rat \<Rightarrow> bool option" where
-  "ile a b = (if snd a \<le> fst b then Some True else if snd b < fst a then Some False else None)"
+fun ile :: "ival \<Rightarrow> ival \<Rightarrow> bool option" where
+  "ile (IvNum p q) (IvNum p' q') = (if q \<le> p' then Some True else if q' < p then Some False else None)"
+| "ile _ _ = Some False"
 
-definition ieq :: "rat \<times> rat \<Rightarrow> rat \<times> rat \<Rightarrow> bool option" where
-  "ieq a b =
-     (if fst a = snd a \<and> fst b = snd b \<and> fst a = fst b then Some True
-      else if snd a < fst b \<or> snd b < fst a then Some False else None)"
+fun ieq :: "ival \<Rightarrow> ival \<Rightarrow> bool option" where
+  "ieq (IvNum p q) (IvNum p' q') =
+     (if p = q \<and> p' = q' \<and> p = p' then Some True else if q < p' \<or> q' < p then Some False else None)"
+| "ieq (IvBool b) (IvBool b') = Some (b = b')"
+| "ieq (IvStr s) (IvStr s') = Some (s = s')"
+| "ieq (IvTime t) (IvTime t') = Some (t = t')"
+| "ieq _ _ = Some False"
 
-primrec evalVI :: "('n, atom) vexp \<Rightarrow> 'n istate \<Rightarrow> (rat \<times> rat) option" where
-  "evalVI (VConst v) I = (case num_of v of None \<Rightarrow> None | Some q \<Rightarrow> Some (q, q))"
+primrec evalVI :: "('n, atom) vexp \<Rightarrow> 'n istate \<Rightarrow> ival option" where
+  "evalVI (VConst v) I = Some (ival_of v)"
 | "evalVI (VName x) I = I x"
 | "evalVI (VDefault x a) I = (case I x of Some i \<Rightarrow> Some i | None \<Rightarrow> evalVI a I)"
 
@@ -1330,109 +1348,66 @@ primrec evalI :: "('n, atom) expr \<Rightarrow> 'n istate \<Rightarrow> bool opt
 
 subsection \<open>The point case: the evaluation on states\<close>
 
-text \<open>On a state whose values are numbers, and an expression whose constants are numbers,
-  the interval evaluation of the point state is the evaluation of the state: the
-  three-valued evaluation of the core is the special case of exact readings.\<close>
+text \<open>The interval evaluation of the point state of a state is the evaluation of the state,
+  for every state and every condition: the three-valued evaluation of the core is the
+  special case of exact readings.\<close>
 
-definition numeric :: "('n, atom) state \<Rightarrow> bool" where
-  "numeric \<sigma> \<longleftrightarrow> (\<forall>x v. \<sigma> x = Some v \<longrightarrow> num_of v \<noteq> None)"
+lemma ieq_ival_of: "ieq (ival_of u) (ival_of w) = Some (u = w)"
+  by (cases u; cases w) simp_all
 
-primrec num_vexp :: "('n, atom) vexp \<Rightarrow> bool" where
-  "num_vexp (VConst v) = (num_of v \<noteq> None)"
-| "num_vexp (VName x) = True"
-| "num_vexp (VDefault x a) = num_vexp a"
+lemma ilt_ival_of: "ilt (ival_of u) (ival_of w) = Some (vless u w)"
+  by (cases u; cases w) simp_all
 
-primrec num_expr :: "('n, atom) expr \<Rightarrow> bool" where
-  "num_expr ETrue = True"
-| "num_expr EFalse = True"
-| "num_expr (EEq a b) = (num_vexp a \<and> num_vexp b)"
-| "num_expr (ELt a b) = (num_vexp a \<and> num_vexp b)"
-| "num_expr (ELe a b) = (num_vexp a \<and> num_vexp b)"
-| "num_expr (ENot e) = num_expr e"
-| "num_expr (EAnd e\<^sub>1 e\<^sub>2) = (num_expr e\<^sub>1 \<and> num_expr e\<^sub>2)"
-| "num_expr (EOr e\<^sub>1 e\<^sub>2) = (num_expr e\<^sub>1 \<and> num_expr e\<^sub>2)"
-| "num_expr (EImp e\<^sub>1 e\<^sub>2) = (num_expr e\<^sub>1 \<and> num_expr e\<^sub>2)"
-| "num_expr (EPresent x) = True"
+lemma ile_ival_of: "ile (ival_of u) (ival_of w) = Some (vleq u w)"
+  by (cases u; cases w) simp_all
 
-lemma num_of_Some: "num_of v = Some q \<longleftrightarrow> v = ANum q"
-  by (cases v) simp_all
+lemma point_dom: "dom (point \<sigma>) = dom \<sigma>"
+  by (auto simp: point_def dom_def)
 
-lemma numericD:
-  assumes "numeric \<sigma>" "\<sigma> x = Some v"
-  shows "\<exists>q. v = ANum q"
-proof -
-  have "num_of v \<noteq> None" using assms unfolding numeric_def by blast
-  then show ?thesis by (cases v) simp_all
-qed
+lemma evalVI_point: "evalVI a (point \<sigma>) = map_option ival_of (evalV a \<sigma>)"
+  by (induction a) (auto simp: point_def split: option.splits)
 
-lemma point_dom: "numeric \<sigma> \<Longrightarrow> dom (point \<sigma>) = dom \<sigma>"
-  by (auto simp: point_def numeric_def domIff split: option.splits)
-
-lemma evalVI_point:
-  assumes "numeric \<sigma>"
-  shows "evalVI a (point \<sigma>) =
-           (case evalV a \<sigma> of None \<Rightarrow> None | Some v \<Rightarrow> (case num_of v of None \<Rightarrow> None | Some q \<Rightarrow> Some (q, q)))"
-proof (induction a)
-  case (VDefault x a)
-  show ?case
-  proof (cases "\<sigma> x")
-    case None
-    then show ?thesis using VDefault by (simp add: point_def)
-  next
-    case (Some v)
-    then obtain q where "v = ANum q" using numericD[OF assms] by blast
-    with Some show ?thesis by (simp add: point_def)
-  qed
-qed (simp_all add: point_def)
-
-lemma evalV_numeric:
-  assumes "numeric \<sigma>" "num_vexp a" "evalV a \<sigma> = Some v"
-  shows "\<exists>q. v = ANum q"
-  using assms by (induction a) (auto simp: numeric_def num_of_Some split: option.splits)
-
-lemma ilt_point: "ilt (p, p) (q, q) = Some (p < q)"
-  by (simp add: ilt_def)
-
-lemma ile_point: "ile (p, p) (q, q) = Some (p \<le> q)"
-  by (simp add: ile_def)
-
-lemma ieq_point: "ieq (p, p) (q, q) = Some (p = q)"
-  by (simp add: ieq_def)
-
-theorem evalI_point:
-  assumes "numeric \<sigma>" "num_expr e"
-  shows "evalI e (point \<sigma>) = eval e \<sigma>"
-  using assms(2)
+theorem evalI_point: "evalI e (point \<sigma>) = eval e \<sigma>"
 proof (induction e)
   case (EEq a b)
-  show ?case
-    using evalV_numeric[OF assms(1), of a] evalV_numeric[OF assms(1), of b] EEq
-    by (auto simp: evalVI_point[OF assms(1)] ieq_point split: option.splits)
+  show ?case by (auto simp: evalVI_point ieq_ival_of split: option.splits)
 next
   case (ELt a b)
-  show ?case
-    using evalV_numeric[OF assms(1), of a] evalV_numeric[OF assms(1), of b] ELt
-    by (auto simp: evalVI_point[OF assms(1)] ilt_point split: option.splits)
+  show ?case by (auto simp: evalVI_point ilt_ival_of split: option.splits)
 next
   case (ELe a b)
-  show ?case
-    using evalV_numeric[OF assms(1), of a] evalV_numeric[OF assms(1), of b] ELe
-    by (auto simp: evalVI_point[OF assms(1)] ile_point split: option.splits)
-qed (simp_all add: point_dom[OF assms(1)])
+  show ?case by (auto simp: evalVI_point ile_ival_of split: option.splits)
+qed (simp_all add: point_dom)
 
 
 subsection \<open>Soundness for real values\<close>
 
 text \<open>A signal has real values, so a condition read on signals is evaluated on a real
-  valuation: a partial map from names to reals, with the numeric constants of the
-  condition cast to the reals, the comparisons of the reals, and the strong Kleene
-  connectives. On rational values this reading is the evaluation of the core
-  (\<open>evalR_eval\<close>).\<close>
+  valuation: a partial map from names to real values, a real number or an exact value of
+  another kind, with the numeric constants of the condition cast to the reals, the
+  comparisons of the reals, and the strong Kleene connectives. On rational values this
+  reading is the evaluation of the core (\<open>evalR_eval\<close>).\<close>
 
-type_synonym 'n rstate = "'n \<rightharpoonup> real"
+datatype rval = RNum real | RBool bool | RStr String.literal | RTime int
 
-primrec evalVR :: "('n, atom) vexp \<Rightarrow> 'n rstate \<Rightarrow> real option" where
-  "evalVR (VConst v) \<rho> = (case num_of v of None \<Rightarrow> None | Some q \<Rightarrow> Some (of_rat q))"
+type_synonym 'n rstate = "'n \<rightharpoonup> rval"
+
+fun rval_of :: "atom \<Rightarrow> rval" where
+  "rval_of (ANum q) = RNum (of_rat q)"
+| "rval_of (ABool b) = RBool b"
+| "rval_of (AStr s) = RStr s"
+| "rval_of (ATime t) = RTime t"
+
+fun rlt :: "rval \<Rightarrow> rval \<Rightarrow> bool" where
+  "rlt (RNum u) (RNum w) = (u < w)"
+| "rlt _ _ = False"
+
+fun rle :: "rval \<Rightarrow> rval \<Rightarrow> bool" where
+  "rle (RNum u) (RNum w) = (u \<le> w)"
+| "rle _ _ = False"
+
+primrec evalVR :: "('n, atom) vexp \<Rightarrow> 'n rstate \<Rightarrow> rval option" where
+  "evalVR (VConst v) \<rho> = Some (rval_of v)"
 | "evalVR (VName x) \<rho> = \<rho> x"
 | "evalVR (VDefault x a) \<rho> = (case \<rho> x of Some r \<Rightarrow> Some r | None \<Rightarrow> evalVR a \<rho>)"
 
@@ -1442,125 +1417,189 @@ primrec evalR :: "('n, atom) expr \<Rightarrow> 'n rstate \<Rightarrow> bool opt
 | "evalR (EEq a b) \<rho> =
      (case evalVR a \<rho> of None \<Rightarrow> None | Some u \<Rightarrow> (case evalVR b \<rho> of None \<Rightarrow> None | Some w \<Rightarrow> Some (u = w)))"
 | "evalR (ELt a b) \<rho> =
-     (case evalVR a \<rho> of None \<Rightarrow> None | Some u \<Rightarrow> (case evalVR b \<rho> of None \<Rightarrow> None | Some w \<Rightarrow> Some (u < w)))"
+     (case evalVR a \<rho> of None \<Rightarrow> None | Some u \<Rightarrow> (case evalVR b \<rho> of None \<Rightarrow> None | Some w \<Rightarrow> Some (rlt u w)))"
 | "evalR (ELe a b) \<rho> =
-     (case evalVR a \<rho> of None \<Rightarrow> None | Some u \<Rightarrow> (case evalVR b \<rho> of None \<Rightarrow> None | Some w \<Rightarrow> Some (u \<le> w)))"
+     (case evalVR a \<rho> of None \<Rightarrow> None | Some u \<Rightarrow> (case evalVR b \<rho> of None \<Rightarrow> None | Some w \<Rightarrow> Some (rle u w)))"
 | "evalR (ENot e) \<rho> = knot (evalR e \<rho>)"
 | "evalR (EAnd e\<^sub>1 e\<^sub>2) \<rho> = kand (evalR e\<^sub>1 \<rho>) (evalR e\<^sub>2 \<rho>)"
 | "evalR (EOr e\<^sub>1 e\<^sub>2) \<rho> = kor (evalR e\<^sub>1 \<rho>) (evalR e\<^sub>2 \<rho>)"
 | "evalR (EImp e\<^sub>1 e\<^sub>2) \<rho> = kimp (evalR e\<^sub>1 \<rho>) (evalR e\<^sub>2 \<rho>)"
 | "evalR (EPresent x) \<rho> = Some (x \<in> dom \<rho>)"
 
-text \<open>The real valuation of a state: each numeric value cast to the reals.\<close>
+text \<open>The real valuation of a state: each numeric value cast to the reals, every other
+  value kept.\<close>
 
 definition real_state :: "('n, atom) state \<Rightarrow> 'n rstate" where
-  "real_state \<sigma> x = (case \<sigma> x of None \<Rightarrow> None | Some v \<Rightarrow> (case num_of v of None \<Rightarrow> None | Some q \<Rightarrow> Some (of_rat q)))"
+  "real_state \<sigma> x = map_option rval_of (\<sigma> x)"
 
-lemma real_state_dom: "numeric \<sigma> \<Longrightarrow> dom (real_state \<sigma>) = dom \<sigma>"
-  by (auto simp: real_state_def numeric_def domIff split: option.splits)
+lemma rval_of_eq: "rval_of u = rval_of w \<longleftrightarrow> u = w"
+  by (cases u; cases w) (simp_all add: of_rat_eq_iff)
 
-lemma evalVR_real_state:
-  assumes "numeric \<sigma>"
-  shows "evalVR a (real_state \<sigma>) =
-           (case evalV a \<sigma> of None \<Rightarrow> None | Some v \<Rightarrow> (case num_of v of None \<Rightarrow> None | Some q \<Rightarrow> Some (of_rat q)))"
-proof (induction a)
-  case (VDefault x a)
-  show ?case
-  proof (cases "\<sigma> x")
-    case None
-    then show ?thesis using VDefault by (simp add: real_state_def)
-  next
-    case (Some v)
-    then obtain q where "v = ANum q" using numericD[OF assms] by blast
-    with Some show ?thesis by (simp add: real_state_def)
-  qed
-qed (simp_all add: real_state_def)
+lemma rlt_rval_of: "rlt (rval_of u) (rval_of w) = vless u w"
+  by (cases u; cases w) (simp_all add: of_rat_less)
 
-theorem evalR_eval:
-  assumes "numeric \<sigma>" "num_expr e"
-  shows "evalR e (real_state \<sigma>) = eval e \<sigma>"
-  using assms(2)
+lemma rle_rval_of: "rle (rval_of u) (rval_of w) = vleq u w"
+  by (cases u; cases w) (simp_all add: of_rat_less_eq)
+
+lemma real_state_dom: "dom (real_state \<sigma>) = dom \<sigma>"
+  by (auto simp: real_state_def dom_def)
+
+lemma evalVR_real_state: "evalVR a (real_state \<sigma>) = map_option rval_of (evalV a \<sigma>)"
+  by (induction a) (auto simp: real_state_def split: option.splits)
+
+theorem evalR_eval: "evalR e (real_state \<sigma>) = eval e \<sigma>"
 proof (induction e)
   case (EEq a b)
-  show ?case
-    using evalV_numeric[OF assms(1), of a] evalV_numeric[OF assms(1), of b] EEq
-    by (auto simp: evalVR_real_state[OF assms(1)] of_rat_eq_iff split: option.splits)
+  show ?case by (auto simp: evalVR_real_state rval_of_eq split: option.splits)
 next
   case (ELt a b)
-  show ?case
-    using evalV_numeric[OF assms(1), of a] evalV_numeric[OF assms(1), of b] ELt
-    by (auto simp: evalVR_real_state[OF assms(1)] of_rat_less split: option.splits)
+  show ?case by (auto simp: evalVR_real_state rlt_rval_of split: option.splits)
 next
   case (ELe a b)
-  show ?case
-    using evalV_numeric[OF assms(1), of a] evalV_numeric[OF assms(1), of b] ELe
-    by (auto simp: evalVR_real_state[OF assms(1)] of_rat_less_eq split: option.splits)
-qed (simp_all add: real_state_dom[OF assms(1)])
+  show ?case by (auto simp: evalVR_real_state rle_rval_of split: option.splits)
+qed (simp_all add: real_state_dom)
 
-text \<open>A real valuation lies inside an interval state if every name with an interval has
-  a value in it.\<close>
+text \<open>A real value lies in an interval value if it is a real number in the numeric
+  interval or the same exact value. A real valuation lies inside an interval state if
+  every name with an interval value has a value in it.\<close>
+
+fun inval :: "ival \<Rightarrow> rval \<Rightarrow> bool" where
+  "inval (IvNum p q) (RNum r) = (of_rat p \<le> r \<and> r \<le> of_rat q)"
+| "inval (IvBool b) (RBool b') = (b = b')"
+| "inval (IvStr s) (RStr s') = (s = s')"
+| "inval (IvTime t) (RTime t') = (t = t')"
+| "inval _ _ = False"
 
 definition inside :: "'n istate \<Rightarrow> 'n rstate \<Rightarrow> bool" where
-  "inside I \<rho> \<longleftrightarrow> (\<forall>x p q. I x = Some (p, q) \<longrightarrow> (\<exists>r. \<rho> x = Some r \<and> of_rat p \<le> r \<and> r \<le> of_rat q))"
+  "inside I \<rho> \<longleftrightarrow> (\<forall>x i. I x = Some i \<longrightarrow> (\<exists>r. \<rho> x = Some r \<and> inval i r))"
+
+lemma inval_ival_of: "inval (ival_of v) (rval_of v)"
+  by (cases v) simp_all
+
+lemma inval_num: "inval (IvNum p q) r \<Longrightarrow> \<exists>u. r = RNum u \<and> of_rat p \<le> u \<and> u \<le> of_rat q"
+  by (cases r) simp_all
+
+lemma inval_bool: "inval (IvBool b) r \<Longrightarrow> r = RBool b"
+  by (cases r) simp_all
+
+lemma inval_str: "inval (IvStr s) r \<Longrightarrow> r = RStr s"
+  by (cases r) simp_all
+
+lemma inval_time: "inval (IvTime t) r \<Longrightarrow> r = RTime t"
+  by (cases r) simp_all
 
 lemma evalVI_inside:
-  assumes "inside I \<rho>" "default_free a" "evalVI a I = Some (p, q)"
-  shows "\<exists>r. evalVR a \<rho> = Some r \<and> of_rat p \<le> r \<and> r \<le> of_rat q"
-  using assms by (cases a) (auto simp: inside_def split: option.splits)
+  assumes "inside I \<rho>" "default_free a" "evalVI a I = Some i"
+  shows "\<exists>r. evalVR a \<rho> = Some r \<and> inval i r"
+  using assms by (cases a) (auto simp: inside_def inval_ival_of)
 
-lemma ilt_sound:
+lemma ilt_num_sound:
   fixes r r' :: real
-  assumes "ilt (p, q) (p', q') = Some b" "of_rat p \<le> r" "r \<le> of_rat q" "of_rat p' \<le> r'" "r' \<le> of_rat q'"
+  assumes "ilt (IvNum p q) (IvNum p' q') = Some b" "of_rat p \<le> r" "r \<le> of_rat q" "of_rat p' \<le> r'" "r' \<le> of_rat q'"
   shows "(r < r') = b"
 proof (cases b)
   case True
-  with assms(1) have "q < p'" by (simp add: ilt_def split: if_splits)
+  with assms(1) have "q < p'" by (simp split: if_splits)
   then have "(of_rat q :: real) < of_rat p'" by (simp add: of_rat_less)
   with assms(3,4) have "r < r'" by linarith
   with True show ?thesis by simp
 next
   case False
-  with assms(1) have "q' \<le> p" by (simp add: ilt_def split: if_splits)
+  with assms(1) have "q' \<le> p" by (simp split: if_splits)
   then have "(of_rat q' :: real) \<le> of_rat p" by (simp add: of_rat_less_eq)
   with assms(2,5) have "\<not> r < r'" by linarith
   with False show ?thesis by simp
 qed
 
-lemma ile_sound:
+lemma ile_num_sound:
   fixes r r' :: real
-  assumes "ile (p, q) (p', q') = Some b" "of_rat p \<le> r" "r \<le> of_rat q" "of_rat p' \<le> r'" "r' \<le> of_rat q'"
+  assumes "ile (IvNum p q) (IvNum p' q') = Some b" "of_rat p \<le> r" "r \<le> of_rat q" "of_rat p' \<le> r'" "r' \<le> of_rat q'"
   shows "(r \<le> r') = b"
 proof (cases b)
   case True
-  with assms(1) have "q \<le> p'" by (simp add: ile_def split: if_splits)
+  with assms(1) have "q \<le> p'" by (simp split: if_splits)
   then have "(of_rat q :: real) \<le> of_rat p'" by (simp add: of_rat_less_eq)
   with assms(3,4) have "r \<le> r'" by linarith
   with True show ?thesis by simp
 next
   case False
-  with assms(1) have "q' < p" by (simp add: ile_def split: if_splits)
+  with assms(1) have "q' < p" by (simp split: if_splits)
   then have "(of_rat q' :: real) < of_rat p" by (simp add: of_rat_less)
   with assms(2,5) have "\<not> r \<le> r'" by linarith
   with False show ?thesis by simp
 qed
 
-lemma ieq_sound:
+lemma ieq_num_sound:
   fixes r r' :: real
-  assumes "ieq (p, q) (p', q') = Some b" "of_rat p \<le> r" "r \<le> of_rat q" "of_rat p' \<le> r'" "r' \<le> of_rat q'"
+  assumes "ieq (IvNum p q) (IvNum p' q') = Some b" "of_rat p \<le> r" "r \<le> of_rat q" "of_rat p' \<le> r'" "r' \<le> of_rat q'"
   shows "(r = r') = b"
 proof (cases b)
   case True
-  with assms(1) have eq: "p = q" "p' = q'" "p = p'" by (simp_all add: ieq_def split: if_splits)
+  with assms(1) have eq: "p = q" "p' = q'" "p = p'" by (simp_all split: if_splits)
   then have eq': "p' = q" "q' = q" by simp_all
   have "r = of_rat q" using assms(2,3) eq(1) by (simp add: order_antisym)
   moreover have "r' = of_rat q" using assms(4,5) eq' by (simp add: order_antisym)
   ultimately show ?thesis using True by simp
 next
   case False
-  with assms(1) have "q < p' \<or> q' < p" by (simp add: ieq_def split: if_splits)
+  with assms(1) have "q < p' \<or> q' < p" by (simp split: if_splits)
   then have "(of_rat q :: real) < of_rat p' \<or> (of_rat q' :: real) < of_rat p" by (simp add: of_rat_less)
   with assms(2-5) have "r \<noteq> r'" by linarith
   with False show ?thesis by simp
+qed
+
+lemma ilt_sound:
+  assumes "ilt i j = Some b" "inval i r" "inval j r'"
+  shows "rlt r r' = b"
+proof (cases i)
+  case (IvNum p q)
+  with assms(2) obtain u where u: "r = RNum u" "of_rat p \<le> u" "u \<le> of_rat q" by (auto dest: inval_num)
+  show ?thesis
+  proof (cases j)
+    case (IvNum p' q')
+    with assms(3) obtain w where w: "r' = RNum w" "of_rat p' \<le> w" "w \<le> of_rat q'" by (auto dest: inval_num)
+    from assms(1) \<open>i = IvNum p q\<close> IvNum have "ilt (IvNum p q) (IvNum p' q') = Some b" by simp
+    from ilt_num_sound[OF this u(2,3) w(2,3)] u(1) w(1) show ?thesis by simp
+  qed (use assms(1,3) \<open>i = IvNum p q\<close> u(1) in \<open>auto dest!: inval_bool inval_str inval_time\<close>)
+qed (use assms in \<open>auto dest!: inval_bool inval_str inval_time\<close>)
+
+lemma ile_sound:
+  assumes "ile i j = Some b" "inval i r" "inval j r'"
+  shows "rle r r' = b"
+proof (cases i)
+  case (IvNum p q)
+  with assms(2) obtain u where u: "r = RNum u" "of_rat p \<le> u" "u \<le> of_rat q" by (auto dest: inval_num)
+  show ?thesis
+  proof (cases j)
+    case (IvNum p' q')
+    with assms(3) obtain w where w: "r' = RNum w" "of_rat p' \<le> w" "w \<le> of_rat q'" by (auto dest: inval_num)
+    from assms(1) \<open>i = IvNum p q\<close> IvNum have "ile (IvNum p q) (IvNum p' q') = Some b" by simp
+    from ile_num_sound[OF this u(2,3) w(2,3)] u(1) w(1) show ?thesis by simp
+  qed (use assms(1,3) \<open>i = IvNum p q\<close> u(1) in \<open>auto dest!: inval_bool inval_str inval_time\<close>)
+qed (use assms in \<open>auto dest!: inval_bool inval_str inval_time\<close>)
+
+lemma ieq_sound:
+  assumes "ieq i j = Some b" "inval i r" "inval j r'"
+  shows "(r = r') = b"
+proof (cases i)
+  case (IvNum p q)
+  with assms(2) obtain u where u: "r = RNum u" "of_rat p \<le> u" "u \<le> of_rat q" by (auto dest: inval_num)
+  show ?thesis
+  proof (cases j)
+    case (IvNum p' q')
+    with assms(3) obtain w where w: "r' = RNum w" "of_rat p' \<le> w" "w \<le> of_rat q'" by (auto dest: inval_num)
+    from assms(1) \<open>i = IvNum p q\<close> IvNum have "ieq (IvNum p q) (IvNum p' q') = Some b" by simp
+    from ieq_num_sound[OF this u(2,3) w(2,3)] u(1) w(1) show ?thesis by simp
+  qed (use assms(1,3) \<open>i = IvNum p q\<close> u(1) in \<open>auto dest!: inval_bool inval_str inval_time\<close>)
+next
+  case (IvBool b')
+  with assms show ?thesis by (cases j) (auto dest!: inval_bool inval_str inval_time inval_num)
+next
+  case (IvStr s)
+  with assms show ?thesis by (cases j) (auto dest!: inval_bool inval_str inval_time inval_num)
+next
+  case (IvTime t)
+  with assms show ?thesis by (cases j) (auto dest!: inval_bool inval_str inval_time inval_num)
 qed
 
 text \<open>Soundness: a definite value of a PRESENT-free condition on an interval state is its
@@ -1575,42 +1614,36 @@ proof (induction e)
   show ?case
   proof (cases "evalI (EEq a b) I")
     case (Some b')
-    then obtain p q p' q' where u: "evalVI a I = Some (p, q)" and w: "evalVI b I = Some (p', q')"
-      and c: "ieq (p, q) (p', q') = Some b'"
+    then obtain i j where u: "evalVI a I = Some i" and w: "evalVI b I = Some j" and c: "ieq i j = Some b'"
       by (auto split: option.splits)
     from EEq have "default_free a" "default_free b" by simp_all
     with evalVI_inside[OF assms(2) _ u] evalVI_inside[OF assms(2) _ w] obtain r r'
-      where rr: "evalVR a \<rho> = Some r" "of_rat p \<le> r" "r \<le> of_rat q"
-        and rr': "evalVR b \<rho> = Some r'" "of_rat p' \<le> r'" "r' \<le> of_rat q'" by blast
-    from ieq_sound[OF c rr(2,3) rr'(2,3)] rr(1) rr'(1) Some show ?thesis by (simp add: approx_def)
+      where rr: "evalVR a \<rho> = Some r" "inval i r" and rr': "evalVR b \<rho> = Some r'" "inval j r'" by blast
+    from ieq_sound[OF c rr(2) rr'(2)] rr(1) rr'(1) Some show ?thesis by (simp add: approx_def)
   qed (simp add: approx_def)
 next
   case (ELt a b)
   show ?case
   proof (cases "evalI (ELt a b) I")
     case (Some b')
-    then obtain p q p' q' where u: "evalVI a I = Some (p, q)" and w: "evalVI b I = Some (p', q')"
-      and c: "ilt (p, q) (p', q') = Some b'"
+    then obtain i j where u: "evalVI a I = Some i" and w: "evalVI b I = Some j" and c: "ilt i j = Some b'"
       by (auto split: option.splits)
     from ELt have "default_free a" "default_free b" by simp_all
     with evalVI_inside[OF assms(2) _ u] evalVI_inside[OF assms(2) _ w] obtain r r'
-      where rr: "evalVR a \<rho> = Some r" "of_rat p \<le> r" "r \<le> of_rat q"
-        and rr': "evalVR b \<rho> = Some r'" "of_rat p' \<le> r'" "r' \<le> of_rat q'" by blast
-    from ilt_sound[OF c rr(2,3) rr'(2,3)] rr(1) rr'(1) Some show ?thesis by (simp add: approx_def)
+      where rr: "evalVR a \<rho> = Some r" "inval i r" and rr': "evalVR b \<rho> = Some r'" "inval j r'" by blast
+    from ilt_sound[OF c rr(2) rr'(2)] rr(1) rr'(1) Some show ?thesis by (simp add: approx_def)
   qed (simp add: approx_def)
 next
   case (ELe a b)
   show ?case
   proof (cases "evalI (ELe a b) I")
     case (Some b')
-    then obtain p q p' q' where u: "evalVI a I = Some (p, q)" and w: "evalVI b I = Some (p', q')"
-      and c: "ile (p, q) (p', q') = Some b'"
+    then obtain i j where u: "evalVI a I = Some i" and w: "evalVI b I = Some j" and c: "ile i j = Some b'"
       by (auto split: option.splits)
     from ELe have "default_free a" "default_free b" by simp_all
     with evalVI_inside[OF assms(2) _ u] evalVI_inside[OF assms(2) _ w] obtain r r'
-      where rr: "evalVR a \<rho> = Some r" "of_rat p \<le> r" "r \<le> of_rat q"
-        and rr': "evalVR b \<rho> = Some r'" "of_rat p' \<le> r'" "r' \<le> of_rat q'" by blast
-    from ile_sound[OF c rr(2,3) rr'(2,3)] rr(1) rr'(1) Some show ?thesis by (simp add: approx_def)
+      where rr: "evalVR a \<rho> = Some r" "inval i r" and rr': "evalVR b \<rho> = Some r'" "inval j r'" by blast
+    from ile_sound[OF c rr(2) rr'(2)] rr(1) rr'(1) Some show ?thesis by (simp add: approx_def)
   qed (simp add: approx_def)
 qed (simp_all add: knot_mono kand_mono kor_mono kimp_mono)
 
@@ -1622,70 +1655,160 @@ corollary evalI_sound_value:
 
 subsection \<open>Monotonicity under narrowing\<close>
 
-text \<open>An interval state narrows to another if every name with an interval keeps an
-  interval inside it: the interval form of the information order. A definite value of a
-  PRESENT-free condition survives narrowing.\<close>
+text \<open>An interval value narrows to another if a numeric interval keeps an interval inside
+  it and an exact value stays the same; an interval state narrows to another if every name
+  with an interval value keeps one that is narrower: the interval form of the information
+  order. A definite value of a PRESENT-free condition survives narrowing.\<close>
+
+fun narrower :: "ival \<Rightarrow> ival \<Rightarrow> bool" where
+  "narrower (IvNum p q) (IvNum p' q') = (p \<le> p' \<and> q' \<le> q)"
+| "narrower (IvBool b) (IvBool b') = (b = b')"
+| "narrower (IvStr s) (IvStr s') = (s = s')"
+| "narrower (IvTime t) (IvTime t') = (t = t')"
+| "narrower _ _ = False"
 
 definition narrows :: "'n istate \<Rightarrow> 'n istate \<Rightarrow> bool" where
-  "narrows I I' \<longleftrightarrow> (\<forall>x p q. I x = Some (p, q) \<longrightarrow> (\<exists>p' q'. I' x = Some (p', q') \<and> p \<le> p' \<and> q' \<le> q))"
+  "narrows I I' \<longleftrightarrow> (\<forall>x i. I x = Some i \<longrightarrow> (\<exists>i'. I' x = Some i' \<and> narrower i i'))"
+
+lemma narrower_refl: "narrower i i"
+  by (cases i) simp_all
+
+lemma narrower_trans: "narrower i i' \<Longrightarrow> narrower i' i'' \<Longrightarrow> narrower i i''"
+  by (cases i; cases i'; cases i'') auto
 
 lemma narrows_refl: "narrows I I"
-  by (simp add: narrows_def)
+  by (simp add: narrows_def narrower_refl)
 
 lemma narrows_trans: "narrows I I' \<Longrightarrow> narrows I' I'' \<Longrightarrow> narrows I I''"
-  unfolding narrows_def by (meson order_trans)
+  unfolding narrows_def by (meson narrower_trans)
+
+lemma narrower_num: "narrower (IvNum p q) i' \<Longrightarrow> \<exists>p' q'. i' = IvNum p' q' \<and> p \<le> p' \<and> q' \<le> q"
+  by (cases i') simp_all
+
+lemma narrower_bool: "narrower (IvBool b) i' \<Longrightarrow> i' = IvBool b"
+  by (cases i') simp_all
+
+lemma narrower_str: "narrower (IvStr s) i' \<Longrightarrow> i' = IvStr s"
+  by (cases i') simp_all
+
+lemma narrower_time: "narrower (IvTime t) i' \<Longrightarrow> i' = IvTime t"
+  by (cases i') simp_all
 
 lemma evalVI_narrows:
-  assumes "narrows I I'" "default_free a" "evalVI a I = Some (p, q)"
-  shows "\<exists>p' q'. evalVI a I' = Some (p', q') \<and> p \<le> p' \<and> q' \<le> q"
-  using assms by (cases a) (auto simp: narrows_def split: option.splits)
-
-lemma ilt_narrows:
-  assumes "ilt (p, q) (p', q') = Some b" "p \<le> u" "u \<le> v" "v \<le> q" "p' \<le> u'" "u' \<le> v'" "v' \<le> q'"
-  shows "ilt (u, v) (u', v') = Some b"
-proof (cases b)
-  case True
-  with assms(1) have "q < p'" by (simp add: ilt_def split: if_splits)
-  with assms(4,5) have "v < u'" by linarith
-  with True show ?thesis by (simp add: ilt_def)
-next
-  case False
-  with assms(1) have "\<not> q < p'" "q' \<le> p" by (simp_all add: ilt_def split: if_splits)
-  with assms(2-7) have "\<not> v < u'" "v' \<le> u" by linarith+
-  with False show ?thesis by (simp add: ilt_def)
-qed
-
-lemma ile_narrows:
-  assumes "ile (p, q) (p', q') = Some b" "p \<le> u" "u \<le> v" "v \<le> q" "p' \<le> u'" "u' \<le> v'" "v' \<le> q'"
-  shows "ile (u, v) (u', v') = Some b"
-proof (cases b)
-  case True
-  with assms(1) have "q \<le> p'" by (simp add: ile_def split: if_splits)
-  with assms(4,5) have "v \<le> u'" by linarith
-  with True show ?thesis by (simp add: ile_def)
-next
-  case False
-  with assms(1) have "\<not> q \<le> p'" "q' < p" by (simp_all add: ile_def split: if_splits)
-  with assms(2-7) have "\<not> v \<le> u'" "v' < u" by linarith+
-  with False show ?thesis by (simp add: ile_def)
-qed
-
-lemma ieq_narrows:
-  assumes "ieq (p, q) (p', q') = Some b" "p \<le> u" "u \<le> v" "v \<le> q" "p' \<le> u'" "u' \<le> v'" "v' \<le> q'"
-  shows "ieq (u, v) (u', v') = Some b"
-  using assms by (auto simp: ieq_def split: if_splits)
+  assumes "narrows I I'" "default_free a" "evalVI a I = Some i"
+  shows "\<exists>i'. evalVI a I' = Some i' \<and> narrower i i'"
+  using assms by (cases a) (auto simp: narrows_def narrower_refl)
 
 text \<open>Narrowing an interval to an empty one could turn a false comparison into a true one
   (with \<open>[5, 6] < [1, 2]\<close> false and \<open>[5, 4] < [6, 2]\<close> true), so monotonicity is stated for
-  interval states whose intervals are non-empty.\<close>
+  interval states whose numeric intervals are non-empty.\<close>
+
+fun proper_ival :: "ival \<Rightarrow> bool" where
+  "proper_ival (IvNum p q) = (p \<le> q)"
+| "proper_ival _ = True"
 
 definition proper :: "'n istate \<Rightarrow> bool" where
-  "proper I \<longleftrightarrow> (\<forall>x p q. I x = Some (p, q) \<longrightarrow> p \<le> q)"
+  "proper I \<longleftrightarrow> (\<forall>x i. I x = Some i \<longrightarrow> proper_ival i)"
+
+lemma proper_ival_of: "proper_ival (ival_of v)"
+  by (cases v) simp_all
 
 lemma evalVI_proper:
-  assumes "proper I" "default_free a" "evalVI a I = Some (p, q)"
-  shows "p \<le> q"
-  using assms by (cases a) (auto simp: proper_def split: option.splits)
+  assumes "proper I" "default_free a" "evalVI a I = Some i"
+  shows "proper_ival i"
+  using assms by (cases a) (auto simp: proper_def proper_ival_of)
+
+lemma ilt_num_narrows:
+  assumes "ilt (IvNum p q) (IvNum p' q') = Some b" "p \<le> u" "u \<le> v" "v \<le> q" "p' \<le> u'" "u' \<le> v'" "v' \<le> q'"
+  shows "ilt (IvNum u v) (IvNum u' v') = Some b"
+proof (cases b)
+  case True
+  with assms(1) have "q < p'" by (simp split: if_splits)
+  with assms(4,5) have "v < u'" by linarith
+  with True show ?thesis by simp
+next
+  case False
+  with assms(1) have "\<not> q < p'" "q' \<le> p" by (simp_all split: if_splits)
+  with assms(2-7) have "\<not> v < u'" "v' \<le> u" by linarith+
+  with False show ?thesis by simp
+qed
+
+lemma ile_num_narrows:
+  assumes "ile (IvNum p q) (IvNum p' q') = Some b" "p \<le> u" "u \<le> v" "v \<le> q" "p' \<le> u'" "u' \<le> v'" "v' \<le> q'"
+  shows "ile (IvNum u v) (IvNum u' v') = Some b"
+proof (cases b)
+  case True
+  with assms(1) have "q \<le> p'" by (simp split: if_splits)
+  with assms(4,5) have "v \<le> u'" by linarith
+  with True show ?thesis by simp
+next
+  case False
+  with assms(1) have "\<not> q \<le> p'" "q' < p" by (simp_all split: if_splits)
+  with assms(2-7) have "\<not> v \<le> u'" "v' < u" by linarith+
+  with False show ?thesis by simp
+qed
+
+lemma ieq_num_narrows:
+  assumes "ieq (IvNum p q) (IvNum p' q') = Some b" "p \<le> u" "u \<le> v" "v \<le> q" "p' \<le> u'" "u' \<le> v'" "v' \<le> q'"
+  shows "ieq (IvNum u v) (IvNum u' v') = Some b"
+  using assms by (auto split: if_splits)
+
+lemma ilt_narrows:
+  assumes "ilt i j = Some b" "narrower i i'" "narrower j j'" "proper_ival i'" "proper_ival j'"
+  shows "ilt i' j' = Some b"
+proof (cases i)
+  case (IvNum p q)
+  with assms(2) obtain u v where u: "i' = IvNum u v" "p \<le> u" "v \<le> q" by (auto dest: narrower_num)
+  show ?thesis
+  proof (cases j)
+    case (IvNum p' q')
+    with assms(3) obtain u' v' where w: "j' = IvNum u' v'" "p' \<le> u'" "v' \<le> q'" by (auto dest: narrower_num)
+    from assms(1) \<open>i = IvNum p q\<close> IvNum have c: "ilt (IvNum p q) (IvNum p' q') = Some b" by simp
+    from assms(4,5) u(1) w(1) have "u \<le> v" "u' \<le> v'" by simp_all
+    from ilt_num_narrows[OF c u(2) this(1) u(3) w(2) this(2) w(3)] u(1) w(1) show ?thesis by simp
+  qed (use assms(1,3) \<open>i = IvNum p q\<close> u(1) in \<open>auto dest!: narrower_bool narrower_str narrower_time\<close>)
+qed (use assms in \<open>auto dest!: narrower_bool narrower_str narrower_time\<close>)
+
+lemma ile_narrows:
+  assumes "ile i j = Some b" "narrower i i'" "narrower j j'" "proper_ival i'" "proper_ival j'"
+  shows "ile i' j' = Some b"
+proof (cases i)
+  case (IvNum p q)
+  with assms(2) obtain u v where u: "i' = IvNum u v" "p \<le> u" "v \<le> q" by (auto dest: narrower_num)
+  show ?thesis
+  proof (cases j)
+    case (IvNum p' q')
+    with assms(3) obtain u' v' where w: "j' = IvNum u' v'" "p' \<le> u'" "v' \<le> q'" by (auto dest: narrower_num)
+    from assms(1) \<open>i = IvNum p q\<close> IvNum have c: "ile (IvNum p q) (IvNum p' q') = Some b" by simp
+    from assms(4,5) u(1) w(1) have "u \<le> v" "u' \<le> v'" by simp_all
+    from ile_num_narrows[OF c u(2) this(1) u(3) w(2) this(2) w(3)] u(1) w(1) show ?thesis by simp
+  qed (use assms(1,3) \<open>i = IvNum p q\<close> u(1) in \<open>auto dest!: narrower_bool narrower_str narrower_time\<close>)
+qed (use assms in \<open>auto dest!: narrower_bool narrower_str narrower_time\<close>)
+
+lemma ieq_narrows:
+  assumes "ieq i j = Some b" "narrower i i'" "narrower j j'" "proper_ival i'" "proper_ival j'"
+  shows "ieq i' j' = Some b"
+proof (cases i)
+  case (IvNum p q)
+  with assms(2) obtain u v where u: "i' = IvNum u v" "p \<le> u" "v \<le> q" by (auto dest: narrower_num)
+  show ?thesis
+  proof (cases j)
+    case (IvNum p' q')
+    with assms(3) obtain u' v' where w: "j' = IvNum u' v'" "p' \<le> u'" "v' \<le> q'" by (auto dest: narrower_num)
+    from assms(1) \<open>i = IvNum p q\<close> IvNum have c: "ieq (IvNum p q) (IvNum p' q') = Some b" by simp
+    from assms(4,5) u(1) w(1) have "u \<le> v" "u' \<le> v'" by simp_all
+    from ieq_num_narrows[OF c u(2) this(1) u(3) w(2) this(2) w(3)] u(1) w(1) show ?thesis by simp
+  qed (use assms(1,3) \<open>i = IvNum p q\<close> u(1) in \<open>auto dest!: narrower_bool narrower_str narrower_time\<close>)
+next
+  case (IvBool b')
+  with assms show ?thesis by (cases j) (auto dest!: narrower_bool narrower_str narrower_time narrower_num)
+next
+  case (IvStr s)
+  with assms show ?thesis by (cases j) (auto dest!: narrower_bool narrower_str narrower_time narrower_num)
+next
+  case (IvTime t)
+  with assms show ?thesis by (cases j) (auto dest!: narrower_bool narrower_str narrower_time narrower_num)
+qed
 
 theorem evalI_mono:
   assumes "present_free e" "narrows I I'" "proper I'"
@@ -1696,45 +1819,39 @@ proof (induction e)
   show ?case
   proof (cases "evalI (EEq a b) I")
     case (Some b')
-    then obtain p q p' q' where u: "evalVI a I = Some (p, q)" and w: "evalVI b I = Some (p', q')"
-      and c: "ieq (p, q) (p', q') = Some b'"
+    then obtain i j where u: "evalVI a I = Some i" and w: "evalVI b I = Some j" and c: "ieq i j = Some b'"
       by (auto split: option.splits)
     from EEq have df: "default_free a" "default_free b" by simp_all
-    from evalVI_narrows[OF assms(2) df(1) u] evalVI_narrows[OF assms(2) df(2) w] obtain u1 v1 u2 v2
-      where n1: "evalVI a I' = Some (u1, v1)" "p \<le> u1" "v1 \<le> q"
-        and n2: "evalVI b I' = Some (u2, v2)" "p' \<le> u2" "v2 \<le> q'" by blast
-    have "u1 \<le> v1" "u2 \<le> v2" using evalVI_proper[OF assms(3) df(1) n1(1)] evalVI_proper[OF assms(3) df(2) n2(1)] .
-    with ieq_narrows[OF c n1(2) _ n1(3) n2(2) _ n2(3)] n1(1) n2(1) Some show ?thesis by (simp add: approx_def)
+    from evalVI_narrows[OF assms(2) df(1) u] evalVI_narrows[OF assms(2) df(2) w] obtain i' j'
+      where n1: "evalVI a I' = Some i'" "narrower i i'" and n2: "evalVI b I' = Some j'" "narrower j j'" by blast
+    have "proper_ival i'" "proper_ival j'" using evalVI_proper[OF assms(3) df(1) n1(1)] evalVI_proper[OF assms(3) df(2) n2(1)] .
+    with ieq_narrows[OF c n1(2) n2(2)] n1(1) n2(1) Some show ?thesis by (simp add: approx_def)
   qed (simp add: approx_def)
 next
   case (ELt a b)
   show ?case
   proof (cases "evalI (ELt a b) I")
     case (Some b')
-    then obtain p q p' q' where u: "evalVI a I = Some (p, q)" and w: "evalVI b I = Some (p', q')"
-      and c: "ilt (p, q) (p', q') = Some b'"
+    then obtain i j where u: "evalVI a I = Some i" and w: "evalVI b I = Some j" and c: "ilt i j = Some b'"
       by (auto split: option.splits)
     from ELt have df: "default_free a" "default_free b" by simp_all
-    from evalVI_narrows[OF assms(2) df(1) u] evalVI_narrows[OF assms(2) df(2) w] obtain u1 v1 u2 v2
-      where n1: "evalVI a I' = Some (u1, v1)" "p \<le> u1" "v1 \<le> q"
-        and n2: "evalVI b I' = Some (u2, v2)" "p' \<le> u2" "v2 \<le> q'" by blast
-    have "u1 \<le> v1" "u2 \<le> v2" using evalVI_proper[OF assms(3) df(1) n1(1)] evalVI_proper[OF assms(3) df(2) n2(1)] .
-    with ilt_narrows[OF c n1(2) _ n1(3) n2(2) _ n2(3)] n1(1) n2(1) Some show ?thesis by (simp add: approx_def)
+    from evalVI_narrows[OF assms(2) df(1) u] evalVI_narrows[OF assms(2) df(2) w] obtain i' j'
+      where n1: "evalVI a I' = Some i'" "narrower i i'" and n2: "evalVI b I' = Some j'" "narrower j j'" by blast
+    have "proper_ival i'" "proper_ival j'" using evalVI_proper[OF assms(3) df(1) n1(1)] evalVI_proper[OF assms(3) df(2) n2(1)] .
+    with ilt_narrows[OF c n1(2) n2(2)] n1(1) n2(1) Some show ?thesis by (simp add: approx_def)
   qed (simp add: approx_def)
 next
   case (ELe a b)
   show ?case
   proof (cases "evalI (ELe a b) I")
     case (Some b')
-    then obtain p q p' q' where u: "evalVI a I = Some (p, q)" and w: "evalVI b I = Some (p', q')"
-      and c: "ile (p, q) (p', q') = Some b'"
+    then obtain i j where u: "evalVI a I = Some i" and w: "evalVI b I = Some j" and c: "ile i j = Some b'"
       by (auto split: option.splits)
     from ELe have df: "default_free a" "default_free b" by simp_all
-    from evalVI_narrows[OF assms(2) df(1) u] evalVI_narrows[OF assms(2) df(2) w] obtain u1 v1 u2 v2
-      where n1: "evalVI a I' = Some (u1, v1)" "p \<le> u1" "v1 \<le> q"
-        and n2: "evalVI b I' = Some (u2, v2)" "p' \<le> u2" "v2 \<le> q'" by blast
-    have "u1 \<le> v1" "u2 \<le> v2" using evalVI_proper[OF assms(3) df(1) n1(1)] evalVI_proper[OF assms(3) df(2) n2(1)] .
-    with ile_narrows[OF c n1(2) _ n1(3) n2(2) _ n2(3)] n1(1) n2(1) Some show ?thesis by (simp add: approx_def)
+    from evalVI_narrows[OF assms(2) df(1) u] evalVI_narrows[OF assms(2) df(2) w] obtain i' j'
+      where n1: "evalVI a I' = Some i'" "narrower i i'" and n2: "evalVI b I' = Some j'" "narrower j j'" by blast
+    have "proper_ival i'" "proper_ival j'" using evalVI_proper[OF assms(3) df(1) n1(1)] evalVI_proper[OF assms(3) df(2) n2(1)] .
+    with ile_narrows[OF c n1(2) n2(2)] n1(1) n2(1) Some show ?thesis by (simp add: approx_def)
   qed (simp add: approx_def)
 qed (simp_all add: knot_mono kand_mono kor_mono kimp_mono)
 
@@ -1744,7 +1861,7 @@ text \<open>The monitor on an interval state blocks unless the condition is know
 definition blocksI :: "('n, atom) expr \<Rightarrow> 'n istate \<Rightarrow> bool" where
   "blocksI c I \<longleftrightarrow> evalI c I \<noteq> Some False"
 
-theorem blocksI_point: "numeric \<sigma> \<Longrightarrow> num_expr c \<Longrightarrow> blocksI c (point \<sigma>) \<longleftrightarrow> blocks c \<sigma>"
+theorem blocksI_point: "blocksI c (point \<sigma>) \<longleftrightarrow> blocks c \<sigma>"
   by (simp add: blocksI_def blocks_def evalI_point)
 
 
@@ -1793,7 +1910,8 @@ definition enclosed_at :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n, atom
   "enclosed_at R \<pi> j t x =
      (case R x of
         None \<Rightarrow> point (st \<pi> j) x
-      | Some L \<Rightarrow> if samples \<pi> j x = {} then None else Some (enc L (samples \<pi> j x) t))"
+      | Some L \<Rightarrow> if samples \<pi> j x = {} then None
+                  else Some (IvNum (lo L (samples \<pi> j x) t) (hi L (samples \<pi> j x) t)))"
 
 definition enclosed :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> 'n istate" where
   "enclosed R \<pi> j = enclosed_at R \<pi> j (of_int (time \<pi> j))"
@@ -1846,13 +1964,14 @@ text \<open>At an arrival of \<open>x\<close> with consistent samples the interv
 
 theorem enclosed_at_sample:
   assumes "R x = Some L" "consistent_upto R \<pi> j" "evt (\<pi> ! j) = Arrival x" "st \<pi> j x = Some (ANum q)"
-  shows "enclosed R \<pi> j x = Some (q, q)" and "enclosed R \<pi> j x = point (st \<pi> j) x"
+  shows "enclosed R \<pi> j x = Some (IvNum q q)" and "enclosed R \<pi> j x = point (st \<pi> j) x"
 proof -
   have p: "(time \<pi> j, q) \<in> samples \<pi> j x" using assms(3,4) by (rule samples_arrival[OF order_refl])
   have c: "consistent L (samples \<pi> j x)" using assms(1,2) by (simp add: consistent_upto_def)
-  from enc_sample[OF samples_finite c p] have "enc L (samples \<pi> j x) (of_int (time \<pi> j)) = (q, q)"
-    by simp
-  with p assms(1) show "enclosed R \<pi> j x = Some (q, q)"
+  from enc_sample[OF samples_finite c p]
+  have "lo L (samples \<pi> j x) (of_int (time \<pi> j)) = q" "hi L (samples \<pi> j x) (of_int (time \<pi> j)) = q"
+    by (simp_all add: enc_def)
+  with p assms(1) show "enclosed R \<pi> j x = Some (IvNum q q)"
     by (auto simp: enclosed_def enclosed_at_def)
   then show "enclosed R \<pi> j x = point (st \<pi> j) x" using assms(4) by (simp add: point_def)
 qed
@@ -1870,32 +1989,33 @@ definition adm_family :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n \<Righ
 
 definition signal_state :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n \<Rightarrow> real \<Rightarrow> real) \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> nat
     \<Rightarrow> real \<Rightarrow> 'n rstate" where
-  "signal_state R F \<pi> j t x = (case R x of None \<Rightarrow> real_state (st \<pi> j) x | Some L \<Rightarrow> Some (F x t))"
+  "signal_state R F \<pi> j t x = (case R x of None \<Rightarrow> real_state (st \<pi> j) x | Some L \<Rightarrow> Some (RNum (F x t)))"
 
 text \<open>The induced valuation at the time of the entry lies inside the interval state of
   the entry: the enclosure part is \<open>adm_in_enc\<close>, the rest is the point state.\<close>
 
-lemma point_inside_real_state: "point \<sigma> x = Some (p, q) \<Longrightarrow> real_state \<sigma> x = Some (of_rat p) \<and> p = q"
-  by (auto simp: point_def real_state_def split: option.splits)
+lemma point_inside_real_state: "point \<sigma> x = Some i \<Longrightarrow> \<exists>r. real_state \<sigma> x = Some r \<and> inval i r"
+  by (auto simp: point_def real_state_def inval_ival_of)
 
 theorem enclosed_inside:
   assumes "adm_family R F \<pi> j"
   shows "inside (enclosed R \<pi> j) (signal_state R F \<pi> j (of_int (time \<pi> j)))"
   unfolding inside_def
 proof (intro allI impI)
-  fix x p q assume e: "enclosed R \<pi> j x = Some (p, q)"
-  show "\<exists>r. signal_state R F \<pi> j (of_int (time \<pi> j)) x = Some r \<and> of_rat p \<le> r \<and> r \<le> of_rat q"
+  fix x i assume e: "enclosed R \<pi> j x = Some i"
+  show "\<exists>r. signal_state R F \<pi> j (of_int (time \<pi> j)) x = Some r \<and> inval i r"
   proof (cases "R x")
     case None
-    with e have "point (st \<pi> j) x = Some (p, q)" by (simp add: enclosed_def enclosed_at_def)
+    with e have "point (st \<pi> j) x = Some i" by (simp add: enclosed_def enclosed_at_def)
     with None show ?thesis by (auto simp: signal_state_def dest: point_inside_real_state)
   next
     case (Some L)
-    with e have ne: "samples \<pi> j x \<noteq> {}" and pq: "enc L (samples \<pi> j x) (of_int (time \<pi> j)) = (p, q)"
+    with e have ne: "samples \<pi> j x \<noteq> {}"
+      and i: "i = IvNum (lo L (samples \<pi> j x) (of_int (time \<pi> j))) (hi L (samples \<pi> j x) (of_int (time \<pi> j)))"
       by (auto simp: enclosed_def enclosed_at_def split: if_splits)
     have a: "adm L (samples \<pi> j x) (F x)" using assms Some by (simp add: adm_family_def)
-    from adm_in_enc[OF samples_finite ne a, of "of_int (time \<pi> j)"] pq Some show ?thesis
-      by (auto simp: signal_state_def enc_def of_rat_of_int_eq)
+    from adm_in_enc[OF samples_finite ne a, of "of_int (time \<pi> j)"] i Some show ?thesis
+      by (auto simp: signal_state_def of_rat_of_int_eq)
   qed
 qed
 
@@ -1979,27 +2099,28 @@ proof -
   from evalI_sound_signals[OF assms(1,3) this] show ?thesis .
 qed
 
-text \<open>Without rate bounds the monitor and the verdict are those of the core, on numeric
-  data and a numeric condition.\<close>
+text \<open>Without rate bounds the monitor and the verdict are those of the core, on every
+  trace and every condition.\<close>
 
 theorem blocked_actionI_no_bounds:
-  assumes "\<And>i. i < length \<pi> \<Longrightarrow> numeric (st \<pi> i)" "num_expr c"
-  shows "blocked_actionI (\<lambda>_. None) s a c \<pi> j \<longleftrightarrow> blocked_action s a c \<pi> j"
-  using assms by (auto simp: blocked_actionI_def blocked_action_def enclosed_no_bounds blocksI_point)
+  "blocked_actionI (\<lambda>_. None) s a c \<pi> j \<longleftrightarrow> blocked_action s a c \<pi> j"
+  by (simp add: blocked_actionI_def blocked_action_def enclosed_no_bounds blocksI_point)
 
 theorem forbiddenI_no_bounds:
-  assumes "\<And>i. i < length \<pi> \<Longrightarrow> numeric (st \<pi> i)" "num_expr c"
-  shows "forbiddenI (\<lambda>_. None) s a c \<pi> j \<longleftrightarrow> forbidden s a c \<pi> j"
-  using assms by (auto simp: forbiddenI_def forbidden_def enclosed_no_bounds evalI_point)
+  "forbiddenI (\<lambda>_. None) s a c \<pi> j \<longleftrightarrow> forbidden s a c \<pi> j"
+  by (simp add: forbiddenI_def forbidden_def enclosed_no_bounds evalI_point)
 
 theorem pr_verdictI_no_bounds:
-  assumes "\<And>i. i < length \<pi> \<Longrightarrow> numeric (st \<pi> i)" "num_expr c"
-  shows "pr_verdictI (\<lambda>_. None) s a c \<pi> = pr_verdict s a c \<pi>"
+  "pr_verdictI (\<lambda>_. None) s a c \<pi> = pr_verdict s a c \<pi>"
 proof -
   have "forbiddenI (\<lambda>_. None) s a c \<pi> = forbidden s a c \<pi>"
-    by (rule ext) (rule forbiddenI_no_bounds[OF assms])
+    by (rule ext) (rule forbiddenI_no_bounds)
   then show ?thesis by (simp add: pr_verdictI_def pr_verdict_def)
 qed
+
+theorem monitor_decisionsI_no_bounds:
+  "monitor_decisionsI (\<lambda>_. None) s a c \<pi> = monitor_decisions s a c \<pi>"
+  by (simp add: monitor_decisionsI_def monitor_decisions_def enclosed_no_bounds blocksI_point)
 
 
 subsection \<open>Finality of the monitor and of the verdict\<close>
@@ -2083,42 +2204,16 @@ definition ew_evalI :: "('n \<Rightarrow> rat option) \<Rightarrow> ('n, atom) e
       then Some False
       else None)"
 
-text \<open>Without rate bounds, on numeric data, they are the invariants of the core.\<close>
+text \<open>Without rate bounds they are the invariants of the core.\<close>
 
-lemma evalI_point_entry:
-  assumes "numeric (st \<pi> j)" "num_expr \<phi>"
-  shows "evalI \<phi> (enclosed (\<lambda>_. None) \<pi> j) = eval \<phi> (st \<pi> j)"
-  unfolding enclosed_no_bounds by (rule evalI_point[OF assms])
+lemma evalI_point_entry: "evalI \<phi> (enclosed (\<lambda>_. None) \<pi> j) = eval \<phi> (st \<pi> j)"
+  unfolding enclosed_no_bounds by (rule evalI_point)
 
-theorem inv_evalI_no_bounds:
-  assumes "\<And>i. i < length \<pi> \<Longrightarrow> numeric (st \<pi> i)" "num_expr (inv_formula \<iota>)"
-  shows "inv_evalI (\<lambda>_. None) \<iota> \<pi> = inv_eval \<iota> \<pi>"
-proof (cases \<iota>)
-  case (Always \<phi>)
-  with assms(2) have f: "num_expr \<phi>" by simp
-  show ?thesis unfolding Always by (simp cong: conj_cong add: evalI_point_entry[OF assms(1) f])
-next
-  case (Eventually \<phi>)
-  with assms(2) have f: "num_expr \<phi>" by simp
-  show ?thesis unfolding Eventually by (simp cong: conj_cong add: evalI_point_entry[OF assms(1) f])
-next
-  case (Next \<phi>)
-  with assms(2) have f: "num_expr \<phi>" by simp
-  show ?thesis
-  proof (cases "1 < length \<pi>")
-    case True
-    with evalI_point_entry[OF assms(1) f, of 1] Next show ?thesis by simp
-  next
-    case False
-    with Next show ?thesis by simp
-  qed
-qed
+theorem inv_evalI_no_bounds: "inv_evalI (\<lambda>_. None) \<iota> \<pi> = inv_eval \<iota> \<pi>"
+  by (cases \<iota>) (simp_all add: evalI_point_entry)
 
-theorem ew_evalI_no_bounds:
-  assumes "\<And>i. i < length \<pi> \<Longrightarrow> numeric (st \<pi> i)" "num_expr \<phi>"
-  shows "ew_evalI (\<lambda>_. None) \<phi> D \<pi> = ew_eval \<phi> D \<pi>"
-  unfolding ew_evalI_def ew_eval_def
-  by (simp cong: conj_cong imp_cong add: evalI_point_entry[OF assms(1) assms(2)])
+theorem ew_evalI_no_bounds: "ew_evalI (\<lambda>_. None) \<phi> D \<pi> = ew_eval \<phi> D \<pi>"
+  unfolding ew_evalI_def ew_eval_def evalI_point_entry by (rule refl)
 
 text \<open>The verdicts are sound for every admissible family at the entries that decide them:
   \<open>ALWAYS\<close> is false only at an entry where every admissible family violates the formula,
@@ -2313,7 +2408,7 @@ proof -
   have a: "adm L (samples \<pi> (length \<pi> - 1) x) (F x)" using assms(2) L by (simp add: adm_family_def)
   have "of_rat c \<le> F x t"
     by (rule above_cert_adm[OF samples_finite ne cert a]) (use assms(3,4) in \<open>simp_all add: of_rat_of_int_eq\<close>)
-  then show ?thesis using L by (simp add: signal_state_def)
+  then show ?thesis using L by (simp add: signal_state_def not_less)
 qed
 
 theorem ew_below_false_final:
@@ -2423,7 +2518,9 @@ lemma enclosed_at_code [code]:
   "enclosed_at R \<pi> j t x =
      (case R x of
         None \<Rightarrow> point (st \<pi> j) x
-      | Some L \<Rightarrow> (case sample_list \<pi> j x of [] \<Rightarrow> None | p # ps \<Rightarrow> Some (enc L (set (p # ps)) t)))"
+      | Some L \<Rightarrow> (case sample_list \<pi> j x of
+                    [] \<Rightarrow> None
+                  | p # ps \<Rightarrow> Some (IvNum (lo L (set (p # ps)) t) (hi L (set (p # ps)) t))))"
   by (simp add: enclosed_at_def samples_code split: option.splits list.splits)
 
 lemma pr_verdictI_code [code]:
@@ -2577,8 +2674,8 @@ value "pr_verdictI sensor_bounds (STR ''arm'') (Act (STR ''move'') []) over_limi
 value "consistent_trace sensor_bounds stale_trace"
 
 lemma stale_enclosure:
-  "enclosed sensor_bounds stale_trace 3 temp = Some (84, 86)"
-  "enclosed sensor_bounds stale_trace 4 temp = Some (839 / 10, 861 / 10)"
+  "enclosed sensor_bounds stale_trace 3 temp = Some (IvNum 84 86)"
+  "enclosed sensor_bounds stale_trace 4 temp = Some (IvNum (839 / 10) (861 / 10))"
   "evalI over_limit (enclosed sensor_bounds stale_trace 3) = Some False"
   "monitor_decisionsI sensor_bounds (STR ''arm'') (Act (STR ''move'') []) over_limit stale_trace = [(4, False)]"
   "pr_verdictI sensor_bounds (STR ''arm'') (Act (STR ''move'') []) over_limit stale_trace = Pending"
@@ -2606,8 +2703,8 @@ value "evalI over_limit (enclosed sensor_bounds boundary_trace 3)"
 value "evalI (ELe (VConst (ANum (853 / 10))) (VName temp)) (enclosed sensor_bounds boundary_trace 3)"
 
 lemma boundary_enclosure:
-  "enclosed sensor_bounds boundary_trace 3 temp = Some (169 / 2, 171 / 2)"
-  "enclosed sensor_bounds boundary_trace 4 temp = Some (422 / 5, 428 / 5)"
+  "enclosed sensor_bounds boundary_trace 3 temp = Some (IvNum (169 / 2) (171 / 2))"
+  "enclosed sensor_bounds boundary_trace 4 temp = Some (IvNum (422 / 5) (428 / 5))"
   "evalI over_limit (enclosed sensor_bounds boundary_trace 3) = Some False"
   "evalI (ELe (VConst (ANum (853 / 10))) (VName temp)) (enclosed sensor_bounds boundary_trace 3) = None"
   "blocksI (ELe (VConst (ANum (853 / 10))) (VName temp)) (enclosed sensor_bounds boundary_trace 3)"
@@ -2639,8 +2736,8 @@ value "pr_verdictI sensor_bounds (STR ''arm'') (Act (STR ''move'') []) over_limi
 value "monitor_decisionsI sensor_bounds (STR ''arm'') (Act (STR ''move'') []) over_limit at_limit_trace"
 
 lemma at_limit_enclosure:
-  "enclosed sensor_bounds at_limit_trace 2 temp = Some (90, 90)"
-  "enclosed_at sensor_bounds at_limit_trace 2 1794211221 temp = Some (899 / 10, 901 / 10)"
+  "enclosed sensor_bounds at_limit_trace 2 temp = Some (IvNum 90 90)"
+  "enclosed_at sensor_bounds at_limit_trace 2 1794211221 temp = Some (IvNum (899 / 10) (901 / 10))"
   "evalI over_limit (enclosed sensor_bounds at_limit_trace 2) = Some True"
   "evalI over_limit (enclosed_at sensor_bounds at_limit_trace 2 1794211221) = None"
   "pr_verdictI sensor_bounds (STR ''arm'') (Act (STR ''move'') []) over_limit at_limit_trace = Breached 1794211221"
@@ -2663,6 +2760,43 @@ value "checked sensor_bounds fall_trace (inv_evalI sensor_bounds (Eventually (EL
 lemma fall_rejected:
   "\<not> consistent_trace sensor_bounds fall_trace"
   "checked sensor_bounds fall_trace (inv_evalI sensor_bounds (Eventually (ELt (VName temp) (VName lim))) fall_trace) = None"
+  by code_simp+
+
+text \<open>A Boolean factor in the condition of a prohibition: \<open>arm MUST_NOT move WHEN over_limit\<close>,
+  whose condition is translated to \<open>over_limit == true\<close> (section 10.6 of CORE.md, rule 2),
+  with a string factor beside it. Neither has a rate bound, so the interval state carries
+  their values exactly. At the entry before the movement the core knows the condition
+  false; so does the reading on interval states, and the monitor on interval states does
+  not block the movement.\<close>
+
+definition over :: path where "over = [STR ''over_limit'']"
+definition mode :: path where "mode = [STR ''mode'']"
+
+definition over_cond :: "(path, atom) expr" where
+  "over_cond = EEq (VName over) (VConst (ABool True))"
+
+definition bool_data :: "(path, atom) state" where
+  "bool_data = [over \<mapsto> ABool False, mode \<mapsto> AStr (STR ''manual''), lim \<mapsto> ANum 90]"
+
+definition bool_trace :: ctrace where
+  "bool_trace =
+     [(bool_data, 1794211200, Tick),
+      (bool_data, 1794211205, Arrival over),
+      (bool_data, 1794211206, arm_move)]"
+
+value "enclosed sensor_bounds bool_trace 1 over"
+value "evalI over_cond (enclosed sensor_bounds bool_trace 1)"
+value "monitor_decisionsI sensor_bounds (STR ''arm'') (Act (STR ''move'') []) over_cond bool_trace"
+
+lemma boolean_factor:
+  "enclosed sensor_bounds bool_trace 1 over = Some (IvBool False)"
+  "enclosed sensor_bounds bool_trace 1 mode = Some (IvStr (STR ''manual''))"
+  "eval over_cond (st bool_trace 1) = Some False"
+  "evalI over_cond (enclosed sensor_bounds bool_trace 1) = Some False"
+  "evalI (EEq (VName mode) (VConst (AStr (STR ''auto'')))) (enclosed sensor_bounds bool_trace 1) = Some False"
+  "evalI (EPresent over) (enclosed sensor_bounds bool_trace 1) = Some True"
+  "monitor_decisionsI sensor_bounds (STR ''arm'') (Act (STR ''move'') []) over_cond bool_trace = [(2, False)]"
+  "monitor_decisions (STR ''arm'') (Act (STR ''move'') []) over_cond bool_trace = [(2, False)]"
   by code_simp+
 
 text \<open>Scenario \<open>sensor_never_false\<close> without its last reading: readings of 97.5 at 08:00:05,
