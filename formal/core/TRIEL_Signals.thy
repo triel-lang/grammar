@@ -212,9 +212,6 @@ proof -
   finally show ?thesis using p(2) by simp
 qed
 
-lemma abs_minus_commute_real: "\<bar>t - s\<bar> = \<bar>s - t\<bar>" for s t :: real
-  by (rule abs_minus_commute)
-
 theorem upper_lip:
   assumes "finite S" "S \<noteq> {}" "0 \<le> L"
   shows "lip L (upper L S)"
@@ -224,7 +221,7 @@ proof (intro allI)
   have "upper L S t - upper L S s \<le> L * \<bar>t - s\<bar>"
     using upper_shift[OF assms, of t s] by simp
   moreover have "upper L S s - upper L S t \<le> L * \<bar>t - s\<bar>"
-    using upper_shift[OF assms, of s t] by (simp add: abs_minus_commute_real)
+    using upper_shift[OF assms, of s t] by (simp add: abs_minus_commute)
   ultimately show "\<bar>upper L S t - upper L S s\<bar> \<le> L * \<bar>t - s\<bar>" by (simp add: abs_le_iff)
 qed
 
@@ -1133,9 +1130,6 @@ lemma of_rat_min: "of_rat (min a b) = min (of_rat a) (of_rat b :: real)"
 lemma of_rat_max: "of_rat (max a b) = max (of_rat a) (of_rat b :: real)"
   by (simp add: max_def of_rat_less_eq)
 
-lemma of_rat_pos_iff: "0 < (of_rat q :: real) \<longleftrightarrow> 0 < q"
-  using of_rat_less[of 0 q] by simp
-
 lemma of_int_le_of_rat_iff: "(of_int k :: real) \<le> of_rat t \<longleftrightarrow> (of_int k :: rat) \<le> t"
   using of_rat_less_eq[of "of_int k" t] by simp
 
@@ -1231,7 +1225,7 @@ theorem lo_qvalley_attained:
 proof -
   have ne: "S \<noteq> {}" using assms(4) by (auto simp: qneighbours_def)
   have fin: "finite (real_samples S)" using assms(1) by simp
-  have Lpos: "0 < (of_rat L :: real)" using assms(2) by (simp add: of_rat_pos_iff)
+  have Lpos: "0 < (of_rat L :: real)" using assms(2) by (simp add: zero_less_of_rat_iff)
   have rc: "rcons (of_rat L) (real_samples S)" by (rule consistent_rconsD[OF assms(3)])
   have n: "neighbours (real_samples S) (real_sample p) (real_sample q)" using assms(4) by (simp add: qneighbours_cast)
   note vt = lower_valley_attained[OF fin Lpos rc n]
@@ -1261,7 +1255,7 @@ proof -
     by (simp add: real_samples_eq)
   show ?thesis
     unfolding above_check_def above_cert_def ball
-    by (simp add: qneighbours_cast of_rat_pos_iff real_sample_fst_less lo_cast[OF assms, symmetric]
+    by (simp add: qneighbours_cast zero_less_of_rat_iff real_sample_fst_less lo_cast[OF assms, symmetric]
         qvalley_time_cast[symmetric] qvalley_cast[symmetric] of_rat_less_eq)
 qed
 
@@ -1892,6 +1886,23 @@ definition blocksI :: "('n, atom) expr \<Rightarrow> 'n istate \<Rightarrow> boo
 theorem blocksI_point: "blocksI c (point \<sigma>) \<longleftrightarrow> blocks c \<sigma>"
   by (simp add: blocksI_def blocks_def evalI_point)
 
+text \<open>The interval evaluation is sound and not complete: on an interval that straddles
+  \<open>c\<close>, with values below \<open>c\<close> and values at or above it, \<open>x < c\<close> and \<open>c \<le> x\<close> are both
+  undefined, and so is their disjunction, which every signal satisfies.\<close>
+
+lemma straddle_undefined:
+  assumes "I x = Some (IvNum p q)" "p < c" "c \<le> q"
+  shows "evalI (ELt (VName x) (VConst (ANum c))) I = None"
+    and "evalI (ELe (VConst (ANum c)) (VName x)) I = None"
+    and "evalI (EOr (ELt (VName x) (VConst (ANum c))) (ELe (VConst (ANum c)) (VName x))) I = None"
+proof -
+  have nq: "\<not> q < c" and np: "\<not> c \<le> p" using assms(2,3) by auto
+  show "evalI (ELt (VName x) (VConst (ANum c))) I = None" using assms(1) nq np by simp
+  show "evalI (ELe (VConst (ANum c)) (VName x)) I = None" using assms(1) nq np by simp
+  show "evalI (EOr (ELt (VName x) (VConst (ANum c))) (ELe (VConst (ANum c)) (VName x))) I = None"
+    using assms(1) nq np by (simp add: kor_def)
+qed
+
 
 section \<open>Enclosures on a trace\<close>
 
@@ -2059,6 +2070,27 @@ theorem evalI_sound_signals:
   assumes "present_free c" "adm_family R F \<pi> j" "evalI c (enclosed R \<pi> j) = Some b"
   shows "evalR c (signal_state R F \<pi> j (of_int (time \<pi> j))) = Some b"
   by (rule evalI_sound_value[OF assms(1) enclosed_inside[OF assms(2)] assms(3)])
+
+text \<open>A family admissible at an entry is admissible at every earlier entry, since the
+  samples up to the earlier entry are among those up to the later one. So the family of
+  the true signals, admissible for all the samples of the trace, is admissible at the
+  entry before every action, and the theorems below, which assume admissibility at that
+  entry, apply to it.\<close>
+
+lemma adm_subset:
+  assumes "S \<subseteq> S'" "adm L S' f"
+  shows "adm L S f"
+  using assms real_samples_mono[OF assms(1)] by (auto simp: adm_def through_def)
+
+theorem adm_family_mono:
+  assumes "i \<le> j" "adm_family R F \<pi> j"
+  shows "adm_family R F \<pi> i"
+  unfolding adm_family_def
+proof (intro allI impI)
+  fix x L assume "map_of R x = Some L"
+  with assms(2) have "adm L (samples \<pi> j x) (F x)" by (simp add: adm_family_def)
+  then show "adm L (samples \<pi> i x) (F x)" by (rule adm_subset[OF samples_mono[OF assms(1)]])
+qed
 
 text \<open>Non-vacuity on a trace: with consistent samples there is an admissible family. A
   negative bound is inconsistent with every set of samples, so no hypothesis on the bounds
@@ -2442,6 +2474,56 @@ proof -
   then show ?thesis using L by (simp add: signal_state_def not_less)
 qed
 
+text \<open>The invariant of the sensor example compares the temperature with the factor
+  \<open>limit_c\<close>, not with a constant. For a name without a bound whose value at the last entry
+  is the number \<open>c\<close>, the induced valuation reads that value, and the verdict is the same.\<close>
+
+corollary ew_evalI_F_sound_factor:
+  assumes "ew_below_false R x c D \<pi>" "adm_family R F \<pi> (length \<pi> - 1)"
+    and "of_int (time \<pi> 0) \<le> t" "t \<le> of_int D"
+    and "map_of R y = None" "st \<pi> (length \<pi> - 1) y = Some (ANum c)"
+  shows "evalR (ELt (VName x) (VName y)) (signal_state R F \<pi> (length \<pi> - 1) t) = Some False"
+proof -
+  have y: "evalVR (VName y) (signal_state R F \<pi> (length \<pi> - 1) t)
+           = evalVR (VConst (ANum c)) (signal_state R F \<pi> (length \<pi> - 1) t)"
+    using assms(5,6) by (simp add: signal_state_def real_state_def)
+  show ?thesis using ew_evalI_F_sound[OF assms(1-4)] unfolding evalR.simps y .
+qed
+
+text \<open>The continuous false verdict never contradicts the verdict at the entries: on a
+  consistent trace with non-decreasing times it excludes the true verdict of
+  \<open>EVENTUALLY (x < c) WITHIN d\<close> on enclosures, since the enclosure of an entry of the
+  window contains the enclosure from all the samples, which is at or above \<open>c\<close> there.\<close>
+
+theorem ew_below_false_not_true:
+  assumes "ew_below_false R x c D \<pi>" "consistent_trace R \<pi>" "is_trace \<pi>" "time \<pi> 0 \<le> D"
+  shows "ew_evalI R (ELt (VName x) (VConst (ANum c))) D \<pi> \<noteq> Some True"
+proof
+  assume "ew_evalI R (ELt (VName x) (VConst (ANum c))) D \<pi> = Some True"
+  then obtain j where j: "j < length \<pi>" "time \<pi> j \<le> D"
+    and T: "evalI (ELt (VName x) (VConst (ANum c))) (enclosed R \<pi> j) = Some True"
+    by (auto simp: ew_evalI_def split: if_splits)
+  from assms(1) obtain L where L: "map_of R x = Some L"
+    and ne: "samples \<pi> (length \<pi> - 1) x \<noteq> {}"
+    and cert: "above_cert L (samples \<pi> (length \<pi> - 1) x) (of_int (time \<pi> 0)) (of_int D) c"
+    by (auto simp: ew_below_false_def split: option.splits)
+  let ?S = "samples \<pi> j x" and ?S' = "samples \<pi> (length \<pi> - 1) x" and ?t = "of_int (time \<pi> j) :: rat"
+  have Sne: "?S \<noteq> {}" and hiS: "hi L ?S ?t < c"
+    using T L by (auto simp: enclosed_def enclosed_at_def split: if_splits)
+  have sub: "?S \<subseteq> ?S'" using j(1) by (intro samples_mono) simp
+  have cons: "consistent L ?S'" using assms(2) L by (simp add: consistent_trace_def consistent_upto_def)
+  have t0: "time \<pi> 0 \<le> time \<pi> j" by (rule time_mono[OF assms(3) _ j(1)]) simp
+  have ab: "(of_int (time \<pi> 0) :: rat) \<le> of_int D" using assms(4) by simp
+  have "above_on (of_rat L) (real_samples ?S') (of_rat (of_int (time \<pi> 0))) (of_rat (of_int D)) (of_rat c)"
+    by (rule above_cert_iff[OF samples_finite ne cons ab, THEN iffD1, OF cert])
+  then have "(of_rat c :: real) \<le> of_rat (lo L ?S' ?t)"
+    unfolding lo_cast[OF samples_finite ne] using t0 j(2) by (simp add: above_on_def of_rat_of_int_eq)
+  then have "c \<le> lo L ?S' ?t" by (simp only: of_rat_less_eq)
+  also have "\<dots> \<le> hi L ?S' ?t" by (rule enc_nonempty[OF samples_finite ne cons])
+  also have "\<dots> \<le> hi L ?S ?t" by (rule enc_antitone(2)[OF samples_finite sub Sne])
+  finally show False using hiS by simp
+qed
+
 theorem ew_below_false_final:
   assumes "ew_below_false R x c D \<pi>" "\<pi> \<noteq> []" "consistent_trace R (\<pi> @ \<rho>)" "time \<pi> 0 \<le> D"
   shows "ew_below_false R x c D (\<pi> @ \<rho>)"
@@ -2462,6 +2544,16 @@ proof -
   have t0: "time (\<pi> @ \<rho>) 0 = time \<pi> 0" using assms(2) by simp
   show ?thesis unfolding ew_below_false_def t0 using passed_append[OF p] L cert' sub ne by auto
 qed
+
+text \<open>The checked form, in the shape of \<open>run_final\<close>: a continuous false verdict of a
+  consistent trace is the verdict of every longer trace, unless the longer trace is
+  rejected.\<close>
+
+theorem checked_ew_below_false_final:
+  assumes "checked R \<pi> (ew_below_false R x c D \<pi>) = Some True" "\<pi> \<noteq> []" "time \<pi> 0 \<le> D"
+  shows "checked R (\<pi> @ \<rho>) (ew_below_false R x c D (\<pi> @ \<rho>)) = Some True
+         \<or> checked R (\<pi> @ \<rho>) (ew_below_false R x c D (\<pi> @ \<rho>)) = None"
+  using assms ew_below_false_final[of R x c D \<pi> \<rho>] by (auto simp: checked_def split: if_splits)
 
 
 section \<open>Executable equations\<close>

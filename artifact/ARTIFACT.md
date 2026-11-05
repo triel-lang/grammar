@@ -49,7 +49,7 @@ and prints a summary whose numbers are all computed by the run.
   other steps stay below 2 GiB. On GitHub-hosted runners (4 cores, 15.6 GiB)
   without a limit, where Isabelle2025-2 used 2 threads (as the build logs
   state), the workflow `.github/workflows/artifact.yml` read peaks from 6.73 to
-  7.20 GiB in the seventeen runs listed under "Times on GitHub-hosted runners"
+  7.20 GiB in the eighteen runs listed under "Times on GitHub-hosted runners"
   below; it keeps the value as `memory-peak.txt` with the logs of the run.
 - Docker Desktop (macOS, Windows): set Memory to at least 10 GB in
   Settings → Resources.
@@ -83,12 +83,13 @@ image build were measured for version 2.5, with the same `Dockerfile`.
 The job `artifact` of `.github/workflows/artifact.yml` builds the image and
 runs `run.sh` on every push, on a GitHub-hosted runner (the label
 `ubuntu-latest` in #56 to #59, `ubuntu-24.04` from #60), and reads the memory
-peak of the container. The seventeen runs
+peak of the container. The eighteen runs
 below are those, from the first run that read the memory peak (#56) to the
-run #75 of this version, in which `run.sh` passed all 11 steps; all of them
-are of sources with 28 examples and 54 scenarios. Over these runs:
+run #169 of this version, in which `run.sh` passed all 11 steps; the runs #56
+to #75 are of sources with 28 examples and 54 scenarios, the run #169 of the
+sources of this version, with 32 examples and 97 scenarios. Over these runs:
 
-| Phase | Range over the seventeen runs |
+| Phase | Range over the eighteen runs |
 |---|---|
 | Job `artifact` (disk clean-up, image build and `run.sh`) | 16:14 to 34:00 min |
 | Image build (`docker build`, base images included) | 1:14 to 2:18 min |
