@@ -216,9 +216,19 @@ the time of the entry before the action, and a breach it records is true for eve
 analogues of the theorems about completions; the verdicts computed on enclosures are
 final when entries are appended (\texttt{pr\_verdictI\_final},
 \texttt{inv\_evalI\_final}, \texttt{ew\_evalI\_final}), with samples inconsistent
-with the bound a rejection; the enclosures are executable, and the numbers of the
-sensor example of the repository are computed by the executable equations. The bound is
-a parameter of the theory, not of the language.
+with the bound a rejection; between two neighbouring samples the envelopes are the two
+neighbouring cones (\texttt{upper\_neighbours}, \texttt{lower\_neighbours},
+\texttt{enc\_neighbours}), with the peak and the valley as their extremes on the
+segment; whether the lower envelope stays at or above a level throughout a window of
+real time is decided by finitely many rational comparisons, exactly
+(\texttt{above\_cert\_iff}), which gives a continuous false verdict of
+\texttt{EVENTUALLY (x < c) WITHIN d}, sound for every admissible signal at every time of
+the window and final under more consistent samples (\texttt{ew\_evalI\_F\_sound},
+\texttt{ew\_below\_false\_final}); a signal with a derivative bounded by $L$ is a
+signal under $L$, by the mean value theorem (\texttt{deriv\_bound\_lip}); the
+enclosures are executable, and the numbers of the sensor example of the repository are
+computed by the executable equations. The bound is a parameter of the theory, not of the
+language.
 
 \paragraph{Numbers (theory \texttt{TRIEL\_Numbers}).}
 There is no floating point. An Integer is a rational number in $\mathbb{Z}$, and a Decimal

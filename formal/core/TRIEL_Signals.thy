@@ -13,13 +13,20 @@
                 monitor of a prohibition allows on the enclosures is false for every
                 admissible signal, and a breach it records is certain; the verdicts
                 computed from the enclosures are final under extension of the trace,
-                where inconsistent samples are a rejection; the enclosures are
-                executable.
+                where inconsistent samples are a rejection; between two neighbouring
+                samples the envelopes are the two neighbouring cones, with the peak
+                and the valley as their extremes; whether the lower envelope stays at
+                or above a level throughout a window of real time is decided exactly by
+                finitely many rational comparisons, which gives a continuous false
+                verdict of EVENTUALLY (x < c) WITHIN d, sound for every admissible
+                signal at every time of the window and final under more consistent
+                samples; a signal with a bounded derivative is a signal under the
+                bound; the enclosures and the decision are executable.
     SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
 theory TRIEL_Signals
-  imports TRIEL_Exec "HOL.Real"
+  imports TRIEL_Exec "HOL.Deriv"
 begin
 
 section \<open>Signals under a rate bound\<close>
@@ -36,6 +43,37 @@ lemma lipD: "lip L f \<Longrightarrow> \<bar>f t - f s\<bar> \<le> L * \<bar>t -
 
 lemma lip_const: "0 \<le> L \<Longrightarrow> lip L (\<lambda>_. c)"
   by (simp add: lip_def)
+
+text \<open>A signal with a derivative bounded by \<open>L\<close> everywhere is a signal under \<open>L\<close>, by the mean
+  value theorem: this is how a bound on the rate of a physical quantity, or on the
+  right-hand side of its differential equation, gives the rate bound of this theory.\<close>
+
+theorem deriv_bound_lip:
+  assumes der: "\<And>x. DERIV f x :> f' x" and bound: "\<And>x. \<bar>f' x\<bar> \<le> L"
+  shows "lip L f"
+  unfolding lip_def
+proof (intro allI)
+  fix s t
+  have mvt: "\<bar>f b - f a\<bar> \<le> L * \<bar>b - a\<bar>" if "a < b" for a b
+  proof -
+    from MVT2[OF that, of f f'] der obtain z where z: "f b - f a = (b - a) * f' z" by blast
+    have "\<bar>f b - f a\<bar> = \<bar>b - a\<bar> * \<bar>f' z\<bar>" by (simp add: z abs_mult)
+    also have "\<dots> \<le> \<bar>b - a\<bar> * L" by (rule mult_left_mono[OF bound]) simp
+    finally show ?thesis by (simp add: mult.commute)
+  qed
+  show "\<bar>f t - f s\<bar> \<le> L * \<bar>t - s\<bar>"
+  proof (cases s t rule: linorder_cases)
+    case less
+    then show ?thesis by (rule mvt)
+  next
+    case equal
+    have "0 \<le> L" using bound[of s] by simp
+    with equal show ?thesis by simp
+  next
+    case greater
+    from mvt[OF greater] show ?thesis by (simp add: abs_minus_commute)
+  qed
+qed
 
 text \<open>A sample is a time with the value read at that time. A signal passes through a set
   of samples if it has each sampled value at its time. A set of samples is consistent
@@ -323,6 +361,527 @@ proof -
 qed
 
 
+subsection \<open>Between two samples\<close>
+
+text \<open>Of two samples on the same side of a time, the farther one confines no more than the
+  nearer one: its cone at that time is at least as high above and at least as low below.
+  So between two consecutive samples the envelopes are the two neighbouring cones, before
+  the first sample and after the last one they are the one cone. Consistency of the two
+  samples is what makes the nearer cone the lower one.\<close>
+
+lemma cone_up_farther:
+  assumes "0 \<le> L" "rcons L S" "p \<in> S" "q \<in> S"
+    and "\<bar>t - fst q\<bar> = \<bar>t - fst p\<bar> + \<bar>fst p - fst q\<bar>"
+  shows "cone_up L t p \<le> cone_up L t q"
+proof -
+  have "\<bar>snd p - snd q\<bar> \<le> L * \<bar>fst p - fst q\<bar>" using assms(2-4) by (simp add: rcons_def)
+  then have le: "snd p \<le> snd q + L * \<bar>fst p - fst q\<bar>" by (simp add: abs_le_iff)
+  have "L * (\<bar>t - fst p\<bar> + \<bar>fst p - fst q\<bar>) = L * \<bar>t - fst p\<bar> + L * \<bar>fst p - fst q\<bar>"
+    by (simp add: distrib_left)
+  with le show ?thesis unfolding cone_up_def assms(5) by linarith
+qed
+
+lemma cone_lo_farther:
+  assumes "0 \<le> L" "rcons L S" "p \<in> S" "q \<in> S"
+    and "\<bar>t - fst q\<bar> = \<bar>t - fst p\<bar> + \<bar>fst p - fst q\<bar>"
+  shows "cone_lo L t q \<le> cone_lo L t p"
+proof -
+  have "\<bar>snd p - snd q\<bar> \<le> L * \<bar>fst p - fst q\<bar>" using assms(2-4) by (simp add: rcons_def)
+  then have le: "snd q - L * \<bar>fst p - fst q\<bar> \<le> snd p" by (simp add: abs_le_iff)
+  have "L * (\<bar>t - fst p\<bar> + \<bar>fst p - fst q\<bar>) = L * \<bar>t - fst p\<bar> + L * \<bar>fst p - fst q\<bar>"
+    by (simp add: distrib_left)
+  with le show ?thesis unfolding cone_lo_def assms(5) by linarith
+qed
+
+lemma abs_split_left: "r \<le> p \<Longrightarrow> p \<le> t \<Longrightarrow> \<bar>t - r\<bar> = \<bar>t - p\<bar> + \<bar>p - r\<bar>" for r p t :: real
+proof -
+  assume "r \<le> p" "p \<le> t"
+  then have "0 \<le> t - r" "0 \<le> t - p" "0 \<le> p - r" by linarith+
+  then show ?thesis by (simp add: abs_of_nonneg)
+qed
+
+lemma abs_split_right: "t \<le> p \<Longrightarrow> p \<le> r \<Longrightarrow> \<bar>t - r\<bar> = \<bar>t - p\<bar> + \<bar>p - r\<bar>" for r p t :: real
+proof -
+  assume "t \<le> p" "p \<le> r"
+  then have "0 \<le> r - t" "0 \<le> p - t" "0 \<le> r - p" by linarith+
+  then show ?thesis by (simp add: abs_minus_commute[of t] abs_minus_commute[of p r] abs_of_nonneg)
+qed
+
+text \<open>Two samples are neighbours of a time if one is at or before it, the other at or after
+  it, and no sample is strictly between them.\<close>
+
+definition neighbours :: "rsamples \<Rightarrow> real \<times> real \<Rightarrow> real \<times> real \<Rightarrow> bool" where
+  "neighbours S p q \<longleftrightarrow> p \<in> S \<and> q \<in> S \<and> fst p \<le> fst q \<and> (\<forall>r \<in> S. fst r \<le> fst p \<or> fst q \<le> fst r)"
+
+theorem upper_neighbours:
+  assumes "finite S" "0 \<le> L" "rcons L S" "neighbours S p q" "fst p \<le> t" "t \<le> fst q"
+  shows "upper L S t = min (cone_up L t p) (cone_up L t q)"
+  unfolding upper_def
+proof (rule Min_eqI)
+  show "finite (cone_up L t ` S)" using assms(1) by simp
+  show "min (cone_up L t p) (cone_up L t q) \<in> cone_up L t ` S"
+    using assms(4) by (auto simp: neighbours_def min_def)
+  fix y assume "y \<in> cone_up L t ` S"
+  then obtain r where r: "r \<in> S" "y = cone_up L t r" by blast
+  have pq: "p \<in> S" "q \<in> S" using assms(4) by (simp_all add: neighbours_def)
+  from assms(4) r(1) have "fst r \<le> fst p \<or> fst q \<le> fst r" by (simp add: neighbours_def)
+  then show "min (cone_up L t p) (cone_up L t q) \<le> y"
+  proof
+    assume "fst r \<le> fst p"
+    then have "cone_up L t p \<le> cone_up L t r"
+      by (intro cone_up_farther[OF assms(2,3) pq(1) r(1)] abs_split_left[OF _ assms(5)])
+    then show ?thesis unfolding r(2) by (simp add: min_le_iff_disj)
+  next
+    assume "fst q \<le> fst r"
+    then have "cone_up L t q \<le> cone_up L t r"
+      by (intro cone_up_farther[OF assms(2,3) pq(2) r(1)] abs_split_right[OF assms(6)])
+    then show ?thesis unfolding r(2) by (simp add: min_le_iff_disj)
+  qed
+qed
+
+theorem lower_neighbours:
+  assumes "finite S" "0 \<le> L" "rcons L S" "neighbours S p q" "fst p \<le> t" "t \<le> fst q"
+  shows "lower L S t = max (cone_lo L t p) (cone_lo L t q)"
+  unfolding lower_def
+proof (rule Max_eqI)
+  show "finite (cone_lo L t ` S)" using assms(1) by simp
+  show "max (cone_lo L t p) (cone_lo L t q) \<in> cone_lo L t ` S"
+    using assms(4) by (auto simp: neighbours_def max_def)
+  fix y assume "y \<in> cone_lo L t ` S"
+  then obtain r where r: "r \<in> S" "y = cone_lo L t r" by blast
+  have pq: "p \<in> S" "q \<in> S" using assms(4) by (simp_all add: neighbours_def)
+  from assms(4) r(1) have "fst r \<le> fst p \<or> fst q \<le> fst r" by (simp add: neighbours_def)
+  then show "y \<le> max (cone_lo L t p) (cone_lo L t q)"
+  proof
+    assume "fst r \<le> fst p"
+    then have "cone_lo L t r \<le> cone_lo L t p"
+      by (intro cone_lo_farther[OF assms(2,3) pq(1) r(1)] abs_split_left[OF _ assms(5)])
+    then show ?thesis unfolding r(2) by (simp add: le_max_iff_disj)
+  next
+    assume "fst q \<le> fst r"
+    then have "cone_lo L t r \<le> cone_lo L t q"
+      by (intro cone_lo_farther[OF assms(2,3) pq(2) r(1)] abs_split_right[OF assms(6)])
+    then show ?thesis unfolding r(2) by (simp add: le_max_iff_disj)
+  qed
+qed
+
+text \<open>Before the first sample and after the last one, the envelopes are the cones of that
+  sample.\<close>
+
+theorem upper_first:
+  assumes "finite S" "0 \<le> L" "rcons L S" "p \<in> S" "\<And>r. r \<in> S \<Longrightarrow> fst p \<le> fst r" "t \<le> fst p"
+  shows "upper L S t = cone_up L t p"
+  unfolding upper_def
+proof (rule Min_eqI)
+  show "finite (cone_up L t ` S)" using assms(1) by simp
+  show "cone_up L t p \<in> cone_up L t ` S" using assms(4) by simp
+  fix y assume "y \<in> cone_up L t ` S"
+  then obtain r where r: "r \<in> S" "y = cone_up L t r" by blast
+  show "cone_up L t p \<le> y" unfolding r(2)
+    by (intro cone_up_farther[OF assms(2,3,4) r(1)] abs_split_right[OF assms(6) assms(5)[OF r(1)]])
+qed
+
+theorem upper_last:
+  assumes "finite S" "0 \<le> L" "rcons L S" "p \<in> S" "\<And>r. r \<in> S \<Longrightarrow> fst r \<le> fst p" "fst p \<le> t"
+  shows "upper L S t = cone_up L t p"
+  unfolding upper_def
+proof (rule Min_eqI)
+  show "finite (cone_up L t ` S)" using assms(1) by simp
+  show "cone_up L t p \<in> cone_up L t ` S" using assms(4) by simp
+  fix y assume "y \<in> cone_up L t ` S"
+  then obtain r where r: "r \<in> S" "y = cone_up L t r" by blast
+  show "cone_up L t p \<le> y" unfolding r(2)
+    by (intro cone_up_farther[OF assms(2,3,4) r(1)] abs_split_left[OF assms(5)[OF r(1)] assms(6)])
+qed
+
+theorem lower_first:
+  assumes "finite S" "0 \<le> L" "rcons L S" "p \<in> S" "\<And>r. r \<in> S \<Longrightarrow> fst p \<le> fst r" "t \<le> fst p"
+  shows "lower L S t = cone_lo L t p"
+  unfolding lower_def
+proof (rule Max_eqI)
+  show "finite (cone_lo L t ` S)" using assms(1) by simp
+  show "cone_lo L t p \<in> cone_lo L t ` S" using assms(4) by simp
+  fix y assume "y \<in> cone_lo L t ` S"
+  then obtain r where r: "r \<in> S" "y = cone_lo L t r" by blast
+  show "y \<le> cone_lo L t p" unfolding r(2)
+    by (intro cone_lo_farther[OF assms(2,3,4) r(1)] abs_split_right[OF assms(6) assms(5)[OF r(1)]])
+qed
+
+theorem lower_last:
+  assumes "finite S" "0 \<le> L" "rcons L S" "p \<in> S" "\<And>r. r \<in> S \<Longrightarrow> fst r \<le> fst p" "fst p \<le> t"
+  shows "lower L S t = cone_lo L t p"
+  unfolding lower_def
+proof (rule Max_eqI)
+  show "finite (cone_lo L t ` S)" using assms(1) by simp
+  show "cone_lo L t p \<in> cone_lo L t ` S" using assms(4) by simp
+  fix y assume "y \<in> cone_lo L t ` S"
+  then obtain r where r: "r \<in> S" "y = cone_lo L t r" by blast
+  show "y \<le> cone_lo L t p" unfolding r(2)
+    by (intro cone_lo_farther[OF assms(2,3,4) r(1)] abs_split_left[OF assms(5)[OF r(1)] assms(6)])
+qed
+
+
+subsection \<open>The extremes between two samples\<close>
+
+text \<open>On the segment between two samples, the two upper cones add up to a constant: twice
+  the mean of the two values plus \<open>L\<close> times the gap. So the least of them is at most that
+  constant divided by two, the peak, with equality where the cones cross; the greatest of
+  the two lower cones is at least the valley, the mean minus \<open>L\<close> times half the gap. For
+  consistent samples the crossing is inside the segment. Between two consecutive samples
+  these are the extremes of the envelopes.\<close>
+
+definition peak :: "real \<Rightarrow> real \<times> real \<Rightarrow> real \<times> real \<Rightarrow> real" where
+  "peak L p q = (snd p + snd q) / 2 + L * (fst q - fst p) / 2"
+
+definition valley :: "real \<Rightarrow> real \<times> real \<Rightarrow> real \<times> real \<Rightarrow> real" where
+  "valley L p q = (snd p + snd q) / 2 - L * (fst q - fst p) / 2"
+
+definition peak_time :: "real \<Rightarrow> real \<times> real \<Rightarrow> real \<times> real \<Rightarrow> real" where
+  "peak_time L p q = (fst p + fst q) / 2 + (snd q - snd p) / (2 * L)"
+
+definition valley_time :: "real \<Rightarrow> real \<times> real \<Rightarrow> real \<times> real \<Rightarrow> real" where
+  "valley_time L p q = (fst p + fst q) / 2 + (snd p - snd q) / (2 * L)"
+
+lemma abs_segment:
+  fixes p q :: "real \<times> real"
+  assumes "fst p \<le> t" "t \<le> fst q"
+  shows "\<bar>t - fst p\<bar> = t - fst p" and "\<bar>t - fst q\<bar> = fst q - t"
+proof -
+  show "\<bar>t - fst p\<bar> = t - fst p" by (rule abs_of_nonneg) (use assms(1) in simp)
+  show "\<bar>t - fst q\<bar> = fst q - t"
+    unfolding abs_minus_commute[of t] by (rule abs_of_nonneg) (use assms(2) in simp)
+qed
+
+lemma cones_up_sum:
+  assumes "fst p \<le> t" "t \<le> fst q"
+  shows "cone_up L t p + cone_up L t q = 2 * peak L p q"
+  unfolding cone_up_def peak_def abs_segment[OF assms] by (simp add: field_simps)
+
+lemma cones_lo_sum:
+  assumes "fst p \<le> t" "t \<le> fst q"
+  shows "cone_lo L t p + cone_lo L t q = 2 * valley L p q"
+  unfolding cone_lo_def valley_def abs_segment[OF assms] by (simp add: field_simps)
+
+lemma min_cones_le_peak:
+  assumes "fst p \<le> t" "t \<le> fst q"
+  shows "min (cone_up L t p) (cone_up L t q) \<le> peak L p q"
+  using cones_up_sum[OF assms, of L] min.cobounded1[of "cone_up L t p" "cone_up L t q"]
+    min.cobounded2[of "cone_up L t p" "cone_up L t q"] by linarith
+
+lemma valley_le_max_cones:
+  assumes "fst p \<le> t" "t \<le> fst q"
+  shows "valley L p q \<le> max (cone_lo L t p) (cone_lo L t q)"
+  using cones_lo_sum[OF assms, of L] max.cobounded1[of "cone_lo L t p" "cone_lo L t q"]
+    max.cobounded2[of "cone_lo L t p" "cone_lo L t q"] by linarith
+
+text \<open>Where the two upper cones cross, both are the peak; where the two lower cones cross,
+  both are the valley. The difference of the two lower cones is proportional to the
+  distance from the crossing, so the lower cone of the earlier sample is the greater one
+  before the crossing and the lesser one after it.\<close>
+
+lemma peak_time_between:
+  assumes "0 < L" "fst p \<le> fst q" "\<bar>snd q - snd p\<bar> \<le> L * (fst q - fst p)"
+  shows "fst p \<le> peak_time L p q" "peak_time L p q \<le> fst q"
+    and "cone_up L (peak_time L p q) p = peak L p q" "cone_up L (peak_time L p q) q = peak L p q"
+proof -
+  have ab: "snd q - snd p \<le> L * (fst q - fst p)" "snd p - snd q \<le> L * (fst q - fst p)"
+    using assms(3) by (simp_all add: abs_le_iff)
+  have d1: "peak_time L p q - fst p = (L * (fst q - fst p) + (snd q - snd p)) / (2 * L)"
+    unfolding peak_time_def using assms(1) by (simp add: field_simps)
+  have d2: "fst q - peak_time L p q = (L * (fst q - fst p) - (snd q - snd p)) / (2 * L)"
+    unfolding peak_time_def using assms(1) by (simp add: field_simps)
+  have "0 \<le> L * (fst q - fst p) + (snd q - snd p)" using ab(2) by linarith
+  then have "0 \<le> peak_time L p q - fst p" unfolding d1 using assms(1) by (intro divide_nonneg_pos; linarith)
+  then show 1: "fst p \<le> peak_time L p q" by linarith
+  have "0 \<le> L * (fst q - fst p) - (snd q - snd p)" using ab(1) by linarith
+  then have "0 \<le> fst q - peak_time L p q" unfolding d2 using assms(1) by (intro divide_nonneg_pos; linarith)
+  then show 2: "peak_time L p q \<le> fst q" by linarith
+  have e1: "L * (peak_time L p q - fst p) = (L * (fst q - fst p) + (snd q - snd p)) / 2"
+    unfolding d1 using assms(1) by (simp add: field_simps)
+  show "cone_up L (peak_time L p q) p = peak L p q"
+    unfolding cone_up_def peak_def abs_segment(1)[OF 1 2] e1 by (simp add: field_simps)
+  have e2: "L * (fst q - peak_time L p q) = (L * (fst q - fst p) - (snd q - snd p)) / 2"
+    unfolding d2 using assms(1) by (simp add: field_simps)
+  show "cone_up L (peak_time L p q) q = peak L p q"
+    unfolding cone_up_def peak_def abs_segment(2)[OF 1 2] e2 by (simp add: field_simps)
+qed
+
+lemma valley_time_between:
+  assumes "0 < L" "fst p \<le> fst q" "\<bar>snd q - snd p\<bar> \<le> L * (fst q - fst p)"
+  shows "fst p \<le> valley_time L p q" "valley_time L p q \<le> fst q"
+    and "cone_lo L (valley_time L p q) p = valley L p q" "cone_lo L (valley_time L p q) q = valley L p q"
+proof -
+  have ab: "snd q - snd p \<le> L * (fst q - fst p)" "snd p - snd q \<le> L * (fst q - fst p)"
+    using assms(3) by (simp_all add: abs_le_iff)
+  have d1: "valley_time L p q - fst p = (L * (fst q - fst p) + (snd p - snd q)) / (2 * L)"
+    unfolding valley_time_def using assms(1) by (simp add: field_simps)
+  have d2: "fst q - valley_time L p q = (L * (fst q - fst p) - (snd p - snd q)) / (2 * L)"
+    unfolding valley_time_def using assms(1) by (simp add: field_simps)
+  have "0 \<le> L * (fst q - fst p) + (snd p - snd q)" using ab(1) by linarith
+  then have "0 \<le> valley_time L p q - fst p" unfolding d1 using assms(1) by (intro divide_nonneg_pos; linarith)
+  then show 1: "fst p \<le> valley_time L p q" by linarith
+  have "0 \<le> L * (fst q - fst p) - (snd p - snd q)" using ab(2) by linarith
+  then have "0 \<le> fst q - valley_time L p q" unfolding d2 using assms(1) by (intro divide_nonneg_pos; linarith)
+  then show 2: "valley_time L p q \<le> fst q" by linarith
+  have e1: "L * (valley_time L p q - fst p) = (L * (fst q - fst p) + (snd p - snd q)) / 2"
+    unfolding d1 using assms(1) by (simp add: field_simps)
+  show "cone_lo L (valley_time L p q) p = valley L p q"
+    unfolding cone_lo_def valley_def abs_segment(1)[OF 1 2] e1 by (simp add: field_simps)
+  have e2: "L * (fst q - valley_time L p q) = (L * (fst q - fst p) - (snd p - snd q)) / 2"
+    unfolding d2 using assms(1) by (simp add: field_simps)
+  show "cone_lo L (valley_time L p q) q = valley L p q"
+    unfolding cone_lo_def valley_def abs_segment(2)[OF 1 2] e2 by (simp add: field_simps)
+qed
+
+lemma cone_lo_cross:
+  assumes "0 < L" "fst p \<le> u" "u \<le> fst q"
+  shows "cone_lo L u p - cone_lo L u q = 2 * L * (valley_time L p q - u)"
+  unfolding cone_lo_def valley_time_def abs_segment[OF assms(2,3)] using assms(1) by (simp add: field_simps)
+
+lemma cone_lo_dec: "0 \<le> L \<Longrightarrow> fst p \<le> u \<Longrightarrow> u \<le> v \<Longrightarrow> cone_lo L v p \<le> cone_lo L u p"
+  unfolding cone_lo_def by (simp add: mult_left_mono)
+
+lemma cone_lo_inc: "0 \<le> L \<Longrightarrow> u \<le> v \<Longrightarrow> v \<le> fst p \<Longrightarrow> cone_lo L u p \<le> cone_lo L v p"
+  unfolding cone_lo_def by (simp add: mult_left_mono)
+
+text \<open>So between two consecutive samples the upper envelope is at most the peak, with
+  equality at the crossing of the two cones for a positive bound, and the lower envelope is
+  at least the valley, with equality at the crossing. For the bound 0 a consistent set has
+  one value, which both envelopes have everywhere.\<close>
+
+theorem upper_le_peak:
+  assumes "finite S" "p \<in> S" "q \<in> S" "fst p \<le> t" "t \<le> fst q"
+  shows "upper L S t \<le> peak L p q"
+proof -
+  have "upper L S t \<le> cone_up L t p" "upper L S t \<le> cone_up L t q"
+    unfolding upper_def using assms(1-3) by (intro Min_le; simp)+
+  with min_cones_le_peak[OF assms(4,5), of L] show ?thesis by (metis min_le_iff_disj order_trans)
+qed
+
+theorem valley_le_lower:
+  assumes "finite S" "p \<in> S" "q \<in> S" "fst p \<le> t" "t \<le> fst q"
+  shows "valley L p q \<le> lower L S t"
+proof -
+  have "cone_lo L t p \<le> lower L S t" "cone_lo L t q \<le> lower L S t"
+    unfolding lower_def using assms(1-3) by (intro Max_ge; simp)+
+  with valley_le_max_cones[OF assms(4,5), of L] show ?thesis by (metis le_max_iff_disj order_trans)
+qed
+
+theorem upper_peak_attained:
+  assumes "finite S" "0 < L" "rcons L S" "neighbours S p q"
+  shows "fst p \<le> peak_time L p q" "peak_time L p q \<le> fst q" "upper L S (peak_time L p q) = peak L p q"
+proof -
+  have pq: "p \<in> S" "q \<in> S" "fst p \<le> fst q" using assms(4) by (simp_all add: neighbours_def)
+  have "\<bar>snd q - snd p\<bar> \<le> L * \<bar>fst q - fst p\<bar>" using assms(3) pq(1,2) unfolding rcons_def by blast
+  then have c: "\<bar>snd q - snd p\<bar> \<le> L * (fst q - fst p)" using pq(3) by (simp add: abs_of_nonneg)
+  note pt = peak_time_between[OF assms(2) pq(3) c]
+  show "fst p \<le> peak_time L p q" "peak_time L p q \<le> fst q" by (rule pt(1)) (rule pt(2))
+  have "upper L S (peak_time L p q) = min (cone_up L (peak_time L p q) p) (cone_up L (peak_time L p q) q)"
+    by (rule upper_neighbours[OF assms(1) _ assms(3,4) pt(1,2)]) (use assms(2) in simp)
+  then show "upper L S (peak_time L p q) = peak L p q" by (simp add: pt(3,4))
+qed
+
+theorem lower_valley_attained:
+  assumes "finite S" "0 < L" "rcons L S" "neighbours S p q"
+  shows "fst p \<le> valley_time L p q" "valley_time L p q \<le> fst q" "lower L S (valley_time L p q) = valley L p q"
+proof -
+  have pq: "p \<in> S" "q \<in> S" "fst p \<le> fst q" using assms(4) by (simp_all add: neighbours_def)
+  have "\<bar>snd q - snd p\<bar> \<le> L * \<bar>fst q - fst p\<bar>" using assms(3) pq(1,2) unfolding rcons_def by blast
+  then have c: "\<bar>snd q - snd p\<bar> \<le> L * (fst q - fst p)" using pq(3) by (simp add: abs_of_nonneg)
+  note vt = valley_time_between[OF assms(2) pq(3) c]
+  show "fst p \<le> valley_time L p q" "valley_time L p q \<le> fst q" by (rule vt(1)) (rule vt(2))
+  have "lower L S (valley_time L p q) = max (cone_lo L (valley_time L p q) p) (cone_lo L (valley_time L p q) q)"
+    by (rule lower_neighbours[OF assms(1) _ assms(3,4) vt(1,2)]) (use assms(2) in simp)
+  then show "lower L S (valley_time L p q) = valley L p q" by (simp add: vt(3,4))
+qed
+
+lemma lower_zero: "lower 0 S t = lower 0 S u"
+  by (simp add: lower_def cone_lo_def)
+
+lemma upper_zero: "upper 0 S t = upper 0 S u"
+  by (simp add: upper_def cone_up_def)
+
+
+subsection \<open>A window above a level\<close>
+
+text \<open>Whether the lower envelope stays at or above a level \<open>c\<close> on a whole window \<open>[a, b]\<close> of
+  real time is decided by finitely many rational checks: the lower envelope at \<open>a\<close> and at
+  \<open>b\<close>, and the valley of every pair of consecutive samples whose crossing lies in the window.
+  The decision is exact: it holds if and only if every admissible signal is at or above
+  \<open>c\<close> throughout the window. The proof uses that the lower envelope rises before the first
+  sample and falls after the last one, and that between two consecutive samples it is the
+  greater of the two lower cones, which falls up to their crossing and rises after it.\<close>
+
+definition above_on :: "real \<Rightarrow> rsamples \<Rightarrow> real \<Rightarrow> real \<Rightarrow> real \<Rightarrow> bool" where
+  "above_on L S a b c \<longleftrightarrow> (\<forall>t. a \<le> t \<longrightarrow> t \<le> b \<longrightarrow> c \<le> lower L S t)"
+
+definition above_check :: "real \<Rightarrow> rsamples \<Rightarrow> real \<Rightarrow> real \<Rightarrow> real \<Rightarrow> bool" where
+  "above_check L S a b c \<longleftrightarrow>
+     c \<le> lower L S a \<and> c \<le> lower L S b \<and>
+     (\<forall>p \<in> S. \<forall>q \<in> S. neighbours S p q \<longrightarrow> fst p < fst q \<longrightarrow> 0 < L \<longrightarrow>
+        a \<le> valley_time L p q \<longrightarrow> valley_time L p q \<le> b \<longrightarrow> c \<le> valley L p q)"
+
+lemma lower_rises_before:
+  assumes "finite S" "S \<noteq> {}" "0 \<le> L" "u \<le> v" "\<And>r. r \<in> S \<Longrightarrow> v \<le> fst r"
+  shows "lower L S u \<le> lower L S v"
+proof -
+  have "lower L S u \<in> cone_lo L u ` S" unfolding lower_def using assms(1,2) by (intro Max_in) simp_all
+  then obtain r where r: "r \<in> S" "lower L S u = cone_lo L u r" by blast
+  have "cone_lo L u r \<le> cone_lo L v r" by (rule cone_lo_inc[OF assms(3,4) assms(5)[OF r(1)]])
+  also have "\<dots> \<le> lower L S v" unfolding lower_def using assms(1) r(1) by (intro Max_ge) simp_all
+  finally show ?thesis using r(2) by simp
+qed
+
+lemma lower_falls_after:
+  assumes "finite S" "S \<noteq> {}" "0 \<le> L" "u \<le> v" "\<And>r. r \<in> S \<Longrightarrow> fst r \<le> u"
+  shows "lower L S v \<le> lower L S u"
+proof -
+  have "lower L S v \<in> cone_lo L v ` S" unfolding lower_def using assms(1,2) by (intro Max_in) simp_all
+  then obtain r where r: "r \<in> S" "lower L S v = cone_lo L v r" by blast
+  have "cone_lo L v r \<le> cone_lo L u r" by (rule cone_lo_dec[OF assms(3) assms(5)[OF r(1)] assms(4)])
+  also have "\<dots> \<le> lower L S u" unfolding lower_def using assms(1) r(1) by (intro Max_ge) simp_all
+  finally show ?thesis using r(2) by simp
+qed
+
+text \<open>Every time strictly between the first and the last sample has two neighbouring samples
+  at different times.\<close>
+
+lemma neighbours_exist:
+  assumes "finite S" "p0 \<in> S" "q0 \<in> S" "fst p0 \<le> t" "t < fst q0"
+  shows "\<exists>p q. neighbours S p q \<and> fst p \<le> t \<and> t < fst q"
+proof -
+  let ?A = "{r \<in> S. fst r \<le> t}" and ?B = "{r \<in> S. t < fst r}"
+  have fA: "finite (fst ` ?A)" and fB: "finite (fst ` ?B)" using assms(1) by simp_all
+  have "p0 \<in> ?A" using assms(2,4) by simp
+  then have neA: "fst ` ?A \<noteq> {}" by blast
+  have "q0 \<in> ?B" using assms(3,5) by simp
+  then have neB: "fst ` ?B \<noteq> {}" by blast
+  from Max_in[OF fA neA] obtain p where p: "p \<in> S" "fst p \<le> t" "fst p = Max (fst ` ?A)" by auto
+  from Min_in[OF fB neB] obtain q where q: "q \<in> S" "t < fst q" "fst q = Min (fst ` ?B)" by auto
+  have btw: "fst r \<le> fst p \<or> fst q \<le> fst r" if r: "r \<in> S" for r
+  proof (cases "fst r \<le> t")
+    case True
+    with r have "fst r \<in> fst ` ?A" by auto
+    then have "fst r \<le> fst p" unfolding p(3) using fA by (rule Max_ge[rotated])
+    then show ?thesis ..
+  next
+    case False
+    with r have "fst r \<in> fst ` ?B" by auto
+    then have "fst q \<le> fst r" unfolding q(3) using fB by (rule Min_le[rotated])
+    then show ?thesis ..
+  qed
+  have "fst p \<le> fst q" using p(2) q(2) by linarith
+  then have "neighbours S p q" unfolding neighbours_def using p(1) q(1) btw by blast
+  with p(2) q(2) show ?thesis by blast
+qed
+
+theorem above_check_sound:
+  assumes "finite S" "S \<noteq> {}" "0 \<le> L" "rcons L S" "above_check L S a b c"
+  shows "above_on L S a b c"
+  unfolding above_on_def
+proof (intro allI impI)
+  fix t assume t: "a \<le> t" "t \<le> b"
+  have at_a: "c \<le> lower L S a" and at_b: "c \<le> lower L S b" using assms(5) by (simp_all add: above_check_def)
+  show "c \<le> lower L S t"
+  proof (cases "L = 0")
+    case True
+    with at_a show ?thesis by (simp add: lower_zero[of S t a])
+  next
+    case L: False
+    with assms(3) have Lpos: "0 < L" by simp
+    let ?m = "Min (fst ` S)" and ?M = "Max (fst ` S)"
+    have fm: "finite (fst ` S)" and nem: "fst ` S \<noteq> {}" using assms(1,2) by simp_all
+    consider "t \<le> ?m" | "?M \<le> t" | "?m < t" "t < ?M" by linarith
+    then show ?thesis
+    proof cases
+      case 1
+      have "lower L S a \<le> lower L S t"
+      proof (rule lower_rises_before[OF assms(1,2,3) t(1)])
+        fix r assume "r \<in> S"
+        then have "?m \<le> fst r" by (intro Min_le[OF fm] imageI)
+        with 1 show "t \<le> fst r" by linarith
+      qed
+      with at_a show ?thesis by simp
+    next
+      case 2
+      have "lower L S b \<le> lower L S t"
+      proof (rule lower_falls_after[OF assms(1,2,3) t(2)])
+        fix r assume "r \<in> S"
+        then have "fst r \<le> ?M" by (intro Max_ge[OF fm] imageI)
+        with 2 show "fst r \<le> t" by linarith
+      qed
+      with at_b show ?thesis by simp
+    next
+      case 3
+      from Min_in[OF fm nem] obtain p0 where p0: "p0 \<in> S" "fst p0 = ?m" by auto
+      from Max_in[OF fm nem] obtain q0 where q0: "q0 \<in> S" "fst q0 = ?M" by auto
+      have "fst p0 \<le> t" "t < fst q0" using 3 p0(2) q0(2) by simp_all
+      from neighbours_exist[OF assms(1) p0(1) q0(1) this]
+      obtain p q where pq: "neighbours S p q" "fst p \<le> t" "t < fst q" by blast
+      then have pqS: "p \<in> S" "q \<in> S" "fst p < fst q" by (auto simp: neighbours_def)
+      note vt = lower_valley_attained[OF assms(1) Lpos assms(4) pq(1)]
+      let ?T = "valley_time L p q"
+      consider "a \<le> ?T" "?T \<le> b" | "?T < a" | "b < ?T" by linarith
+      then show ?thesis
+      proof cases
+        case 1
+        from assms(5) have "c \<le> valley L p q"
+          unfolding above_check_def using pqS(1,2) pq(1) pqS(3) Lpos 1 by blast
+        also have "\<dots> \<le> lower L S t" using valley_le_lower[OF assms(1) pqS(1,2) pq(2)] pq(3) by simp
+        finally show ?thesis .
+      next
+        case 2
+        have a: "fst p \<le> a" "a \<le> fst q" using 2 vt(1) t(1) pq(3) by linarith+
+        have "2 * L * (valley_time L p q - a) \<le> 0" using 2 Lpos by (intro mult_nonneg_nonpos; linarith)
+        with cone_lo_cross[OF Lpos a] have le: "cone_lo L a p \<le> cone_lo L a q" by linarith
+        have "lower L S a = max (cone_lo L a p) (cone_lo L a q)"
+          by (rule lower_neighbours[OF assms(1,3,4) pq(1) a])
+        also have "\<dots> = cone_lo L a q" using le by (simp add: max_def)
+        also have "\<dots> \<le> cone_lo L t q" by (rule cone_lo_inc[OF assms(3) t(1)]) (use pq(3) in simp)
+        also have "\<dots> \<le> lower L S t" unfolding lower_def using assms(1) pqS(2) by (intro Max_ge) simp_all
+        finally show ?thesis using at_a by simp
+      next
+        case 3
+        have b: "fst p \<le> b" "b \<le> fst q" using 3 vt(2) t(2) pq(2) by linarith+
+        have "0 \<le> 2 * L * (valley_time L p q - b)" using 3 Lpos by (intro mult_nonneg_nonneg; linarith)
+        with cone_lo_cross[OF Lpos b] have le: "cone_lo L b q \<le> cone_lo L b p" by linarith
+        have "lower L S b = max (cone_lo L b p) (cone_lo L b q)"
+          by (rule lower_neighbours[OF assms(1,3,4) pq(1) b])
+        also have "\<dots> = cone_lo L b p" using le by (simp add: max_def)
+        also have "\<dots> \<le> cone_lo L t p" by (rule cone_lo_dec[OF assms(3) pq(2) t(2)])
+        also have "\<dots> \<le> lower L S t" unfolding lower_def using assms(1) pqS(1) by (intro Max_ge) simp_all
+        finally show ?thesis using at_b by simp
+      qed
+    qed
+  qed
+qed
+
+theorem above_check_complete:
+  assumes "finite S" "0 \<le> L" "rcons L S" "a \<le> b" "above_on L S a b c"
+  shows "above_check L S a b c"
+  unfolding above_check_def
+proof (intro conjI ballI impI)
+  show "c \<le> lower L S a" "c \<le> lower L S b" using assms(4,5) by (simp_all add: above_on_def)
+  fix p q assume "p \<in> S" "q \<in> S" and n: "neighbours S p q" "fst p < fst q" "0 < L"
+    and T: "a \<le> valley_time L p q" "valley_time L p q \<le> b"
+  from assms(5) T have "c \<le> lower L S (valley_time L p q)" by (simp add: above_on_def)
+  also have "\<dots> = valley L p q" by (rule lower_valley_attained(3)[OF assms(1) n(3) assms(3) n(1)])
+  finally show "c \<le> valley L p q" .
+qed
+
+corollary above_check_iff:
+  assumes "finite S" "S \<noteq> {}" "0 \<le> L" "rcons L S" "a \<le> b"
+  shows "above_check L S a b c \<longleftrightarrow> above_on L S a b c"
+  using above_check_sound[OF assms(1-4)] above_check_complete[OF assms(1,3,4,5)] by blast
+
+text \<open>The decision is final under more samples: the lower envelope only rises.\<close>
+
+theorem above_on_mono:
+  assumes "finite S'" "S \<subseteq> S'" "S \<noteq> {}" "above_on L S a b c"
+  shows "above_on L S' a b c"
+  using assms envelope_antitone(1)[OF assms(1,2,3)] unfolding above_on_def by (meson order_trans)
+
+
 section \<open>Enclosures from samples at integer times\<close>
 
 text \<open>The samples of a factor come from a trace: integer times and rational values. The
@@ -513,6 +1072,213 @@ theorem consistent_iff_adm:
   shows "consistent L S \<longleftrightarrow> (\<exists>f. adm L S f)"
   using rcons_iff_lip[of "real_samples S" "of_rat L"] assms
   by (simp add: adm_def consistent_rcons of_rat_less_eq)
+
+
+subsection \<open>Between two samples, in rational arithmetic\<close>
+
+text \<open>The results on neighbouring samples, on the extremes between two consecutive samples
+  and on a window above a level, cast to the rational samples and bounds of a trace. The
+  decision whether the lower envelope stays at or above a level on a window is then a
+  finite rational computation, \<open>above_cert\<close>, proved exact for consistent samples.\<close>
+
+definition real_sample :: "int \<times> rat \<Rightarrow> real \<times> real" where
+  "real_sample p = (of_int (fst p), of_rat (snd p))"
+
+lemma real_samples_eq: "real_samples S = real_sample ` S"
+  by (simp add: real_samples_def real_sample_def)
+
+lemma real_sample_inj: "real_sample p = real_sample q \<longleftrightarrow> p = q"
+  by (simp add: real_sample_def of_rat_eq_iff prod_eq_iff)
+
+definition qneighbours :: "samples \<Rightarrow> int \<times> rat \<Rightarrow> int \<times> rat \<Rightarrow> bool" where
+  "qneighbours S p q \<longleftrightarrow> p \<in> S \<and> q \<in> S \<and> fst p \<le> fst q \<and> (\<forall>r \<in> S. fst r \<le> fst p \<or> fst q \<le> fst r)"
+
+lemma qneighbours_cast: "neighbours (real_samples S) (real_sample p) (real_sample q) \<longleftrightarrow> qneighbours S p q"
+  by (auto simp: neighbours_def qneighbours_def real_samples_eq real_sample_inj real_sample_def)
+
+lemma of_rat_min: "of_rat (min a b) = min (of_rat a) (of_rat b :: real)"
+  by (simp add: min_def of_rat_less_eq)
+
+lemma of_rat_max: "of_rat (max a b) = max (of_rat a) (of_rat b :: real)"
+  by (simp add: max_def of_rat_less_eq)
+
+lemma of_rat_pos_iff: "0 < (of_rat q :: real) \<longleftrightarrow> 0 < q"
+  using of_rat_less[of 0 q] by simp
+
+lemma of_int_le_of_rat_iff: "(of_int k :: real) \<le> of_rat t \<longleftrightarrow> (of_int k :: rat) \<le> t"
+  using of_rat_less_eq[of "of_int k" t] by simp
+
+lemma of_rat_le_of_int_iff: "(of_rat t :: real) \<le> of_int k \<longleftrightarrow> t \<le> (of_int k :: rat)"
+  using of_rat_less_eq[of t "of_int k"] by simp
+
+lemma real_sample_fst_less: "fst (real_sample p) < fst (real_sample q) \<longleftrightarrow> fst p < fst q"
+  by (simp add: real_sample_def)
+
+lemma qcone_up_cast': "of_rat (qcone_up L t p) = cone_up (of_rat L) (of_rat t) (real_sample p)"
+  by (simp add: real_sample_def qcone_up_cast)
+
+lemma qcone_lo_cast': "of_rat (qcone_lo L t p) = cone_lo (of_rat L) (of_rat t) (real_sample p)"
+  by (simp add: real_sample_def qcone_lo_cast)
+
+theorem enc_neighbours:
+  assumes "finite S" "0 \<le> L" "consistent L S" "qneighbours S p q" "of_int (fst p) \<le> t" "t \<le> of_int (fst q)"
+  shows "hi L S t = min (qcone_up L t p) (qcone_up L t q)"
+    and "lo L S t = max (qcone_lo L t p) (qcone_lo L t q)"
+proof -
+  have ne: "S \<noteq> {}" using assms(4) by (auto simp: qneighbours_def)
+  have n: "neighbours (real_samples S) (real_sample p) (real_sample q)"
+    using assms(4) by (simp add: qneighbours_cast)
+  have t: "fst (real_sample p) \<le> of_rat t" "of_rat t \<le> fst (real_sample q)"
+    using assms(5,6) by (simp_all add: real_sample_def of_int_le_of_rat_iff of_rat_le_of_int_iff)
+  have fin: "finite (real_samples S)" using assms(1) by simp
+  have rc: "rcons (of_rat L) (real_samples S)" using assms(3) by (simp add: consistent_rcons)
+  have "(of_rat (hi L S t) :: real) = upper (of_rat L) (real_samples S) (of_rat t)" by (rule hi_cast[OF assms(1) ne])
+  also have "\<dots> = min (cone_up (of_rat L) (of_rat t) (real_sample p)) (cone_up (of_rat L) (of_rat t) (real_sample q))"
+    by (rule upper_neighbours[OF fin of_rat_nonneg[OF assms(2)] rc n t])
+  also have "\<dots> = of_rat (min (qcone_up L t p) (qcone_up L t q))" by (simp add: of_rat_min qcone_up_cast')
+  finally show "hi L S t = min (qcone_up L t p) (qcone_up L t q)" by (simp add: of_rat_eq_iff)
+  have "(of_rat (lo L S t) :: real) = lower (of_rat L) (real_samples S) (of_rat t)" by (rule lo_cast[OF assms(1) ne])
+  also have "\<dots> = max (cone_lo (of_rat L) (of_rat t) (real_sample p)) (cone_lo (of_rat L) (of_rat t) (real_sample q))"
+    by (rule lower_neighbours[OF fin of_rat_nonneg[OF assms(2)] rc n t])
+  also have "\<dots> = of_rat (max (qcone_lo L t p) (qcone_lo L t q))" by (simp add: of_rat_max qcone_lo_cast')
+  finally show "lo L S t = max (qcone_lo L t p) (qcone_lo L t q)" by (simp add: of_rat_eq_iff)
+qed
+
+definition qpeak :: "rat \<Rightarrow> int \<times> rat \<Rightarrow> int \<times> rat \<Rightarrow> rat" where
+  "qpeak L p q = (snd p + snd q) / 2 + L * of_int (fst q - fst p) / 2"
+
+definition qvalley :: "rat \<Rightarrow> int \<times> rat \<Rightarrow> int \<times> rat \<Rightarrow> rat" where
+  "qvalley L p q = (snd p + snd q) / 2 - L * of_int (fst q - fst p) / 2"
+
+definition qvalley_time :: "rat \<Rightarrow> int \<times> rat \<Rightarrow> int \<times> rat \<Rightarrow> rat" where
+  "qvalley_time L p q = of_int (fst p + fst q) / 2 + (snd p - snd q) / (2 * L)"
+
+lemma qpeak_cast: "of_rat (qpeak L p q) = peak (of_rat L) (real_sample p) (real_sample q)"
+  by (simp add: qpeak_def peak_def real_sample_def of_rat_add of_rat_diff of_rat_mult of_rat_divide)
+
+lemma qvalley_cast: "of_rat (qvalley L p q) = valley (of_rat L) (real_sample p) (real_sample q)"
+  by (simp add: qvalley_def valley_def real_sample_def of_rat_add of_rat_diff of_rat_mult of_rat_divide)
+
+lemma qvalley_time_cast: "of_rat (qvalley_time L p q) = valley_time (of_rat L) (real_sample p) (real_sample q)"
+  by (simp add: qvalley_time_def valley_time_def real_sample_def of_rat_add of_rat_diff of_rat_mult of_rat_divide)
+
+text \<open>Between two samples the upper bound of the enclosure is at most the peak and the lower
+  bound at least the valley; between two consecutive samples of a consistent set, under a
+  positive bound, the lower bound of the enclosure is the valley at the crossing time.\<close>
+
+theorem hi_le_qpeak:
+  assumes "finite S" "p \<in> S" "q \<in> S" "of_int (fst p) \<le> t" "t \<le> of_int (fst q)"
+  shows "hi L S t \<le> qpeak L p q"
+proof -
+  have ne: "S \<noteq> {}" using assms(2) by blast
+  have "(of_rat (hi L S t) :: real) = upper (of_rat L) (real_samples S) (of_rat t)" by (rule hi_cast[OF assms(1) ne])
+  also have "\<dots> \<le> peak (of_rat L) (real_sample p) (real_sample q)"
+    using assms by (intro upper_le_peak)
+      (simp_all add: real_samples_eq real_sample_def of_int_le_of_rat_iff of_rat_le_of_int_iff)
+  also have "\<dots> = of_rat (qpeak L p q)" by (simp add: qpeak_cast)
+  finally show ?thesis by (simp add: of_rat_less_eq)
+qed
+
+theorem qvalley_le_lo:
+  assumes "finite S" "p \<in> S" "q \<in> S" "of_int (fst p) \<le> t" "t \<le> of_int (fst q)"
+  shows "qvalley L p q \<le> lo L S t"
+proof -
+  have ne: "S \<noteq> {}" using assms(2) by blast
+  have "(of_rat (qvalley L p q) :: real) = valley (of_rat L) (real_sample p) (real_sample q)" by (rule qvalley_cast)
+  also have "\<dots> \<le> lower (of_rat L) (real_samples S) (of_rat t)"
+    using assms by (intro valley_le_lower)
+      (simp_all add: real_samples_eq real_sample_def of_int_le_of_rat_iff of_rat_le_of_int_iff)
+  also have "\<dots> = of_rat (lo L S t)" by (rule lo_cast[OF assms(1) ne, symmetric])
+  finally show ?thesis by (simp add: of_rat_less_eq)
+qed
+
+theorem lo_qvalley_attained:
+  assumes "finite S" "0 < L" "consistent L S" "qneighbours S p q"
+  shows "of_int (fst p) \<le> qvalley_time L p q" "qvalley_time L p q \<le> of_int (fst q)"
+    and "lo L S (qvalley_time L p q) = qvalley L p q"
+proof -
+  have ne: "S \<noteq> {}" using assms(4) by (auto simp: qneighbours_def)
+  have fin: "finite (real_samples S)" using assms(1) by simp
+  have Lpos: "0 < (of_rat L :: real)" using assms(2) by (simp add: of_rat_pos_iff)
+  have rc: "rcons (of_rat L) (real_samples S)" using assms(3) by (simp add: consistent_rcons)
+  have n: "neighbours (real_samples S) (real_sample p) (real_sample q)" using assms(4) by (simp add: qneighbours_cast)
+  note vt = lower_valley_attained[OF fin Lpos rc n]
+  show "of_int (fst p) \<le> qvalley_time L p q"
+    using vt(1) unfolding qvalley_time_cast[symmetric] by (simp add: real_sample_def of_int_le_of_rat_iff)
+  show "qvalley_time L p q \<le> of_int (fst q)"
+    using vt(2) unfolding qvalley_time_cast[symmetric] by (simp add: real_sample_def of_rat_le_of_int_iff)
+  have "(of_rat (lo L S (qvalley_time L p q)) :: real) = lower (of_rat L) (real_samples S) (of_rat (qvalley_time L p q))"
+    by (rule lo_cast[OF assms(1) ne])
+  also have "\<dots> = valley (of_rat L) (real_sample p) (real_sample q)" using vt(3) by (simp add: qvalley_time_cast)
+  also have "\<dots> = of_rat (qvalley L p q)" by (simp add: qvalley_cast)
+  finally show "lo L S (qvalley_time L p q) = qvalley L p q" by (simp add: of_rat_eq_iff)
+qed
+
+definition above_cert :: "rat \<Rightarrow> samples \<Rightarrow> rat \<Rightarrow> rat \<Rightarrow> rat \<Rightarrow> bool" where
+  "above_cert L S a b c \<longleftrightarrow>
+     c \<le> lo L S a \<and> c \<le> lo L S b \<and>
+     (\<forall>p \<in> S. \<forall>q \<in> S. qneighbours S p q \<longrightarrow> fst p < fst q \<longrightarrow> 0 < L \<longrightarrow>
+        a \<le> qvalley_time L p q \<longrightarrow> qvalley_time L p q \<le> b \<longrightarrow> c \<le> qvalley L p q)"
+
+lemma above_cert_cast:
+  assumes "finite S" "S \<noteq> {}"
+  shows "above_check (of_rat L) (real_samples S) (of_rat a) (of_rat b) (of_rat c) \<longleftrightarrow> above_cert L S a b c"
+proof -
+  have ball: "(\<forall>p \<in> real_samples S. \<forall>q \<in> real_samples S. P p q) \<longleftrightarrow>
+              (\<forall>p \<in> S. \<forall>q \<in> S. P (real_sample p) (real_sample q))" for P
+    by (simp add: real_samples_eq)
+  show ?thesis
+    unfolding above_check_def above_cert_def ball
+    by (simp add: qneighbours_cast of_rat_pos_iff real_sample_fst_less lo_cast[OF assms, symmetric]
+        qvalley_time_cast[symmetric] qvalley_cast[symmetric] of_rat_less_eq)
+qed
+
+theorem above_cert_iff:
+  assumes "finite S" "S \<noteq> {}" "0 \<le> L" "consistent L S" "a \<le> b"
+  shows "above_cert L S a b c \<longleftrightarrow> above_on (of_rat L) (real_samples S) (of_rat a) (of_rat b) (of_rat c)"
+  using above_check_iff[of "real_samples S" "of_rat L" "of_rat a" "of_rat b" "of_rat c"] assms
+  by (simp add: above_cert_cast of_rat_nonneg consistent_rcons of_rat_less_eq)
+
+lemma adm_nonneg: "adm L S f \<Longrightarrow> 0 \<le> L"
+proof -
+  assume "adm L S f"
+  then have "lip (of_rat L) f" by (simp add: adm_def)
+  from lipD[OF this, of 1 0] have "\<bar>f 1 - f 0\<bar> \<le> of_rat L" by simp
+  with abs_ge_zero[of "f 1 - f 0"] have "(0 :: real) \<le> of_rat L" by linarith
+  then show "0 \<le> L" using of_rat_less_eq[of 0 L] by simp
+qed
+
+text \<open>Soundness of the decision for every admissible signal, and finality under more
+  consistent samples.\<close>
+
+theorem above_cert_adm:
+  assumes "finite S" "S \<noteq> {}" "above_cert L S a b c" "adm L S f" "of_rat a \<le> t" "t \<le> of_rat b"
+  shows "of_rat c \<le> f t"
+proof -
+  have lp: "lip (of_rat L) f" "through (real_samples S) f" using assms(4) by (simp_all add: adm_def)
+  have rc: "rcons (of_rat L) (real_samples S)" by (rule lip_through_rcons[OF lp])
+  have ck: "above_check (of_rat L) (real_samples S) (of_rat a) (of_rat b) (of_rat c)"
+    using assms(3) by (simp add: above_cert_cast[OF assms(1,2)])
+  have "above_on (of_rat L) (real_samples S) (of_rat a) (of_rat b) (of_rat c)"
+    by (rule above_check_sound[OF _ _ _ rc ck]) (simp_all add: assms(1,2) of_rat_nonneg adm_nonneg[OF assms(4)])
+  then have "of_rat c \<le> lower (of_rat L) (real_samples S) t" using assms(5,6) by (simp add: above_on_def)
+  also have "\<dots> \<le> f t" using assms(1,2,4) by (intro lower_le_lip) (simp_all add: adm_def)
+  finally show ?thesis .
+qed
+
+theorem above_cert_mono:
+  assumes "finite S'" "S \<subseteq> S'" "S \<noteq> {}" "0 \<le> L" "consistent L S'" "a \<le> b" "above_cert L S a b c"
+  shows "above_cert L S' a b c"
+proof -
+  have fS: "finite S" using assms(2,1) by (rule finite_subset)
+  have cS: "consistent L S" using assms(2,5) by (rule consistent_subset)
+  have "above_on (of_rat L) (real_samples S) (of_rat a) (of_rat b) (of_rat c)"
+    using assms(7) by (simp add: above_cert_iff[OF fS assms(3,4) cS assms(6)])
+  then have "above_on (of_rat L) (real_samples S') (of_rat a) (of_rat b) (of_rat c)"
+    using assms(1,2,3) by (intro above_on_mono[of "real_samples S'" "real_samples S"]) (simp_all add: real_samples_mono)
+  moreover have "S' \<noteq> {}" using assms(2,3) by blast
+  ultimately show ?thesis by (simp add: above_cert_iff[OF assms(1) _ assms(4,5,6)])
+qed
 
 
 section \<open>Interval evaluation\<close>
@@ -1515,6 +2281,63 @@ theorem checked_monitor_decisionsI_final:
   using assms monitor_decisionsI_append[of R s a c \<pi> \<rho>] by (auto simp: checked_def split: if_splits)
 
 
+section \<open>The continuous false verdict of EVENTUALLY WITHIN\<close>
+
+text \<open>The false verdict of \<open>EVENTUALLY \<phi> WITHIN d\<close> on enclosures, like that of the core, is a
+  statement about the entries of the window (\<open>ew_false_signals\<close>). For the formula \<open>x < c\<close>,
+  with \<open>x\<close> under a rate bound and \<open>c\<close> a constant, a verdict about every time of the window
+  is decided by \<open>above_cert\<close> on all the samples of \<open>x\<close> in the trace: the quantity is at or
+  above \<open>c\<close> throughout the window, for every admissible signal. This reading is not
+  causal: it uses every sample of the trace, later ones included, which narrow the
+  enclosure at earlier times. It is sound, and it is final under more consistent
+  samples.\<close>
+
+definition ew_below_false :: "('n \<Rightarrow> rat option) \<Rightarrow> 'n \<Rightarrow> rat \<Rightarrow> int \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> bool" where
+  "ew_below_false R x c D \<pi> \<longleftrightarrow>
+     passed D \<pi> \<and>
+     (case R x of
+        None \<Rightarrow> False
+      | Some L \<Rightarrow> samples \<pi> (length \<pi> - 1) x \<noteq> {} \<and>
+                 above_cert L (samples \<pi> (length \<pi> - 1) x) (of_int (time \<pi> 0)) (of_int D) c)"
+
+theorem ew_evalI_F_sound:
+  assumes "ew_below_false R x c D \<pi>" "adm_family R F \<pi> (length \<pi> - 1)"
+    and "of_int (time \<pi> 0) \<le> t" "t \<le> of_int D"
+  shows "evalR (ELt (VName x) (VConst (ANum c))) (signal_state R F \<pi> (length \<pi> - 1) t) = Some False"
+proof -
+  from assms(1) obtain L where L: "R x = Some L"
+    and ne: "samples \<pi> (length \<pi> - 1) x \<noteq> {}"
+    and cert: "above_cert L (samples \<pi> (length \<pi> - 1) x) (of_int (time \<pi> 0)) (of_int D) c"
+    by (auto simp: ew_below_false_def split: option.splits)
+  have a: "adm L (samples \<pi> (length \<pi> - 1) x) (F x)" using assms(2) L by (simp add: adm_family_def)
+  have "of_rat c \<le> F x t"
+    by (rule above_cert_adm[OF samples_finite ne cert a]) (use assms(3,4) in \<open>simp_all add: of_rat_of_int_eq\<close>)
+  then show ?thesis using L by (simp add: signal_state_def)
+qed
+
+theorem ew_below_false_final:
+  assumes "ew_below_false R x c D \<pi>" "\<pi> \<noteq> []" "bounds_nonneg R" "consistent_trace R (\<pi> @ \<rho>)" "time \<pi> 0 \<le> D"
+  shows "ew_below_false R x c D (\<pi> @ \<rho>)"
+proof -
+  from assms(1) obtain L where L: "R x = Some L"
+    and ne: "samples \<pi> (length \<pi> - 1) x \<noteq> {}"
+    and cert: "above_cert L (samples \<pi> (length \<pi> - 1) x) (of_int (time \<pi> 0)) (of_int D) c"
+    and p: "passed D \<pi>"
+    by (auto simp: ew_below_false_def split: option.splits)
+  let ?S = "samples \<pi> (length \<pi> - 1) x" and ?S' = "samples (\<pi> @ \<rho>) (length (\<pi> @ \<rho>) - 1) x"
+  have lt: "length \<pi> - 1 < length \<pi>" using assms(2) by simp
+  have sub: "?S \<subseteq> ?S'"
+    using samples_append[OF lt, of \<rho> x] samples_mono[of "length \<pi> - 1" "length (\<pi> @ \<rho>) - 1" "\<pi> @ \<rho>" x] by simp
+  have L0: "0 \<le> L" using assms(3) L by (simp add: bounds_nonneg_def)
+  have c': "consistent L ?S'" using assms(4) L by (simp add: consistent_trace_def consistent_upto_def)
+  have ab: "(of_int (time \<pi> 0) :: rat) \<le> of_int D" using assms(5) by simp
+  have cert': "above_cert L ?S' (of_int (time \<pi> 0)) (of_int D) c"
+    by (rule above_cert_mono[OF samples_finite sub ne L0 c' ab cert])
+  have t0: "time (\<pi> @ \<rho>) 0 = time \<pi> 0" using assms(2) by simp
+  show ?thesis unfolding ew_below_false_def t0 using passed_append[OF p] L cert' sub ne by auto
+qed
+
+
 section \<open>Executable equations\<close>
 
 text \<open>The samples of a name up to an entry, as a list; consistency, the bounds of the
@@ -1839,6 +2662,41 @@ value "checked sensor_bounds fall_trace (inv_evalI sensor_bounds (Eventually (EL
 lemma fall_rejected:
   "\<not> consistent_trace sensor_bounds fall_trace"
   "checked sensor_bounds fall_trace (inv_evalI sensor_bounds (Eventually (ELt (VName temp) (VName lim))) fall_trace) = None"
+  by code_simp+
+
+text \<open>Scenario \<open>sensor_never_false\<close> without its last reading: readings of 97.5 at 08:00:05,
+  08:05:00 and 08:10:00, the deadline 08:10:00, and a tick after it. The verdict of the
+  core is undefined, since no fresh reading is known at the activation entry, and so is
+  the verdict on enclosures at the entries. The continuous reading uses every sample: with
+  the bound 0.1 degrees per second the lower envelope falls to 82.75 between the first two
+  readings, below the limit, so the verdict is not false; with the bound 0.05 it stays at or
+  above 90 throughout the window (the valley between the last two readings is exactly 90),
+  and the verdict is false: every signal under that bound through the readings was at or
+  above the limit at every time of the ten minutes.\<close>
+
+definition never_false_trace :: ctrace where
+  "never_false_trace =
+     [(sensor_data (195 / 2), 1794211200, Tick),
+      (sensor_data (195 / 2), 1794211205, Arrival temp),
+      (sensor_data (195 / 2), 1794211210, stop_drive),
+      (sensor_data (195 / 2), 1794211500, Arrival temp),
+      (sensor_data (195 / 2), 1794211800, Arrival temp),
+      (sensor_data (195 / 2), 1794211801, Tick)]"
+
+definition slow_bounds :: "path \<Rightarrow> rat option" where
+  "slow_bounds x = (if x = temp then Some (1 / 20) else None)"
+
+value "ew_evalI sensor_bounds (ELt (VName temp) (VName lim)) 1794211800 never_false_trace"
+value "ew_below_false sensor_bounds temp 90 1794211800 never_false_trace"
+value "ew_below_false slow_bounds temp 90 1794211800 never_false_trace"
+value "lo (1 / 10) (samples never_false_trace 5 temp) (qvalley_time (1 / 10) (1794211205, 195 / 2) (1794211500, 195 / 2))"
+
+lemma never_false_signals:
+  "ew_evalI sensor_bounds (ELt (VName temp) (VName lim)) 1794211800 never_false_trace = None"
+  "\<not> ew_below_false sensor_bounds temp 90 1794211800 never_false_trace"
+  "ew_below_false slow_bounds temp 90 1794211800 never_false_trace"
+  "qvalley (1 / 10) (1794211205, 195 / 2) (1794211500, 195 / 2) = 331 / 4"
+  "qvalley (1 / 20) (1794211500, 195 / 2) (1794211800, 195 / 2) = 90"
   by code_simp+
 
 end
