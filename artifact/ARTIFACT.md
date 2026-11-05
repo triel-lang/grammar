@@ -15,7 +15,7 @@ behind the paper. It contains:
 - `parser/`: the reference parser of the TRIEL 2.5 grammar (which 2.5.1 does
   not change), and the translator
   `parser/triel_to_core.py` from TRIEL specifications to terms of the core.
-- `examples/`: 30 TRIEL specifications and 65 scenarios (implementation traces
+- `examples/`: 30 TRIEL specifications and 70 scenarios (implementation traces
   with hand-written expected reports).
 - `artifact/`: the Docker image (`Dockerfile`), the script that runs every check
   (`run.sh`), and the Isabelle session `TRIEL_Paper`
@@ -144,8 +144,8 @@ functions have been added to the list. On these sources with the list complete (
 theorems), two runs of the job `artifact` on 3 November 2026, on the same
 runners, took 1009 s and 823 s for `run.sh` and 20:55 and 17:08 min for the
 whole job, with memory peaks of 7.07 and 6.79 GiB. Since then the example
-`sensor_overheat` with its five scenarios has been added (30 examples, 65
-scenarios, 341 translator and driver tests); its runs are not in the table. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
+`sensor_overheat` with its ten scenarios has been added (30 examples, 70
+scenarios, 351 translator and driver tests); its runs are not in the table. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
 the step pytest: the test that every name in backquotes in `CORE.md` is defined
 in the theories failed on the name of a file, since corrected; they are not in
 the table. The time on a shared
@@ -180,9 +180,9 @@ Expected end of the output:
 theories checked by Isabelle (TRIEL_Core)    13 (.thy files in formal/core: 13)
 proved statements (lemma/theorem/corollary)  764
 paper theorems found, without oracles        107 of 107
-scenarios matching .expected                 65 of 65
+scenarios matching .expected                 70 of 70
 examples accepted by the core                28 of 30
-translator and driver tests (pytest)         341 passed in ...
+translator and driver tests (pytest)         351 passed in ...
 examples parsed with one derivation          30 of 30
 ambiguity regression checks passed           239
 document excerpts conforming to the grammar  15
@@ -318,7 +318,7 @@ variables `?x`.
 |---|---|---|
 | The core is machine-checked: 13 theories, 764 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `13 (.thy files in formal/core: 13)`, `764`; `no sorry, oops or axiomatization ...` |
 | The evaluator is the code exported from the checked theories | `cat results/03-exported-code.log` | `evaluator/generated is the exported code` |
-| The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `65` |
+| The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `70` |
 | 28 of the 30 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `28`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
 | Every listed theorem (every theorem cited in the paper, and more) exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 107` |
 | Finality of verdicts: on a trace (times that do not decrease) a definite verdict of an obligation, a prohibition or an invariant does not change when the trace is extended; the evaluator rejects a list of observations whose times decrease, so for `run` a decided line stays the same when observations are appended, unless the longer list is rejected for its time order or its types. A property of the design | `grep -A1 -E '\.(ob_verdict_final\|pr_verdict_final\|inv_final\|sinv_final\|handle_breach_final\|run_final\|time_order_rejected)$' results/paper_theorems.txt` | `TRIEL_Breach.ob_verdict_final`, `TRIEL_Breach.pr_verdict_final`, `TRIEL_Invariants.inv_final`, `TRIEL_Invariants.sinv_final` (EVENTUALLY … WITHIN), `TRIEL_Breach.handle_breach_final` (breach handlers), `TRIEL_Exec.run_final`, `TRIEL_Exec.time_order_rejected`, each with its statement, e.g. `inv_eval ?\<iota> ?\<pi> = Some ?b \<Longrightarrow> inv_eval ?\<iota> (?\<pi> @ ?\<rho>) = Some ?b` |
@@ -363,8 +363,8 @@ The results rest on the following, which are not proved here:
   specifications to terms of the core, written in Python. Nothing proves that it
   translates a specification into the core term with the intended meaning, or
   that it rejects exactly the constructs outside the core. It is checked only
-  by tests: the 341 tests of `parser/test_triel_to_core.py`, the classification
-  of the 30 examples, and the 65 scenarios. The same holds for
+  by tests: the 351 tests of `parser/test_triel_to_core.py`, the classification
+  of the 30 examples, and the 70 scenarios. The same holds for
   `parser/triel_eval.py`, which converts a scenario into the input of the
   evaluator, and for the grammar `parser/triel.lark` with the parser library
   lark 1.3.1.
