@@ -1,0 +1,8 @@
+; At 09:15:00 the host reports a budget limit of 0: the invariant is false.
+; The agent applies no change, so no monitor has an action to decide.
+(scenario mandate_budget_limit_zero
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T09:15:00Z" (tick)
+    (data (budget_limit (dec 0.00)) (reorder_point (int 10)))))

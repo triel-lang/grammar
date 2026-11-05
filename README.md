@@ -6,6 +6,8 @@
 
 An open specification language for rules with one precise, checkable meaning.
 
+TRIEL stands for *Trace Rule and Invariant Expression Language*: a language for rules and invariants over traces. The name also reads as "three", which turned out to fit: a condition is true, false or undefined; the verdict on a norm is fulfilled, pending or breached; the verdict on an invariant is true, false or inconclusive.
+
 Website: https://triel.dev
 
 Interactive demo: https://triel.ai (illustrative examples only)
@@ -75,11 +77,22 @@ TRIEL is a separate piece of work that draws on several traditions: strong Kleen
 
 ## License
 
-- The TRIEL Language Specification, versions 2.5 and 2.5.1 (`TRIEL-grammar-v2_5-core.ebnf`, `TECHNICAL_REPORT.md`, `formal/core/CORE.md`), is made available under the Open Web Foundation Final Specification Agreement 1.0 (OWFa 1.0).
-- The Isabelle theories in `formal/core/` are available under the [Apache License 2.0](LICENSE-APACHE) or the [BSD 3-Clause License](LICENSE-BSD), at your option. The other code (`evaluator/`, `parser/`, `examples/`, `.github/`) is licensed under the [Apache License 2.0](LICENSE-APACHE).
+- The TRIEL Language Specification, versions 2.5 and 2.5.1 (`TRIEL-grammar-v2_5-core.ebnf`, `TECHNICAL_REPORT.md`, `formal/core/CORE.md`), is made available under the Open Web Foundation Final Specification Agreement 1.0 (OWFa 1.0). The OWFa 1.0 statement for version 2.4 remains in effect.
+- The code in `formal/core/` (the Isabelle theories, `ROOT`, `document/` and the build log) is available under the [Apache License 2.0](LICENSE-APACHE) or the [BSD 3-Clause License](LICENSE-BSD), at your option. The other code (`evaluator/`, `parser/`, `examples/`, `.github/`) is licensed under the [Apache License 2.0](LICENSE-APACHE).
 - Contributions are accepted under the [TRIEL Contributor License Agreement](CLA.md); see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 [LICENSE.md](LICENSE.md) governs, including what the specification does not cover.
+
+### What you may do, in plain words
+
+This summary changes nothing in [LICENSE.md](LICENSE.md) or in the agreements it names, which decide every question; it is not legal advice.
+
+- **The Specification.** You may copy, publish, change and implement the three files of the Specification, for any purpose, commercial or not. A work derived from them must name the Specification and its version.
+- **Patents on the Specification.** Under OWFa 1.0, Dmitri Chistyakov promises not to assert against an implementation the patent claims he owns or controls that it infringes. This covers only claims infringed where the Specification describes the infringing functionality in detail, not where it merely refers to it. The promise covers an implementation only to the extent that it implements the Specification, and only if it implements all of its required parts. He also agrees to license those claims free of charge, on reasonable and non-discriminatory terms, for the same uses. Everything OWFa 1.0 gives, the copyright license included, ends for anyone who brings, maintains or joins a suit claiming that an implementation of the Specification infringes their patents, unless that suit answers one first brought against them. The promise covers each version named in LICENSE.md (2.4, 2.5 and 2.5.1); a later version needs a statement of its own.
+- **The code.** Under the Apache License 2.0 you may use, change and redistribute the code, for any purpose, commercial or not. Whoever redistributes it must include the license, keep the notice in `NOTICE` and the copyright, patent, trademark and attribution notices of the source, and mark the files they changed. Section 3 of the license gives a patent license for the claims of each contributor that their contribution necessarily infringes, alone or combined with the code. That patent license ends for anyone who starts a patent suit, a counterclaim included, claiming that the code infringes a patent.
+- **The code in `formal/core/`** can also be taken under the BSD 3-Clause License, which the Archive of Formal Proofs accepts. That license contains no patent license, and LICENSE.md adds none to it. If you need one for this code, take it under the Apache License 2.0.
+- **What is outside.** No other patent rights and no trademark rights are granted. Section 1 of LICENSE.md lists what the Specification does not cover. The earlier grammar `TRIEL-grammar-v2.3.3-core.ebnf` keeps the terms stated in its own header. All other files not named in sections 1 and 2 of LICENSE.md, `README.md`, `RELATED_WORK.md` and `FOUNDATIONS.md` among them, are not licensed under these terms.
+- **Contributions.** A contributor keeps the copyright and the authorship of a contribution and grants the licenses stated in the CLA to the Maintainer and to those who receive the repository or a product of the Maintainer. The Maintainer may use a contribution in any product, open or closed, and may assign the agreement. The contributor's patent license covers the claims that the contribution necessarily infringes, alone or combined with the repository or with the product that includes it; it ends for anyone who starts a patent suit claiming that the contribution or the repository infringes a patent. A contribution to the Specification carries the same OWFa 1.0 commitment as the Specification itself.
 
 ## Contact
 

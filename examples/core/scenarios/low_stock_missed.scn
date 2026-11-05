@@ -1,0 +1,10 @@
+; Nothing happens after the alert until 13:00:01, after the deadline. The
+; obligation is breached at 13:00:00 and the owner is notified; NOTIFY does not
+; continue the obligation, so it is closed. No stock level is ever present, and
+; PRESENT is always defined, so the invariant is false.
+(scenario low_stock_missed
+  (spec "examples/core/merchant_low_stock.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data))
+  (entry "2026-11-10T13:00:01Z" (tick)
+    (data)))

@@ -1,0 +1,12 @@
+; A stale stock level and no approval reported at all: undefined AND undefined
+; is undefined, so the monitor blocks the restock and nothing is breached.
+(scenario mandate_restock_stale_no_approval
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T09:05:00Z" (arrive stock_units)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4))))
+  (entry "2026-11-10T10:30:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4))))
+  (entry "2026-11-10T10:30:01Z" (act agent apply_restock must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4)))))

@@ -1,0 +1,15 @@
+; A stock level of 4 arrives at 09:05:00. At 10:30:00 it is 85 minutes old,
+; older than MAX_AGE 1 HOURS, and so absent; the restock is not approved. The
+; agent applies the restock at 10:30:01: the condition, read in the state of
+; 10:30:00, is undefined AND true, which is undefined, so the monitor blocks
+; the restock until the owner approves it, and nothing is breached.
+(scenario mandate_restock_stale
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T09:05:00Z" (arrive stock_units)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4))))
+  (entry "2026-11-10T10:30:00Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4)) (restock_approved (bool false))))
+  (entry "2026-11-10T10:30:01Z" (act agent apply_restock must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4)) (restock_approved (bool false)))))

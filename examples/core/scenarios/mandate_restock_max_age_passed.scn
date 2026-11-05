@@ -1,0 +1,13 @@
+; The same level, read one second later: at 11:00:01 it is older than an hour
+; and so absent, the condition is undefined without approval, and the monitor
+; blocks the restock applied at 11:00:02.
+(scenario mandate_restock_max_age_passed
+  (spec "examples/core/merchant_mandate.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10))))
+  (entry "2026-11-10T10:00:00Z" (arrive stock_units)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4))))
+  (entry "2026-11-10T11:00:01Z" (tick)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4)) (restock_approved (bool false))))
+  (entry "2026-11-10T11:00:02Z" (act agent apply_restock must_not)
+    (data (budget_limit (dec 5000.00)) (reorder_point (int 10)) (stock_units (int 4)) (restock_approved (bool false)))))

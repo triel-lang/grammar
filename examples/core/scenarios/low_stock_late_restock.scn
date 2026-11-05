@@ -1,0 +1,11 @@
+; The alert comes without a stock level, and the agent prepares the restock
+; only at 13:00:01, after the deadline, with a stock level of 3. The
+; obligation is breached at 13:00:00 and the owner is notified; NOTIFY does
+; not continue the obligation, so the late restock changes nothing. The stock
+; level is present only after the deadline, so the invariant is false.
+(scenario low_stock_late_restock
+  (spec "examples/core/merchant_low_stock.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data))
+  (entry "2026-11-10T13:00:01Z" (act agent stage_restock must)
+    (data (stock_units (int 3)))))

@@ -1,0 +1,82 @@
+-- TRIEL example inside the formal core: the mandate of an AI agent that runs
+-- a shop for its owner. The agent prepares changes to the store (a price, a
+-- restock, an advertising campaign) and then applies them; the prohibitions
+-- below decide whether a prepared change may be applied. The factors are
+-- reported by the system that hosts the agent: the state of the store, and
+-- the one prepared change that is about to be applied. The specification
+-- trusts the host's numbers, as it trusts an oracle's.
+--
+-- - A price change of more than 20 percent may be applied only with the
+--   owner's approval. The host computes the size of the change and gives it as
+--   a non-negative percentage, up or down alike: a decrease of 35 percent is
+--   35.0. Conditions compare values and do not compute them, so the rule reads
+--   the number it is given; a decrease given as -35.0 is not more than 20 and
+--   is allowed (mandate_price_decrease_signed).
+-- - A restock may not be applied when the stock is above the reorder point,
+--   unless the owner approves it. The stock level comes from an inventory
+--   feed, an ORACLE, so PROVENANCE_REQUIRED is true (TECHNICAL_REPORT.md
+--   section 2.9). It is fresh for one hour after it arrives, an age of exactly
+--   one hour included (MAX_AGE 1 HOURS ON_STALE BLOCK, fresh_at_max_age); a
+--   stock level that is older, or present at activation without an arrival, is
+--   absent (stale_absent; examples/core/README.md, conventions 3 and 4). Then
+--   the condition of the prohibition is undefined unless the owner has
+--   approved the restock: without approval the fail-closed monitor blocks it,
+--   and with approval the condition is false (strong Kleene: undefined AND
+--   false is false), so the restock goes ahead. The verdict of the prohibition
+--   records a breach only when its condition is true, so a blocked restock is
+--   not a breach (undefined_guard_blocks_not_breach).
+-- - A campaign may not be applied with a budget above the owner's limit; no
+--   approval lifts this one.
+--
+-- A breach of the price rule or of the campaign rule notifies the owner. Each
+-- condition is read in the state of the entry just before the change is
+-- applied, and the monitor of each prohibition decides only the applications
+-- of its own action (mandate_two_changes). A factor that is absent there, such
+-- as an approval not given, makes a condition that needs it undefined, and the
+-- change is blocked. Each rule has its own approval factor, and the host
+-- reports an approval for the change about to be applied and clears it once
+-- that change is applied: an approval stays as current as the host reports
+-- it, with no MAX_AGE, and one cleared before the change no longer counts
+-- (mandate_price_approval_cleared). The invariant states that the budget limit
+-- is positive: it is F once a limit that is not positive is reported, and U
+-- otherwise, since ALWAYS is never T on a finite trace (always_never_true).
+--
+-- What the example does not say: whether a change is a good one (the host and
+-- the owner decide that), and how a blocked change reaches the owner (the
+-- monitor only reports BLOCK; routing it to the owner is the host's job).
+-- Reacting to a low-stock alert within a time limit is in
+-- merchant_low_stock.triel: a duration counts from the activation, so that
+-- obligation needs an activation of its own, the alert. Every construct in
+-- this file is translated into the Isabelle/HOL core (formal/core) and
+-- evaluated by the exported evaluator (evaluator/).
+
+SPECIFICATION merchant_mandate VERSION 1.0.0
+    PROVENANCE_REQUIRED: true
+
+SUBJECTS {
+  owner          : PARTY,
+  agent          : SYSTEM,
+  inventory_feed : ORACLE
+}
+
+TERMS {
+  agent MUST_NOT apply_price_change WHEN price_delta_pct > 20 AND NOT price_change_approved;
+  agent ON_BREACH NOTIFY owner;
+  agent MUST_NOT apply_restock WHEN stock_units > reorder_point AND NOT restock_approved;
+  agent MUST_NOT apply_campaign WHEN campaign_budget > budget_limit;
+  agent ON_BREACH NOTIFY owner
+}
+
+FACTORS {
+  price_delta_pct       : Decimal METADATA,
+  price_change_approved : Boolean METADATA,
+  stock_units           : Integer METADATA SOURCE inventory_feed MAX_AGE 1 HOURS ON_STALE BLOCK,
+  reorder_point         : Integer METADATA,
+  restock_approved      : Boolean METADATA,
+  campaign_budget       : Decimal METADATA,
+  budget_limit          : Decimal METADATA
+}
+
+INVARIANTS {
+  budget_limit_set : SAFETY : ALWAYS(budget_limit > 0)
+}

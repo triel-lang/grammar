@@ -1,0 +1,8 @@
+; The alert at 09:00:00 comes with a stock level of 3, so the invariant is true
+; at once. The agent prepares a restock at 10:30:00, within the 4 hours.
+(scenario low_stock_restocked
+  (spec "examples/core/merchant_low_stock.triel")
+  (entry "2026-11-10T09:00:00Z" (activate)
+    (data (stock_units (int 3))))
+  (entry "2026-11-10T10:30:00Z" (act agent stage_restock must)
+    (data (stock_units (int 3)))))
