@@ -49,7 +49,7 @@ and prints a summary whose numbers are all computed by the run.
   other steps stay below 2 GiB. On GitHub-hosted runners (4 cores, 15.6 GiB)
   without a limit, where Isabelle2025-2 used 2 threads (as the build logs
   state), the workflow `.github/workflows/artifact.yml` read peaks from 6.73 to
-  7.20 GiB in the eighteen runs listed under "Times on GitHub-hosted runners"
+  7.42 GiB in the nineteen runs listed under "Times on GitHub-hosted runners"
   below; it keeps the value as `memory-peak.txt` with the logs of the run.
 - Docker Desktop (macOS, Windows): set Memory to at least 10 GB in
   Settings → Resources.
@@ -83,23 +83,24 @@ image build were measured for version 2.5, with the same `Dockerfile`.
 The job `artifact` of `.github/workflows/artifact.yml` builds the image and
 runs `run.sh` on every push, on a GitHub-hosted runner (the label
 `ubuntu-latest` in #56 to #59, `ubuntu-24.04` from #60), and reads the memory
-peak of the container. The eighteen runs
+peak of the container. The nineteen runs
 below are those, from the first run that read the memory peak (#56) to the
-run #169 of this version, in which `run.sh` passed all 11 steps; the runs #56
-to #75 are of sources with 28 examples and 54 scenarios, the run #169 of the
-sources of this version, with 32 examples and 97 scenarios. Over these runs:
+run #176 of this version, in which `run.sh` passed all 11 steps; the runs #56
+to #75 are of sources with 28 examples and 54 scenarios, the runs #169 and
+#176 of the sources of this version, with 32 examples and 97 scenarios. Over
+these runs:
 
-| Phase | Range over the eighteen runs |
+| Phase | Range over the nineteen runs |
 |---|---|
-| Job `artifact` (disk clean-up, image build and `run.sh`) | 16:14 to 34:00 min |
+| Job `artifact` (disk clean-up, image build and `run.sh`) | 16:14 to 38:28 min |
 | Image build (`docker build`, base images included) | 1:14 to 2:18 min |
 | `run.sh`, all 11 steps | 766 to 1855 s (12.8 to 30.9 min) |
-| of which: clean Isabelle build of `TRIEL_Core` | 85 to 197 s |
+| of which: clean Isabelle build of `TRIEL_Core` | 85 to 250 s |
 | of which: the scenarios | 124 to 389 s |
 | of which: translator and driver tests (pytest) | 318 to 873 s |
 | of which: parsing of the examples with the ambiguity check | 123 to 247 s |
 | of which: ambiguity regression tests | 67 to 118 s |
-| Memory peak of the container | 6.73 to 7.20 GiB |
+| Memory peak of the container | 6.73 to 7.42 GiB |
 
 | Run | Date (UTC) | Theories | Job `artifact` | Image build | `run.sh` | Memory peak |
 |---|---|---:|---:|---:|---:|---:|
@@ -121,6 +122,7 @@ sources of this version, with 32 examples and 97 scenarios. Over these runs:
 | #74 | 2026-10-27 | 13 | 16:30 | 1:41 | 770 s | 7.20 GiB |
 | #75 | 2026-10-27 | 13 | 23:28 | 1:21 | 1219 s | 7.01 GiB |
 | #169 | 2026-11-05 | 14 | 34:00 | 1:20 | 1855 s | 7.07 GiB |
+| #176 | 2026-11-05 | 14 | 38:28 | 1:31 | 1803 s | 7.42 GiB |
 
 Runs #61 to #63 are of the same commit. #67 to #73 are of drafts of this
 version with the new theory before its last three theorems (646 statements,
@@ -153,7 +155,9 @@ the step pytest: the test that every name in backquotes in `CORE.md` is defined
 in the theories failed on the name of a file, since corrected; they are not in
 the table. Stage 43 added the theory `TRIEL_Signals.thy` (continuous signals between
 samples, section 11 of `formal/core/CORE.md`), 14 theories and 984 proved
-statements after the changes of its independent review; the run #169 of the job `artifact` on the tree before the review is in the table. The time on a shared
+statements after the changes of its independent review; the runs #169 (the tree
+before the review, with 960 statements) and #176 (after it) of the job `artifact`
+are in the table. The time on a shared
 runner varies from run to run, and so does its CPU.
 
 ## Running
