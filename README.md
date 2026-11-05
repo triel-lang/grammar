@@ -6,6 +6,8 @@
 
 An open specification language for rules with one precise, checkable meaning.
 
+TRIEL stands for *Trace Rule and Invariant Expression Language*: a language for rules and invariants over traces. The name also reads as "three", which turned out to fit: conditions take three values, and so do verdicts.
+
 Website: https://triel.dev
 
 Interactive demo: https://triel.ai (illustrative examples only)
@@ -80,6 +82,16 @@ TRIEL is a separate piece of work that draws on several traditions: strong Kleen
 - Contributions are accepted under the [TRIEL Contributor License Agreement](CLA.md); see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 [LICENSE.md](LICENSE.md) governs, including what the specification does not cover.
+
+### What you may do, in plain words
+
+This summary changes nothing in [LICENSE.md](LICENSE.md) or in the agreements it names, which decide every question; it is not legal advice.
+
+- **The Specification.** You may copy, publish, change and implement the three files of the Specification, also commercially; a derived work names the Specification and its version. For patents, OWFa 1.0 binds Dmitri Chistyakov not to assert the patent claims he owns or controls that are infringed by implementing what the Specification describes, as far as an implementation implements the Specification and all of its required parts. The promise ends for anyone who sues claiming that such implementations infringe their own patents, and it covers each version named in LICENSE.md (2.4, 2.5 and 2.5.1), not later versions by itself.
+- **The code.** Under the Apache License 2.0 you may use, change and redistribute the code, also commercially, keeping the license and the notice in `NOTICE`. Its section 3 gives a patent license for the claims of each contributor that their contribution necessarily infringes; it ends for anyone who sues over the code.
+- **The Isabelle theories** can also be taken under the BSD 3-Clause License, which the Archive of Formal Proofs accepts. That license contains no patent license, and LICENSE.md adds none to it. If you need one for the theories, take them under the Apache License 2.0.
+- **What is outside.** No other patent rights and no trademark rights are granted. What the Specification does not define is outside it; section 1 of LICENSE.md lists what it does not cover. `README.md`, `RELATED_WORK.md`, `FOUNDATIONS.md` and the other files named in section 3 of LICENSE.md are not licensed under these terms.
+- **Contributions.** A contributor keeps the authorship of a contribution and grants the rights stated in the CLA: the Maintainer may use it in any product, open or closed; a contribution to the Specification carries the same OWFa 1.0 commitment as the Specification itself.
 
 ## Contact
 
