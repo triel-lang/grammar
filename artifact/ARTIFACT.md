@@ -13,8 +13,10 @@ behind the paper. It contains:
   `formal/core/TRIEL_Exec.thy`; `evaluator/Main.hs` only reads the input and
   prints the report.
 - `parser/`: the reference parser of the TRIEL 2.5 grammar (which 2.5.1 does
-  not change), and the translator
-  `parser/triel_to_core.py` from TRIEL specifications to terms of the core.
+  not change), the translator
+  `parser/triel_to_core.py` from TRIEL specifications to terms of the core, and
+  the command `parser/triel.py` (`triel check`), which runs the translator and
+  the evaluator on a trace and prints the report as text or JSON.
 - `examples/`: 33 TRIEL specifications and 101 scenarios (implementation traces
   with hand-written expected reports).
 - `artifact/`: the Docker image (`Dockerfile`), the script that runs every check
@@ -159,6 +161,9 @@ statements after the changes of its independent review; the runs #169 (the tree
 before the review, with 960 statements) and #176 (after it) of the job `artifact`
 are in the table. Since then the example `purpose_limitation_gate` with four
 scenarios has been added (33 examples, 101 scenarios, 413 translator and driver
+tests); its runs are not in the table. Stage 42 added the command `triel check`
+(`parser/triel.py`) with the 475 tests of `parser/test_triel_check.py`, which
+the step pytest runs with those of the translator (888 translator and driver
 tests); its runs are not in the table. The time on a shared
 runner varies from run to run, and so does its CPU.
 
@@ -193,7 +198,7 @@ proved statements (lemma/theorem/corollary)  984
 paper theorems found, without oracles        107 of 107
 scenarios matching .expected                 101 of 101
 examples accepted by the core                31 of 33
-translator and driver tests (pytest)         413 passed in ...
+translator and driver tests (pytest)         888 passed in ...
 examples parsed with one derivation          33 of 33
 ambiguity regression checks passed           242
 document excerpts conforming to the grammar  15
@@ -218,7 +223,7 @@ docker run --rm -it --entrypoint bash triel-artifact
 | 04-build-evaluator | GHC builds `evaluator/triel-eval` from the exported code and `Main.hs` | evaluator.yml |
 | 05-classification | the translator classifies every example as in `examples/core/classification.expected` | evaluator.yml |
 | 06-scenarios | every scenario gives exactly its `.expected` report | evaluator.yml |
-| 07-pytest | the tests of the translator and the driver | evaluator.yml |
+| 07-pytest | the tests of the translator and the driver, and of `triel check` | evaluator.yml |
 | 08-parse-examples | every example parses with exactly one derivation | parse-examples.yml |
 | 09-ambiguity-tests | the ambiguity regression tests and the LALR(1) check of the grammar | parse-examples.yml |
 | 10-document-excerpts | every TRIEL excerpt of the documents, every grammar excerpt of `TECHNICAL_REPORT.md` and every usage example of the grammar file conforms to the grammar | parse-examples.yml |
@@ -367,9 +372,11 @@ The results rest on the following, which are not proved here:
   the Haskell code to the HOL definitions is the code generator's, not a theorem
   of this development.
 - **GHC 9.6.7** and its runtime, which build and run the evaluator.
-- **`evaluator/Main.hs`** (hand-written, 416 lines): reads the input
-  S-expression and prints the report. Every verdict is computed by the exported
-  function `run`, but the reading and the printing are not proved.
+- **`evaluator/Main.hs`** (hand-written, 444 lines): reads the input
+  S-expression and prints the report; with `--last` it also selects, from the
+  `MONITOR` lines, the decisions at the last entry. Every verdict is computed by
+  the exported function `run`, but the reading, the selection and the printing
+  are not proved.
 - **`parser/triel_to_core.py` is not proved.** It is the translator from TRIEL
   specifications to terms of the core, written in Python. Nothing proves that it
   translates a specification into the core term with the intended meaning, or
@@ -377,7 +384,9 @@ The results rest on the following, which are not proved here:
   by tests: the 413 tests of `parser/test_triel_to_core.py`, the classification
   of the 33 examples, and the 101 scenarios. The same holds for
   `parser/triel_eval.py`, which converts a scenario into the input of the
-  evaluator, and for the grammar `parser/triel.lark` with the parser library
+  evaluator, for `parser/triel.py`, which reads a trace as a scenario or in
+  JSON and converts the report to JSON, checked by the 475 tests of
+  `parser/test_triel_check.py`, and for the grammar `parser/triel.lark` with the parser library
   lark 1.3.1.
 - **The expected outputs** (`examples/core/classification.expected` and the
   `.expected` files of the scenarios) are written by hand. A scenario passes
