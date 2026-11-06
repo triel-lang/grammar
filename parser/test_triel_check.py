@@ -10,6 +10,7 @@ specification computed once; the tests of the exit codes run it as a program.
 import functools
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -63,8 +64,74 @@ def program(*args, **kw):
                           capture_output=True, text=True, encoding="utf-8", cwd=REPO, **kw)
 
 
-def has_block(lines, kind="MONITOR"):
-    return any(line.startswith(kind + " ") and " BLOCK" in line for line in lines)
+# The exit code of every scenario, without and with --last, written from the
+# .expected files and the number of entries of the .scn files, independently of
+# parser/triel.py: 4 if a line rejects the trace; then 3 if a MONITOR line (with
+# --last: the decisions at the last entry) has BLOCK; then, without --last, 6 if
+# a TERM line has BREACHED or ELSE BREACHED after its colon, a composite line
+# STATUS VIOLATED or an invariant F, and with --last 5 if no monitor decided on
+# the last entry; otherwise 0.
+CODES = {
+    "age_verification_breach": (6, 5), "commitment_boundary": (6, 5),
+    "commitment_missing_data": (6, 5), "commitment_pending": (6, 5), "commitment_rejected": (4, 4),
+    "conditional_cancelled": (0, 5), "conditional_elif": (0, 5), "conditional_express": (0, 5),
+    "conditional_undefined": (0, 5), "deadline_cure_failed": (3, 3),
+    "deadline_cure_ill_typed": (4, 4), "deadline_cure_ok": (6, 0),
+    "deadline_cure_time_order": (4, 4), "fallback_breached": (6, 5), "fallback_on_time": (0, 5),
+    "fallback_order_equal": (4, 4), "fallback_order_ok": (0, 5), "fallback_order_rejected": (4, 4),
+    "fallback_pending": (0, 5), "fallback_taken": (0, 5), "gdpr_data_subjects_only": (6, 5),
+    "gdpr_no_notification": (6, 5), "gdpr_notified_48h": (0, 5), "gdpr_notified_at_72h": (0, 5),
+    "gdpr_notified_day_11": (6, 5), "gdpr_notified_day_5": (6, 5), "hidden_invalid_proof": (3, 3),
+    "hidden_valid": (0, 0), "hidden_value_ignored": (0, 0), "hidden_visible_ill_typed": (4, 4),
+    "invoice_approval_missing": (3, 3), "invoice_approved": (0, 0), "invoice_over_limit": (3, 3),
+    "invoice_owner_fallback": (0, 5), "invoice_owner_late": (6, 5), "invoice_stale_quote": (3, 3),
+    "invoice_within_limit": (0, 0), "low_stock_at_deadline": (0, 5),
+    "low_stock_known_at_deadline": (0, 5), "low_stock_late_restock": (6, 5),
+    "low_stock_missed": (6, 5), "low_stock_restocked": (0, 5),
+    "mandate_budget_limit_absent": (3, 3), "mandate_budget_limit_zero": (6, 5),
+    "mandate_campaign_at_limit": (0, 0), "mandate_campaign_budget": (3, 3),
+    "mandate_price_approval_cleared": (3, 3), "mandate_price_approval_missing": (3, 3),
+    "mandate_price_approved": (0, 0), "mandate_price_at_limit": (0, 0),
+    "mandate_price_decrease_signed": (0, 0), "mandate_price_over_limit": (3, 3),
+    "mandate_price_within_limit": (0, 0), "mandate_price_within_limit_no_approval": (0, 0),
+    "mandate_restock_approved_fresh": (0, 0), "mandate_restock_at_reorder_point": (0, 0),
+    "mandate_restock_fresh_low": (0, 0), "mandate_restock_max_age": (0, 0),
+    "mandate_restock_max_age_passed": (3, 3), "mandate_restock_not_needed": (3, 3),
+    "mandate_restock_stale": (3, 3), "mandate_restock_stale_approved": (0, 0),
+    "mandate_restock_stale_no_approval": (3, 3), "mandate_two_changes": (3, 3),
+    "numbers_breach": (3, 5), "numbers_exact": (6, 0), "numbers_ill_typed": (4, 4),
+    "payment_capped": (3, 5), "payment_cured": (6, 5), "payment_negative": (3, 3),
+    "payment_undefined": (3, 5), "prohibition_handler_breach": (3, 3), "purpose_consented": (0, 0),
+    "purpose_no_route": (3, 3), "purpose_not_on_record": (3, 3),
+    "purpose_stale_assessment": (3, 3), "readings_guard_after_pay": (6, 5),
+    "readings_guard_at_pay": (0, 5), "readings_guard_at_pay_leak": (6, 5),
+    "readings_leak_then_pay": (6, 5), "readings_or_pay_leak": (6, 5), "sensor_at_limit": (3, 5),
+    "sensor_escalation_missed": (6, 5), "sensor_escalation_window": (6, 5),
+    "sensor_handled": (0, 0), "sensor_max_age_boundary": (0, 0), "sensor_never_false": (0, 5),
+    "sensor_not_stopped": (3, 5), "sensor_silent": (3, 5), "sensor_stale": (3, 3),
+    "sensor_stop_at_deadline": (0, 5), "sequence_one_payment": (0, 5), "sequence_polarity": (6, 5),
+    "sequence_prohibition_violated": (6, 5), "sequence_two_payments": (0, 5),
+    "sequence_violation_not_last": (6, 5), "sequence_violation_then_done": (6, 5),
+    "stale_block_fresh_breach": (3, 3), "stale_block_undefined_guard": (3, 5),
+    "unless_records_cancelled": (0, 5), "unless_records_completed": (0, 5),
+}
+
+
+SCN = REPO / "examples/core/scenarios"
+
+needs_sh = pytest.mark.skipif(os.name == "nt", reason="the stub evaluator is a shell script")
+
+
+def stub(tmp_path, lines, last_line=None):
+    """An evaluator that prints the given lines whatever its input, and with
+    --last also last_line: for reports that no scenario of the repository has."""
+    f = tmp_path / "stub-evaluator"
+    script = ["#!/bin/sh", "cat > /dev/null"] + [f"echo '{line}'" for line in lines]
+    if last_line is not None:
+        script.append(f"[ \"$1\" = --last ] && echo '{last_line}'")
+    f.write_text("\n".join(script + ["exit 0"]) + "\n")
+    f.chmod(0o755)
+    return f
 
 
 # --- The .scn scenario in JSON, written independently of parser/triel.py --------
@@ -116,7 +183,7 @@ def scn_to_json(text: str) -> str:
 def test_text_is_the_expected_report(scn, capsys):
     code, out, err = check(capsys, spec_of(scn), scn)
     assert out.splitlines() == expected(scn), err
-    assert code == (3 if has_block(expected(scn)) else 0)
+    assert code == CODES[scn.stem][0]
 
 
 @needs_evaluator
@@ -126,7 +193,7 @@ def test_json_converts_back_to_the_expected_report(scn, capsys):
     objs = json.loads(out)
     assert isinstance(objs, list) and all(isinstance(o, dict) for o in objs)
     assert [triel.report_line(o) for o in objs] == expected(scn), err
-    assert code == (3 if has_block(expected(scn)) else 0)
+    assert code == CODES[scn.stem][0]
 
 
 @needs_evaluator
@@ -142,7 +209,7 @@ def test_json_trace_gives_the_same_report(scn, tmp_path, capsys):
     assert out.splitlines() == expected(scn), err
     code_json, out_json, _ = check(capsys, spec_of(scn), trace, "--json")
     assert [triel.report_line(o) for o in json.loads(out_json)] == expected(scn)
-    assert code == code_json == (3 if has_block(expected(scn)) else 0)
+    assert code == code_json == CODES[scn.stem][0]
 
 
 @needs_evaluator
@@ -156,12 +223,14 @@ def test_last_line_selects_the_decisions_at_the_last_entry(scn, capsys):
           if m["line"] == "MONITOR" for d in m["decisions"] if d["entry"] == j]
     assert lines[-1] == f"LAST ENTRY {j} :" + ("".join(f" MONITOR {i} {d}" for i, d in ds)
                                                or " NO DECISION")
-    assert code == (3 if ("BLOCK" in [d for _, d in ds]) else 0)
+    assert code == CODES[scn.stem][1]
+
+
+def test_the_table_has_every_scenario():
+    assert sorted(CODES) == IDS
 
 
 # --- --last on chosen scenarios ---------------------------------------------------
-
-SCN = REPO / "examples/core/scenarios"
 
 
 @needs_evaluator
@@ -180,9 +249,21 @@ def test_last_blocked(capsys):
 
 
 @needs_evaluator
-def test_last_no_action(capsys):
+def test_last_no_decision_on_a_tick(capsys):
     code, out, _ = check(capsys, MANDATE, SCN / "mandate_budget_limit_zero.scn", "--last")
-    assert out.splitlines()[-1] == "LAST ENTRY 1 : NO DECISION" and code == 0
+    assert out.splitlines()[-1] == "LAST ENTRY 1 : NO DECISION" and code == 5
+
+
+@needs_evaluator
+def test_last_no_decision_on_a_nested_prohibition(capsys):
+    """The leak violates a composite term, whose prohibition has no monitor."""
+    scn = SCN / "sequence_prohibition_violated.scn"
+    code, out, _ = check(capsys, "examples/core/core_sequence.triel", scn, "--last")
+    lines = out.splitlines()
+    assert "TERM 1 COMPOSITE : DONE NO INTERRUPTED NO VIOLATED YES STATUS VIOLATED ENTRY 2" in lines
+    assert lines[-1] == "LAST ENTRY 2 : NO DECISION" and code == 5
+    code, _, _ = check(capsys, "examples/core/core_sequence.triel", scn)
+    assert code == 6
 
 
 def campaign(*budgets):
@@ -197,6 +278,33 @@ def campaign(*budgets):
                      "event": {"kind": "act", "subject": "agent", "action": "apply_campaign",
                                "polarity": "must_not"}, "data": data}]
     return json.dumps({"scenario": "campaigns", "spec": MANDATE, "entries": entries})
+
+
+def with_tick(trace: str, time: str) -> str:
+    """The JSON trace with a tick appended, with the data of its last entry."""
+    x = json.loads(trace)
+    x["entries"].append({"time": time, "event": {"kind": "tick"}, "data": x["entries"][-1]["data"]})
+    return json.dumps(x)
+
+
+@needs_evaluator
+def test_last_no_decision_on_a_tick_after_a_block(tmp_path, capsys):
+    trace = tmp_path / "campaign_then_tick.json"
+    trace.write_text(with_tick(campaign("7500.00"), "2026-11-10T09:20:02Z"))
+    code, out, _ = check(capsys, MANDATE, trace)
+    assert "MONITOR 4 : ENTRY 2 BLOCK" in out.splitlines() and code == 3
+    code, out, _ = check(capsys, MANDATE, trace, "--last")
+    assert out.splitlines()[-1] == "LAST ENTRY 3 : NO DECISION" and code == 5
+
+
+@needs_evaluator
+def test_last_no_decision_on_the_activation_entry_alone(tmp_path, capsys):
+    trace = tmp_path / "activation.json"
+    trace.write_text(campaign())
+    code, out, _ = check(capsys, MANDATE, trace, "--last")
+    assert out.splitlines()[-1] == "LAST ENTRY 0 : NO DECISION" and code == 5
+    code, out, _ = check(capsys, MANDATE, trace)
+    assert code == 0, out
 
 
 @needs_evaluator
@@ -235,6 +343,9 @@ def test_exit_code_rejected_specification(tmp_path):
     r = program("examples/semantics/execute_renaming.triel", scn, "--json")
     assert r.returncode == 2
     assert json.loads(r.stdout)[-1] == {"line": "REJECTED", "constructs": ["EXECUTE"]}
+    # A specification rejected by the translator is 2, not the 4 of a rejected trace.
+    r = program("examples/semantics/execute_renaming.triel", scn, "--last")
+    assert r.returncode == 2 and r.stdout.splitlines()[-1] == "REJECTED: EXECUTE"
 
 
 def test_exit_code_other_errors(tmp_path):
@@ -273,6 +384,152 @@ def test_evaluator_path_order(tmp_path):
     assert r.returncode == 1 and "no-evaluator" in r.stderr
     r = program(MANDATE, scn, "--evaluator", default_evaluator(), env=env)
     assert r.returncode == 0, r.stderr
+
+
+# --- Exit code 4: the evaluator rejects the trace --------------------------------------
+
+@needs_evaluator
+@pytest.mark.parametrize("spec, scn, line", [
+    ("examples/core/core_deadline_cure.triel", "deadline_cure_time_order", "TIME ORDER REJECTED ENTRY 2"),
+    ("examples/core/core_commitment.triel", "commitment_rejected", "ACTIVATION REJECTED"),
+    ("examples/core/core_numbers.triel", "numbers_ill_typed", "TYPES ILL-TYPED ENTRY 0 FACTOR order"),
+])
+def test_rejected_trace(spec, scn, line):
+    for args in ([], ["--last"]):
+        r = program(spec, SCN / f"{scn}.scn", *args)
+        assert r.returncode == 4, r.stderr
+        assert line in r.stdout.splitlines()
+
+
+@needs_sh
+def test_rejected_trace_block(tmp_path):
+    """BLOCK REJECTED, which no scenario has."""
+    ev = stub(tmp_path, ["ACTIVATION OK", "BLOCK REJECTED"], "LAST ENTRY 4 : NO DECISION")
+    for args in ([], ["--last"]):
+        r = program(MANDATE, SCN / "mandate_campaign_budget.scn", "--evaluator", ev, *args)
+        assert r.returncode == 4, r.stderr
+        assert "BLOCK REJECTED" in r.stdout.splitlines()
+
+
+@needs_evaluator
+@pytest.mark.parametrize("old, new, line", [
+    ("2026-11-10T09:10:01Z", "2026-11-10T09:09:59Z", "TIME ORDER REJECTED ENTRY 2"),
+    ("(price_delta_pct (dec 35.0)) (price_change_approved (bool false))))\n  (entry",
+     '(price_delta_pct (str "35")) (price_change_approved (bool false))))\n  (entry',
+     "TYPES ILL-TYPED ENTRY 1 FACTOR price_delta_pct"),
+])
+def test_rejected_trace_is_not_allowed(old, new, line, tmp_path, capsys):
+    """The traces of the review: the change blocked on the trace as recorded is
+    neither 0 nor 3 when the trace is rejected."""
+    text = (SCN / "mandate_price_over_limit.scn").read_text(encoding="utf-8")
+    assert old in text
+    trace = tmp_path / "rejected.scn"
+    trace.write_text(text.replace(old, new, 1), encoding="utf-8")
+    for args in ([], ["--last"]):
+        code, out, _ = check(capsys, MANDATE, trace, *args)
+        assert line in out.splitlines() and code == 4
+
+
+# --- Exit code 6: a violation, without --last ---------------------------------------------
+
+@needs_evaluator
+@pytest.mark.parametrize("scn, form", [
+    ("age_verification_breach", r"^TERM .* : BREACHED \d+ "),
+    ("fallback_breached", r"^TERM .* : ELSE BREACHED \d+$"),
+    ("gdpr_notified_day_5", r"^TERM .* : BREACHED \d+ CURE FULFILLED$"),
+    ("sequence_violation_not_last", r"^TERM \d+ COMPOSITE : .* VIOLATED NO STATUS VIOLATED ENTRY \d+$"),
+    ("numbers_exact", r"^INVARIANT \S+ : F$"),
+])
+def test_violation(scn, form, capsys):
+    """Each form of a violation alone gives 6, with no BLOCK in the report."""
+    code, out, _ = check(capsys, spec_of(SCN / f"{scn}.scn"), SCN / f"{scn}.scn")
+    lines = out.splitlines()
+    assert any(re.search(form, line) for line in lines)
+    assert not any(line.startswith("MONITOR ") and " BLOCK" in line for line in lines)
+    assert code == 6
+
+
+@needs_evaluator
+def test_composite_violated_no_is_not_a_violation(capsys):
+    scn = SCN / "sequence_two_payments.scn"
+    code, out, _ = check(capsys, spec_of(scn), scn)
+    assert any(" VIOLATED NO STATUS " in line for line in out.splitlines()) and code == 0
+
+
+@needs_sh
+def test_composite_violated_yes_with_status_done_is_not_a_violation(tmp_path, capsys):
+    ev = stub(tmp_path, ["ACTIVATION OK", "BLOCK OK", "TYPES OK",
+                         "TERM 1 COMPOSITE : DONE NO INTERRUPTED NO VIOLATED YES STATUS DONE ENTRY 1"])
+    code, _, _ = check(capsys, MANDATE, SCN / "mandate_campaign_budget.scn", "--evaluator", ev)
+    assert code == 0
+
+
+def test_violation_rule_catches_every_breach_line():
+    """Against format drift: in the 101 .expected files, the rule catches
+    exactly the TERM lines with the word BREACHED, the lines with the words
+    STATUS VIOLATED, and the invariants F."""
+    lines = [line for scn in SCENARIOS for line in expected(scn)]
+    caught = [line for line in lines if triel.violation(triel.report_json(line))]
+    breached = [line for line in lines if line.startswith("TERM ") and "BREACHED" in line.split()]
+    status_violated = [line for line in lines if " STATUS VIOLATED " in f" {line} "]
+    invariant_false = [line for line in lines if line.startswith("INVARIANT ") and line.endswith(" : F")]
+    assert len(breached) == 34 and len(status_violated) == 15 and len(invariant_false) == 13
+    assert sorted(caught) == sorted(breached + status_violated + invariant_false)
+    assert sum(" COMPOSITE " in line for line in caught) == len(status_violated)
+
+
+# --- The order of the codes ---------------------------------------------------------------
+
+@needs_evaluator
+@pytest.mark.parametrize("scn", ["purpose_no_route", "deadline_cure_failed"])
+def test_block_before_violation(scn, capsys):
+    code, out, _ = check(capsys, spec_of(SCN / f"{scn}.scn"), SCN / f"{scn}.scn")
+    lines = out.splitlines()
+    assert any(re.search(r"^TERM .* : BREACHED ", line) for line in lines)
+    assert any(line.startswith("MONITOR ") and " BLOCK" in line for line in lines) and code == 3
+    if scn == "purpose_no_route":
+        assert "MONITOR 2 : ENTRY 3 BLOCK" in lines
+
+
+CURED = "TERM 1 MUST a b DEADLINE 10 : BREACHED 10 CURE FULFILLED"
+
+
+@needs_sh
+@pytest.mark.parametrize("lines, last_line, codes", [
+    # A cured breach and a block: 3; the cured breach alone: 6.
+    ([CURED, "MONITOR 2 : ENTRY 4 BLOCK"], None, (3, 1)),
+    ([CURED, "MONITOR 2 : ENTRY 4 ALLOW"], None, (6, 1)),
+    # A rejected trace before a block.
+    (["TYPES ILL-TYPED ENTRY 1 FACTOR f", "MONITOR 2 : ENTRY 4 BLOCK"], None, (4, 1)),
+    # With --last only the LAST line counts, after a rejection.
+    ([CURED, "MONITOR 2 : ENTRY 4 BLOCK"], "LAST ENTRY 4 : MONITOR 2 BLOCK", (3, 3)),
+    ([CURED, "MONITOR 2 : ENTRY 2 BLOCK ENTRY 4 ALLOW"], "LAST ENTRY 4 : MONITOR 2 ALLOW", (3, 0)),
+    ([CURED, "INVARIANT i : F"], "LAST ENTRY 4 : NO DECISION", (6, 5)),
+    (["ACTIVATION REJECTED"], "LAST ENTRY 4 : NO DECISION", (4, 4)),
+    (["MONITOR 2 : ENTRY 4 ALLOW", "MONITOR 3 : ENTRY 4 BLOCK"],
+     "LAST ENTRY 4 : MONITOR 2 ALLOW MONITOR 3 BLOCK", (3, 3)),
+])
+def test_order_of_the_codes(lines, last_line, codes, tmp_path, capsys):
+    ev = stub(tmp_path, lines, last_line)
+    scn = SCN / "mandate_campaign_budget.scn"
+    assert check(capsys, MANDATE, scn, "--evaluator", ev)[0] == codes[0]
+    assert check(capsys, MANDATE, scn, "--evaluator", ev, "--last")[0] == codes[1]
+
+
+@needs_sh
+@pytest.mark.parametrize("lines, last_line, args", [
+    (["MONITOR 4 : ENTRY 4 BLOCK"], "LAST ENTRY 4 : MONITOR 4 MAYBE", ["--last"]),
+    (["MONITOR 4 : ENTRY 4 BLOCK"], "LAST ENTRY 4 :", ["--last"]),
+    (["MONITOR 4 : ENTRY 4 BLOCK", "LAST ENTRY 4 : MONITOR 4 BLOCK"], None, []),
+    (["MONITOR 4 : ENTRY 4 MAYBE"], None, []),
+    (["SOMETHING ELSE"], None, []),
+])
+def test_report_not_recognised(lines, last_line, args, tmp_path, capsys):
+    """A LAST line that is not one of its forms, or a line that is not a line
+    of the report, is an error, 1, with nothing on standard output."""
+    ev = stub(tmp_path, lines, last_line)
+    code, out, err = check(capsys, MANDATE, SCN / "mandate_campaign_budget.scn", "--evaluator", ev, *args)
+    assert code == 1 and out == "" and "cannot read the report" in err
 
 
 # --- The JSON trace is checked like a .scn file --------------------------------------

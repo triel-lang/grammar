@@ -90,9 +90,11 @@ evaluated, 2 rejected, 1 parse or input error.
 `triel.py check SPEC.triel TRACE [--json] [--last]` does the same for a trace
 of `SPEC.triel`, given as a scenario or in JSON, and prints the report as text
 (the output of `triel_eval.py`) or as JSON; `--last` adds the decisions of the
-monitors on the last entry. Exit codes: 0 evaluated and no action blocked, 3 an
-action blocked, 2 rejected, 1 any other error. See
-[`evaluator/README.md`](../evaluator/README.md#triel-check).
+monitors on the last entry. Exit codes, in the order they are checked: 2 the
+specification is rejected, 1 any other error, 4 the trace is rejected, 3 an
+action blocked (with `--last`, the last one), then 6 without `--last` a violation
+on record, or 5 with `--last` no decision on the last action, and 0 otherwise.
+See [`evaluator/README.md`](../evaluator/README.md#triel-check).
 
 ```bash
 python3 parser/triel.py check examples/core/merchant_mandate.triel examples/core/scenarios/mandate_price_over_limit.scn --last

@@ -24,9 +24,21 @@ printed by the evaluator.
 The evaluator binary is taken from --evaluator, else from the environment
 variable TRIEL_EVALUATOR, else evaluator/triel-eval (triel-eval.exe on Windows).
 
-Exit codes: 0 evaluated, and no action is blocked by a monitor; 3 a monitor
-blocks an action (with --last: the action of the last entry); 2 the
-specification is rejected; 1 any other error.
+Exit codes, read from the words of the report lines, checked in this order:
+  2  the translator rejects the specification (the line REJECTED: ...);
+  1  any other error, including a report that is missing or not recognised,
+     or with --last no LAST line;
+  4  the evaluator rejects the trace (TIME ORDER REJECTED, ACTIVATION
+     REJECTED, BLOCK REJECTED or TYPES ILL-TYPED);
+  3  a monitor blocks an action: BLOCK in a MONITOR line; with --last, BLOCK
+     in the LAST line;
+  6  without --last: a violation in the report (a TERM line whose verdict is
+     BREACHED or ELSE BREACHED, STATUS VIOLATED, or an invariant F);
+  5  with --last: LAST ENTRY J : NO DECISION, no monitor decided on the last
+     action;
+  0  without --last: none of these; with --last: the LAST line has ALLOW.
+With --last the code answers only the question about the last action: a
+violation earlier in the trace does not change it.
 """
 import argparse
 import json
@@ -43,7 +55,8 @@ from triel_eval import (ScenarioError, Sym, default_evaluator, find_spec,  # noq
                         read_sexp, scenario_input)
 from triel_to_core import Str, header, sexp, translate  # noqa: E402
 
-EVALUATED, ERROR, REJECTED, BLOCKED = 0, 1, 2, 3
+EVALUATED, ERROR, REJECTED, BLOCKED, TRACE_REJECTED, NO_DECISION, VIOLATION = \
+    0, 1, 2, 3, 4, 5, 6
 
 
 # --- The trace in JSON --------------------------------------------------------
@@ -507,13 +520,53 @@ def report_line(o: dict) -> str:
     raise BadLine(f"unknown line {k}")
 
 
-def blocked(lines, last: bool) -> bool:
-    """Whether the report has a BLOCK decision: in a MONITOR line, or with
-    --last in the LAST line."""
-    kind = "LAST" if last else "MONITOR"
-    return any(d["decision"] == "BLOCK"
-               for line in lines if line.startswith(kind + " ")
-               for d in report_json(line)["decisions"])
+# --- The exit code ----------------------------------------------------------------
+#
+# The exit code is read from the words of the report lines, through their JSON
+# objects: nothing is computed here that the lines do not say.
+
+def trace_rejected(o: dict) -> bool:
+    """A line by which the evaluator rejects the trace: TIME ORDER REJECTED,
+    ACTIVATION REJECTED, BLOCK REJECTED or TYPES ILL-TYPED."""
+    return (o["line"] == "TIME ORDER REJECTED"
+            or (o["line"] in ("ACTIVATION", "BLOCK") and o["result"] == "REJECTED")
+            or (o["line"] == "TYPES" and o["result"] == "ILL-TYPED"))
+
+
+def violation(o: dict) -> bool:
+    """A line that reports a violation: a TERM line whose verdict, the word
+    after its colon, is BREACHED, or ELSE followed by BREACHED; a composite
+    line with STATUS VIOLATED; an invariant F."""
+    if o["line"] == "INVARIANT":
+        return o["value"] == "F"
+    if o["line"] != "TERM" or "status" not in o:
+        return False
+    st = o["status"]
+    if o["kind"] == "COMPOSITE":
+        return st["outcome"] == "VIOLATED"
+    return st["verdict"] == "BREACHED" or (st["verdict"] == "ELSE"
+                                           and st["fallback"]["verdict"] == "BREACHED")
+
+
+def exit_code(lines, last: bool) -> int:
+    """The exit code of a report the evaluator printed (the module docstring);
+    BadLine if a line is not recognised or, with --last, the LAST line is not
+    the one last line."""
+    objs = [report_json(line) for line in lines]
+    lasts = [o for o in objs if o["line"] == "LAST"]
+    if last and (len(lasts) != 1 or objs[-1]["line"] != "LAST"):
+        raise BadLine("no LAST line at the end of the report")
+    if not last and lasts:
+        raise BadLine("a LAST line without --last")
+    if any(trace_rejected(o) for o in objs):
+        return TRACE_REJECTED
+    if last:
+        ds = [d["decision"] for d in objs[-1]["decisions"]]
+        return BLOCKED if "BLOCK" in ds else NO_DECISION if not ds else EVALUATED
+    if any(d["decision"] == "BLOCK" for o in objs if o["line"] == "MONITOR"
+           for d in o["decisions"]):
+        return BLOCKED
+    return VIOLATION if any(violation(o) for o in objs) else EVALUATED
 
 
 # --- The command --------------------------------------------------------------
@@ -561,7 +614,7 @@ def check(spec: str, trace: str, evaluator=None, last: bool = False):
         # An evaluator built before --last ignores the option.
         return error(f"the evaluator {ev} printed no LAST line; rebuild it (evaluator/README.md)")
     try:
-        return (BLOCKED if blocked(lines, last) else EVALUATED), lines
+        return exit_code(lines, last), lines
     except BadLine as e:
         return error(f"cannot read the report: {e}")
 

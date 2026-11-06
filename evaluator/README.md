@@ -74,29 +74,34 @@ The exit code is 3: the monitor of the price rule (`TERM 1`) blocks the change a
 LAST ENTRY J : NO DECISION | (MONITOR I (BLOCK | ALLOW))+
 ```
 
-with the decision, at the last entry J, of the monitor of every top-level prohibition `TERM I` whose action it is. The decisions are the ones the evaluator prints in the `MONITOR` lines: they are computed by the exported function `run`, through `monitor_decisions` of `formal/core/TRIEL_Breach.thy`, which reads the condition of the prohibition in the blocked state of entry J − 1 with `blocks`, the function exported as `check_action`. A decision is `BLOCK` exactly when `enforce` replaces the action by a tick (`monitor_decisions_enforce`), and it does not change when entries are appended later (`run_final`). `Main.hs` only selects the decisions at entry J and prints them.
+with the decision, at the last entry J, of the monitor of every top-level prohibition `TERM I` whose action it is. The decisions are the ones the evaluator prints in the `MONITOR` lines: they are computed by the exported function `run`, through `monitor_decisions` of `formal/core/TRIEL_Breach.thy`, which reads the condition of the prohibition in the blocked state of entry J − 1 with `blocks`, the function exported as `check_action`. A decision is `BLOCK` exactly when `enforce` replaces the action by a tick (`monitor_decisions_enforce`), and it does not change when entries are appended later, unless the longer trace is rejected for its time order or its types (`run_final`). `Main.hs` only selects the decisions at entry J and prints them.
 
-`NO DECISION` means that no monitor decided on the last entry: it is not the action of the subject of a top-level prohibition, or it is the activation entry, or the report has no `MONITOR` line (a rejected trace, or no top-level prohibition). It is not a permission: read it with the lines of the report above it.
+`NO DECISION` means that no monitor decided on the last entry: it is not the action of the subject of a top-level prohibition, or it is the activation entry, or the report has no `MONITOR` line (a rejected trace, or no top-level prohibition). It is not a permission, and its exit code is 5, not 0.
 
 ### Exit codes
 
-| Code | Meaning |
-|---|---|
-| 0 | The report is computed, and no action is blocked: no `MONITOR` line has `BLOCK`; with `--last`, the `LAST` line has no `BLOCK` (a decision `ALLOW`, or `NO DECISION`). |
-| 3 | The report is computed, and a monitor blocks an action: a `MONITOR` line has `BLOCK`; with `--last`, the `LAST` line has `BLOCK`, whatever the earlier entries. |
-| 2 | The translator rejects the specification; the report ends with `REJECTED: ...`. |
-| 1 | Any other error: a file that cannot be read, a trace that is not well formed or names another specification, a specification that does not parse, an evaluator that cannot be run or fails, or that prints no `LAST` line with `--last` (an evaluator built before the option, which ignores it). The message is on standard error, and nothing is printed on standard output. |
+The exit code is read from the words of the lines of the report, through their JSON objects; the conditions are checked in the order of the table, and the first that holds gives the code.
 
-A rejected trace (`TIME ORDER REJECTED`, `ACTIVATION REJECTED`, `BLOCK REJECTED`, `TYPES ILL-TYPED`) is a computed report, with exit code 0: it has no `MONITOR` line.
+| Order | Code | When |
+|---|---|---|
+| 1 | 2 | The translator rejects the specification: the report ends with the line `REJECTED: ...`. |
+| 2 | 1 | Any other error: a file that cannot be read, a trace that is not well formed or names another specification, a specification that does not parse, an evaluator that cannot be run or fails, a report that is not recognised (a line that is not one of the lines of `examples/core/README.md`, Output), or with `--last` no `LAST` line of one of its forms at the end (an evaluator built before the option ignores it). The message is on standard error, and nothing is printed on standard output. |
+| 3 | 4 | The evaluator rejects the trace, with or without `--last`: a line that begins with `TIME ORDER REJECTED`, `ACTIVATION REJECTED`, `BLOCK REJECTED` or `TYPES ILL-TYPED`. Nothing is decided on a rejected trace. |
+| 4 | 3 | A monitor blocks an action: a `MONITOR` line has `BLOCK`; with `--last`, the `LAST` line has `BLOCK`. |
+| 5 | 6 | Without `--last` only: the report records a violation and no monitor blocks: a `TERM` line whose verdict, the word after its colon, is `BREACHED` or `ELSE BREACHED` (also when it is followed by `CURE FULFILLED`: a breach cured in time stays a breach on record), a composite line with `STATUS VIOLATED`, or an invariant `F`. The words `VIOLATED YES` and `VIOLATED NO` of a composite line, before `STATUS`, are not a violation. |
+| 5 | 5 | With `--last` only: `LAST ENTRY J : NO DECISION`, the monitor made no decision on the last action. |
+| 6 | 0 | Without `--last`: none of the above, so the report is computed, no monitor blocks and no violation is recorded. With `--last`: the `LAST` line has `ALLOW` and no `BLOCK`. |
+
+With `--last` the code answers only the question about the last action: 0 means that the last action is `ALLOW`, and a violation earlier in the trace does not change the code. Without `--last`, 0 means that the report is computed, no monitor blocked anything, and no violation is on record.
 
 ### What the proof covers, and what it does not
 
-Covered: every verdict and every decision in the report is computed by the code that Isabelle exported from the theories of `formal/core` (`run`, with the monitor of section 8.1 and decision 37 of `formal/core/CORE.md`), and the theorems about them are proved there. The command decides nothing: the exit code reads the words `BLOCK` in the lines the evaluator printed.
+Covered: every verdict and every decision in the report is computed by the code that Isabelle exported from the theories of `formal/core` (`run`, with the monitor of section 8.1 and decision 37 of `formal/core/CORE.md`), and the theorems about them are proved there. The command decides nothing: the exit code is read from the words of the lines the evaluator printed.
 
 Not covered by the proof:
 
 - the translator `parser/triel_to_core.py`, the reading of the trace in `parser/triel_eval.py` and `parser/triel.py`, the reading and printing in `Main.hs`, and the conversion of the report to JSON. They are checked by tests (`parser/test_triel_to_core.py`, `parser/test_triel_check.py`), not proved; the conversion to JSON is also checked on every line it converts, by converting the object back to the line;
-- what happens outside the command. The trace is data given to it: whoever records the times, the events and the values of the factors is responsible for them, and nothing here checks that they are true. The command does not watch a running system and does not stop anything: to keep an agent from taking a blocked action, the system that runs the agent must call the command before the action and hold the action back on `BLOCK`. That interception is outside the command and is not checked.
+- what happens outside the command. The trace is data given to it: whoever records the times, the events and the values of the factors is responsible for them, and nothing here checks that they are true. The command does not watch a running system and does not stop anything: to keep an agent from taking a blocked action, the system that runs the agent must call the command with `--last` before the action and hold the action back on any exit code other than 0. That interception is outside the command and is not checked.
 
 ### The trace in JSON
 
@@ -118,7 +123,7 @@ A trace in JSON is a scenario of [`examples/core/README.md`](../examples/core/RE
 | `(time "TIME")` | `{"time": "TIME"}` |
 | `(record (FIELD VALUE) ...)` | `{"record": {"FIELD": VALUE, ...}}` |
 
-`PATH` is relative to the root of the repository, as in a `.scn` file. A name (`NAME`, `FACTOR`, `SUBJECT`, `FIELD`, `X`, the polarity) is a word without white space, parentheses, `"` or `;`, as in a `.scn` file; the order of the keys of `data` and `record` is the order of the fields. The scenario `mandate_price_over_limit.scn` in JSON:
+`PATH` is relative to the root of the repository, as in a `.scn` file. A name (`NAME`, `FACTOR`, `SUBJECT`, `FIELD`, `X`, the polarity) is one word, without white space, parentheses, `"` or `;`; a `.scn` file also accepts a name in quotes, such as `(act "agent x" ...)`, which has no form in JSON; the order of the keys of `data` and `record` is the order of the fields. The scenario `mandate_price_over_limit.scn` in JSON:
 
 ```json
 {"scenario": "mandate_price_over_limit",
