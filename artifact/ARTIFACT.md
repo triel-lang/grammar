@@ -162,8 +162,8 @@ before the review, with 960 statements) and #176 (after it) of the job `artifact
 are in the table. Since then the example `purpose_limitation_gate` with four
 scenarios has been added (33 examples, 101 scenarios, 413 translator and driver
 tests); its runs are not in the table. Stage 42 added the command `triel check`
-(`parser/triel.py`) with the 508 tests of `parser/test_triel_check.py`, which
-the step pytest runs with those of the translator (921 translator and driver
+(`parser/triel.py`) with the 512 tests of `parser/test_triel_check.py`, which
+the step pytest runs with those of the translator (925 translator and driver
 tests); its runs are not in the table. The time on a shared
 runner varies from run to run, and so does its CPU.
 
@@ -198,7 +198,7 @@ proved statements (lemma/theorem/corollary)  984
 paper theorems found, without oracles        107 of 107
 scenarios matching .expected                 101 of 101
 examples accepted by the core                31 of 33
-translator and driver tests (pytest)         921 passed in ...
+translator and driver tests (pytest)         925 passed in ...
 examples parsed with one derivation          33 of 33
 ambiguity regression checks passed           242
 document excerpts conforming to the grammar  15
@@ -385,7 +385,7 @@ The results rest on the following, which are not proved here:
   of the 33 examples, and the 101 scenarios. The same holds for
   `parser/triel_eval.py`, which converts a scenario into the input of the
   evaluator, for `parser/triel.py`, which reads a trace as a scenario or in
-  JSON and converts the report to JSON, checked by the 508 tests of
+  JSON and converts the report to JSON, checked by the 512 tests of
   `parser/test_triel_check.py`, and for the grammar `parser/triel.lark` with the parser library
   lark 1.3.1.
 - **The expected outputs** (`examples/core/classification.expected` and the
