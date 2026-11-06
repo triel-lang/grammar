@@ -2921,8 +2921,10 @@ lemma boolean_factor:
 
 text \<open>Scenario \<open>sensor_never_false\<close> without its last reading: readings of 97.5 at 08:00:05,
   08:05:00 and 08:10:00, the deadline 08:10:00, and a tick after it. The verdict of the
-  core is undefined, since no fresh reading is known at the activation entry, and so is
-  the verdict on enclosures at the entries. The continuous reading uses every sample: with
+  core under \<open>MAX_AGE\<close> and \<open>ON_STALE BLOCK\<close>, as the evaluator reads the scenario
+  \<open>sensor_never_false\<close>, is undefined, since no fresh reading is known at the activation
+  entry; the verdict on enclosures at the entries is undefined as well, since the
+  temperature has no sample there. The continuous reading uses every sample: with
   the bound 0.1 degrees per second the lower envelope falls to 82.75 between the first two
   readings, below the limit, so the verdict is not false; with the bound 0.05 it stays at or
   above 90 throughout the window (the valley between the last two readings is exactly 90),
@@ -2966,8 +2968,9 @@ text \<open>The trace of item 8 of section 2.6 of the research note: the same re
   window (the valley between 08:00:05 and 08:05:00 is 90.125, between the last two
   readings exactly 90), and the continuous verdict is false. So the false verdict at the
   entries and the continuous false verdict are different statements, neither weaker than
-  the other: \<open>never_false_trace\<close> is undefined at the entries and not false continuously,
-  this trace false at the entries and, under the bound 0.1, not false continuously.\<close>
+  the other: \<open>never_false_trace\<close> is undefined on the enclosures at the entries and not
+  false continuously, this trace false at the entries and, under the bound 0.1, not false
+  continuously.\<close>
 
 definition fresh_window_trace :: ctrace where
   "fresh_window_trace =
