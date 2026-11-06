@@ -56,6 +56,20 @@ Relative to v2.3.3, v2.4 added three extensions:
 
 [`formal/core`](formal/core/CORE.md) formalises the semantics of a core of TRIEL in Isabelle/HOL: its definitions, the theorems proved about them, and the design decisions they forced. An evaluator exported from these theories ([`evaluator/`](evaluator/README.md)) computes the verdicts of a specification on a trace, and the decisions of the fail-closed monitor of each prohibition, a function on traces proved sound, and transparent when the condition of the prohibition is defined. [`parser/triel_to_core.py`](parser/README.md) translates a specification into the core and checks the semantic rules that apply to it, or rejects by name the constructs that lie outside it. [`examples/core/`](examples/core/README.md) holds specifications and scenarios with their expected reports; `examples/core/classification.expected` lists which examples the core accepts.
 
+## Checking a trace: triel check
+
+`triel check` takes a specification and a recorded trace (what happened, when, and with which data) and prints the verdict on every rule and the decision of the monitor of every prohibition: for each action of its subject, `BLOCK` or `ALLOW`. With `--last` it adds the decision on the last entry of the trace: an agent that is about to act writes the action as the last entry and asks whether it may take it now. The trace is a scenario file (`.scn`) or the same scenario in JSON, and `--json` prints the report as JSON.
+
+After building the evaluator ([`evaluator/README.md`](evaluator/README.md)), from the root of the repository:
+
+```bash
+python3 parser/triel.py check examples/core/merchant_mandate.triel examples/core/scenarios/mandate_price_over_limit.scn --last
+```
+
+The report ends with `MONITOR 1 : ENTRY 2 BLOCK` and `LAST ENTRY 2 : MONITOR 1 BLOCK`: the agent applies a price change of 35 percent without the owner's approval, and the monitor of the price rule blocks it. The exit code is 0 when the report is computed and no action is blocked, 3 when a monitor blocks an action (with `--last`, the last one), 2 when the specification is rejected, and 1 for any other error.
+
+What is proved and what is not. Every verdict and every decision is computed by the code exported from the Isabelle theories of `formal/core`; the command only reads the files, runs the translator and the evaluator, and prints. The translator, the reading of the trace and the printing are tested, not proved. Collecting the data of the trace, and stopping an agent's call to a tool when the answer is `BLOCK`, happen outside the command and are not checked here. The formats, the exit codes and the JSON are described in [`evaluator/README.md`](evaluator/README.md#triel-check).
+
 ## Examples
 
 The `examples/` directory contains sample TRIEL specifications:

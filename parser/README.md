@@ -18,6 +18,10 @@ A reference parser for TRIEL v2.5, built from the published grammar
 - `triel_to_core.py`: the translator to the formal core.
 - `triel_eval.py`: the scenario driver of the evaluator.
 - `test_triel_to_core.py`: the tests of the translator and of the driver.
+- `triel.py`: the command `triel check`, which runs the translator and the
+  evaluator on a specification and a trace, a scenario or the same scenario in
+  JSON, and prints the report as text or JSON (`evaluator/README.md`).
+- `test_triel_check.py`: the tests of `triel check`.
 
 ## What the parser is
 
@@ -82,3 +86,15 @@ to the root of the repository. Strings are read with the escapes of
 driver does not check the order of the times: the evaluator rejects a trace
 whose times decrease (`TIME ORDER REJECTED`). Exit codes: 0 accepted or
 evaluated, 2 rejected, 1 parse or input error.
+
+`triel.py check SPEC.triel TRACE [--json] [--last]` does the same for a trace
+of `SPEC.triel`, given as a scenario or in JSON, and prints the report as text
+(the output of `triel_eval.py`) or as JSON; `--last` adds the decisions of the
+monitors on the last entry. Exit codes: 0 evaluated and no action blocked, 3 an
+action blocked, 2 rejected, 1 any other error. See
+[`evaluator/README.md`](../evaluator/README.md#triel-check).
+
+```bash
+python3 parser/triel.py check examples/core/merchant_mandate.triel examples/core/scenarios/mandate_price_over_limit.scn --last
+python3 -m pytest parser/test_triel_check.py
+```

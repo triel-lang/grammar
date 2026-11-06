@@ -103,3 +103,9 @@ jobs:
 
       - name: Tests of the translator and the driver
         run: python3 -m pytest -q parser/test_triel_to_core.py
+
+      # triel check on every scenario: the text report is the .expected file,
+      # the JSON report converts back to it, the scenario in JSON gives the same
+      # report, --last, and the exit codes.
+      - name: Tests of triel check
+        run: python3 -m pytest -q parser/test_triel_check.py

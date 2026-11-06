@@ -80,6 +80,7 @@ METADATA PROVES FACTOR CONSTRAINT   -- in FACTORS order, and for each factor in 
 METADATA BOUND_TO FACTOR S NONCE    --   constraint), BOUND_TO, SOURCE, and
 METADATA SOURCE FACTOR SUBJECT
 METADATA POLARITY FACTOR NUMBER     --   POLARITY, THRESHOLD and SENSITIVITY_BOUND, as written
+REJECTED: CONSTRUCT; ...             -- instead of the evaluator lines, when the translator rejects the specification
 TIME ORDER REJECTED ENTRY J          -- the only evaluator line, when the times decrease at entry J
 ACTIVATION OK | ACTIVATION REJECTED
 BLOCK OK | BLOCK REJECTED
@@ -93,6 +94,7 @@ TERM I COMPOSITE : DONE X INTERRUPTED X VIOLATED X STATUS ((VIOLATED | INTERRUPT
                                                           -- X is YES, NO or UNKNOWN; also IF, WHEN and REF
 INVARIANT NAME : T | F | U
 MONITOR I : NO ACTION | (ENTRY J (BLOCK | ALLOW))+                        -- one line per top-level MUST_NOT, after the invariants
+LAST ENTRY J : NO DECISION | (MONITOR I (BLOCK | ALLOW))+                 -- with --last only, after the monitor lines
 ```
 
 `STATUS` of an obligation is one of:
@@ -112,6 +114,10 @@ An action with arguments is printed `NAME(ARG, ...)`: a name as written, a strin
 `U` is the inconclusive verdict ⊥ of an invariant.
 
 A `MONITOR` line gives the decisions of the fail-closed monitor of the top-level prohibition `TERM I` (`enforce` and `monitor_decisions` of `formal/core/TRIEL_Breach.thy`): for every entry `J` whose event is the action of the prohibition's subject, in trace order, `BLOCK` if the condition is not known to be false in the blocked state of entry `J − 1` (true or undefined), `ALLOW` if it is false there; `NO ACTION` if the subject never performs the action. The verdict of the prohibition and the monitor's decisions are two roles: an entry is `BLOCK` whenever the verdict is breached at it (`breach_blocked`), but an action taken while the condition is undefined is `BLOCK` and not a breach (`undefined_guard_blocks_not_breach`; `numbers_breach`, entry 1, and `invoice_stale_quote`, entry 3). The trace in which every `BLOCK` entry is replaced by a tick is never breached (`enforce_sound`), and a trace with no `BLOCK` entry is left unchanged by the monitor (`enforce_id_iff`). A decision is final: entries added later do not change it (`run_final`). Prohibitions inside composite terms have no monitor line, as they have no verdict of their own.
+
+The `REJECTED` line is printed by the driver (`parser/triel_eval.py`, `parser/triel.py`) after the lines of the translator, with the rejected constructs in sorted order; the evaluator is not run.
+
+The `LAST` line is printed only when the evaluator is run with `--last` (`triel check --last`, [`evaluator/README.md`](../../evaluator/README.md#triel-check)). J is the last entry of the trace. The line lists, in the order of the `MONITOR` lines, the decision at entry J of every monitor that has one, `MONITOR I BLOCK` or `MONITOR I ALLOW`; these are the decisions of the `MONITOR` lines, selected, not computed again. `NO DECISION` if no `MONITOR` line has a decision at entry J: the last entry is not an action of the subject of a top-level prohibition, or it is the activation entry, or the report has no `MONITOR` line.
 
 ## Classification
 

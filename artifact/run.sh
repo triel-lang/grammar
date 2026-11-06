@@ -108,8 +108,9 @@ scenarios() {
   return $status
 }
 
+# evaluator.yml: the tests of the translator and the driver, and of triel check.
 tests() {
-  python3 -m pytest -q -p no:cacheprovider parser/test_triel_to_core.py
+  python3 -m pytest -q -p no:cacheprovider parser/test_triel_to_core.py parser/test_triel_check.py
 }
 
 # parse-examples.yml: every example parses under parser/triel.lark with exactly

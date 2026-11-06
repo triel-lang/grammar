@@ -6,7 +6,7 @@
 --
 -- Only reading the input and printing the report are written here; every
 -- verdict and every decision of a monitor comes from the exported code. The input is produced by
--- parser/triel_eval.py. Its grammar:
+-- parser/triel_eval.py and parser/triel.py. Its grammar:
 --
 --   input  ::= (input (spec (factors F*) (terms T*) (invariants I*)) (trace E*))
 --   F      ::= (factor NAME TY AGE) | (hidden_factor NAME TY AGE)
@@ -38,11 +38,17 @@
 -- NAME is a string literal; INT is a decimal integer (seconds for times).
 -- (dec M K) is the exact number M / 10^K; (int N) is the number N.
 -- (ref K) refers to the element K of (terms T*), counted from 0.
+--
+-- Usage: triel-eval [--last]. With --last, the report is followed by one line,
+-- LAST ENTRY J : ..., with the decisions of the MONITOR lines at the last entry
+-- J of the trace (examples/core/README.md, Output). They are selected from the
+-- lines computed by run, not computed here.
 
 module Main (main) where
 
 import Data.Char (isDigit, isSpace)
 import Data.List (intercalate)
+import System.Environment (getArgs)
 import System.Exit (exitWith, ExitCode (ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import qualified TRIEL as T
@@ -403,14 +409,36 @@ line (T.LMonitor i ds) =
   where
     decision (j, b) = " ENTRY " ++ nat j ++ (if b then " BLOCK" else " ALLOW")
 
+-- The decisions at entry J of the MONITOR lines of a report, in the order of the
+-- lines: for each top-level prohibition I whose monitor decided on entry J,
+-- MONITOR I BLOCK or MONITOR I ALLOW; NO DECISION if there is none. The
+-- decisions are those of the LMonitor lines computed by run; this function only
+-- selects the ones at entry J.
+lastLine :: Integer -> [T.Line] -> String
+lastLine j ls =
+  "LAST ENTRY " ++ show j ++ " :" ++ (if null ds then " NO DECISION" else concatMap decision ds)
+  where
+    ds = [(i, b) | T.LMonitor i xs <- ls, (k, b) <- xs, T.integer_of_nat k == j]
+    decision (i, b) = " MONITOR " ++ nat i ++ (if b then " BLOCK" else " ALLOW")
+
 main :: IO ()
 main = do
+  args <- getArgs
+  lastEntry <- case args of
+    [] -> return False
+    ["--last"] -> return True
+    _ -> failWith "usage: triel-eval [--last] < INPUT"
   src <- getContents
   case tokenize src >>= one >>= input of
-    Left e -> do
-      hPutStrLn stderr ("evaluator: " ++ e)
-      exitWith (ExitFailure 1)
-    Right (sp, tr) -> mapM_ (putStrLn . line) (T.run sp tr)
+    Left e -> failWith ("evaluator: " ++ e)
+    Right (_, []) | lastEntry -> failWith "evaluator: --last needs a trace with an entry"
+    Right (sp, tr) -> do
+      let ls = T.run sp tr
+      mapM_ (putStrLn . line) ls
+      if lastEntry then putStrLn (lastLine (toInteger (length tr) - 1) ls) else return ()
   where
     one [x] = Right x
     one xs = Left ("expected one S-expression, got " ++ show (length xs))
+    failWith msg = do
+      hPutStrLn stderr msg
+      exitWith (ExitFailure 1)
