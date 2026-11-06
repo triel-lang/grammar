@@ -5,7 +5,7 @@
 This artifact reproduces the machine-checked results and the executable checks
 behind the paper. It contains:
 
-- `formal/core/`: the core of TRIEL 2.5.1 (the errata to 2.5) in Isabelle/HOL, 13 theories (session
+- `formal/core/`: the core of TRIEL 2.5.1 (the errata to 2.5) in Isabelle/HOL, 14 theories (session
   `TRIEL_Core`). All theorems are proved; there is no `sorry`, `oops` or
   `axiomatization`.
 - `evaluator/`: an evaluator of the core. Its Haskell code
@@ -49,7 +49,7 @@ and prints a summary whose numbers are all computed by the run.
   other steps stay below 2 GiB. On GitHub-hosted runners (4 cores, 15.6 GiB)
   without a limit, where Isabelle2025-2 used 2 threads (as the build logs
   state), the workflow `.github/workflows/artifact.yml` read peaks from 6.73 to
-  7.20 GiB in the seventeen runs listed under "Times on GitHub-hosted runners"
+  7.42 GiB in the nineteen runs listed under "Times on GitHub-hosted runners"
   below; it keeps the value as `memory-peak.txt` with the logs of the run.
 - Docker Desktop (macOS, Windows): set Memory to at least 10 GB in
   Settings → Resources.
@@ -83,22 +83,24 @@ image build were measured for version 2.5, with the same `Dockerfile`.
 The job `artifact` of `.github/workflows/artifact.yml` builds the image and
 runs `run.sh` on every push, on a GitHub-hosted runner (the label
 `ubuntu-latest` in #56 to #59, `ubuntu-24.04` from #60), and reads the memory
-peak of the container. The seventeen runs
+peak of the container. The nineteen runs
 below are those, from the first run that read the memory peak (#56) to the
-run #75 of this version, in which `run.sh` passed all 11 steps; all of them
-are of sources with 28 examples and 54 scenarios. Over these runs:
+run #176 of this version, in which `run.sh` passed all 11 steps; the runs #56
+to #75 are of sources with 28 examples and 54 scenarios, the runs #169 and
+#176 of the sources of this version, with 32 examples and 97 scenarios. Over
+these runs:
 
-| Phase | Range over the seventeen runs |
+| Phase | Range over the nineteen runs |
 |---|---|
-| Job `artifact` (disk clean-up, image build and `run.sh`) | 16:14 to 23:39 min |
+| Job `artifact` (disk clean-up, image build and `run.sh`) | 16:14 to 38:28 min |
 | Image build (`docker build`, base images included) | 1:14 to 2:18 min |
-| `run.sh`, all 11 steps | 766 to 1221 s (12.8 to 20.4 min) |
-| of which: clean Isabelle build of `TRIEL_Core` | 85 to 132 s |
-| of which: the scenarios | 124 to 211 s |
-| of which: translator and driver tests (pytest) | 318 to 518 s |
-| of which: parsing of the examples with the ambiguity check | 123 to 217 s |
+| `run.sh`, all 11 steps | 766 to 1855 s (12.8 to 30.9 min) |
+| of which: clean Isabelle build of `TRIEL_Core` | 85 to 250 s |
+| of which: the scenarios | 124 to 389 s |
+| of which: translator and driver tests (pytest) | 318 to 873 s |
+| of which: parsing of the examples with the ambiguity check | 123 to 247 s |
 | of which: ambiguity regression tests | 67 to 118 s |
-| Memory peak of the container | 6.73 to 7.20 GiB |
+| Memory peak of the container | 6.73 to 7.42 GiB |
 
 | Run | Date (UTC) | Theories | Job `artifact` | Image build | `run.sh` | Memory peak |
 |---|---|---:|---:|---:|---:|---:|
@@ -119,6 +121,8 @@ are of sources with 28 examples and 54 scenarios. Over these runs:
 | #73 | 2026-10-27 | 13 | 22:36 | 1:17 | 1221 s | 7.05 GiB |
 | #74 | 2026-10-27 | 13 | 16:30 | 1:41 | 770 s | 7.20 GiB |
 | #75 | 2026-10-27 | 13 | 23:28 | 1:21 | 1219 s | 7.01 GiB |
+| #169 | 2026-11-05 | 14 | 34:00 | 1:20 | 1855 s | 7.07 GiB |
+| #176 | 2026-11-05 | 14 | 38:28 | 1:31 | 1803 s | 7.42 GiB |
 
 Runs #61 to #63 are of the same commit. #67 to #73 are of drafts of this
 version with the new theory before its last three theorems (646 statements,
@@ -144,12 +148,18 @@ functions have been added to the list. On these sources with the list complete (
 theorems), two runs of the job `artifact` on 3 November 2026, on the same
 runners, took 1009 s and 823 s for `run.sh` and 20:55 and 17:08 min for the
 whole job, with memory peaks of 7.07 and 6.79 GiB. Since then the examples
-`sensor_overheat`, `merchant_mandate`, `merchant_low_stock` and
-`purpose_limitation_gate` with 41 scenarios have been added (33 examples, 101
-scenarios, 413 translator and driver tests); their runs are not in the table. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
+`sensor_overheat`, `merchant_mandate` and `merchant_low_stock` with 37
+scenarios have been added (32 examples, 97 scenarios, 405 translator and
+driver tests); their runs are not in the table. In the runs #64 to #66 of drafts of this version, `run.sh` failed in
 the step pytest: the test that every name in backquotes in `CORE.md` is defined
 in the theories failed on the name of a file, since corrected; they are not in
-the table. The time on a shared
+the table. Stage 43 added the theory `TRIEL_Signals.thy` (continuous signals between
+samples, section 11 of `formal/core/CORE.md`), 14 theories and 984 proved
+statements after the changes of its independent review; the runs #169 (the tree
+before the review, with 960 statements) and #176 (after it) of the job `artifact`
+are in the table. Since then the example `purpose_limitation_gate` with four
+scenarios has been added (33 examples, 101 scenarios, 413 translator and driver
+tests); its runs are not in the table. The time on a shared
 runner varies from run to run, and so does its CPU.
 
 ## Running
@@ -178,8 +188,8 @@ Expected end of the output:
 
 ```
 === Summary
-theories checked by Isabelle (TRIEL_Core)    13 (.thy files in formal/core: 13)
-proved statements (lemma/theorem/corollary)  764
+theories checked by Isabelle (TRIEL_Core)    14 (.thy files in formal/core: 14)
+proved statements (lemma/theorem/corollary)  984
 paper theorems found, without oracles        107 of 107
 scenarios matching .expected                 101 of 101
 examples accepted by the core                31 of 33
@@ -317,7 +327,7 @@ variables `?x`.
 
 | Claim | Command | Expected output |
 |---|---|---|
-| The core is machine-checked: 13 theories, 764 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `13 (.thy files in formal/core: 13)`, `764`; `no sorry, oops or axiomatization ...` |
+| The core is machine-checked: 14 theories, 984 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `14 (.thy files in formal/core: 14)`, `984`; `no sorry, oops or axiomatization ...` |
 | The evaluator is the code exported from the checked theories | `cat results/03-exported-code.log` | `evaluator/generated is the exported code` |
 | The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `101` |
 | 31 of the 33 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `31`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |

@@ -16,6 +16,7 @@ session TRIEL_Core = HOL +
     TRIEL_Numbers
     TRIEL_Penalty
     TRIEL_Exec
+    TRIEL_Signals
   document_files
     "root.bib"
     "root.tex"
