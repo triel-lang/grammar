@@ -134,6 +134,12 @@ def stub(tmp_path, lines, last_line=None):
     return f
 
 
+def run_report(*lines):
+    """The lines of a stub report, after the three lines with which run begins
+    a report on a trace it does not reject."""
+    return ["ACTIVATION OK", "BLOCK OK", "TYPES OK", *lines]
+
+
 # --- The .scn scenario in JSON, written independently of parser/triel.py --------
 
 def json_value(v):
@@ -363,17 +369,15 @@ def test_exit_code_other_errors(tmp_path):
     assert "Traceback" not in r.stderr
 
 
+@needs_sh
 def test_evaluator_without_last(tmp_path):
     """An evaluator that ignores --last (one built before it) is an error, not
     a report without a decision."""
-    fake = tmp_path / "old-evaluator"
-    fake.write_text("#!/bin/sh\ncat > /dev/null\necho 'ACTIVATION OK'\necho 'MONITOR 4 : ENTRY 4 BLOCK'\n")
-    fake.chmod(0o755)
+    fake = stub(tmp_path, run_report("MONITOR 4 : ENTRY 4 BLOCK"))
     scn = "examples/core/scenarios/mandate_campaign_budget.scn"
-    if os.name != "nt":
-        assert program(MANDATE, scn, "--evaluator", fake).returncode == 3
-        r = program(MANDATE, scn, "--last", "--evaluator", fake)
-        assert r.returncode == 1 and "printed no LAST line" in r.stderr and r.stdout == ""
+    assert program(MANDATE, scn, "--evaluator", fake).returncode == 3
+    r = program(MANDATE, scn, "--last", "--evaluator", fake)
+    assert r.returncode == 1 and "printed no LAST line" in r.stderr and r.stdout == ""
 
 
 @needs_evaluator
@@ -458,8 +462,8 @@ def test_composite_violated_no_is_not_a_violation(capsys):
 
 @needs_sh
 def test_composite_violated_yes_with_status_done_is_not_a_violation(tmp_path, capsys):
-    ev = stub(tmp_path, ["ACTIVATION OK", "BLOCK OK", "TYPES OK",
-                         "TERM 1 COMPOSITE : DONE NO INTERRUPTED NO VIOLATED YES STATUS DONE ENTRY 1"])
+    ev = stub(tmp_path, run_report(
+        "TERM 1 COMPOSITE : DONE NO INTERRUPTED NO VIOLATED YES STATUS DONE ENTRY 1"))
     code, _, _ = check(capsys, MANDATE, SCN / "mandate_campaign_budget.scn", "--evaluator", ev)
     assert code == 0
 
@@ -497,16 +501,18 @@ CURED = "TERM 1 MUST a b DEADLINE 10 : BREACHED 10 CURE FULFILLED"
 @needs_sh
 @pytest.mark.parametrize("lines, last_line, codes", [
     # A cured breach and a block: 3; the cured breach alone: 6.
-    ([CURED, "MONITOR 2 : ENTRY 4 BLOCK"], None, (3, 1)),
-    ([CURED, "MONITOR 2 : ENTRY 4 ALLOW"], None, (6, 1)),
-    # A rejected trace before a block.
+    (run_report(CURED, "MONITOR 2 : ENTRY 4 BLOCK"), None, (3, 1)),
+    (run_report(CURED, "MONITOR 2 : ENTRY 4 ALLOW"), None, (6, 1)),
+    # A rejected trace before a block. On purpose not a report of run, which
+    # prints nothing after a rejection line: it checks the order of the rules.
     (["TYPES ILL-TYPED ENTRY 1 FACTOR f", "MONITOR 2 : ENTRY 4 BLOCK"], None, (4, 1)),
     # With --last only the LAST line counts, after a rejection.
-    ([CURED, "MONITOR 2 : ENTRY 4 BLOCK"], "LAST ENTRY 4 : MONITOR 2 BLOCK", (3, 3)),
-    ([CURED, "MONITOR 2 : ENTRY 2 BLOCK ENTRY 4 ALLOW"], "LAST ENTRY 4 : MONITOR 2 ALLOW", (3, 0)),
-    ([CURED, "INVARIANT i : F"], "LAST ENTRY 4 : NO DECISION", (6, 5)),
+    (run_report(CURED, "MONITOR 2 : ENTRY 4 BLOCK"), "LAST ENTRY 4 : MONITOR 2 BLOCK", (3, 3)),
+    (run_report(CURED, "MONITOR 2 : ENTRY 2 BLOCK ENTRY 4 ALLOW"), "LAST ENTRY 4 : MONITOR 2 ALLOW",
+     (3, 0)),
+    (run_report(CURED, "INVARIANT i : F"), "LAST ENTRY 4 : NO DECISION", (6, 5)),
     (["ACTIVATION REJECTED"], "LAST ENTRY 4 : NO DECISION", (4, 4)),
-    (["MONITOR 2 : ENTRY 4 ALLOW", "MONITOR 3 : ENTRY 4 BLOCK"],
+    (run_report("MONITOR 2 : ENTRY 4 ALLOW", "MONITOR 3 : ENTRY 4 BLOCK"),
      "LAST ENTRY 4 : MONITOR 2 ALLOW MONITOR 3 BLOCK", (3, 3)),
 ])
 def test_order_of_the_codes(lines, last_line, codes, tmp_path, capsys):
@@ -517,19 +523,28 @@ def test_order_of_the_codes(lines, last_line, codes, tmp_path, capsys):
 
 
 @needs_sh
-@pytest.mark.parametrize("lines, last_line, args", [
-    (["MONITOR 4 : ENTRY 4 BLOCK"], "LAST ENTRY 4 : MONITOR 4 MAYBE", ["--last"]),
-    (["MONITOR 4 : ENTRY 4 BLOCK"], "LAST ENTRY 4 :", ["--last"]),
-    (["MONITOR 4 : ENTRY 4 BLOCK", "LAST ENTRY 4 : MONITOR 4 BLOCK"], None, []),
-    (["MONITOR 4 : ENTRY 4 MAYBE"], None, []),
-    (["SOMETHING ELSE"], None, []),
+@pytest.mark.parametrize("lines, last_line, args, message", [
+    (run_report("MONITOR 4 : ENTRY 4 BLOCK"), "LAST ENTRY 4 : MONITOR 4 MAYBE", ["--last"],
+     "cannot read the report"),
+    (run_report("MONITOR 4 : ENTRY 4 BLOCK"), "LAST ENTRY 4 :", ["--last"], "cannot read the report"),
+    (run_report("MONITOR 4 : ENTRY 4 BLOCK", "LAST ENTRY 4 : MONITOR 4 BLOCK"), None, [],
+     "a LAST line without --last"),
+    (run_report("MONITOR 4 : ENTRY 4 MAYBE"), None, [], "cannot read the report"),
+    (run_report("SOMETHING ELSE"), None, [], "unknown line"),
+    # No report: the evaluator prints nothing and exits 0, as /bin/true does.
+    ([], None, [], "no report of the evaluator"),
+    ([], None, ["--last"], "printed no LAST line"),
+    # Only a LAST line (printed with --last), no line of run behind it.
+    ([], "LAST ENTRY 2 : MONITOR 1 ALLOW", [], "no report of the evaluator"),
+    ([], "LAST ENTRY 2 : MONITOR 1 ALLOW", ["--last"], "no report of the evaluator"),
 ])
-def test_report_not_recognised(lines, last_line, args, tmp_path, capsys):
-    """A LAST line that is not one of its forms, or a line that is not a line
-    of the report, is an error, 1, with nothing on standard output."""
+def test_report_not_recognised(lines, last_line, args, message, tmp_path, capsys):
+    """A report that is missing, a LAST line that is not one of its forms, or a
+    line that is not a line of the report, is an error, 1, with nothing on
+    standard output."""
     ev = stub(tmp_path, lines, last_line)
-    code, out, err = check(capsys, MANDATE, SCN / "mandate_campaign_budget.scn", "--evaluator", ev, *args)
-    assert code == 1 and out == "" and "cannot read the report" in err
+    code, out, err = check(capsys, MANDATE, SCN / "mandate_price_over_limit.scn", "--evaluator", ev, *args)
+    assert code == 1 and out == "" and message in err
 
 
 # --- The JSON trace is checked like a .scn file --------------------------------------

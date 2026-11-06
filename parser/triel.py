@@ -550,9 +550,14 @@ def violation(o: dict) -> bool:
 
 def exit_code(lines, last: bool) -> int:
     """The exit code of a report the evaluator printed (the module docstring);
-    BadLine if a line is not recognised or, with --last, the LAST line is not
-    the one last line."""
+    BadLine if a line is not recognised, if the report has no line of the
+    evaluator, or, with --last, if the LAST line is not the one last line."""
     objs = [report_json(line) for line in lines]
+    # The evaluator always prints one of these lines first (TIME ORDER REJECTED,
+    # ACTIVATION OK or REJECTED, then BLOCK and TYPES); SPEC and METADATA come
+    # from the translator. Without one, no report of the evaluator was received.
+    if not any(o["line"] in ("TIME ORDER REJECTED", "ACTIVATION", "BLOCK", "TYPES") for o in objs):
+        raise BadLine("no report of the evaluator")
     lasts = [o for o in objs if o["line"] == "LAST"]
     if last and (len(lasts) != 1 or objs[-1]["line"] != "LAST"):
         raise BadLine("no LAST line at the end of the report")
