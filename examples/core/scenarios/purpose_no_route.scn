@@ -1,0 +1,19 @@
+; No route to compatibility: the controller records at 09:05 that the data
+; subject has not consented to the new purpose and at 09:10 that the new
+; purpose is assessed as not compatible, both fresh; the Annex 2 condition is
+; not met. At 10:00 the agent transfers the data. In the state of 09:10 the
+; condition of the prohibition is true: the prohibition is breached at 10:00,
+; the handler notifies the reviewer, the monitor blocks the transfer, and the
+; invariant is F at the entry of the transfer.
+(scenario purpose_no_route
+  (spec "examples/core/purpose_limitation_gate.triel")
+  (entry "2026-11-02T09:00:00Z" (activate)
+    (data (annex2_condition_met (bool false)) (data_transferred (bool false))))
+  (entry "2026-11-02T09:05:00Z" (arrive new_purpose_consented)
+    (data (new_purpose_consented (bool false)) (annex2_condition_met (bool false)) (data_transferred (bool false))))
+  (entry "2026-11-02T09:10:00Z" (arrive assessed_compatible)
+    (data (new_purpose_consented (bool false)) (annex2_condition_met (bool false)) (assessed_compatible (bool false))
+          (data_transferred (bool false))))
+  (entry "2026-11-02T10:00:00Z" (act agent transfer_personal_data must_not)
+    (data (new_purpose_consented (bool false)) (annex2_condition_met (bool false)) (assessed_compatible (bool false))
+          (data_transferred (bool true)))))

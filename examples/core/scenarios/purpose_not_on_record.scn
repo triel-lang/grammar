@@ -1,0 +1,14 @@
+; Neither a consent to the new purpose nor an assessment of compatibility is
+; on record: both factors are absent from the data. The Annex 2 condition is
+; not met. At 10:00 the agent transfers the data. In the state of 09:00 the
+; condition of the permission is false OR undefined, which is undefined, and
+; so is the condition of the prohibition: the permission is not exercised, the
+; prohibition is not breached, and the monitor blocks the transfer, since its
+; condition is not known to be false. The invariant is undefined at the entry
+; of the transfer, so it is U.
+(scenario purpose_not_on_record
+  (spec "examples/core/purpose_limitation_gate.triel")
+  (entry "2026-11-02T09:00:00Z" (activate)
+    (data (annex2_condition_met (bool false)) (data_transferred (bool false))))
+  (entry "2026-11-02T10:00:00Z" (act agent transfer_personal_data must_not)
+    (data (annex2_condition_met (bool false)) (data_transferred (bool true)))))

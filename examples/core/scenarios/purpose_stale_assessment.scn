@@ -1,0 +1,21 @@
+; The controller records on 6 July 2026 that the new purpose is assessed as
+; compatible. On 3 November, 120 days later, the agent transfers the data. The
+; consent arrives one hour before the transfer, fresh and false; the Annex 2
+; condition is not met. In the state before the transfer the assessment is
+; older than MAX_AGE 90 DAYS, so under ON_STALE BLOCK it is absent although
+; the data still carries it: the conditions of the permission and of the
+; prohibition are undefined, as in purpose_not_on_record. The permission is
+; not exercised, the prohibition is not breached, the monitor blocks the
+; transfer, and the invariant is U.
+(scenario purpose_stale_assessment
+  (spec "examples/core/purpose_limitation_gate.triel")
+  (entry "2026-07-06T09:00:00Z" (activate)
+    (data (annex2_condition_met (bool false)) (data_transferred (bool false))))
+  (entry "2026-07-06T09:05:00Z" (arrive assessed_compatible)
+    (data (annex2_condition_met (bool false)) (assessed_compatible (bool true)) (data_transferred (bool false))))
+  (entry "2026-11-03T08:05:00Z" (arrive new_purpose_consented)
+    (data (new_purpose_consented (bool false)) (annex2_condition_met (bool false)) (assessed_compatible (bool true))
+          (data_transferred (bool false))))
+  (entry "2026-11-03T09:05:00Z" (act agent transfer_personal_data must_not)
+    (data (new_purpose_consented (bool false)) (annex2_condition_met (bool false)) (assessed_compatible (bool true))
+          (data_transferred (bool true)))))

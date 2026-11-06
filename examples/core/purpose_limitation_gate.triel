@@ -1,0 +1,84 @@
+-- TRIEL example inside the formal core: purpose limitation as a gate on the
+-- actions of an AI agent. The agent may transfer personal data for a new
+-- purpose only when the new purpose is compatible with the purpose for which
+-- the data were collected, after Articles 5(1)(b) and 8A of the UK GDPR: a
+-- permission and a prohibition with complementary conditions, a breach
+-- handler bound to the prohibition, and an invariant.
+--
+-- This is a stylised reading of Article 8A, not a formalisation of it. The
+-- example keeps three routes by which a new purpose counts as compatible: the
+-- data subject has consented to the processing for the new purpose
+-- (new_purpose_consented); the processing meets a condition in Annex 2
+-- (annex2_condition_met); or the controller has assessed the new purpose as
+-- compatible, taking into account the matters listed in Article 8A(2)
+-- (assessed_compatible). Article 8A(4) is omitted, and so is every other part
+-- of the article.
+--
+-- The rule is written by the controller, and so are its data. TRIEL does not
+-- decide which purposes are compatible: whether the data subject consented,
+-- whether an Annex 2 condition is met and how the matters of Article 8A(2)
+-- weigh are determinations of the controller, which it records as the three
+-- factors. The specification only checks the transfers of the agent against
+-- what is on record. The three factors come from the controller, declared an
+-- ORACLE, so PROVENANCE_REQUIRED is true (formal/core/CORE.md, section 9,
+-- decision 28); without it the translator rejects the specification ("ORACLE
+-- source without PROVENANCE_REQUIRED"). The fact that data were transferred
+-- is reported by the agent itself.
+--
+-- A consent is fresh for 30 days after it arrives and an assessment for 90
+-- days (MAX_AGE ... ON_STALE BLOCK); the two periods are assumptions of this
+-- example, not periods of the article. A factor that is older, or present at
+-- activation without an arrival, is absent (examples/core/README.md,
+-- conventions 3 and 4). The Annex 2 condition has no MAX_AGE.
+--
+-- Both conditions are read in the state of the entry just before the
+-- transfer. If one of the three factors is true there, the permission is
+-- exercised (FULFILLED) and the monitor of the prohibition lets the transfer
+-- through (purpose_consented). If all three are false, the prohibition is
+-- breached at the transfer, the handler notifies the reviewer, and the
+-- monitor blocks it (purpose_no_route). If none is true and one is absent,
+-- because it is not on record or is stale, both conditions are undefined: the
+-- permission is not exercised and the prohibition is not breached, and the
+-- fail-closed monitor blocks the transfer, since its condition is not known
+-- to be false (purpose_not_on_record, purpose_stale_assessment;
+-- undefined_guard_blocks_not_breach).
+--
+-- The invariant reads data_transferred in the state of the entry of the
+-- transfer. It is F from an entry where data were transferred and none of
+-- the three routes is true; ALWAYS is never T on a finite trace
+-- (always_never_true), so otherwise it is U. The invariant reports, it does
+-- not block. Every construct in this file is translated into the Isabelle/HOL
+-- core (formal/core) and evaluated by the exported evaluator (evaluator/).
+
+SPECIFICATION purpose_limitation_gate VERSION 1.0.0
+    JURISDICTION "UK"
+    PROVENANCE_REQUIRED: true
+
+SUBJECTS {
+  agent      : PARTY,
+  controller : ORACLE,
+  reviewer   : REGULATOR
+}
+
+TERMS {
+  agent MAY transfer_personal_data
+    WHEN new_purpose_consented OR annex2_condition_met OR assessed_compatible;
+  agent MUST_NOT transfer_personal_data
+    WHEN NOT (new_purpose_consented OR annex2_condition_met OR assessed_compatible);
+  agent ON_BREACH NOTIFY reviewer
+}
+
+FACTORS {
+  new_purpose_consented : Boolean METADATA SOURCE controller
+                          MAX_AGE 30 DAYS ON_STALE BLOCK,
+  annex2_condition_met  : Boolean METADATA SOURCE controller,
+  assessed_compatible   : Boolean METADATA SOURCE controller
+                          MAX_AGE 90 DAYS ON_STALE BLOCK,
+  data_transferred      : Boolean METADATA SOURCE agent
+}
+
+INVARIANTS {
+  compatible_transfers_only : SAFETY :
+    ALWAYS(data_transferred IMPLIES
+           (new_purpose_consented OR annex2_condition_met OR assessed_compatible))
+}

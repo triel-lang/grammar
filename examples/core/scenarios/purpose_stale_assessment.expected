@@ -1,0 +1,15 @@
+SPEC purpose_limitation_gate
+METADATA JURISDICTION "UK"
+METADATA PROVENANCE_REQUIRED true
+METADATA SOURCE new_purpose_consented controller
+METADATA SOURCE annex2_condition_met controller
+METADATA SOURCE assessed_compatible controller
+METADATA SOURCE data_transferred agent
+ACTIVATION OK
+BLOCK OK
+TYPES OK
+TERM 1 MAY agent transfer_personal_data : PENDING
+TERM 2 MUST_NOT agent transfer_personal_data : PENDING
+TERM 3 ON_BREACH agent : BOUND 2
+INVARIANT compatible_transfers_only : U
+MONITOR 2 : ENTRY 3 BLOCK
