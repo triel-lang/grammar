@@ -101,6 +101,55 @@ jobs:
           done
           exit $status
 
+      # The conformance suite (examples/core/conformance) with the reference
+      # implementation, on both levels.
+      - name: Conformance suite with the reference implementation
+        run: |
+          python3 examples/core/conformance/run.py --level verdicts
+          python3 examples/core/conformance/run.py --level monitor
+
+      # manifest.json names the committed evaluator, every scenario, and the
+      # sha256 of every file it lists.
+      - name: The manifest of the conformance suite matches the files
+        shell: python3 {0}
+        run: |
+          import hashlib, json, re, sys
+          from pathlib import Path
+          m = json.loads(Path("examples/core/conformance/manifest.json").read_text(encoding="utf-8"))
+          sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          errors = []
+          if m["evaluator_sha256"] != sha("evaluator/generated/TRIEL.hs"):
+              errors.append("evaluator_sha256 is not the sha256 of evaluator/generated/TRIEL.hs")
+          traces = sorted(c["trace"] for c in m["cases"])
+          files = sorted(p.as_posix() for p in Path("examples/core/scenarios").glob("*.scn"))
+          if traces != files:
+              errors.append("cases differ from the scenarios: only in manifest %s, only on disk %s"
+                            % (sorted(set(traces) - set(files)), sorted(set(files) - set(traces))))
+          for c in m["cases"]:
+              if Path(c["trace"]).stem != c["id"] or c["expected"] != c["trace"][:-len(".scn")] + ".expected":
+                  errors.append("%s: id, trace and expected do not agree" % c["id"])
+              if not Path(c["trace"]).is_file():
+                  continue
+              if re.findall(r'\(spec "([^"]*)"\)', Path(c["trace"]).read_text(encoding="utf-8")) != [c["spec"]]:
+                  errors.append("%s: spec is not the specification of the scenario" % c["id"])
+              for k in ("trace", "spec", "expected"):
+                  if not Path(c[k]).is_file() or c["sha256"][k] != sha(c[k]):
+                      errors.append("%s: sha256 of %s differs from %s" % (c["id"], k, c[k]))
+          print("\n".join(errors) or "manifest.json: %d cases, every sha256 matches" % len(m["cases"]))
+          sys.exit(1 if errors else 0)
+
+      # run.py itself: a command that prints the expected outputs passes on both
+      # levels, a command that prints nothing fails.
+      - name: Self-check of the conformance runner
+        run: |
+          for level in verdicts monitor; do
+            python3 examples/core/conformance/run.py --level $level --impl "sh -c 'cat \"\${0%.scn}.expected\"' {trace}" > /tmp/self.txt
+          done
+          if python3 examples/core/conformance/run.py --impl true > /tmp/self.txt; then
+            echo "run.py passed a command without output"; exit 1
+          fi
+          tail -n 1 /tmp/self.txt
+
       - name: Tests of the translator and the driver
         run: python3 -m pytest -q parser/test_triel_to_core.py
 

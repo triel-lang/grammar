@@ -80,6 +80,7 @@ The `examples/` directory contains sample TRIEL specifications:
 * `eudi/eudi_driving_license.triel` — EUDI Wallet-style issuance and presentation policy for a driving license credential, combining conditional obligations and a zero-knowledge age predicate
 * `semantics/` — small specifications accompanying the semantics in `TECHNICAL_REPORT.md` §2.5 and §2.9: obligations and deadlines, `UNLESS` and its laws, missing and stale data, hierarchical names, and `EXECUTE` bindings
 * `core/` — specifications inside the formal core, with scenarios and expected reports
+  * `core/conformance/` — the core conformance suite: a manifest of the scenarios with their expected reports, and a runner that compares any implementation with the reference evaluator
 
 Every example is parsed against the grammar, with an ambiguity check, on every push (`.github/workflows/parse-examples.yml`). The same workflow checks the grammar for ambiguity: one derivation for every example and probe input (Earley, `lexer=dynamic`), and an LALR(1) table whose only conflicts are four that, by an argument made by hand, are not ambiguities (`TECHNICAL_REPORT.md` §2.12). It also checks that every TRIEL excerpt of the documents and of the grammar file conforms to the grammar (`parser/test_documents.py`).
 
