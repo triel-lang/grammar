@@ -40,19 +40,19 @@ A line of a report belongs to a level if its first word, or for `TIME ORDER` its
 
 No other line is compared on either level; in particular `SPEC`, `METADATA`, `REJECTED` and `LAST` lines are not.
 
-`verdicts`: the `.scn` files of the 47 scenarios of tag `v2.5.1` have not changed since the tag, and neither have the `verdicts` lines of their `.expected` files: 14 of these files have gained one `MONITOR` line each, and the other 33 are unchanged. The exported code `evaluator/generated/TRIEL.hs` differs from that of the tag only in the functions of the monitor.
+`verdicts`: the `.scn` files of the 47 scenarios of tag `v2.5.1` have not changed since the tag, and neither have the `verdicts` lines of their `.expected` files: 14 of these files have gained one `MONITOR` line each, and the other 33 are unchanged. The exported code `evaluator/generated/TRIEL.hs` differs from that of the tag only in what the monitor adds: its functions, the constructor of the `MONITOR` line in the type `Line`, the monitor lines appended to the report by `evaluate_trace`, and the export of `enforce`, `check_action` and `Value_order`. Apart from that line of `evaluate_trace`, no function that existed at the tag has changed; `map_filter`, `does` and `evt` have only moved within the file.
 
 `monitor`: additional. The `MONITOR` lines follow decision 37 of [`formal/core/CORE.md`](../../../formal/core/CORE.md#9-design-decisions-forced-by-the-theory), section 9, which was made after tag `v2.5.1`.
 
 ## Passing
 
-A case passes on a level if the lines of that level in the standard output of the implementation are, line by line and exactly, the lines of that level in the `.expected` file. `\r\n` and `\n` are the same line end, and a last empty line is not counted. The exit code of the implementation does not matter. An implementation that cannot be started, or does not finish within 60 seconds, fails the case. An implementation passes the suite on a level if it passes every case on that level.
+A case passes on a level if the lines of that level in the standard output of the implementation are, line by line and exactly, the lines of that level in the `.expected` file. `\r\n` and `\n` are the same line end, and a last empty line is not counted. The exit code of the implementation does not matter. The standard error of the implementation is discarded; only its standard output is compared. An implementation that cannot be started, or does not finish within 60 seconds, fails the case. An implementation passes the suite on a level if it passes every case on that level.
 
 Passing means agreement with the reference evaluator on these traces, in the lines of the chosen level. It does not mean conformance to the Specification.
 
 ## Where the expected reports come from
 
-The `.expected` files were written by hand from the text of the specifications. Which of them were committed before the evaluator was first run on them, and which were not, is stated in [`examples/core/README.md`](../README.md), in the paragraph that begins "The expected outputs". CI compares every `.expected` file with the output of the evaluator exported from the core.
+How the `.expected` files were derived, and which of them were committed before the evaluator was first run on them, is stated in [`examples/core/README.md`](../README.md), in the paragraph that begins "The expected outputs". CI compares every `.expected` file with the output of the evaluator exported from the core.
 
 What is proved and what is trusted: [`evaluator/README.md`, What the proof covers, and what it does not](../../../evaluator/README.md#what-the-proof-covers-and-what-it-does-not), and [`formal/core/CORE.md`, section 10.6](../../../formal/core/CORE.md#106-the-translator-and-the-trusted-base).
 
@@ -77,7 +77,7 @@ python3 examples/core/conformance/run.py [--impl "COMMAND"] [--level verdicts|mo
 
 `run.py` prints `PASS` or `FAIL` for each case, with the first line that differs for a `FAIL`, and `N/M passed` at the end. Its exit code is 0 only if every case passes.
 
-`triel check` as the implementation, on the `monitor` level (its exit codes, 3 or 6 on some cases, do not matter):
+`triel check` as the implementation, on the `monitor` level (its exit code, which is not 0 on many cases, does not matter):
 
 ```bash
 python3 examples/core/conformance/run.py --impl "python3 parser/triel.py check {spec} {trace}" --level monitor
@@ -88,7 +88,7 @@ CI runs the suite with the reference on both levels, checks `manifest.json` agai
 ## Limits
 
 - Only examples inside the core: every specification of a case is accepted by the translator.
-- Rejections by the translator are not tested: no case has a `REJECTED` report.
+- Rejections by the translator are not tested: no `.expected` file has a `REJECTED:` line.
 - The trace format is `.scn`. The same trace in JSON is described in [`evaluator/README.md`, The trace in JSON](../../../evaluator/README.md#the-trace-in-json), and `triel check` accepts it.
 
 ## License
