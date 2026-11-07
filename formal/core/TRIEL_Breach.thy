@@ -607,9 +607,9 @@ proof (rule ccontr)
   with assms(3) show False by (simp add: blocks_def)
 qed
 
-text \<open>So, for a condition without PRESENT, the monitor blocks fewer actions on a trace whose
-  entries carry more data and the same times and events: an action blocked on the trace
-  with more data is blocked on the trace with less.\<close>
+text \<open>So, for a condition without PRESENT and DEFAULT, the monitor blocks fewer actions on a
+  trace whose entries carry more data and the same times and events: an action blocked on
+  the trace with more data is blocked on the trace with less.\<close>
 
 theorem blocked_action_data_mono:
   assumes pf: "present_free c" and len: "length \<pi>' = length \<pi>"

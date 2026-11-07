@@ -609,7 +609,7 @@ corollary Down_cond_equitone: "equitone_nd (cond_eval (catom_eval I) (opt_cond_D
   by (subst equitone_on_nd[symmetric], rule cond_equitone)
      (auto simp: opt_cond_Down_def equitone_on_nd present_partial_equitone is_prim_equitone)
 
-subsection \<open>Invariants (LTL3 verdicts)\<close>
+subsection \<open>Invariants (verdicts in the style of LTL3)\<close>
 
 text \<open>The three-valued verdicts of invariants (TRIEL_Invariants) rest on the same property:
   \<open>inv_data_mono\<close> holds for every state formula whose predicate is equitone, not only for
