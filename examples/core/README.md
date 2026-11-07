@@ -122,3 +122,7 @@ The `LAST` line is printed only when the evaluator is run with `--last` (`triel 
 ## Classification
 
 `classification.expected` lists every example. A file is either ACCEPTED, or REJECTED with the sorted list of rejected constructs. Only the outermost unsupported construct is reported: the translator does not look inside a construct it rejects.
+
+## Conformance suite
+
+[`conformance/`](conformance/README.md) is the core conformance suite: a manifest of the scenarios, their specifications and their expected reports, with their sha256, and a runner that compares the reports of any implementation with them.

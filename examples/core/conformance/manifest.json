@@ -1,0 +1,1496 @@
+{
+  "suite": "TRIEL core conformance suite",
+  "language_version": "2.5.1",
+  "edition": "Core Language Edition",
+  "revision": 1,
+  "evaluator_sha256": "9b5f10f8f915cc019d9d6ab90acfd34f32f7021367099781c45451e5b8c08c75",
+  "levels": {
+    "verdicts": {
+      "lines": [
+        "TIME ORDER",
+        "ACTIVATION",
+        "BLOCK",
+        "TYPES",
+        "TERM",
+        "INVARIANT"
+      ],
+      "additional": false,
+      "description": "The checks, one line per element of TERMS, and the invariants."
+    },
+    "monitor": {
+      "lines": [
+        "TIME ORDER",
+        "ACTIVATION",
+        "BLOCK",
+        "TYPES",
+        "TERM",
+        "INVARIANT",
+        "MONITOR"
+      ],
+      "additional": true,
+      "description": "The lines of verdicts and the MONITOR lines. MONITOR lines follow decision 37 of formal/core/CORE.md, section 9, which was made after tag v2.5.1; this level is additional."
+    }
+  },
+  "cases": [
+    {
+      "id": "age_verification_breach",
+      "trace": "examples/core/scenarios/age_verification_breach.scn",
+      "spec": "examples/age_verification.triel",
+      "expected": "examples/core/scenarios/age_verification_breach.expected",
+      "sha256": {
+        "trace": "ee68d6a4cf343c05b8f4a290fb9541dd88ca07f3f0cc177b6de2e08d1bc11f05",
+        "spec": "99fd66e0fa451bbac16b8c1a482f19a2eddd8d709566c15469272e3e341c2e05",
+        "expected": "616a662bf92481a3af33c740159287f2ad02ba383ecfd6d0cf8de3343a37770b"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "commitment_boundary",
+      "trace": "examples/core/scenarios/commitment_boundary.scn",
+      "spec": "examples/core/core_commitment.triel",
+      "expected": "examples/core/scenarios/commitment_boundary.expected",
+      "sha256": {
+        "trace": "18d91a91b8f2dbd6e21a0f162e50802056592a75b2a44815cb1fae222a2e6139",
+        "spec": "ace61a48a55c40d0377cc942a73da797525fee4fe981ee79ff53b18630129225",
+        "expected": "7b9d26e27d1a3c952426b6086fee2564e59d4a6844c521a07868c378f7b6c1c5"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "commitment_missing_data",
+      "trace": "examples/core/scenarios/commitment_missing_data.scn",
+      "spec": "examples/core/core_commitment.triel",
+      "expected": "examples/core/scenarios/commitment_missing_data.expected",
+      "sha256": {
+        "trace": "b045f831ae99955cff8bf8a219ecff7eac92eaf2e9b6da39f96e059b7ca6d491",
+        "spec": "ace61a48a55c40d0377cc942a73da797525fee4fe981ee79ff53b18630129225",
+        "expected": "88b335cc33580d2d50b56c944d78920ec549e4ab93727e45a2bb4b42c94a8cac"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "commitment_pending",
+      "trace": "examples/core/scenarios/commitment_pending.scn",
+      "spec": "examples/core/core_commitment.triel",
+      "expected": "examples/core/scenarios/commitment_pending.expected",
+      "sha256": {
+        "trace": "6256fa2d6d96d74704dd457a8e54ea6c381a90c04504e3f11b14fc20d2d5a198",
+        "spec": "ace61a48a55c40d0377cc942a73da797525fee4fe981ee79ff53b18630129225",
+        "expected": "e195f5a3191047690e254fc2bd91700968d535eeb3b71439a088ef0de6e58b4c"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "commitment_rejected",
+      "trace": "examples/core/scenarios/commitment_rejected.scn",
+      "spec": "examples/core/core_commitment.triel",
+      "expected": "examples/core/scenarios/commitment_rejected.expected",
+      "sha256": {
+        "trace": "0af823ab7c9e009bcf7849dd4c68b203b6256fa74bac67938dfd2b739a0d6349",
+        "spec": "ace61a48a55c40d0377cc942a73da797525fee4fe981ee79ff53b18630129225",
+        "expected": "9fbde8c17ca4feafe1c7121c92c6be360661967fbfddeae3f88ff2bddb93b3b0"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "conditional_cancelled",
+      "trace": "examples/core/scenarios/conditional_cancelled.scn",
+      "spec": "examples/core/core_conditional.triel",
+      "expected": "examples/core/scenarios/conditional_cancelled.expected",
+      "sha256": {
+        "trace": "26a61d6c9861c56e882b6282e176578e5e7686feb07da24dc5ca38d590892694",
+        "spec": "af02f4adc15cd1b01c233dd32e1a90c2f1a458fa20ac0c1f1334e63c9a4a16db",
+        "expected": "6e01c620ba2960348e6e48f95606f8218ac3c929bfc5a3d9b425864e2eb5fe0c"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "conditional_elif",
+      "trace": "examples/core/scenarios/conditional_elif.scn",
+      "spec": "examples/core/core_conditional.triel",
+      "expected": "examples/core/scenarios/conditional_elif.expected",
+      "sha256": {
+        "trace": "e98e4dbe7bcd90b5a3a19074d5c94e7b404c1300970af9e199dc7803e1ebad55",
+        "spec": "af02f4adc15cd1b01c233dd32e1a90c2f1a458fa20ac0c1f1334e63c9a4a16db",
+        "expected": "f1ab2b3379cfe35494d49672f07f64d51efdeb92ecff9e118b3c6a5fbbb80b64"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "conditional_express",
+      "trace": "examples/core/scenarios/conditional_express.scn",
+      "spec": "examples/core/core_conditional.triel",
+      "expected": "examples/core/scenarios/conditional_express.expected",
+      "sha256": {
+        "trace": "2f8d9d2dbc819abcb3fb932fe94dc0183b866e1ec73267abb76a45ea48528fd6",
+        "spec": "af02f4adc15cd1b01c233dd32e1a90c2f1a458fa20ac0c1f1334e63c9a4a16db",
+        "expected": "1244aca3c34a91547764b742d31022e4556328f0bc574ba15d9f6650deaad6f9"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "conditional_undefined",
+      "trace": "examples/core/scenarios/conditional_undefined.scn",
+      "spec": "examples/core/core_conditional.triel",
+      "expected": "examples/core/scenarios/conditional_undefined.expected",
+      "sha256": {
+        "trace": "d6f7765699f8f24ed2bb55efa68237e45f9f23f48edd6ab4574fb2f815136f2a",
+        "spec": "af02f4adc15cd1b01c233dd32e1a90c2f1a458fa20ac0c1f1334e63c9a4a16db",
+        "expected": "988a399663623c5c7f68f596a907ea181cff5a6b373876e11046c335d40f7959"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 14
+        },
+        {
+          "doc": "formal/core/CORE.md",
+          "ref": "decision 34"
+        }
+      ]
+    },
+    {
+      "id": "deadline_cure_failed",
+      "trace": "examples/core/scenarios/deadline_cure_failed.scn",
+      "spec": "examples/core/core_deadline_cure.triel",
+      "expected": "examples/core/scenarios/deadline_cure_failed.expected",
+      "sha256": {
+        "trace": "828661d02ab5b12f1503640935ec53594d01f5e81d0820654f76a59de5962916",
+        "spec": "a3359f82b7c21814f2e282e69de87bd7a06f270a4f34e5db94ad907d801be9b2",
+        "expected": "e1fbe171aef490529169611d91d8bf77717535a1d4cb1312920fe0ba4959db17"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "deadline_cure_ill_typed",
+      "trace": "examples/core/scenarios/deadline_cure_ill_typed.scn",
+      "spec": "examples/core/core_deadline_cure.triel",
+      "expected": "examples/core/scenarios/deadline_cure_ill_typed.expected",
+      "sha256": {
+        "trace": "b18bea7bf0cf237d8d581302c37bc4179a25d4e54e671838848322250c2dd0bb",
+        "spec": "a3359f82b7c21814f2e282e69de87bd7a06f270a4f34e5db94ad907d801be9b2",
+        "expected": "c0d737078d02e1966f2bdd48a8af952b9fb7c589ef0a7dd561b5ff9ee664c5a5"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "deadline_cure_ok",
+      "trace": "examples/core/scenarios/deadline_cure_ok.scn",
+      "spec": "examples/core/core_deadline_cure.triel",
+      "expected": "examples/core/scenarios/deadline_cure_ok.expected",
+      "sha256": {
+        "trace": "e1aecf84c9479a6660de376a2aa7e6e75f53b87fb57b262e5de3acd603aedf06",
+        "spec": "a3359f82b7c21814f2e282e69de87bd7a06f270a4f34e5db94ad907d801be9b2",
+        "expected": "57abee13d35bc4832516ee6a0a10e1e4308c6de957d7f9abbd0a6fce697c5025"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "deadline_cure_time_order",
+      "trace": "examples/core/scenarios/deadline_cure_time_order.scn",
+      "spec": "examples/core/core_deadline_cure.triel",
+      "expected": "examples/core/scenarios/deadline_cure_time_order.expected",
+      "sha256": {
+        "trace": "43b3df0ca2dcc8324275bf410d64c3ccfe0f1de317f23503d314e0eab368afaf",
+        "spec": "a3359f82b7c21814f2e282e69de87bd7a06f270a4f34e5db94ad907d801be9b2",
+        "expected": "7bb67fabe014a05f1812a00be3d00799c548e752236d9f4a83b9d826fcdd3495"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 1
+        }
+      ]
+    },
+    {
+      "id": "fallback_breached",
+      "trace": "examples/core/scenarios/fallback_breached.scn",
+      "spec": "examples/core/core_fallback.triel",
+      "expected": "examples/core/scenarios/fallback_breached.expected",
+      "sha256": {
+        "trace": "2f511a95b284f255c5125ddfb472345c76b916375dae59c50778ea2477cd64b1",
+        "spec": "8b43a7fdb2231c5e7ddefb8a43976ce1d68ff1686cb27f1e0e407b77fa5b8eac",
+        "expected": "79925e3ba8546488ee65ad889bb92566cdf8ee7489303f38c405222c18f65222"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "fallback_on_time",
+      "trace": "examples/core/scenarios/fallback_on_time.scn",
+      "spec": "examples/core/core_fallback.triel",
+      "expected": "examples/core/scenarios/fallback_on_time.expected",
+      "sha256": {
+        "trace": "76f3d6ce0729b83dcbdbf4849e6268021b06084b29575bb3c0fca70fd998004d",
+        "spec": "8b43a7fdb2231c5e7ddefb8a43976ce1d68ff1686cb27f1e0e407b77fa5b8eac",
+        "expected": "2c993066a1ab62b280b326124c0a99432b5468c0450ae2a7e21bd98c280552bb"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "fallback_order_equal",
+      "trace": "examples/core/scenarios/fallback_order_equal.scn",
+      "spec": "examples/core/core_fallback.triel",
+      "expected": "examples/core/scenarios/fallback_order_equal.expected",
+      "sha256": {
+        "trace": "750e72bb5a7ef09dcabb6dd2972402944d22fb9752adbf1ae77570b71c1db835",
+        "spec": "8b43a7fdb2231c5e7ddefb8a43976ce1d68ff1686cb27f1e0e407b77fa5b8eac",
+        "expected": "49dc833b0a8b3706baf3406ea1b8d71bb4aaa58df9a7c4d2b9dded7b5982a88a"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 12
+        }
+      ]
+    },
+    {
+      "id": "fallback_order_ok",
+      "trace": "examples/core/scenarios/fallback_order_ok.scn",
+      "spec": "examples/core/core_fallback.triel",
+      "expected": "examples/core/scenarios/fallback_order_ok.expected",
+      "sha256": {
+        "trace": "722311ee1890b6cba50ee885f3eae33c0b46f690b78c6934ff73fd4d6133230f",
+        "spec": "8b43a7fdb2231c5e7ddefb8a43976ce1d68ff1686cb27f1e0e407b77fa5b8eac",
+        "expected": "7dafb5075dc9ccb893e19a06b29e0a84b63fb3856d0df00d57cce36b0ae7d79d"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 12
+        }
+      ]
+    },
+    {
+      "id": "fallback_order_rejected",
+      "trace": "examples/core/scenarios/fallback_order_rejected.scn",
+      "spec": "examples/core/core_fallback.triel",
+      "expected": "examples/core/scenarios/fallback_order_rejected.expected",
+      "sha256": {
+        "trace": "a86de39396511705f3ecaeb3c121162c99036d9a5202c6128aa5f8ec8115113a",
+        "spec": "8b43a7fdb2231c5e7ddefb8a43976ce1d68ff1686cb27f1e0e407b77fa5b8eac",
+        "expected": "49dc833b0a8b3706baf3406ea1b8d71bb4aaa58df9a7c4d2b9dded7b5982a88a"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 12
+        }
+      ]
+    },
+    {
+      "id": "fallback_pending",
+      "trace": "examples/core/scenarios/fallback_pending.scn",
+      "spec": "examples/core/core_fallback.triel",
+      "expected": "examples/core/scenarios/fallback_pending.expected",
+      "sha256": {
+        "trace": "4178be029335fbbe6af6dd65bb8b658cdec1fa8c64da8bf7064f0510be8be22a",
+        "spec": "8b43a7fdb2231c5e7ddefb8a43976ce1d68ff1686cb27f1e0e407b77fa5b8eac",
+        "expected": "a33bfa8441b6cf1f831c2c70246961ab9ad16051f691e97b0c862a3377e62259"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "fallback_taken",
+      "trace": "examples/core/scenarios/fallback_taken.scn",
+      "spec": "examples/core/core_fallback.triel",
+      "expected": "examples/core/scenarios/fallback_taken.expected",
+      "sha256": {
+        "trace": "aaa951f6268dc45b83a1d0a1b389a64b4db136da7e048eb18cd3c0d9bf5012ee",
+        "spec": "8b43a7fdb2231c5e7ddefb8a43976ce1d68ff1686cb27f1e0e407b77fa5b8eac",
+        "expected": "dbe836dca4ea68f31d8aa868cdcc9b1e1604c73f33b4634d6a4491719c66fc1b"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "gdpr_data_subjects_only",
+      "trace": "examples/core/scenarios/gdpr_data_subjects_only.scn",
+      "spec": "examples/core/gdpr_art33_notification.triel",
+      "expected": "examples/core/scenarios/gdpr_data_subjects_only.expected",
+      "sha256": {
+        "trace": "b3be8d9d5d53383308a8d6de6280785537ef6328c4f4a38eb7873f9c1ef289d6",
+        "spec": "4202c605f4b7e585e7af0afa8c50c14c65ece2d61601cef1b351cefca540947b",
+        "expected": "a48e5abe9581149dee06710d0a26b9b65c6fc5566207caef0b1a515ee8e6f547"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "gdpr_no_notification",
+      "trace": "examples/core/scenarios/gdpr_no_notification.scn",
+      "spec": "examples/core/gdpr_art33_notification.triel",
+      "expected": "examples/core/scenarios/gdpr_no_notification.expected",
+      "sha256": {
+        "trace": "d0d53b94c70c9a4cc8374333abfc96a3d228bccadfc30bcfb15bde6bc937f4ef",
+        "spec": "4202c605f4b7e585e7af0afa8c50c14c65ece2d61601cef1b351cefca540947b",
+        "expected": "987df8eec288cfdc9fab8ce02a7fff9903f8d4d9445d9fae279ae3c2bcf31443"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "gdpr_notified_48h",
+      "trace": "examples/core/scenarios/gdpr_notified_48h.scn",
+      "spec": "examples/core/gdpr_art33_notification.triel",
+      "expected": "examples/core/scenarios/gdpr_notified_48h.expected",
+      "sha256": {
+        "trace": "b0edb3d3d8989947df4c9b2c23f70d466d8da815c24d67ecf3520517d211cc6d",
+        "spec": "4202c605f4b7e585e7af0afa8c50c14c65ece2d61601cef1b351cefca540947b",
+        "expected": "5c04d606850a493f92e06851ecc5139ed360478ab7cc21dc28aae1758ddaa9ef"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "gdpr_notified_at_72h",
+      "trace": "examples/core/scenarios/gdpr_notified_at_72h.scn",
+      "spec": "examples/core/gdpr_art33_notification.triel",
+      "expected": "examples/core/scenarios/gdpr_notified_at_72h.expected",
+      "sha256": {
+        "trace": "57fafbbba3f3846bbe77bd8455d4adf866903da7b6b53e1b94fa55b090e5e335",
+        "spec": "4202c605f4b7e585e7af0afa8c50c14c65ece2d61601cef1b351cefca540947b",
+        "expected": "5c04d606850a493f92e06851ecc5139ed360478ab7cc21dc28aae1758ddaa9ef"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "gdpr_notified_day_11",
+      "trace": "examples/core/scenarios/gdpr_notified_day_11.scn",
+      "spec": "examples/core/gdpr_art33_notification.triel",
+      "expected": "examples/core/scenarios/gdpr_notified_day_11.expected",
+      "sha256": {
+        "trace": "b4b32f9b8795c3bf27867243b6b21a75edfdfc7369ed3e927e9a4a5590868ca7",
+        "spec": "4202c605f4b7e585e7af0afa8c50c14c65ece2d61601cef1b351cefca540947b",
+        "expected": "a48e5abe9581149dee06710d0a26b9b65c6fc5566207caef0b1a515ee8e6f547"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "formal/core/CORE.md",
+          "ref": "section 8.3, point 9"
+        }
+      ]
+    },
+    {
+      "id": "gdpr_notified_day_5",
+      "trace": "examples/core/scenarios/gdpr_notified_day_5.scn",
+      "spec": "examples/core/gdpr_art33_notification.triel",
+      "expected": "examples/core/scenarios/gdpr_notified_day_5.expected",
+      "sha256": {
+        "trace": "26807df580c329673dd6267591aec09803b72a3a602b9e92281e6773d3d74651",
+        "spec": "4202c605f4b7e585e7af0afa8c50c14c65ece2d61601cef1b351cefca540947b",
+        "expected": "ecdc729ec43a9281498988b09e9332eb2576c11c46b0892ef63044ce298eb931"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "hidden_invalid_proof",
+      "trace": "examples/core/scenarios/hidden_invalid_proof.scn",
+      "spec": "examples/core/core_hidden.triel",
+      "expected": "examples/core/scenarios/hidden_invalid_proof.expected",
+      "sha256": {
+        "trace": "326ac5f9e8ca09761d7f703406e6b3bd8e6639d052f27b1a7679db5b1e02da54",
+        "spec": "8d860f3575152a107dbefd0ae605ef578a25a16d5e5f2a4ca8ada1f3ba977228",
+        "expected": "b4a782d3b37105893c1e5ae2eb0156170b3d739a40e7a34ec83988896ed04f40"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "hidden_valid",
+      "trace": "examples/core/scenarios/hidden_valid.scn",
+      "spec": "examples/core/core_hidden.triel",
+      "expected": "examples/core/scenarios/hidden_valid.expected",
+      "sha256": {
+        "trace": "787a2f2a8cc89a34b4390e8590a62dd26e8de75756f51494c6b9b5053b2a9e5b",
+        "spec": "8d860f3575152a107dbefd0ae605ef578a25a16d5e5f2a4ca8ada1f3ba977228",
+        "expected": "c23cdce32b78ad207ad2ea798c1d40463ba60908a4b1d3a6d1986d9119e223c0"
+      },
+      "monitor_lines": 1,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 13
+        }
+      ]
+    },
+    {
+      "id": "hidden_value_ignored",
+      "trace": "examples/core/scenarios/hidden_value_ignored.scn",
+      "spec": "examples/core/core_hidden.triel",
+      "expected": "examples/core/scenarios/hidden_value_ignored.expected",
+      "sha256": {
+        "trace": "7da8a6c8ae2040cf9ec8ca20d62fb553abb05faa17ad5126c5943bfa14f1fda8",
+        "spec": "8d860f3575152a107dbefd0ae605ef578a25a16d5e5f2a4ca8ada1f3ba977228",
+        "expected": "c23cdce32b78ad207ad2ea798c1d40463ba60908a4b1d3a6d1986d9119e223c0"
+      },
+      "monitor_lines": 1,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 13
+        }
+      ]
+    },
+    {
+      "id": "hidden_visible_ill_typed",
+      "trace": "examples/core/scenarios/hidden_visible_ill_typed.scn",
+      "spec": "examples/core/core_hidden.triel",
+      "expected": "examples/core/scenarios/hidden_visible_ill_typed.expected",
+      "sha256": {
+        "trace": "d58ccbc678d51cb24482b6fb6751e7e3d4b03989c292b9bd5b8a98487e5b6801",
+        "spec": "8d860f3575152a107dbefd0ae605ef578a25a16d5e5f2a4ca8ada1f3ba977228",
+        "expected": "084fcf146220c11294a99c21b7b3479fa3baada185feb596a0cab64d09479889"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 13
+        }
+      ]
+    },
+    {
+      "id": "invoice_approval_missing",
+      "trace": "examples/core/scenarios/invoice_approval_missing.scn",
+      "spec": "examples/core/core_invoice_agent.triel",
+      "expected": "examples/core/scenarios/invoice_approval_missing.expected",
+      "sha256": {
+        "trace": "9d175247b9e4b264443aaf97d882e25655c7641e0d10173d90e82b161e02f009",
+        "spec": "045569f23c5dc731af2b31f54e9c7ce559d2360f37673f7c280f7d0620ab3b9b",
+        "expected": "89ab7fd9edbdb268e718238ff774509c462060190b25e6fd5c0f738b31443cfc"
+      },
+      "monitor_lines": 1,
+      "covers": [
+        {
+          "doc": "formal/core/CORE.md",
+          "ref": "undefined_guard_blocks_not_breach"
+        }
+      ]
+    },
+    {
+      "id": "invoice_approved",
+      "trace": "examples/core/scenarios/invoice_approved.scn",
+      "spec": "examples/core/core_invoice_agent.triel",
+      "expected": "examples/core/scenarios/invoice_approved.expected",
+      "sha256": {
+        "trace": "a944587d8e295addeb94c5e231812e0c244aad2744bb67b12821a825c4a58469",
+        "spec": "045569f23c5dc731af2b31f54e9c7ce559d2360f37673f7c280f7d0620ab3b9b",
+        "expected": "94a43646a72250902005601e81337a06bacfd9e2a5d1ab206aaf93e1f106d12c"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "invoice_over_limit",
+      "trace": "examples/core/scenarios/invoice_over_limit.scn",
+      "spec": "examples/core/core_invoice_agent.triel",
+      "expected": "examples/core/scenarios/invoice_over_limit.expected",
+      "sha256": {
+        "trace": "382bf5399cbfbf003898dba32a7d1f989d68c19f336ad9c39ccfe2e3a4aac22f",
+        "spec": "045569f23c5dc731af2b31f54e9c7ce559d2360f37673f7c280f7d0620ab3b9b",
+        "expected": "10f8fcc50431a4156127c0e1d917e298cfa64527a9cd79146c18103a63b46f03"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "invoice_owner_fallback",
+      "trace": "examples/core/scenarios/invoice_owner_fallback.scn",
+      "spec": "examples/core/core_invoice_agent.triel",
+      "expected": "examples/core/scenarios/invoice_owner_fallback.expected",
+      "sha256": {
+        "trace": "e624f90a5d68d830b79e2905a56dfdba0b6c868ca6e40ff70c6f58210f42d2ba",
+        "spec": "045569f23c5dc731af2b31f54e9c7ce559d2360f37673f7c280f7d0620ab3b9b",
+        "expected": "9dc51dd04496506f2602f2cc8039cb010c2dcbe39016e62504864a2fdd862a47"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "invoice_owner_late",
+      "trace": "examples/core/scenarios/invoice_owner_late.scn",
+      "spec": "examples/core/core_invoice_agent.triel",
+      "expected": "examples/core/scenarios/invoice_owner_late.expected",
+      "sha256": {
+        "trace": "92256f8813db3ea54cf716272b0c44fd7e86c6c64d0b619e50fa3b4634f8b9e9",
+        "spec": "045569f23c5dc731af2b31f54e9c7ce559d2360f37673f7c280f7d0620ab3b9b",
+        "expected": "74d56f055adc64da68383a93a0f3fcb13a4070fbcabbf8b8dd4d660eff2126ad"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "invoice_stale_quote",
+      "trace": "examples/core/scenarios/invoice_stale_quote.scn",
+      "spec": "examples/core/core_invoice_agent.triel",
+      "expected": "examples/core/scenarios/invoice_stale_quote.expected",
+      "sha256": {
+        "trace": "a0aeaeb748ddd4ce5361d7fefe26f984d228833f01e6fa7bd0dc05bffe523303",
+        "spec": "045569f23c5dc731af2b31f54e9c7ce559d2360f37673f7c280f7d0620ab3b9b",
+        "expected": "007ed01e0a90e7275843866d7b1e24d67f65a5fb0b5ad47138f21ab7cae7e267"
+      },
+      "monitor_lines": 1,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 15
+        },
+        {
+          "doc": "formal/core/CORE.md",
+          "ref": "undefined_guard_blocks_not_breach"
+        }
+      ]
+    },
+    {
+      "id": "invoice_within_limit",
+      "trace": "examples/core/scenarios/invoice_within_limit.scn",
+      "spec": "examples/core/core_invoice_agent.triel",
+      "expected": "examples/core/scenarios/invoice_within_limit.expected",
+      "sha256": {
+        "trace": "5826f525393010a4c4fa4097d7e683f8a2f9d4748f7be9e454ef268e8564c1ff",
+        "spec": "045569f23c5dc731af2b31f54e9c7ce559d2360f37673f7c280f7d0620ab3b9b",
+        "expected": "94a43646a72250902005601e81337a06bacfd9e2a5d1ab206aaf93e1f106d12c"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "low_stock_at_deadline",
+      "trace": "examples/core/scenarios/low_stock_at_deadline.scn",
+      "spec": "examples/core/merchant_low_stock.triel",
+      "expected": "examples/core/scenarios/low_stock_at_deadline.expected",
+      "sha256": {
+        "trace": "90d868e48730d9d5bcb0b2c2fc4ebb23a1f7a110df7149aeac0820e4f230fd4f",
+        "spec": "6a4ebb6e80fb099ac8af6aa173f28b1db2bd72849f9c01da99a1960928622537",
+        "expected": "321dd973ea14dfd56bbe3c30dc62d59ffe9f6ac3b8ae181bc0228de9b054ff09"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "low_stock_known_at_deadline",
+      "trace": "examples/core/scenarios/low_stock_known_at_deadline.scn",
+      "spec": "examples/core/merchant_low_stock.triel",
+      "expected": "examples/core/scenarios/low_stock_known_at_deadline.expected",
+      "sha256": {
+        "trace": "ad0a2077c92de1cfbb792846cca0d90ff72050a345a4b7f36dc599f2d964618e",
+        "spec": "6a4ebb6e80fb099ac8af6aa173f28b1db2bd72849f9c01da99a1960928622537",
+        "expected": "a94e502f2122ebcd44e10aef436ccc1d2107186dc55f395af3230f066c2c3d77"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "low_stock_late_restock",
+      "trace": "examples/core/scenarios/low_stock_late_restock.scn",
+      "spec": "examples/core/merchant_low_stock.triel",
+      "expected": "examples/core/scenarios/low_stock_late_restock.expected",
+      "sha256": {
+        "trace": "a06041b530ee6776f7eaaba6eba5c64c8fed538dcd5c510e59dbf7648295a99f",
+        "spec": "6a4ebb6e80fb099ac8af6aa173f28b1db2bd72849f9c01da99a1960928622537",
+        "expected": "813044d99dd83eb1c3da7e353f5c715193f02f849436aa560dc2a94a0e6cd290"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "low_stock_missed",
+      "trace": "examples/core/scenarios/low_stock_missed.scn",
+      "spec": "examples/core/merchant_low_stock.triel",
+      "expected": "examples/core/scenarios/low_stock_missed.expected",
+      "sha256": {
+        "trace": "966b86dfa986a6207571aa7a5dd70c1b62fe4b5681874f3242d09d694976f613",
+        "spec": "6a4ebb6e80fb099ac8af6aa173f28b1db2bd72849f9c01da99a1960928622537",
+        "expected": "813044d99dd83eb1c3da7e353f5c715193f02f849436aa560dc2a94a0e6cd290"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "low_stock_restocked",
+      "trace": "examples/core/scenarios/low_stock_restocked.scn",
+      "spec": "examples/core/merchant_low_stock.triel",
+      "expected": "examples/core/scenarios/low_stock_restocked.expected",
+      "sha256": {
+        "trace": "3b995b4725d81ab1fcfcef80ec678e77252b3e4a8cbcbe96757fda5085e91fab",
+        "spec": "6a4ebb6e80fb099ac8af6aa173f28b1db2bd72849f9c01da99a1960928622537",
+        "expected": "321dd973ea14dfd56bbe3c30dc62d59ffe9f6ac3b8ae181bc0228de9b054ff09"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "mandate_budget_limit_absent",
+      "trace": "examples/core/scenarios/mandate_budget_limit_absent.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_budget_limit_absent.expected",
+      "sha256": {
+        "trace": "7dbd715f3d85dff2d69f270c33532dda51c479d3ee9e327e141b4ea0f3ea8e47",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "715f4256cedca15b56632c74fb78309f69962e4734683d104080ed7c7f042995"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_budget_limit_zero",
+      "trace": "examples/core/scenarios/mandate_budget_limit_zero.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_budget_limit_zero.expected",
+      "sha256": {
+        "trace": "cb2b362dfe857f411f02807038f8952ec4959b2dffd6e954328a87fd3bd3e800",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "e68a2699f63302f1cddf3c0c51742a4f5e5149380d8426b03aedbc6d33601b63"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_campaign_at_limit",
+      "trace": "examples/core/scenarios/mandate_campaign_at_limit.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_campaign_at_limit.expected",
+      "sha256": {
+        "trace": "29ce66bd05221adb07d6ed0d0e95c7893f74e0d4dd5ace043c80f1f6ab4d33f3",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "1038a31a73ecc8fb6ffc20fd39131552528e2ef9c2b4dcb3790af8b821a04dae"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_campaign_budget",
+      "trace": "examples/core/scenarios/mandate_campaign_budget.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_campaign_budget.expected",
+      "sha256": {
+        "trace": "9c08a9bb27a5d383d3275ed0a44ccc46e0b6ceba0640b00adc035353c582e83d",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "b046afb06f5cb45edcf11e6c281f19d2427c4fa413f7bec8d1493e2d8c943b40"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_price_approval_cleared",
+      "trace": "examples/core/scenarios/mandate_price_approval_cleared.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_price_approval_cleared.expected",
+      "sha256": {
+        "trace": "5d2c7c4e59f10949564bfa8474c6b03a7fb3dbf20ba9808d84faa924987b5834",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "8696ed6bcac1f169e2fed8f1d64bbd64ab222cc2e499e2515ce804300d2709fe"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_price_approval_missing",
+      "trace": "examples/core/scenarios/mandate_price_approval_missing.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_price_approval_missing.expected",
+      "sha256": {
+        "trace": "ab5180a5c855cdac7bab3657089ee1df76498eeade47f92f1f095bf6c37980d3",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "e634e2625a0d38620986b5d6a1abe9bb1e8e6c808e33d715f197e28c66833d17"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_price_approved",
+      "trace": "examples/core/scenarios/mandate_price_approved.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_price_approved.expected",
+      "sha256": {
+        "trace": "a0a59df3b942ee15bf969954c0614a36407ca7a620b055067555ba2591ce62cf",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "2d1981a0ad94d1d50b2dfd62f54d4945b5747d6d7dc2ac23eeb17fc357255951"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_price_at_limit",
+      "trace": "examples/core/scenarios/mandate_price_at_limit.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_price_at_limit.expected",
+      "sha256": {
+        "trace": "8dd8d30788301f6d985f18989294f3e830dc8de0632ee9b1ce769acc01ad0de1",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "2d1981a0ad94d1d50b2dfd62f54d4945b5747d6d7dc2ac23eeb17fc357255951"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_price_decrease_signed",
+      "trace": "examples/core/scenarios/mandate_price_decrease_signed.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_price_decrease_signed.expected",
+      "sha256": {
+        "trace": "d0371f8bf1165ec44ddfe15345db7cd6bcdc41b7d83da27d672208b48bb92754",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "2d1981a0ad94d1d50b2dfd62f54d4945b5747d6d7dc2ac23eeb17fc357255951"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_price_over_limit",
+      "trace": "examples/core/scenarios/mandate_price_over_limit.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_price_over_limit.expected",
+      "sha256": {
+        "trace": "3fa06f1564d820d420d65bba1ae044861e0f05011be4e011a85136aa54819e5f",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "71b5af9181a337774b9af3317f39436d63f97457ce546bd72d99115ac7dd397f"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_price_within_limit",
+      "trace": "examples/core/scenarios/mandate_price_within_limit.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_price_within_limit.expected",
+      "sha256": {
+        "trace": "42de7459616bca87b0d73ba18059b256c02a7eb07e879d460a56d48239e25228",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "2d1981a0ad94d1d50b2dfd62f54d4945b5747d6d7dc2ac23eeb17fc357255951"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_price_within_limit_no_approval",
+      "trace": "examples/core/scenarios/mandate_price_within_limit_no_approval.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_price_within_limit_no_approval.expected",
+      "sha256": {
+        "trace": "7f072466d763368500e5c3203d81b880300f0bcafb1a69e94639159d145c1eff",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "2d1981a0ad94d1d50b2dfd62f54d4945b5747d6d7dc2ac23eeb17fc357255951"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_restock_approved_fresh",
+      "trace": "examples/core/scenarios/mandate_restock_approved_fresh.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_restock_approved_fresh.expected",
+      "sha256": {
+        "trace": "6f8e5f5ea464aa699fe6c462c5981af2b79c842cbdc1843c339ef65a80b8c829",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "a570863f61c2eec898494b678018f42a846fbb2fdbfefc5ef438f0d4b6e771f5"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_restock_at_reorder_point",
+      "trace": "examples/core/scenarios/mandate_restock_at_reorder_point.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_restock_at_reorder_point.expected",
+      "sha256": {
+        "trace": "8251ab985548c8e75f8b90eca501b870522ce8e857bac60890c2ce68a0400641",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "a570863f61c2eec898494b678018f42a846fbb2fdbfefc5ef438f0d4b6e771f5"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_restock_fresh_low",
+      "trace": "examples/core/scenarios/mandate_restock_fresh_low.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_restock_fresh_low.expected",
+      "sha256": {
+        "trace": "e6f0783ea868b74f130db0ca75fae75c53b3c88ee43ea3eacfcb02ccf08527b3",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "a570863f61c2eec898494b678018f42a846fbb2fdbfefc5ef438f0d4b6e771f5"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_restock_max_age",
+      "trace": "examples/core/scenarios/mandate_restock_max_age.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_restock_max_age.expected",
+      "sha256": {
+        "trace": "bfef1069309124565358d15db2420ce738bfa1014965758bb3ffb827ec630b87",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "a570863f61c2eec898494b678018f42a846fbb2fdbfefc5ef438f0d4b6e771f5"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_restock_max_age_passed",
+      "trace": "examples/core/scenarios/mandate_restock_max_age_passed.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_restock_max_age_passed.expected",
+      "sha256": {
+        "trace": "5066b8273dfaaa640e591e21be7abfec30b27ff4d026416936b01504df3f0479",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "2c823ebbd77153b29a5e22f17a20cba4c3d1984734a302e76cfcd6ece2a31fff"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_restock_not_needed",
+      "trace": "examples/core/scenarios/mandate_restock_not_needed.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_restock_not_needed.expected",
+      "sha256": {
+        "trace": "60ddf802813be835ce2b031f1104a2fe15a9d740812db60ecd575b0eccad48c0",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "69c22219323137096ba660419fa69b27207c6cf9aef5efe76ff0cdb216519d00"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_restock_stale",
+      "trace": "examples/core/scenarios/mandate_restock_stale.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_restock_stale.expected",
+      "sha256": {
+        "trace": "245a0e2371530675d143c7d7335bb1a05577d4f679947dec3aa88c512e7cf1cb",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "2c823ebbd77153b29a5e22f17a20cba4c3d1984734a302e76cfcd6ece2a31fff"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_restock_stale_approved",
+      "trace": "examples/core/scenarios/mandate_restock_stale_approved.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_restock_stale_approved.expected",
+      "sha256": {
+        "trace": "fc2b099e8a79e17233ee458a80aba36e3e9565b28323cbe5c82de7cfc477ea9e",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "a570863f61c2eec898494b678018f42a846fbb2fdbfefc5ef438f0d4b6e771f5"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_restock_stale_no_approval",
+      "trace": "examples/core/scenarios/mandate_restock_stale_no_approval.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_restock_stale_no_approval.expected",
+      "sha256": {
+        "trace": "6002255c34e887b464e1c2de6d8b18f61a2107e2c6fb7a709d78cc185121d7e8",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "2c823ebbd77153b29a5e22f17a20cba4c3d1984734a302e76cfcd6ece2a31fff"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "mandate_two_changes",
+      "trace": "examples/core/scenarios/mandate_two_changes.scn",
+      "spec": "examples/core/merchant_mandate.triel",
+      "expected": "examples/core/scenarios/mandate_two_changes.expected",
+      "sha256": {
+        "trace": "a59155800ae6a789fb8e775875ea0edfeceebc1c1f386f23e8b2fd8bbddfc401",
+        "spec": "ea086c550607f4896b904df7b3423621b381b67e67712038e8d23039f2cf41c5",
+        "expected": "363de6f501029b045d58d50e2c4258e2a5866598c6d664f626c0415f1a67e416"
+      },
+      "monitor_lines": 3,
+      "covers": []
+    },
+    {
+      "id": "numbers_breach",
+      "trace": "examples/core/scenarios/numbers_breach.scn",
+      "spec": "examples/core/core_numbers.triel",
+      "expected": "examples/core/scenarios/numbers_breach.expected",
+      "sha256": {
+        "trace": "c298052846481315a653f10dec8e46ffcf6f43044999c38bb11919fd3662e535",
+        "spec": "0e5909baacd7ed8b8cd0a63d9b068ef72621b59497f5213b5c63389e009d717f",
+        "expected": "f058664105166b01cbf872ede760d44ab7ebfb90b24d34e8b717d15dcc18385d"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "numbers_exact",
+      "trace": "examples/core/scenarios/numbers_exact.scn",
+      "spec": "examples/core/core_numbers.triel",
+      "expected": "examples/core/scenarios/numbers_exact.expected",
+      "sha256": {
+        "trace": "e1238aa07537c7740a7b01727c979c1d8936ee38d3fb76ee5423ffdbee754c8b",
+        "spec": "0e5909baacd7ed8b8cd0a63d9b068ef72621b59497f5213b5c63389e009d717f",
+        "expected": "1303009a6056470c9ed8484da8fa0d2f7959f15efbc4156c3655cf7083a93ea4"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "numbers_ill_typed",
+      "trace": "examples/core/scenarios/numbers_ill_typed.scn",
+      "spec": "examples/core/core_numbers.triel",
+      "expected": "examples/core/scenarios/numbers_ill_typed.expected",
+      "sha256": {
+        "trace": "6e06afc50bb778da895d55532547bfbaf24f5d3f9b3cdae4fca0438a73d32e28",
+        "spec": "0e5909baacd7ed8b8cd0a63d9b068ef72621b59497f5213b5c63389e009d717f",
+        "expected": "437b8f3e8c336a6a7371cefb00c622a22ee514b1e7a0e2441ee46778f429ad77"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "payment_capped",
+      "trace": "examples/core/scenarios/payment_capped.scn",
+      "spec": "examples/core/core_payment.triel",
+      "expected": "examples/core/scenarios/payment_capped.expected",
+      "sha256": {
+        "trace": "c7092388cceea68af17ce2324be4a3be05ec9aa22c2be245ef1a5ceeda5362bc",
+        "spec": "8da2cf87ead467262681daa52900836167a6510468ada12f3e51b9bae5d5aafe",
+        "expected": "e23df5ec73ef725ff2bf1f45dfb5c72c6f2eaf2d331c56890b1efc354910c496"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "payment_cured",
+      "trace": "examples/core/scenarios/payment_cured.scn",
+      "spec": "examples/core/core_payment.triel",
+      "expected": "examples/core/scenarios/payment_cured.expected",
+      "sha256": {
+        "trace": "3a7ebd465f2a71558de72f5526315d03ffba7dcc9463ae8e3ec749ae694fc767",
+        "spec": "8da2cf87ead467262681daa52900836167a6510468ada12f3e51b9bae5d5aafe",
+        "expected": "975c944c105ee8025b5e88432a14185b63feb6329904afe382cbf27b09b64781"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "payment_negative",
+      "trace": "examples/core/scenarios/payment_negative.scn",
+      "spec": "examples/core/core_payment.triel",
+      "expected": "examples/core/scenarios/payment_negative.expected",
+      "sha256": {
+        "trace": "c06679e466544b676117a6a8ba06159614f3698838e0153ad1ee03a617cfd60b",
+        "spec": "8da2cf87ead467262681daa52900836167a6510468ada12f3e51b9bae5d5aafe",
+        "expected": "3373089d1b84ba1a88ba677dd230d2652158821e61b72910bd05f9ba9c2627dc"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "payment_undefined",
+      "trace": "examples/core/scenarios/payment_undefined.scn",
+      "spec": "examples/core/core_payment.triel",
+      "expected": "examples/core/scenarios/payment_undefined.expected",
+      "sha256": {
+        "trace": "ecda33252bf58d32a05cfb9ac684302e3d7a0c8fbeb2e2cb6687e2656b85f095",
+        "spec": "8da2cf87ead467262681daa52900836167a6510468ada12f3e51b9bae5d5aafe",
+        "expected": "f9e83133a0d222e1bf31c97b641102536c17f034161ac7414a6561821413280a"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "prohibition_handler_breach",
+      "trace": "examples/core/scenarios/prohibition_handler_breach.scn",
+      "spec": "examples/core/core_prohibition_handler.triel",
+      "expected": "examples/core/scenarios/prohibition_handler_breach.expected",
+      "sha256": {
+        "trace": "302b4abe68dc7bda14a26366702f0bbcb8a60d6d07a279976c7b71583b01c57b",
+        "spec": "7bcd763c837f0b99b873978f6b6a1199c17a726c7e78e1f21343605adb6aa343",
+        "expected": "58b7b55ceb4adf8bdfb9efb8b6ac66689395ee171f5d4c66c186d7698bd8f8a1"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "purpose_consented",
+      "trace": "examples/core/scenarios/purpose_consented.scn",
+      "spec": "examples/core/purpose_limitation_gate.triel",
+      "expected": "examples/core/scenarios/purpose_consented.expected",
+      "sha256": {
+        "trace": "ade395f93bc032278525998d73b0be099aebe278b2baf1fb61b8c6bbb705d42a",
+        "spec": "f5b3e328e501ec169fed0f58308d33de94d6ddecdbf101e07e28d7c2f7bf8469",
+        "expected": "80e17fe918edb47cbfc72b5c594d36a233bdac6dbf35a1ce80ba870722a68937"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "purpose_no_route",
+      "trace": "examples/core/scenarios/purpose_no_route.scn",
+      "spec": "examples/core/purpose_limitation_gate.triel",
+      "expected": "examples/core/scenarios/purpose_no_route.expected",
+      "sha256": {
+        "trace": "14d316c8d480cd37db7baadbe643acd8228f1de5269bad01f4f4210bbc5b416f",
+        "spec": "f5b3e328e501ec169fed0f58308d33de94d6ddecdbf101e07e28d7c2f7bf8469",
+        "expected": "da701b58bb380833f22c417d848c752570fd39309be1887425cd6fc4f25b9fde"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "purpose_not_on_record",
+      "trace": "examples/core/scenarios/purpose_not_on_record.scn",
+      "spec": "examples/core/purpose_limitation_gate.triel",
+      "expected": "examples/core/scenarios/purpose_not_on_record.expected",
+      "sha256": {
+        "trace": "af0058a4b79c53605cc2d2e3804112d359305e3d533b159fecf486236eab70d5",
+        "spec": "f5b3e328e501ec169fed0f58308d33de94d6ddecdbf101e07e28d7c2f7bf8469",
+        "expected": "7fa9f02b0a94fbb53f4f19cd6c09541ecf2c8532fc5c160d40d9bf66418e295d"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "purpose_stale_assessment",
+      "trace": "examples/core/scenarios/purpose_stale_assessment.scn",
+      "spec": "examples/core/purpose_limitation_gate.triel",
+      "expected": "examples/core/scenarios/purpose_stale_assessment.expected",
+      "sha256": {
+        "trace": "dc18720de0952d66ee2b2b82e3091124cbff988a3994f6c84b55ab51a2594f52",
+        "spec": "f5b3e328e501ec169fed0f58308d33de94d6ddecdbf101e07e28d7c2f7bf8469",
+        "expected": "b2013773a69a5010d69ac2ce85ad1bbff0dadce29ff7e81d1d1842759420170d"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "readings_guard_after_pay",
+      "trace": "examples/core/scenarios/readings_guard_after_pay.scn",
+      "spec": "examples/core/core_readings.triel",
+      "expected": "examples/core/scenarios/readings_guard_after_pay.expected",
+      "sha256": {
+        "trace": "a7d166ffbb2faf5174d5e185957e829698b5e72d7d6676615e31ff146493f391",
+        "spec": "21acacb1b4be4e87cc6104372a3bb20781c9dcdedef761021b298e62cf982ab2",
+        "expected": "1575f8731a777ace486183ae6820ed83b340fe985f7713710ea9bf953a9a221a"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 14
+        },
+        {
+          "doc": "formal/core/CORE.md",
+          "ref": "decision 34"
+        }
+      ]
+    },
+    {
+      "id": "readings_guard_at_pay",
+      "trace": "examples/core/scenarios/readings_guard_at_pay.scn",
+      "spec": "examples/core/core_readings.triel",
+      "expected": "examples/core/scenarios/readings_guard_at_pay.expected",
+      "sha256": {
+        "trace": "e57636e59bbb9cd86abc8a749e12f7fb69ad60bb9531c7ddee588fb27489a3a4",
+        "spec": "21acacb1b4be4e87cc6104372a3bb20781c9dcdedef761021b298e62cf982ab2",
+        "expected": "4bda089f1266338d73a9a117275512a42cc39f6feb970cf10ffee442a813a173"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 14
+        },
+        {
+          "doc": "formal/core/CORE.md",
+          "ref": "decision 34"
+        }
+      ]
+    },
+    {
+      "id": "readings_guard_at_pay_leak",
+      "trace": "examples/core/scenarios/readings_guard_at_pay_leak.scn",
+      "spec": "examples/core/core_readings.triel",
+      "expected": "examples/core/scenarios/readings_guard_at_pay_leak.expected",
+      "sha256": {
+        "trace": "38a72fb65dc27471118a676622272eda094c64414d3846f31e9d6f1872bcb188",
+        "spec": "21acacb1b4be4e87cc6104372a3bb20781c9dcdedef761021b298e62cf982ab2",
+        "expected": "747f6ebad92221670c8e8bce17aae7d1258cdbcf8ea581db18bf49215c1fb116"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 14
+        }
+      ]
+    },
+    {
+      "id": "readings_leak_then_pay",
+      "trace": "examples/core/scenarios/readings_leak_then_pay.scn",
+      "spec": "examples/core/core_readings.triel",
+      "expected": "examples/core/scenarios/readings_leak_then_pay.expected",
+      "sha256": {
+        "trace": "d71b7e14129c1c6aa063f821f1b56433c525c386dbbe8bc05d683e4313d063c8",
+        "spec": "21acacb1b4be4e87cc6104372a3bb20781c9dcdedef761021b298e62cf982ab2",
+        "expected": "6f174c67f603c0eecf55ed315baa33f3e4b9f81f720f4b4c4dc580c01593ad00"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 14
+        }
+      ]
+    },
+    {
+      "id": "readings_or_pay_leak",
+      "trace": "examples/core/scenarios/readings_or_pay_leak.scn",
+      "spec": "examples/core/core_readings.triel",
+      "expected": "examples/core/scenarios/readings_or_pay_leak.expected",
+      "sha256": {
+        "trace": "ef36eb1f3f066015d9e36a090bdaa6466fc9b235364570792a138075941e4fac",
+        "spec": "21acacb1b4be4e87cc6104372a3bb20781c9dcdedef761021b298e62cf982ab2",
+        "expected": "43dfd41c5d5acc3399d9db6fe8c61f379cff49fc7af80356418ba6e2fbb08d35"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 14
+        },
+        {
+          "doc": "formal/core/CORE.md",
+          "ref": "decision 34"
+        }
+      ]
+    },
+    {
+      "id": "sensor_at_limit",
+      "trace": "examples/core/scenarios/sensor_at_limit.scn",
+      "spec": "examples/core/sensor_overheat.triel",
+      "expected": "examples/core/scenarios/sensor_at_limit.expected",
+      "sha256": {
+        "trace": "d575acce5af45869ecbd3a59480336294033bd26b2cbb9eb2625d9775a10e8ef",
+        "spec": "86486e87e7b9bd10d3fb0f44fc71cf1f5b1686ae764e483ac4dc27c88386d915",
+        "expected": "85fc1da7a49b0d99cfd576a98be1922cc674c4658ab66d893ece7bd77c8bfe72"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "sensor_escalation_missed",
+      "trace": "examples/core/scenarios/sensor_escalation_missed.scn",
+      "spec": "examples/core/sensor_overheat.triel",
+      "expected": "examples/core/scenarios/sensor_escalation_missed.expected",
+      "sha256": {
+        "trace": "f7cf1de4b6783af0a3e9fa5bce616699cb8ce63ad8a82a4cbad56079da00b0f7",
+        "spec": "86486e87e7b9bd10d3fb0f44fc71cf1f5b1686ae764e483ac4dc27c88386d915",
+        "expected": "b464b9568960b27f4aeab9dd5c7bfc0ba46f81c0d4941f2fcbde5b608d5f4499"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "sensor_escalation_window",
+      "trace": "examples/core/scenarios/sensor_escalation_window.scn",
+      "spec": "examples/core/sensor_overheat.triel",
+      "expected": "examples/core/scenarios/sensor_escalation_window.expected",
+      "sha256": {
+        "trace": "92eda4a0b2c45a8de5923a94247c924269a6b8cc82e373507620a3f8257b2352",
+        "spec": "86486e87e7b9bd10d3fb0f44fc71cf1f5b1686ae764e483ac4dc27c88386d915",
+        "expected": "1b35299b3bf9f97e8447245195551b62541de3ffb70e9bdd106f597e1b29cd74"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "sensor_handled",
+      "trace": "examples/core/scenarios/sensor_handled.scn",
+      "spec": "examples/core/sensor_overheat.triel",
+      "expected": "examples/core/scenarios/sensor_handled.expected",
+      "sha256": {
+        "trace": "053f947c00a2553818e90ff30b4ad13f0165491c2c6069e9692258c563d12e71",
+        "spec": "86486e87e7b9bd10d3fb0f44fc71cf1f5b1686ae764e483ac4dc27c88386d915",
+        "expected": "bec0da166cdbe9ea91c32903231e5467ffd4d42c9693e40260605da9d9b64b05"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "sensor_max_age_boundary",
+      "trace": "examples/core/scenarios/sensor_max_age_boundary.scn",
+      "spec": "examples/core/sensor_overheat.triel",
+      "expected": "examples/core/scenarios/sensor_max_age_boundary.expected",
+      "sha256": {
+        "trace": "9f4f0fe35ac2ed36c712a6370345bbc8348dd531e02afdc74fa75856fa03dcad",
+        "spec": "86486e87e7b9bd10d3fb0f44fc71cf1f5b1686ae764e483ac4dc27c88386d915",
+        "expected": "018138431b59a9307265e4a3c89bd3d75954674fb75db4fc911953c1f474dc43"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "sensor_never_false",
+      "trace": "examples/core/scenarios/sensor_never_false.scn",
+      "spec": "examples/core/sensor_overheat.triel",
+      "expected": "examples/core/scenarios/sensor_never_false.expected",
+      "sha256": {
+        "trace": "11664ec9de80e7d1c86133d9f65eb369d13ba414ba14197c2f0a7bd0473e715f",
+        "spec": "86486e87e7b9bd10d3fb0f44fc71cf1f5b1686ae764e483ac4dc27c88386d915",
+        "expected": "482a989f8fb8d5c99bf01339c651a8864eae4b8398a4d163584ef7cf34d17832"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "sensor_not_stopped",
+      "trace": "examples/core/scenarios/sensor_not_stopped.scn",
+      "spec": "examples/core/sensor_overheat.triel",
+      "expected": "examples/core/scenarios/sensor_not_stopped.expected",
+      "sha256": {
+        "trace": "decb6b5d475ad4da6350a1d09d84642089145a05547b9d53cb421feee1bf97bd",
+        "spec": "86486e87e7b9bd10d3fb0f44fc71cf1f5b1686ae764e483ac4dc27c88386d915",
+        "expected": "ddf7a0b6e6f4f010a6b7799f787e95f7580fb98d59aaf35115bc80287bcb9fdf"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "sensor_silent",
+      "trace": "examples/core/scenarios/sensor_silent.scn",
+      "spec": "examples/core/sensor_overheat.triel",
+      "expected": "examples/core/scenarios/sensor_silent.expected",
+      "sha256": {
+        "trace": "b1ffda85a03ec99bb67acbd85d3518921d7326835673f886517699780a9f6ed5",
+        "spec": "86486e87e7b9bd10d3fb0f44fc71cf1f5b1686ae764e483ac4dc27c88386d915",
+        "expected": "6363e4567758e651bcce1f7022cc8dd9311812ddcebf7ac76c372fe6a2a84d65"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "sensor_stale",
+      "trace": "examples/core/scenarios/sensor_stale.scn",
+      "spec": "examples/core/sensor_overheat.triel",
+      "expected": "examples/core/scenarios/sensor_stale.expected",
+      "sha256": {
+        "trace": "232926118f883ffc717ca7890334551ad4ed0ab888fb08cd9c8295f3e24efe39",
+        "spec": "86486e87e7b9bd10d3fb0f44fc71cf1f5b1686ae764e483ac4dc27c88386d915",
+        "expected": "cd9965305950a8b6ab487f5f60407e25b717f5fcea0b54b2198b8c9d802ba9d4"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "sensor_stop_at_deadline",
+      "trace": "examples/core/scenarios/sensor_stop_at_deadline.scn",
+      "spec": "examples/core/sensor_overheat.triel",
+      "expected": "examples/core/scenarios/sensor_stop_at_deadline.expected",
+      "sha256": {
+        "trace": "e8aa163898d0c9922cfdafeb31266059f24988e79a9103795fae265929d350b8",
+        "spec": "86486e87e7b9bd10d3fb0f44fc71cf1f5b1686ae764e483ac4dc27c88386d915",
+        "expected": "482a989f8fb8d5c99bf01339c651a8864eae4b8398a4d163584ef7cf34d17832"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "sequence_one_payment",
+      "trace": "examples/core/scenarios/sequence_one_payment.scn",
+      "spec": "examples/core/core_sequence.triel",
+      "expected": "examples/core/scenarios/sequence_one_payment.expected",
+      "sha256": {
+        "trace": "b2903f819c485addda79320b4a7527ba345cff7ffc7127b94998e95768a15594",
+        "spec": "c58bc91dfbff8be587a508adff5b7653a78ce1cfbc98dbdb1649be1b27244910",
+        "expected": "f57d0fb950785cd1ecc973836b67bba597603c966c9abe1b24c6b0d4d022e399"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 14
+        }
+      ]
+    },
+    {
+      "id": "sequence_polarity",
+      "trace": "examples/core/scenarios/sequence_polarity.scn",
+      "spec": "examples/core/core_sequence.triel",
+      "expected": "examples/core/scenarios/sequence_polarity.expected",
+      "sha256": {
+        "trace": "7582fc04808fefa546a8c54ab655e5a3b1d2b857acf39bdc81f629e52c4e8166",
+        "spec": "c58bc91dfbff8be587a508adff5b7653a78ce1cfbc98dbdb1649be1b27244910",
+        "expected": "3e24f8d889324b31d7d265a3a4f953cbf426fd415df72f7fe45d2d6321cf8769"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "sequence_prohibition_violated",
+      "trace": "examples/core/scenarios/sequence_prohibition_violated.scn",
+      "spec": "examples/core/core_sequence.triel",
+      "expected": "examples/core/scenarios/sequence_prohibition_violated.expected",
+      "sha256": {
+        "trace": "c9fd914c496889dc989da9e682a6b49841744ce18b6ef37dbb06654accb9cb87",
+        "spec": "c58bc91dfbff8be587a508adff5b7653a78ce1cfbc98dbdb1649be1b27244910",
+        "expected": "3e24f8d889324b31d7d265a3a4f953cbf426fd415df72f7fe45d2d6321cf8769"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 14
+        },
+        {
+          "doc": "formal/core/CORE.md",
+          "ref": "decision 34"
+        }
+      ]
+    },
+    {
+      "id": "sequence_two_payments",
+      "trace": "examples/core/scenarios/sequence_two_payments.scn",
+      "spec": "examples/core/core_sequence.triel",
+      "expected": "examples/core/scenarios/sequence_two_payments.expected",
+      "sha256": {
+        "trace": "51b23624a5ed297a0dd87c84b3ca6fce788af32737099db4bdbb8d63a7a253a1",
+        "spec": "c58bc91dfbff8be587a508adff5b7653a78ce1cfbc98dbdb1649be1b27244910",
+        "expected": "d47d97ad744eaee0d98c25820e4c3f947fe55b0efaece1680e1a2689f9b3e76d"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 14
+        }
+      ]
+    },
+    {
+      "id": "sequence_violation_not_last",
+      "trace": "examples/core/scenarios/sequence_violation_not_last.scn",
+      "spec": "examples/core/core_sequence.triel",
+      "expected": "examples/core/scenarios/sequence_violation_not_last.expected",
+      "sha256": {
+        "trace": "8a9d012f400282daaaaebfe0ea9786847302b54a5a472d0ed3a34f50b1ff6325",
+        "spec": "c58bc91dfbff8be587a508adff5b7653a78ce1cfbc98dbdb1649be1b27244910",
+        "expected": "4bdf94308122ea25fff87badce832f034db3c1d41d18bf6c9d8e83fc172476e3"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 14
+        },
+        {
+          "doc": "formal/core/CORE.md",
+          "ref": "decision 34"
+        }
+      ]
+    },
+    {
+      "id": "sequence_violation_then_done",
+      "trace": "examples/core/scenarios/sequence_violation_then_done.scn",
+      "spec": "examples/core/core_sequence.triel",
+      "expected": "examples/core/scenarios/sequence_violation_then_done.expected",
+      "sha256": {
+        "trace": "28ba8b48dd7c8d7b1455a2b6fe0a32d4b14ad2def1ac42956f16820b28ee11cb",
+        "spec": "c58bc91dfbff8be587a508adff5b7653a78ce1cfbc98dbdb1649be1b27244910",
+        "expected": "770538c4508570efeaabc33fae3b048f3a4c12d42644d5d4a5d6dd53dff89089"
+      },
+      "monitor_lines": 0,
+      "covers": [
+        {
+          "doc": "examples/core/README.md",
+          "convention": 14
+        },
+        {
+          "doc": "formal/core/CORE.md",
+          "ref": "decision 34"
+        }
+      ]
+    },
+    {
+      "id": "stale_block_fresh_breach",
+      "trace": "examples/core/scenarios/stale_block_fresh_breach.scn",
+      "spec": "examples/core/core_stale_block.triel",
+      "expected": "examples/core/scenarios/stale_block_fresh_breach.expected",
+      "sha256": {
+        "trace": "b4b65737721c308e9b8ad31cf9bf27dde2351afa52774fa68c5bc7e376c6bef2",
+        "spec": "a37143dbbb5a100d109d2d2fd23991044cd3e45b5bd7c4408b5123b10efe297a",
+        "expected": "1a969fe3384888a5caec3fea9d56778212f66bba859beeee1e57d079b7693426"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "stale_block_undefined_guard",
+      "trace": "examples/core/scenarios/stale_block_undefined_guard.scn",
+      "spec": "examples/core/core_stale_block.triel",
+      "expected": "examples/core/scenarios/stale_block_undefined_guard.expected",
+      "sha256": {
+        "trace": "cc31cff8a7209be6496cf40ed8c68ef7d9601e4d964d65b71930f37542636cf0",
+        "spec": "a37143dbbb5a100d109d2d2fd23991044cd3e45b5bd7c4408b5123b10efe297a",
+        "expected": "0c04a6dad2b8ffe484955f04911efea7348009f52fdf72501c8b2df3ffe0547f"
+      },
+      "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "unless_records_cancelled",
+      "trace": "examples/core/scenarios/unless_records_cancelled.scn",
+      "spec": "examples/core/core_unless_records.triel",
+      "expected": "examples/core/scenarios/unless_records_cancelled.expected",
+      "sha256": {
+        "trace": "15e68ea25b9e23ee255aa8f84df389a081a17a2b28def22e35db091492f97405",
+        "spec": "a240ebd4739420a39b9fa89e25bc0a2dd4649f41997cb26929b0d3ca7259d856",
+        "expected": "f063648b6d1301827805e3e1fe60c8dbd5bf5d5a9bfb56025d4e3c0b119ad019"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    },
+    {
+      "id": "unless_records_completed",
+      "trace": "examples/core/scenarios/unless_records_completed.scn",
+      "spec": "examples/core/core_unless_records.triel",
+      "expected": "examples/core/scenarios/unless_records_completed.expected",
+      "sha256": {
+        "trace": "5b215ddb04116a41508823fb8970db06155dd260be293021a69304fc7cc93b5e",
+        "spec": "a240ebd4739420a39b9fa89e25bc0a2dd4649f41997cb26929b0d3ca7259d856",
+        "expected": "e459719d7b75a26f5fffaa99280985620781e16f6514e0bbaf5fedaa2e3cad41"
+      },
+      "monitor_lines": 0,
+      "covers": []
+    }
+  ],
+  "outside_core": [
+    {
+      "example": "examples/semantics/execute_renaming.triel",
+      "reason": "EXECUTE"
+    },
+    {
+      "example": "examples/semantics/prohibition_continuation.triel",
+      "reason": "§2.6 defines continuations only for obligations"
+    }
+  ]
+}
