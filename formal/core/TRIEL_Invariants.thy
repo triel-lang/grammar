@@ -15,8 +15,11 @@ section \<open>Invariants on finite prefixes\<close>
 
 text \<open>An invariant is \<open>ALWAYS \<phi>\<close>, \<open>EVENTUALLY \<phi>\<close> or \<open>NEXT \<phi>\<close> for a state formula \<open>\<phi>\<close>, read at
   the activation entry of an implementation trace (TECHNICAL_REPORT.md sections 2.4 and
-  2.5). On a finite prefix the verdict follows LTL3: it is T or F only if every
-  continuation of the prefix would give the same answer, and \<open>\<bottom>\<close> (inconclusive) otherwise.
+  2.5). On a finite prefix the verdict is three-valued, in the style of LTL3: T, F, or
+  \<open>\<bottom>\<close> (undefined). A definite verdict is final: it does not change when the trace is
+  extended (\<open>inv_final\<close>). Correspondence with LTL3 is not proved; for example, for a
+  state formula \<open>\<phi>\<close> that is true in every state, LTL3 gives \<open>ALWAYS \<phi>\<close> the verdict T,
+  while here it stays \<open>\<bottom>\<close>.
   \<^item> \<open>ALWAYS \<phi>\<close> is F from the first entry where \<open>\<phi>\<close> is F, and \<open>\<bottom>\<close> otherwise; it is never T.
   \<^item> \<open>EVENTUALLY \<phi>\<close> is T from the first entry where \<open>\<phi>\<close> is T, and \<open>\<bottom>\<close> otherwise; it is never F.
   \<^item> \<open>NEXT \<phi>\<close> is the value of \<open>\<phi>\<close> at entry 1, and \<open>\<bottom>\<close> while the prefix has only entry 0.
@@ -85,9 +88,9 @@ theorem eventually_undefined_data:
   "(\<And>j. j < length \<pi> \<Longrightarrow> eval \<phi> (st \<pi> j) \<noteq> Some True) \<Longrightarrow> inv_eval (Eventually \<phi>) \<pi> = None"
   by auto
 
-text \<open>Consistency with the information order: for a PRESENT-free state formula, a
-  definite verdict on a trace stays the same on any trace with the same entries whose
-  states carry more data (T2 at each entry).\<close>
+text \<open>Consistency with the information order: for a state formula without PRESENT and
+  DEFAULT, a definite verdict on a trace stays the same on any trace with the same entries
+  whose states carry more data (T2 at each entry).\<close>
 
 primrec inv_formula :: "('n, 'v) inv \<Rightarrow> ('n, 'v) expr" where
   "inv_formula (Always \<phi>) = \<phi>"

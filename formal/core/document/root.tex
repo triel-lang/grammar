@@ -30,7 +30,8 @@ Boolean expressions are evaluated in strong Kleene three-valued logic~\cite{Klee
 predicate \texttt{PRESENT(x)} is always defined, and a comparison $=$, $<$ or $\le$ with
 an operand that has no value is undefined. Proved: commutativity and associativity
 of \texttt{AND} and \texttt{OR}, De Morgan's laws and double negation (T1); monotonicity of
-every \texttt{PRESENT}-free expression under extension of the state, the claim of
+every expression without \texttt{PRESENT} and \texttt{DEFAULT} under extension of the
+state, the claim of
 Section~2.9 (T2; cf.\ the strong Kleene connectives of the logic
 LPF~\cite{BarringerChengJones1984} and the monotone valuation schemes of
 Kripke~\cite{Kripke1975}); non-monotonicity of \texttt{PRESENT} (T3); agreement with two-valued
@@ -43,7 +44,8 @@ given by its truth and falsity domains, and the total indicator predicate $E_x$ 
 where $x$ has a value and false where it has none. Proved: \texttt{PRESENT(x)} is $E_x$
 (\texttt{present\_is\_Ex}); $E_x$ is total and not equitone; $E_x$ holds exactly when the
 value of $x$ equals some value, as for the existence predicate of free logic; every
-\texttt{PRESENT}-free expression is equitone; the comparison $x = x$ is the partial
+expression without \texttt{PRESENT} and \texttt{DEFAULT} is equitone; the comparison
+$x = x$ is the partial
 indicator predicate.
 
 \paragraph{Trace semantics (theory \texttt{TRIEL\_Trace}).}
@@ -105,7 +107,8 @@ blocked action, and, when the condition is defined at every entry, exactly when 
 verdict is pending (\texttt{enforce\_transparent}), while an action taken under an undefined
 condition is blocked and is not a breach (\texttt{enforce\_undefined\_blocks}); on defined
 data no breach-free edit of the trace keeps an action the monitor blocks
-(\texttt{enforce\_minimal}); for a condition without \texttt{PRESENT}, more data never
+(\texttt{enforce\_minimal}); for a condition without \texttt{PRESENT} and
+\texttt{DEFAULT}, more data never
 makes it block more (\texttt{blocks\_data\_mono}). Breach
 handlers bind to the nearest preceding obligation or prohibition of the same subject; at most one
 continuation-determining action is allowed; a cure in time prevents a second breach, and a
@@ -143,12 +146,14 @@ values.
 
 \paragraph{Invariants (theory \texttt{TRIEL\_Invariants}).}
 \texttt{ALWAYS}, \texttt{EVENTUALLY} and \texttt{NEXT} are evaluated on finite prefixes of
-implementation traces with the three verdicts of LTL3 (Bauer, Leucker and
-Schallhart~\cite{BauerLeuckerSchallhart2011}).
+implementation traces with three-valued verdicts in the style of LTL3 (Bauer, Leucker and
+Schallhart~\cite{BauerLeuckerSchallhart2011}): true, false, or undefined. Correspondence
+with LTL3 is not proved; for a formula true in every state, LTL3 gives \texttt{ALWAYS}
+the verdict true, while here it stays undefined.
 Proved: on a prefix \texttt{ALWAYS} is never true and \texttt{EVENTUALLY} never false; a
 definite verdict is final under extension; an entry where the formula is undefined for
-lack of data neither violates \texttt{ALWAYS} nor fulfils \texttt{EVENTUALLY}; definite
-verdicts survive more data.
+lack of data neither violates \texttt{ALWAYS} nor fulfils \texttt{EVENTUALLY}; for a
+formula without \texttt{PRESENT} and \texttt{DEFAULT}, definite verdicts survive more data.
 \texttt{EVENTUALLY \dots\ WITHIN} a deadline is evaluated on the entries up to the
 deadline: it is true as soon as the formula is true at one of them, false once the trace
 has passed the deadline with the formula false at every one of them, and undefined
@@ -168,7 +173,7 @@ P-predicate, and in TRIEL it is the comparison $z = z$; $E_z$ is total and singl
 but not monotone, with an explicit counterexample; partial presence of a complex name is
 monotone under extension of nominative data. A condition built from equitone atoms,
 such as $\downarrow z$, by \texttt{NOT}, \texttt{AND} and \texttt{OR} keeps every
-definite verdict when the data is extended, comparisons included; with the atom $E_z$ this fails, on the data of
+definite verdict when the data is extended, comparisons without \texttt{DEFAULT} included; with the atom $E_z$ this fails, on the data of
 the counterexample for typing with \texttt{Optional}. The equitone P-predicates are
 closed under negation and disjunction.
 
@@ -203,12 +208,13 @@ executable equations.
 Following Sections~2.6 and 2.9, the amount of \texttt{PENALTY e CAP c} is built from
 values with $+$, $-$ and $\times$, without division, and computed on exact numbers; it is
 undefined when an operand is undefined or not a number. The amount of an obligation is
-read in the last state not after its deadline, and that of a prohibition in the state
+read in the last state not after its deadline (in the activation state when the deadline
+is already past at activation), and that of a prohibition in the state
 before the forbidden action, in which its condition is true. Proved: an amount is
 undefined when an operand is; without \texttt{DEFAULT} a defined amount is not changed by
 more data, and with \texttt{DEFAULT} it can be; the Decimals are closed under $+$, $-$
-and $\times$; an amount reported for payment is never negative and, with a non-negative
-cap, never exceeds the cap (\texttt{pen\_amount\_bounds}), while a negative amount is
+and $\times$; with no cap or a non-negative cap, an amount reported for payment is never
+negative and never exceeds the cap (\texttt{pen\_amount\_bounds}), while a negative amount is
 reported as negative and not replaced by 0; once a norm
 is breached, later entries change neither the state of the breach nor the reported
 actions and amounts.
@@ -228,7 +234,7 @@ observations a decided verdict of its report stays the same when observations ar
 appended, unless the longer list is rejected for the order of its times or for the types
 of its data (\texttt{run\_final}); and when the same observations are read with more
 data, for a specification whose conditions are without \texttt{PRESENT} and
-\texttt{DEFAULT}, the report has the same lines and every verdict of a norm or an invariant in it is refined, not
+\texttt{DEFAULT}, if the observations were accepted, the report has the same lines and every verdict of a norm or an invariant in it is refined, not
 withdrawn: the status of an obligation is unchanged, a reported breach of a prohibition
 stays reported at the same or an earlier time, and a pending prohibition on the richer
 data was pending before, unless the richer data fails the type check
