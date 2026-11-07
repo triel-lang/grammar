@@ -403,8 +403,9 @@ proof -
 qed
 
 text \<open>So strong Kleene evaluation is the most defined sound compositional evaluation: on a
-  PRESENT-free condition every sound one is below it. This is a classical fact about the
-  logic of Kleene, proved here with respect to the completions of the data.\<close>
+  PRESENT-free condition, for a type with two different values, every sound one is below
+  it. This is a classical fact about the logic of Kleene, proved here with respect to the
+  completions of the data.\<close>
 
 theorem kleene_optimal:
   assumes "sound_conn TYPE(('n, 'v :: value_order) expr) G" and "present_free (e :: ('n, 'v) expr)"

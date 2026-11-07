@@ -17,9 +17,10 @@ text \<open>An invariant is \<open>ALWAYS \<phi>\<close>, \<open>EVENTUALLY \<ph
   the activation entry of an implementation trace (TECHNICAL_REPORT.md sections 2.4 and
   2.5). On a finite prefix the verdict is three-valued, in the style of LTL3: T, F, or
   \<open>\<bottom>\<close> (undefined). A definite verdict is final: it does not change when the trace is
-  extended (\<open>inv_final\<close>). Correspondence with LTL3 is not proved; for example, for a
-  state formula \<open>\<phi>\<close> that is true in every state, LTL3 gives \<open>ALWAYS \<phi>\<close> the verdict T,
-  while here it stays \<open>\<bottom>\<close>.
+  extended (\<open>inv_final\<close>). Correspondence with LTL3 is not proved, and the verdicts
+  differ: for a state formula \<open>\<phi>\<close> that is true in every state, such as the literal
+  \<open>true\<close>, LTL3 gives \<open>ALWAYS \<phi>\<close> the verdict T on every prefix, while here it stays
+  \<open>\<bottom>\<close>.
   \<^item> \<open>ALWAYS \<phi>\<close> is F from the first entry where \<open>\<phi>\<close> is F, and \<open>\<bottom>\<close> otherwise; it is never T.
   \<^item> \<open>EVENTUALLY \<phi>\<close> is T from the first entry where \<open>\<phi>\<close> is T, and \<open>\<bottom>\<close> otherwise; it is never F.
   \<^item> \<open>NEXT \<phi>\<close> is the value of \<open>\<phi>\<close> at entry 1, and \<open>\<bottom>\<close> while the prefix has only entry 0.

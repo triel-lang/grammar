@@ -148,8 +148,9 @@ values.
 \texttt{ALWAYS}, \texttt{EVENTUALLY} and \texttt{NEXT} are evaluated on finite prefixes of
 implementation traces with three-valued verdicts in the style of LTL3 (Bauer, Leucker and
 Schallhart~\cite{BauerLeuckerSchallhart2011}): true, false, or undefined. Correspondence
-with LTL3 is not proved; for a formula true in every state, LTL3 gives \texttt{ALWAYS}
-the verdict true, while here it stays undefined.
+with LTL3 is not proved, and the verdicts differ: for a formula true in every state, such
+as the literal \texttt{true}, LTL3 gives \texttt{ALWAYS} the verdict true on every prefix,
+while here it stays undefined.
 Proved: on a prefix \texttt{ALWAYS} is never true and \texttt{EVENTUALLY} never false; a
 definite verdict is final under extension; an entry where the formula is undefined for
 lack of data neither violates \texttt{ALWAYS} nor fulfils \texttt{EVENTUALLY}; for a
