@@ -142,7 +142,9 @@ theorem pen_amount_capped:
   "evalP num e \<sigma> = Some v \<Longrightarrow> c < v \<Longrightarrow> 0 \<le> c \<Longrightarrow> pen_amount num (Pen e (Some c)) \<sigma> = PAmount c True"
   by simp
 
-text \<open>A reported amount is never negative and never exceeds the cap.\<close>
+text \<open>An amount reported as \<open>PAmount\<close>, with no cap or a non-negative cap, is never negative
+  and never exceeds the cap (\<open>pen_amount_bounds\<close>); a negative value is reported as
+  \<open>PNegative\<close>.\<close>
 
 theorem pen_amount_bounds:
   assumes "pen_amount num (Pen e cap) \<sigma> = PAmount x b" and "\<forall>c. cap = Some c \<longrightarrow> 0 \<le> c"
