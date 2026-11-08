@@ -306,8 +306,8 @@ theorem T1_nd:
   subgoal by (simp add: knot_knot)
   done
 
-text \<open>Monotonicity (T2, the claim of TECHNICAL_REPORT.md section 2.9) under the deep
-  information order, obtained from T2 through \<open>flat\<close>.\<close>
+text \<open>Monotonicity of PRESENT-free expressions (T2, the claim of TECHNICAL_REPORT.md section
+  2.9) under the deep information order, obtained from T2 through \<open>flat\<close>.\<close>
 
 theorem T2_nd_monotone:
   assumes "present_free e" and "nd_le d d'" and "eval_nd e d = Some b"
