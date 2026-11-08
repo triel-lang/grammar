@@ -112,8 +112,9 @@ data no breach-free edit of the trace keeps an action the monitor blocks
 makes it block more (\texttt{blocks\_data\_mono}). Breach
 handlers bind to the nearest preceding obligation or prohibition of the same subject; at most one
 continuation-determining action is allowed; a cure in time prevents a second breach, and a
-failed cure is final; a result computed with stale factors treated as absent is not
-overturned when they are refreshed. Verdicts are also stable under more data: on the same
+failed cure is final; for a condition without \texttt{PRESENT} and \texttt{DEFAULT}, a result
+computed with stale factors treated as absent is not overturned when they are refreshed.
+Verdicts are also stable under more data: on the same
 trace read with more data at every entry, for a condition without \texttt{PRESENT} and
 \texttt{DEFAULT}, an obligation keeps its verdict and status, a breached prohibition stays
 breached, at the same or an earlier time, and an exercised permission stays exercised
@@ -137,9 +138,10 @@ condition (\texttt{absent\_comparison}). Strong Kleene evaluation is not complet
 to completions: $x = v$ \texttt{AND NOT} $(x = v)$ with $x$ absent is undefined, though it is
 false in every completion (\texttt{absent\_contradiction}, \texttt{kleene\_not\_complete}).
 Among the evaluations that read the atoms in the same way and combine their values by any
-four connectives on the three truth values, strong Kleene evaluation is sound for every
-completion and, with two different values, the most defined sound one, and no sound one is
-complete (\texttt{kleene\_sound\_conn}, \texttt{kleene\_optimal},
+four connectives on the three truth values, strong Kleene evaluation is, on conditions
+without \texttt{PRESENT} and \texttt{DEFAULT}, sound for every completion and, with two
+different values, the most defined sound one on such conditions; no sound one is complete
+(\texttt{kleene\_sound\_conn}, \texttt{kleene\_optimal},
 \texttt{compositional\_incomplete}): a classical fact about the logic of Kleene, proved here
 with respect to the completions of states, the flat nominative data that map names to
 values.
@@ -218,23 +220,29 @@ narrow the enclosure (\texttt{enc\_antitone}); for a finite non-empty set of sam
 consistent with the bound, which includes the bound being non-negative, the enclosure
 at a sample time is the sample, it is non-empty, some signal is admissible, and every
 value in the enclosure is the value of an admissible signal (\texttt{enc\_sample},
-\texttt{enc\_nonempty}, \texttt{adm\_exists}, \texttt{enc\_tight}); on a trace, what the monitor of a
+\texttt{enc\_nonempty}, \texttt{adm\_exists}, \texttt{enc\_tight}); on a trace, for a condition
+without \texttt{PRESENT} and \texttt{DEFAULT}, what the monitor of a
 prohibition allows on the enclosures is false for every admissible family of signals at
 the time of the entry before the action, and a breach it records is true for every one
 (\texttt{monitor\_sound\_signals}, \texttt{breach\_certain\_signals}), the
 analogues of the theorems about completions; the verdicts computed on enclosures are
 final when entries are appended (\texttt{pr\_verdictI\_final},
-\texttt{inv\_evalI\_final}, \texttt{ew\_evalI\_final}), with samples inconsistent
-with the bound, or a negative bound, a rejection; between two neighbouring samples the envelopes are the two
+\texttt{inv\_evalI\_final}, and, for times that do not decrease,
+\texttt{ew\_evalI\_final}), with samples inconsistent
+with the bound, or a negative bound, a rejection; for samples consistent with the bound,
+between two neighbouring samples the envelopes are the two
 neighbouring cones (\texttt{upper\_neighbours}, \texttt{lower\_neighbours},
 \texttt{enc\_neighbours}), with the peak and the valley as their extremes on the
-segment; whether the lower envelope stays at or above a level throughout a window of
-real time is decided by finitely many rational comparisons, exactly
-(\texttt{above\_cert\_iff}), which gives a continuous false verdict of
+segment, attained for a positive bound; whether the lower envelope stays at or above a level throughout a window of
+real time is, for a finite non-empty set of samples consistent with the bound and a
+window that does not end before it starts, decided by finitely many rational
+comparisons, exactly (\texttt{above\_cert\_iff}), which gives a continuous false verdict of
 \texttt{EVENTUALLY (x < c) WITHIN d}, sound for every admissible signal at every time of
-the window, final under more consistent samples, and never contradicting the verdict
-at the entries (\texttt{ew\_evalI\_F\_sound}, \texttt{ew\_below\_false\_final},
-\texttt{ew\_below\_false\_not\_true}); a signal with a derivative bounded by $L$ is a
+the window and, for a deadline not before the activation entry, final under more
+consistent samples and, on a consistent trace with times that do not decrease, never
+contradicting the verdict at the entries (\texttt{ew\_evalI\_F\_sound},
+\texttt{ew\_below\_false\_final}, \texttt{ew\_below\_false\_not\_true}); a signal with a
+derivative bounded by $L$ is a
 signal under $L$, by the mean value theorem (\texttt{deriv\_bound\_lip}); the
 enclosures are executable, and the numbers of the sensor example of the repository are
 computed by the executable equations. The bound is a parameter of the theory, not of the
@@ -259,8 +267,8 @@ more data, and with \texttt{DEFAULT} it can be; the Decimals are closed under $+
 and $\times$; with no cap or a non-negative cap, an amount reported for payment is never
 negative and never exceeds the cap (\texttt{pen\_amount\_bounds}), while a negative amount is
 reported as negative and not replaced by 0; once a norm
-is breached, later entries change neither the state of the breach nor the reported
-actions and amounts.
+is breached, later entries change neither the state of the breach nor the reported actions
+and amounts (for those of an obligation, when the timestamps do not decrease).
 
 \paragraph{The evaluator (theory \texttt{TRIEL\_Exec}).}
 Executable equations, each proved equal to a definition of the other theories, replace
@@ -270,7 +278,8 @@ every term without \texttt{AND} (soundness, \texttt{mem3\_sound}), and an answer
 always definite for terms without \texttt{UNLESS} and \texttt{AND}
 (\texttt{mem3\_definite}); for these terms the two together make the test exact
 (\texttt{mem3\_eq}). Stale factors are blocked by factor, and the safety
-claim of Section~2.9 is proved again for this blocking. The function \texttt{run}
+claim of Section~2.9, for a condition without \texttt{PRESENT} and \texttt{DEFAULT}, is proved
+again for this blocking. The function \texttt{run}
 computes the report of a specification on an implementation trace and is exported to
 Haskell. It rejects a list of observations whose times decrease, and for every list of
 observations a decided verdict of its report stays the same when observations are

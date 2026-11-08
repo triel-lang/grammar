@@ -900,7 +900,8 @@ begin
 lemma wf_den_den: "and_free t \<Longrightarrow> wf_den (den t)"
   by (induction t) (simp_all add: wf_must wf_may wf_mustnot wf_then wf_or wf_unless wf_if wf_skip)
 
-text \<open>Soundness: a definite answer of \<open>mem3\<close> or \<open>ext3\<close> is the truth.\<close>
+text \<open>Soundness: for a term without AND, a definite answer of \<open>mem3\<close> or \<open>ext3\<close> is
+  the truth.\<close>
 
 theorem mem3_ext3_sound:
   assumes "and_free t"
@@ -1716,7 +1717,7 @@ lemma dec_mem3: "and_free t \<Longrightarrow> dec (mem3 t \<pi> r) ((\<pi>, r) \
 lemma dec_ext3: "and_free t \<Longrightarrow> \<rho> \<noteq> [] \<Longrightarrow> dec (ext3 t \<rho>) (ext (den t) \<rho>)"
   using mem3_ext3_sound by (simp add: dec_def)
 
-text \<open>Soundness: a definite answer of \<open>mem3m\<close> is the truth.\<close>
+text \<open>Soundness: for a term without AND, a definite answer of \<open>mem3m\<close> is the truth.\<close>
 
 theorem mem3m_dec: "and_free t \<Longrightarrow> dec (mem3m t \<pi> r m) ((\<pi>, r, m) \<in> fden t)"
 proof (induction t arbitrary: \<pi> r m)
@@ -1905,11 +1906,12 @@ proof -
   qed
 qed
 
-text \<open>Soundness of the status. At the reported entry the prefix is a violated trace of the term,
-  or a trace that completes it by an executed action, with Violated before Interrupted before
-  Done; a completion is reported only if no reading of this prefix or of an earlier one has
-  reached a prohibition. No shorter prefix is a violated trace, and none is completed by an
-  executed action unless a reading of it or of an earlier prefix has reached a prohibition.\<close>
+text \<open>Soundness of the status, for a term without AND. At the reported entry the prefix is a
+  violated trace of the term, or a trace that completes it by an executed action, with Violated
+  before Interrupted before Done; a completion is reported only if no reading of this prefix or
+  of an earlier one has reached a prohibition. No shorter prefix is a violated trace, and none
+  is completed by an executed action unless a reading of it or of an earlier prefix has reached
+  a prohibition.\<close>
 
 theorem status_sound:
   assumes "and_free t" and "status t \<pi> = CAt r k"
@@ -1974,12 +1976,12 @@ proof -
     by blast+
 qed
 
-text \<open>The status does not miss a violation that a reading of a prefix admits. If a prefix of
-  the observed trace is a violated trace of the term, the status is a violation at that entry
-  or before it, unless it is unknown, or the observation has ended before, at an entry where
-  the term is completed by an executed action and no reading of that prefix or of an earlier
-  one has reached a prohibition. An unknown status needs UNLESS, and the exception for an
-  earlier completion cannot be dropped (\<open>violation_after_completion\<close>).\<close>
+text \<open>For a term without AND, the status does not miss a violation that a reading of a prefix
+  admits. If a prefix of the observed trace is a violated trace of the term, the status is a
+  violation at that entry or before it, unless it is unknown, or the observation has ended
+  before, at an entry where the term is completed by an executed action and no reading of that
+  prefix or of an earlier one has reached a prohibition. An unknown status needs UNLESS, and
+  the exception for an earlier completion cannot be dropped (\<open>violation_after_completion\<close>).\<close>
 
 theorem status_no_missed_violation:
   assumes "and_free t" and "k < length \<pi>" and "(take (Suc k) \<pi>, Violated) \<in> den t"
@@ -2017,9 +2019,9 @@ next
   with status_definite[of t \<pi>] assms(1) show ?thesis by auto
 qed
 
-text \<open>The same principle from the side of the readings: once a reading of a prefix has reached
-  a prohibition, every later violation is reported, unless the status is unknown or the
-  observation ended at an earlier entry.\<close>
+text \<open>The same principle from the side of the readings: once a reading of a prefix of a term
+  without AND has reached a prohibition, every later violation is reported, unless the status
+  is unknown or the observation ended at an earlier entry.\<close>
 
 corollary reached_prohibition_watched:
   assumes "and_free t" and "reached_prohibition t (take (Suc j) \<pi>)"
@@ -2060,10 +2062,11 @@ next
 qed (auto simp: must_d_def may_d_def mustnot_d_def skip_d_def)
 
 text \<open>A prohibition at the end of a sequence is watched to the end of the trace. If a prefix
-  of the observed trace is a violated trace of \<open>t THEN s MUST_NOT a\<close> in a reading where
-  \<open>t\<close> is completed at entry \<open>k\<^sub>0\<close> and the prohibition is violated later, the status is a
-  violation at that entry or before it, unless it is unknown or the term was interrupted,
-  with an executed handler, before entry \<open>k\<^sub>0\<close>. Both exceptions need UNLESS in \<open>t\<close>.\<close>
+  of the observed trace is a violated trace of \<open>t THEN s MUST_NOT a\<close>, for \<open>t\<close> without AND,
+  in a reading where \<open>t\<close> is completed at entry \<open>k\<^sub>0\<close> and the prohibition is violated later,
+  the status is a violation at that entry or before it, unless it is unknown or the term was
+  interrupted, with an executed handler, before entry \<open>k\<^sub>0\<close>. Both exceptions need UNLESS in
+  \<open>t\<close>.\<close>
 
 theorem then_mustnot_watched:
   assumes "and_free t" and "k\<^sub>0 < k" and "k < length \<pi>"
@@ -2155,9 +2158,10 @@ proof -
 qed
 
 text \<open>A prohibition in a branch of OR completes at once, so a reading of the first entry has
-  reached it, and every violation of the term is reported, whatever the other branch does:
-  on the trace activation, pay, leak, \<open>alice MUST pay OR bob MUST_NOT leak\<close> is reported
-  violated at entry 2. This is the conservative reading of OR.\<close>
+  reached it: if the other branch is without AND, every violation of the term is reported,
+  unless the status is unknown, which needs UNLESS in that branch. On the trace activation,
+  pay, leak, \<open>alice MUST pay OR bob MUST_NOT leak\<close> is reported violated at entry 2. This is
+  the conservative reading of OR.\<close>
 
 corollary or_mustnot_watched:
   assumes "and_free t" and "k < length \<pi>"
@@ -2298,7 +2302,7 @@ text \<open>The evaluator names data by complex names. A factor \<open>f\<close>
   \<open>ON_STALE BLOCK\<close> is fresh at an entry if \<open>[f]\<close> arrived at most \<open>m\<close> time units earlier
   (\<open>fresh\<close> of TRIEL_Breach). When it is stale, every complex name that starts with \<open>f\<close>
   is absent. This lifts \<open>blocked\<close> from names to factors, and the safety claim of section
-  2.9 carries over with the same proof.\<close>
+  2.9, for a condition without PRESENT and DEFAULT, carries over with the same proof.\<close>
 
 definition blockp :: "('f \<Rightarrow> int option) \<Rightarrow> ('f list, 'v, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> ('f list, 'v) state" where
   "blockp M \<pi> j p =
@@ -2913,10 +2917,13 @@ end
 subsection \<open>Time order\<close>
 
 text \<open>A list of observations is an implementation trace only if its times do not decrease
-  (\<open>is_trace\<close>). Every verdict depends on this: a breach is final only because no later
-  entry can be earlier than the entry past the deadline (\<open>window_final\<close>). The evaluator
-  checks it before anything else, and \<open>time_order\<close> is the first entry that is earlier than
-  the entry before it.\<close>
+  (\<open>is_trace\<close>). The finality of the verdicts of obligations, fallbacks and handlers, and of
+  \<open>EVENTUALLY \<dots> WITHIN\<close>, depends on this: a breach at a deadline is final only because no
+  later entry can be earlier than the entry past the deadline (\<open>window_final\<close>, \<open>ew_final\<close>);
+  the verdicts of prohibitions, permissions and the other invariants, the status of a composite
+  term and the decisions of the monitor are final without it. The evaluator checks it before
+  anything else, and \<open>time_order\<close> is the first entry that is earlier than the entry before
+  it.\<close>
 
 definition obs_time :: "observation \<Rightarrow> int" where
   "obs_time x = fst (snd x)"
@@ -3586,10 +3593,11 @@ text \<open>Finality (\<open>run_final\<close>) is about appending observations.
   lists alike, and the blocking of stale factors reads only times and events, so the blocked
   trace of \<open>obs'\<close> carries more data than the blocked trace of \<open>obs\<close> at every entry
   (\<open>btrace_data_le\<close>). Activation on more data succeeds with the same deadlines. The verdicts
-  then behave as on traces: an obligation does not change; a breached prohibition stays
-  breached, at the same or an earlier time; a fulfilled permission stays fulfilled; a definite
-  invariant stays the same; a monitor decides the same actions, and a decision can only change
-  from block to allow. For the conditions of prohibitions and permissions and the
+  then behave as on traces, for accepted observations and unless the richer observations fail
+  the type check (\<open>run_data_mono\<close>): an obligation does not change; a breached prohibition
+  stays breached, at the same or an earlier time; a fulfilled permission stays fulfilled; a
+  definite invariant stays the same; a monitor decides the same actions, and a decision can
+  only change from block to allow. For the conditions of prohibitions and permissions and the
   formulas of invariants this needs PRESENT-freedom (\<open>present_free_spec\<close>); the lines of
   composite terms are not covered, since \<open>IF\<close> takes its ELSE branch on an undefined
   condition. The actions reported with a breach (penalties) are not compared: a penalty is
@@ -3948,8 +3956,9 @@ next
     by (simp add: term_line_def else_line_def Let_def else_verdict_data_indep[OF le])
 qed (simp_all add: term_line_def composite_line_def split: option.splits)
 
-text \<open>The line of a monitor on the same trace with more data: the same actions are decided,
-  and an action blocked on the richer data was blocked before.\<close>
+text \<open>The line of a monitor on the same trace with more data, for a condition without PRESENT
+  and DEFAULT: the same actions are decided, and an action blocked on the richer data was
+  blocked before.\<close>
 
 lemma monitor_decisions_data_mono:
   assumes pf: "present_free c" and le: "data_le \<pi> \<pi>'"
@@ -4018,11 +4027,13 @@ proof -
         split: option.splits if_splits prod.splits)
 qed
 
-text \<open>The report on the same observations with more data. If the observations \<open>obs\<close> were
-  accepted (their report has the line \<open>LTypes None\<close>), then either \<open>obs'\<close> is rejected for the
-  types of its data, or the report on \<open>obs'\<close> has the same number of lines and every line of it
-  refines the corresponding line of the report on \<open>obs\<close>. \<open>obs'\<close> cannot be rejected for its time order or its activation: the
-  times are the same, and activation succeeds on more data.\<close>
+text \<open>The report on the same observations with more data, for a specification in which the
+  conditions of prohibitions and permissions and the formulas of invariants are without
+  PRESENT and DEFAULT (\<open>present_free_spec\<close>). If the observations \<open>obs\<close> were accepted
+  (their report has the line \<open>LTypes None\<close>), then either \<open>obs'\<close> is rejected for the types
+  of its data, or the report on \<open>obs'\<close> has the same number of lines and every line of it
+  refines the corresponding line of the report on \<open>obs\<close>. \<open>obs'\<close> cannot be rejected for its
+  time order or its activation: the times are the same, and activation succeeds on more data.\<close>
 
 theorem run_data_mono:
   assumes pf: "present_free_spec sp" and le: "obs_le obs obs'"
@@ -4166,7 +4177,9 @@ proof -
   qed
 qed
 
-text \<open>Three readings of \<open>run_data_mono\<close> for a report on accepted observations. A decided line
+text \<open>Three readings of \<open>run_data_mono\<close> for a report on accepted observations of a
+  specification in which the conditions of prohibitions and permissions and the formulas of
+  invariants are without PRESENT and DEFAULT (\<open>present_free_spec\<close>). A decided line
   of an obligation, a prohibition, a permission, a fallback or an invariant stays decided; a
   breach of a prohibition reported at \<open>\<tau>\<close> is reported at some \<open>\<tau>' \<le> \<tau>\<close>; a prohibition that is
   pending on the observations with more data was pending before. In each case the only

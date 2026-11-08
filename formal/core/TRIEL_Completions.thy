@@ -1,12 +1,13 @@
 (*  Title:      TRIEL_Completions.thy
     Purpose:    Completions of incomplete data: the total valuations that agree with a
-                state wherever it is defined. What the fail-closed monitor of TRIEL_Breach
-                allows, and a condition known to be true, stay so in every completion;
-                reading an undefined condition as "skip the policy", or a comparison with
-                an absent operand as false, does not; strong Kleene evaluation is not
-                complete with respect to completions, and, with two different values, it
-                is the most defined sound evaluation that combines the values of the parts
-                of a condition by four connectives.
+                state wherever it is defined. For conditions without PRESENT and DEFAULT,
+                what the fail-closed monitor of TRIEL_Breach allows, and a condition known
+                to be true, stay so in every completion; reading an undefined condition as
+                "skip the policy", or a comparison with an absent operand as false, does
+                not; strong Kleene evaluation is not complete with respect to completions,
+                and, on such conditions and with two different values, it is the most
+                defined sound evaluation that combines the values of the parts of a
+                condition by four connectives.
     SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
@@ -93,8 +94,10 @@ corollary completion_defined: "completion \<sigma> \<sigma>' \<Longrightarrow> e
 
 section \<open>Soundness of the monitor and of the verdict\<close>
 
-text \<open>If the fail-closed monitor does not block, the condition is false in every completion:
-  the action is allowed only when it is allowed however the missing data turn out.\<close>
+text \<open>For a condition without PRESENT and DEFAULT, if the fail-closed monitor does not block,
+  the condition is false in every completion: the action is allowed only when it is allowed
+  however the missing data turn out. With PRESENT this fails: \<open>PRESENT(x)\<close> is false on the
+  empty state, so the monitor does not block, and it is true in every completion.\<close>
 
 theorem monitor_sound_completions:
   assumes "present_free c" and "\<not> blocks c \<sigma>" and "completion \<sigma> \<sigma>'"
@@ -105,8 +108,8 @@ proof -
   ultimately show ?thesis using T2_monotone[OF assms(1)] by blast
 qed
 
-text \<open>The same for the monitor as a function: an action that \<open>enforce\<close> lets through was taken
-  in a state in which the condition is false in every completion.\<close>
+text \<open>The same for the monitor as a function, for such a condition: an action that \<open>enforce\<close>
+  lets through was taken in a state in which the condition is false in every completion.\<close>
 
 theorem enforce_allows_sound:
   assumes "present_free c" and j: "1 \<le> j" "j < length \<pi>"
@@ -124,8 +127,8 @@ proof -
   from monitor_sound_completions[OF assms(1) this assms(5)] show ?thesis .
 qed
 
-text \<open>If the condition is true, it is true in every completion: the condition of a breach
-  recorded on incomplete data holds however the missing data turn out.\<close>
+text \<open>If a condition without PRESENT and DEFAULT is true, it is true in every completion: the
+  condition of a breach recorded on incomplete data holds however the missing data turn out.\<close>
 
 theorem breach_certain_completions:
   assumes "present_free c" and "eval c \<sigma> = Some True" and "completion \<sigma> \<sigma>'"
@@ -430,8 +433,8 @@ proof -
   qed simp_all
 qed
 
-text \<open>And no sound compositional evaluation is complete: the witness of
-  \<open>kleene_not_complete\<close> is undefined for every one of them.\<close>
+text \<open>And, for a type with two different values, no sound compositional evaluation is
+  complete: the witness of \<open>kleene_not_complete\<close> is undefined for every one of them.\<close>
 
 theorem compositional_incomplete:
   assumes "sound_conn TYPE(('n, 'v :: value_order) expr) G" and "\<exists>v w :: 'v. v \<noteq> w"

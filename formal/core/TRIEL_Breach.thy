@@ -229,7 +229,7 @@ theorem from_absent_factor: "\<sigma>\<^sub>0 x = None \<Longrightarrow> start_o
   by (simp add: start_of_def)
 
 text \<open>An action before the start does not fulfil the obligation; one exactly at the start
-  does.\<close>
+  does, when the start is not after the deadline.\<close>
 
 theorem before_from_no_fulfil:
   assumes "\<And>j. 1 \<le> j \<Longrightarrow> j < length \<pi> \<Longrightarrow> does s a (evt (\<pi> ! j)) \<Longrightarrow> time \<pi> j < b"
@@ -594,8 +594,9 @@ proof -
   then show "enforce s a c \<pi> ! j = \<pi> ! j" using enforce_blocks_exactly[OF j(2), of s a c] by simp
 qed
 
-text \<open>Blocking is antitone: what the monitor allows in a state it allows in every state with
-  more data, because a false condition stays false (T2).\<close>
+text \<open>Blocking is antitone for a condition without PRESENT and DEFAULT: what the monitor allows
+  in a state it allows in every state with more data, because a false condition stays false
+  (T2).\<close>
 
 theorem blocks_data_mono:
   assumes "present_free c" and "\<sigma> \<sqsubseteq> \<sigma>'" and "blocks c \<sigma>'"
@@ -766,8 +767,9 @@ qed
 subsection \<open>Prohibitions and permissions\<close>
 
 text \<open>The monitor blocks fewer actions on a refinement (\<open>blocks_data_mono\<close>,
-  \<open>blocked_action_data_mono\<close> above); here the same for the verdict, in the other direction.
-  A breach is not withdrawn by more data: if \<open>\<pi>'\<close> is pending, so was \<open>\<pi>\<close>.\<close>
+  \<open>blocked_action_data_mono\<close> above); here the same for the verdict, in the other direction,
+  again for a condition without PRESENT and DEFAULT. A breach is not withdrawn by more data:
+  if \<open>\<pi>'\<close> is pending, so was \<open>\<pi>\<close>.\<close>
 
 theorem pr_verdict_pending_data_mono:
   assumes pf: "present_free c" and le: "data_le \<pi> \<pi>'" and p: "pr_verdict s a c \<pi>' = Pending"
@@ -785,9 +787,10 @@ corollary pr_verdict_decided_data_mono:
   shows "pr_verdict s a c \<pi>' \<noteq> Pending"
   using pr_verdict_pending_data_mono[OF assms(1,2)] assms(3) by blast
 
-text \<open>The time of a breach can only move earlier: the first forbidden action of \<open>\<pi>\<close> is still
-  forbidden in \<open>\<pi>'\<close>, and an earlier action, whose condition was undefined in \<open>\<pi>\<close>, may have
-  become forbidden. With non-decreasing times the new breach is not later than the old one.\<close>
+text \<open>For a condition without PRESENT and DEFAULT, the time of a breach can only move earlier:
+  the first forbidden action of \<open>\<pi>\<close> is still forbidden in \<open>\<pi>'\<close>, and an earlier action, whose
+  condition was undefined in \<open>\<pi>\<close>, may have become forbidden. With non-decreasing times the
+  new breach is not later than the old one.\<close>
 
 theorem pr_verdict_data_mono:
   assumes pf: "present_free c" and tr: "is_trace \<pi>" and le: "data_le \<pi> \<pi>'"
@@ -813,7 +816,8 @@ proof -
   with v' show ?thesis by blast
 qed
 
-text \<open>A permission exercised in a state where its condition holds stays exercised.\<close>
+text \<open>A permission with a condition without PRESENT and DEFAULT, exercised in a state where its
+  condition holds, stays exercised.\<close>
 
 theorem may_verdict_data_mono:
   assumes pf: "present_free c" and le: "data_le \<pi> \<pi>'"
@@ -1010,7 +1014,7 @@ theorem escalation_keeps_breach:
   using assms by (simp add: handle_breach_def)
 
 text \<open>The status is final once the obligation and the window of its continuation are
-  decided.\<close>
+  decided, when the trace is extended with non-decreasing timestamps.\<close>
 
 theorem handle_breach_final:
   assumes tr: "is_trace (\<pi> @ \<rho>)"
@@ -1474,8 +1478,10 @@ theorem stale_absent:
   "M x = Some m \<Longrightarrow> \<not> fresh m x \<pi> j \<Longrightarrow> eval (EPresent x) (blocked M \<pi> j) = Some False"
   by (simp add: blocked_def domIff)
 
-text \<open>The safety claim of section 2.9: a result computed with stale factors treated as
-  absent is not overturned by whatever values those factors have when refreshed.\<close>
+text \<open>The safety claim of section 2.9, for a condition without PRESENT and DEFAULT: a result
+  computed with stale factors treated as absent is not overturned by whatever values those
+  factors have when refreshed. With PRESENT a result can be overturned: \<open>PRESENT(x)\<close> is false
+  while \<open>x\<close> is stale (\<open>stale_absent\<close>) and true once \<open>x\<close> is refreshed.\<close>
 
 theorem stale_safe:
   assumes "present_free e" and "eval e (blocked M \<pi> j) = Some b"

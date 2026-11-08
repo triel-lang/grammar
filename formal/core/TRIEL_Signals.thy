@@ -6,22 +6,25 @@
                 signals are the L-Lipschitz functions through the samples; at every time
                 the quantity lies in an enclosure computed by exact rational arithmetic;
                 a condition is evaluated on enclosures in three values. Proved: the
-                interval evaluation extends the evaluation on states, is sound for every
-                admissible signal and monotone under narrowing; the enclosure contains
+                interval evaluation extends the evaluation on states and, for conditions
+                without PRESENT and DEFAULT, is sound for every admissible signal and
+                monotone under narrowing to non-empty intervals; the enclosure contains
                 every admissible signal, narrows with more samples, is the sample at a
                 sample time, is non-empty and tight for consistent samples; what the
-                monitor of a prohibition allows on the enclosures is false for every
-                admissible signal, and a breach it records is certain; the verdicts
-                computed from the enclosures are final under extension of the trace,
-                where inconsistent samples are a rejection; between two neighbouring
-                samples the envelopes are the two neighbouring cones, with the peak
-                and the valley as their extremes; whether the lower envelope stays at
-                or above a level throughout a window of real time is decided exactly by
-                finitely many rational comparisons, which gives a continuous false
-                verdict of EVENTUALLY (x < c) WITHIN d, sound for every admissible
-                signal at every time of the window and final under more consistent
-                samples; a signal with a bounded derivative is a signal under the
-                bound; the enclosures and the decision are executable.
+                monitor of a prohibition allows on the enclosures is, for such a
+                condition, false for every admissible signal, and a breach it records is
+                certain; the verdicts computed from the enclosures are final under
+                extension of the trace, where inconsistent samples are a rejection; for
+                consistent samples, between two neighbouring samples the envelopes are
+                the two neighbouring cones, with the peak and the valley as their
+                extremes, and whether the lower envelope stays at or above a level
+                throughout a window of real time is decided exactly by finitely many
+                rational comparisons, which gives a continuous false verdict of
+                EVENTUALLY (x < c) WITHIN d, sound for every admissible signal at every
+                time of the window and, for a deadline not before the activation entry,
+                final under more consistent samples; a signal with a bounded derivative
+                is a signal under the bound; the enclosures and the decision are
+                executable.
     SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 *)
 
@@ -172,8 +175,9 @@ proof (rule Max_eqI)
   then show "y \<le> snd p" unfolding q(2) cone_lo_def by (simp add: abs_le_iff)
 qed
 
-text \<open>The envelopes are signals under \<open>L\<close> themselves: a cone moves by at most \<open>L\<close> times
-  the time difference, and so does the least or greatest of finitely many cones.\<close>
+text \<open>For a non-negative bound the envelopes are signals under \<open>L\<close> themselves: a cone moves by
+  at most \<open>L\<close> times the time difference, and so does the least or greatest of finitely many
+  cones.\<close>
 
 lemma abs_diff_triangle: "\<bar>t - s\<bar> \<le> \<bar>t' - s\<bar> + \<bar>t - t'\<bar>" for t t' s :: real
   using abs_triangle_ineq[of "t - t'" "t' - s"] by simp
@@ -243,10 +247,10 @@ theorem envelope_lip:
   shows "lip L (lower L S)" and "lip L (upper L S)"
   by (rule lower_lip[OF assms]) (rule upper_lip[OF assms])
 
-text \<open>So the envelopes of a consistent set of samples are signals under \<open>L\<close> through the
-  samples: the extremal admissible signals. Hence the lower envelope is below the upper
-  one, and a set of samples is consistent exactly when some signal under \<open>L\<close> passes
-  through it.\<close>
+text \<open>So, for a non-negative bound, the envelopes of a consistent set of samples are signals
+  under \<open>L\<close> through the samples: the extremal admissible signals. Hence the lower envelope is
+  below the upper one, and a set of samples is consistent exactly when some signal under \<open>L\<close>
+  passes through it.\<close>
 
 lemma upper_through:
   assumes "finite S" "rcons L S"
@@ -283,9 +287,10 @@ next
   then show "rcons L S" using lip_through_rcons by blast
 qed
 
-text \<open>Tightness: every value between the envelopes at a time is the value there of some
-  signal under \<open>L\<close> through the samples, namely of the upper envelope of the samples with
-  that value added as a sample, which is a consistent set.\<close>
+text \<open>Tightness, for a consistent set of samples under a non-negative bound: every value
+  between the envelopes at a time is the value there of some signal under \<open>L\<close> through the
+  samples, namely of the upper envelope of the samples with that value added as a sample,
+  which is a consistent set.\<close>
 
 lemma rcons_insert:
   assumes "finite S" "S \<noteq> {}" "0 \<le> L" "rcons L S"
@@ -364,7 +369,7 @@ text \<open>Of two samples on the same side of a time, the farther one confines 
   nearer one: its cone at that time is at least as high above and at least as low below.
   So between two consecutive samples the envelopes are the two neighbouring cones, before
   the first sample and after the last one they are the one cone. Consistency of the two
-  samples is what makes the nearer cone the lower one.\<close>
+  samples, under a non-negative bound, is what makes the nearer cone the lower one.\<close>
 
 lemma cone_up_farther:
   assumes "0 \<le> L" "rcons L S" "p \<in> S" "q \<in> S"
@@ -524,7 +529,8 @@ text \<open>On the segment between two samples, the two upper cones add up to a 
   the mean of the two values plus \<open>L\<close> times the gap. So the least of them is at most that
   constant divided by two, the peak, with equality where the cones cross; the greatest of
   the two lower cones is at least the valley, the mean minus \<open>L\<close> times half the gap. For
-  consistent samples the crossing is inside the segment. Between two consecutive samples
+  consistent samples and a positive bound the crossing is inside the segment. Between two
+  consecutive samples
   these are the extremes of the envelopes.\<close>
 
 definition peak :: "real \<Rightarrow> real \<times> real \<Rightarrow> real \<times> real \<Rightarrow> real" where
@@ -704,8 +710,9 @@ subsection \<open>A window above a level\<close>
 text \<open>Whether the lower envelope stays at or above a level \<open>c\<close> on a whole window \<open>[a, b]\<close> of
   real time is decided by finitely many rational checks: the lower envelope at \<open>a\<close> and at
   \<open>b\<close>, and the valley of every pair of consecutive samples whose crossing lies in the window.
-  The decision is exact: it holds if and only if every admissible signal is at or above
-  \<open>c\<close> throughout the window. The proof uses that the lower envelope rises before the first
+  The decision is exact for a non-empty consistent set of samples under a non-negative bound
+  and \<open>a \<le> b\<close>: it holds if and only if every admissible signal is at or above \<open>c\<close>
+  throughout the window. The proof uses that the lower envelope rises before the first
   sample and falls after the last one, and that between two consecutive samples it is the
   greater of the two lower cones, which falls up to their crossing and rises after it.\<close>
 
@@ -1271,7 +1278,7 @@ proof -
 qed
 
 text \<open>Soundness of the decision for every admissible signal, and finality under more
-  consistent samples.\<close>
+  consistent samples, for a window that does not end before it starts.\<close>
 
 theorem above_cert_adm:
   assumes "finite S" "S \<noteq> {}" "above_cert L S a b c" "adm L S f" "of_rat a \<le> t" "t \<le> of_rat b"
@@ -2138,11 +2145,13 @@ definition monitor_decisionsI :: "'n bounds \<Rightarrow> 's \<Rightarrow> 'a \<
   "monitor_decisionsI R s a c \<pi> =
      map (\<lambda>j. (j, blocksI c (enclosed R \<pi> (j - 1)))) (filter (\<lambda>j. does s a (evt (\<pi> ! j))) [1..<length \<pi>])"
 
-text \<open>What the monitor allows is false for every admissible family of signals at the time
-  of the entry before the action; the condition of a breach is true for every admissible
-  family there. These are the analogues of \<open>monitor_sound_completions\<close> and
-  \<open>breach_certain_completions\<close>, with the signals through the samples in place of the
-  completions of the data.\<close>
+text \<open>For a condition without PRESENT and DEFAULT, what the monitor allows is false for every
+  admissible family of signals at the time of the entry before the action; the condition of
+  a breach is true for every admissible family there. These are the analogues of
+  \<open>monitor_sound_completions\<close> and \<open>breach_certain_completions\<close>, with the signals through
+  the samples in place of the completions of the data. With PRESENT this fails: a name with
+  a rate bound and no sample is absent from the interval state, while every family of
+  signals gives it a value.\<close>
 
 theorem monitor_sound_signals:
   assumes "present_free c" and j: "1 \<le> j" "j < length \<pi>" and "does s a (evt (\<pi> ! j))"
@@ -2278,10 +2287,10 @@ theorem inv_evalI_no_bounds: "inv_evalI [] \<iota> \<pi> = inv_eval \<iota> \<pi
 theorem ew_evalI_no_bounds: "ew_evalI [] \<phi> D \<pi> = ew_eval \<phi> D \<pi>"
   unfolding ew_evalI_def ew_eval_def evalI_point_entry by (rule refl)
 
-text \<open>The verdicts are sound for every admissible family at the entries that decide them:
-  \<open>ALWAYS\<close> is false only at an entry where every admissible family violates the formula,
-  \<open>EVENTUALLY\<close> and \<open>EVENTUALLY \<dots> WITHIN\<close> are true only at an entry where every admissible
-  family satisfies it.\<close>
+text \<open>For a formula without PRESENT and DEFAULT, the verdicts are sound for every admissible
+  family at the entries that decide them: \<open>ALWAYS\<close> is false only at an entry where every
+  admissible family violates the formula, \<open>EVENTUALLY\<close> and \<open>EVENTUALLY \<dots> WITHIN\<close> are true
+  only at an entry where every admissible family satisfies it.\<close>
 
 theorem always_false_signals:
   assumes "present_free \<phi>" "inv_evalI R (Always \<phi>) \<pi> = Some False"
@@ -2311,9 +2320,9 @@ proof -
   with evalI_sound_signals[OF assms(1)] show ?thesis by blast
 qed
 
-text \<open>The false verdict of \<open>EVENTUALLY \<dots> WITHIN\<close> says that at every entry of the window the
-  formula is false for every admissible family at the time of that entry. It says nothing
-  about the times between the entries.\<close>
+text \<open>For a formula without PRESENT and DEFAULT, the false verdict of \<open>EVENTUALLY \<dots> WITHIN\<close>
+  says that at every entry of the window the formula is false for every admissible family at
+  the time of that entry. It says nothing about the times between the entries.\<close>
 
 theorem ew_false_signals:
   assumes "present_free \<phi>" "ew_evalI R \<phi> D \<pi> = Some False"
@@ -2448,8 +2457,8 @@ text \<open>The false verdict of \<open>EVENTUALLY \<phi> WITHIN d\<close> on en
   is decided by \<open>above_cert\<close> on all the samples of \<open>x\<close> in the trace: the quantity is at or
   above \<open>c\<close> throughout the window, for every admissible signal. This reading is not
   causal: it uses every sample of the trace, later ones included, which narrow the
-  enclosure at earlier times. It is sound, and it is final under more consistent
-  samples.\<close>
+  enclosure at earlier times. It is sound, and, when the deadline is not before the
+  activation entry, it is final under more consistent samples.\<close>
 
 definition ew_below_false :: "'n bounds \<Rightarrow> 'n \<Rightarrow> rat \<Rightarrow> int \<Rightarrow> ('n, atom, 's, 'a) itrace \<Rightarrow> bool" where
   "ew_below_false R x c D \<pi> \<longleftrightarrow>
@@ -2491,9 +2500,10 @@ proof -
 qed
 
 text \<open>The continuous false verdict never contradicts the verdict at the entries: on a
-  consistent trace with non-decreasing times it excludes the true verdict of
-  \<open>EVENTUALLY (x < c) WITHIN d\<close> on enclosures, since the enclosure of an entry of the
-  window contains the enclosure from all the samples, which is at or above \<open>c\<close> there.\<close>
+  consistent trace with non-decreasing times, for a deadline not before the activation
+  entry, it excludes the true verdict of \<open>EVENTUALLY (x < c) WITHIN d\<close> on enclosures, since
+  the enclosure of an entry of the window contains the enclosure from all the samples, which
+  is at or above \<open>c\<close> there.\<close>
 
 theorem ew_below_false_not_true:
   assumes "ew_below_false R x c D \<pi>" "consistent_trace R \<pi>" "is_trace \<pi>" "time \<pi> 0 \<le> D"
@@ -2546,8 +2556,8 @@ proof -
 qed
 
 text \<open>The checked form, in the shape of \<open>run_final\<close>: a continuous false verdict of a
-  consistent trace is the verdict of every longer trace, unless the longer trace is
-  rejected.\<close>
+  consistent trace, with the deadline not before the activation entry, is the verdict of
+  every longer trace, unless the longer trace is rejected.\<close>
 
 theorem checked_ew_below_false_final:
   assumes "checked R \<pi> (ew_below_false R x c D \<pi>) = Some True" "\<pi> \<noteq> []" "time \<pi> 0 \<le> D"
