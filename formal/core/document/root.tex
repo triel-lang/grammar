@@ -106,8 +106,8 @@ exactly the blocked actions; it leaves a trace unchanged exactly when the trace 
 blocked action, and, when the condition is defined at every entry, exactly when the
 verdict is pending (\texttt{enforce\_transparent}), while an action taken under an undefined
 condition is blocked and is not a breach (\texttt{enforce\_undefined\_blocks}); on defined
-data no breach-free edit of the trace keeps an action the monitor blocks
-(\texttt{enforce\_minimal}); for a condition without \texttt{PRESENT} and
+data no breach-free edit of the trace that keeps its states and times keeps an action the
+monitor blocks (\texttt{enforce\_minimal}); for a condition without \texttt{PRESENT} and
 \texttt{DEFAULT}, more data never
 makes it block more (\texttt{blocks\_data\_mono}). Breach
 handlers bind to the nearest preceding obligation or prohibition of the same subject; at most one
