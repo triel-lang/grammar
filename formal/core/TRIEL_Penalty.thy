@@ -355,8 +355,9 @@ lemma handle_breach_breached:
 lemma window_breached_passed: "window s a lo d \<pi> = Breached d \<Longrightarrow> passed d \<pi>"
   by (auto simp: window_def split: if_splits)
 
-text \<open>The reported actions are final: once the norm is breached, later entries change
-  neither the actions nor the amounts of its penalties.\<close>
+text \<open>The reported actions are final: once the norm is breached, later entries (for an
+  obligation, with non-decreasing timestamps) change neither the actions nor the amounts of
+  its penalties.\<close>
 
 theorem pr_report_final:
   assumes "pr_verdict s a c \<pi> \<noteq> Pending"
