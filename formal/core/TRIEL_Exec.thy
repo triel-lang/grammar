@@ -2194,9 +2194,10 @@ lemma held_upto_eq:
   by (cases "held_upto t \<pi> k") (auto simp: dec_def)
 
 text \<open>The exception of \<open>status_no_missed_violation\<close> for an earlier completion cannot be
-  dropped: on the trace activation, \<open>a'\<close>, \<open>a\<close>, the term \<open>s MUST_NOT a THEN s' MUST a'\<close> is
-  completed by the action \<open>a'\<close> at entry 1, when no reading has reached a prohibition, and its
-  status is Done there, although the whole trace is a violated trace of the term.\<close>
+  dropped: on the trace activation, \<open>a'\<close>, \<open>a\<close>, with \<open>(s, a) \<noteq> (s', a')\<close>, the term
+  \<open>s MUST_NOT a THEN s' MUST a'\<close> is completed by the action \<open>a'\<close> at entry 1, when no reading
+  has reached a prohibition, and its status is Done there, although the whole trace is a
+  violated trace of the term.\<close>
 
 theorem violation_after_completion:
   assumes "(s, a) \<noteq> (s', a')" and "\<tau>\<^sub>0 \<le> \<tau>\<^sub>1" and "\<tau>\<^sub>1 \<le> \<tau>\<^sub>2"
