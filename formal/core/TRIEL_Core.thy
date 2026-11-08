@@ -167,8 +167,7 @@ text \<open>PRESENT is always defined.\<close>
 lemma eval_present_defined: "eval (EPresent x) \<sigma> \<noteq> None"
   by simp
 
-text \<open>A comparison with an operand that has no value is undefined, like every other
-  condition of the core that reads an absent name.\<close>
+text \<open>A comparison with an operand that has no value is undefined.\<close>
 
 theorem cmp_undefined:
   assumes "evalV a \<sigma> = None \<or> evalV b \<sigma> = None"
