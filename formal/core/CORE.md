@@ -486,9 +486,9 @@ Section 2.6 distinguishes the specification trace of §2.5 from the *implementat
 - **`nested_handler_rejected`, `wf_handler_bound`, `wf_one_handler`:** a nested handler is rejected; in a well-formed block every handler is bound, and every obligation has at most one handler.
 - **`activation_rejected`:** a deadline from an absent factor rejects the activation.
 - **`from_window`, `after_from`:** with FROM f, an action fulfils exactly when it is at a time in [f, d].
-- **`before_from_no_fulfil`, `fulfilled_at_from`:** an action before f does not fulfil, so the obligation is breached at d if nothing else happens; an action exactly at f fulfils, when f is not after the deadline.
+- **`before_from_no_fulfil`, `fulfilled_at_from`:** an action before f does not fulfil, so, if nothing else happens, the obligation is breached at d once the trace has an entry after d; an action exactly at f fulfils, when f is not after the deadline.
 - **`from_no_deadline`:** with FROM and no deadline, only an action at or after f fulfils, and the obligation is never breached.
-- **`empty_window_breached`:** a window that starts after its deadline cannot be met: the obligation is breached at d.
+- **`empty_window_breached`:** a window that starts after its deadline cannot be met: once the trace has an entry after d, the obligation is breached at d.
 - **`no_from`, `from_duration`, `from_at`, `from_absent_factor`:** without FROM, start, window and deadline are as before; a duration in BY counts from the start; a DATETIME start is that time; a start from an absent factor does not resolve.
 - **`activation_rejected_from`, `activates_resolves`:** a start from an absent factor rejects the activation; after activation, the start and the deadline of every top-level obligation resolve.
 - **`else_fulfilled`, `else_pending`, `else_taken`, `else_no_breach`:** an action by d fulfils an obligation with a fallback; when d passes without one, the fallback is in force from d instead of a breach.
@@ -641,7 +641,7 @@ Each decision below was made because of a theorem: either one that proves the de
     - A factor in an argument stands for its name, not for its value (decision 24).
 17. **`FROM s` opens the window of an obligation at s, and a duration in `BY` counts from s.**
     - The window of `s MUST a BY d FROM f` is [f, d]: an action before f does not fulfil it (`from_window`, `before_from_no_fulfil`, `fulfilled_at_from`). f is resolved at activation, like a deadline, and a factor that does not resolve rejects the activation (`activation_rejected_from`). A duration in BY counts from f (`from_duration`).
-    - Without `FROM` the window and the origin of durations are those of section 8 (`no_from`). `ESCALATE_TO` gives the new obligation a window of length d − f. A window that starts after its deadline is breached at the deadline (`empty_window_breached`).
+    - Without `FROM` the window and the origin of durations are those of section 8 (`no_from`). `ESCALATE_TO` gives the new obligation a window of length d − f. A window that starts after its deadline is breached at the deadline, once the trace has an entry after it (`empty_window_breached`).
     - The verdicts stay final (`window_final`, `handle_breach_final`, now for every lower bound of the window).
     - `UNTIL` is removed from obligations (decision 21).
 18. **A penalty is computed once, in the state in which the breach occurs.**
