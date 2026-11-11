@@ -347,7 +347,7 @@ proof -
 qed
 
 
-text \<open>DEFAULT is not monotone either: on \<open>\<emptyset> \<sqsubseteq> [x \<mapsto> v]\<close>, DEFAULT(x, w) changes from \<open>w\<close>
+text \<open>DEFAULT is not monotone either: on \<open>\<emptyset> \<sqsubseteq> [x \<mapsto> v]\<close> with \<open>v \<noteq> w\<close>, DEFAULT(x, w) changes from \<open>w\<close>
   to \<open>v\<close>, and the condition DEFAULT(x, w) = w changes from T to F. Both results are
   definite, so this is not the passage from \<open>\<bottom>\<close> to a value that monotonicity allows.\<close>
 

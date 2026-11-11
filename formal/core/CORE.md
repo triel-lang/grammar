@@ -644,7 +644,7 @@ Each decision below was made because of a theorem: either one that proves the de
 17. **`FROM s` opens the window of an obligation at s, and a duration in `BY` counts from s.**
     - The window of `s MUST a BY d FROM f` is [f, d]: an action before f does not fulfil it (`from_window`, `before_from_no_fulfil`, `fulfilled_at_from`). f is resolved at activation, like a deadline, and a factor that does not resolve rejects the activation (`activation_rejected_from`). A duration in BY counts from f (`from_duration`).
     - Without `FROM` the window and the origin of durations are those of section 8 (`no_from`). `ESCALATE_TO` gives the new obligation a window of length d − f. A window that starts after its deadline is breached at the deadline, once the trace has an entry after it (`empty_window_breached`).
-    - The verdicts stay final (`window_final`, `handle_breach_final`, now for every lower bound of the window).
+    - The verdicts stay final once decided, when the trace is extended with non-decreasing timestamps (`window_final`, `handle_breach_final`, now for every lower bound of the window; section 8.2).
     - `UNTIL` is removed from obligations (decision 21).
 18. **A penalty is computed once, in the state in which the breach occurs.**
     - The amount of `PENALTY e CAP c` is read in the state of the entry just before the entry that establishes the breach: for a prohibition the state before the forbidden action (`pr_pen_state_condition`), for an obligation the last state not after the deadline (`ob_pen_state_at_deadline`). That entry is fixed once the breach is, so the amount does not change when the trace is extended (`pr_report_final`; for an obligation, with non-decreasing timestamps, `ob_report_final`).

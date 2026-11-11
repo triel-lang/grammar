@@ -53,8 +53,10 @@ and prints a summary whose numbers are all computed by the run.
   state), the workflow `.github/workflows/artifact.yml` read peaks from 6.73 to
   7.42 GiB in the nineteen runs listed under "Times on GitHub-hosted runners"
   below; it keeps the value as `memory-peak.txt` with the logs of the run.
-- Docker Desktop (macOS, Windows): set Memory to at least 10 GB in
-  Settings → Resources.
+- Docker Desktop on macOS or Linux, or on Windows with the Hyper-V backend: set
+  the memory limit to at least 10 GB in Settings → Resources → Advanced. Docker
+  Desktop on Windows with the WSL 2 backend: set `memory=10GB` in the `[wsl2]`
+  section of `%UserProfile%\.wslconfig`, then run `wsl --shutdown`.
 - Disk: 10 GB for the image (3.1 GB compressed download, the same size for
   `docker save | gzip`), and about 0.2 GB inside the container for a run.
 - Network: only to build the image (base images, Ubuntu packages and Python
