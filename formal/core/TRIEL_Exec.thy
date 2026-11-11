@@ -810,8 +810,10 @@ fun unless_free :: "('n, 'v, 's, 'a) tm \<Rightarrow> bool" where
 text \<open>\<open>mem3 t \<pi> r\<close> decides whether \<open>(\<pi>, r)\<close> is in the denotation of \<open>t\<close>; \<open>ext3 t \<rho>\<close> decides
   whether \<open>\<rho>\<close> is a proper prefix of a trace of \<open>t\<close>. \<open>None\<close> means unknown. For UNLESS, an
   interrupted trace requires that the observed prefix can be continued by \<open>t\<^sub>1\<close>; this is
-  decided exactly for MUST and THEN-chains of MUST, and left unknown where it would depend
-  on the satisfiability of a guard.\<close>
+  decided for MUST, for THEN chains, OR and IF of decided parts, for skip, for MAY and
+  MUST_NOT when the condition is true in the last state, and for MUST_NOT when a forbidden
+  action has already occurred, and left unknown where it would depend on the
+  satisfiability of a guard.\<close>
 
 fun mem3 :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> outcome \<Rightarrow> bool option"
 and ext3 :: "('n, 'v :: value_order, 's, 'a) tm \<Rightarrow> ('n, 'v, 't :: linorder, 's, 'a) trace \<Rightarrow> bool option" where
