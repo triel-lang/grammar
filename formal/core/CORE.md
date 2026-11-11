@@ -12,7 +12,7 @@ isabelle build -D .
 
 `isabelle build -e -D .` also writes the exported evaluator to `evaluator/generated/`.
 
-The build is checked with Isabelle2025-2 by CI on every push to `main` (`.github/workflows/isabelle.yml`). [`build.log`](build.log) is the output of a clean build (`isabelle build -c -v -D .`), with the PDF document, made on 27 October 2026 of the thirteen theories of that date; it does not include `TRIEL_Signals.thy`, which was added later. It was produced on Linux, in the Docker image `makarius/isabelle:Isabelle2025-2` with TeX Live added.
+The build is checked with Isabelle2025-2 by CI on every push to main (`.github/workflows/isabelle.yml`). [`build.log`](build.log) is the output of a clean build (`isabelle build -c -v -D .`), with the PDF document, made on 27 October 2026 of the thirteen theories of that date; it does not include `TRIEL_Signals.thy`, which was added later. It was produced on Linux, in the Docker image `makarius/isabelle:Isabelle2025-2` with TeX Live added.
 
 The build also typesets the theories, with a short introduction ([`document/root.tex`](document/root.tex)), into `output/document.pdf`. This step needs a LaTeX installation that provides `lualatex`, for example MiKTeX or TeX Live.
 
