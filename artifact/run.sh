@@ -144,6 +144,57 @@ paper_theorems() {
   cat "$RESULTS_DIR/paper_theorems.txt"
 }
 
+# evaluator.yml: the conformance suite (examples/core/conformance) with the
+# reference implementation, on both levels.
+conformance() {
+  python3 examples/core/conformance/run.py --level verdicts || return 1
+  python3 examples/core/conformance/run.py --level monitor
+}
+
+# evaluator.yml: manifest.json names the committed evaluator, every scenario,
+# and the sha256 of every file it lists. The same code as in CI.
+conformance_manifest() {
+  python3 - <<'EOF'
+import hashlib, json, re, sys
+from pathlib import Path
+m = json.loads(Path("examples/core/conformance/manifest.json").read_text(encoding="utf-8"))
+sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()
+errors = []
+if m["evaluator_sha256"] != sha("evaluator/generated/TRIEL.hs"):
+    errors.append("evaluator_sha256 is not the sha256 of evaluator/generated/TRIEL.hs")
+traces = sorted(c["trace"] for c in m["cases"])
+files = sorted(p.as_posix() for p in Path("examples/core/scenarios").glob("*.scn"))
+if traces != files:
+    errors.append("cases differ from the scenarios: only in manifest %s, only on disk %s"
+                  % (sorted(set(traces) - set(files)), sorted(set(files) - set(traces))))
+for c in m["cases"]:
+    if Path(c["trace"]).stem != c["id"] or c["expected"] != c["trace"][:-len(".scn")] + ".expected":
+        errors.append("%s: id, trace and expected do not agree" % c["id"])
+    if not Path(c["trace"]).is_file():
+        continue
+    if re.findall(r'\(spec "([^"]*)"\)', Path(c["trace"]).read_text(encoding="utf-8")) != [c["spec"]]:
+        errors.append("%s: spec is not the specification of the scenario" % c["id"])
+    for k in ("trace", "spec", "expected"):
+        if not Path(c[k]).is_file() or c["sha256"][k] != sha(c[k]):
+            errors.append("%s: sha256 of %s differs from %s" % (c["id"], k, c[k]))
+print("\n".join(errors) or "manifest.json: %d cases, every sha256 matches" % len(m["cases"]))
+sys.exit(1 if errors else 0)
+EOF
+}
+
+# evaluator.yml: run.py itself: a command that prints the expected outputs
+# passes on both levels, a command that prints nothing fails.
+conformance_self_check() {
+  local level
+  for level in verdicts monitor; do
+    python3 examples/core/conformance/run.py --level $level --impl "sh -c 'cat \"\${0%.scn}.expected\"' {trace}" > "$SCRATCH/self.txt" || return 1
+  done
+  if python3 examples/core/conformance/run.py --impl true > "$SCRATCH/self.txt"; then
+    echo "run.py passed a command without output"; return 1
+  fi
+  tail -n 1 "$SCRATCH/self.txt"
+}
+
 # --- Run -------------------------------------------------------------------
 
 echo "TRIEL artifact: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -170,6 +221,9 @@ step 08-parse-examples     parse_examples
 step 09-ambiguity-tests    ambiguity_tests
 step 10-document-excerpts  document_excerpts
 step 11-paper-theorems     paper_theorems
+step 12-conformance        conformance
+step 13-conformance-manifest conformance_manifest
+step 14-conformance-self-check conformance_self_check
 total_seconds=$(( $(date +%s) - total_start ))
 
 # --- Summary ---------------------------------------------------------------

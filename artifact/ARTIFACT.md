@@ -80,7 +80,9 @@ Measured on a 4-core x86-64 virtual machine with 16 GB of memory:
 
 The times of `run.sh` in the table are those of version 2.5.1 (47 scenarios, 27
 examples), measured with the container limited to 10 GiB; the download and the
-image build were measured for version 2.5, with the same `Dockerfile`.
+image build were measured for version 2.5, with the same `Dockerfile`. These
+runs, and the runs on GitHub-hosted runners below, were made before the steps
+12 to 14 of `run.sh` (the conformance suite) were added, with steps 01 to 11.
 
 ### Times on GitHub-hosted runners
 
@@ -206,7 +208,7 @@ ambiguity regression checks passed           242
 document excerpts conforming to the grammar  15
 wall-clock time                              ...
 ...
-RESULT: all 11 steps passed
+RESULT: all 14 steps passed
 ```
 
 For a shell in the image, with Isabelle, GHC and Python on the `PATH`:
@@ -230,6 +232,9 @@ docker run --rm -it --entrypoint bash triel-artifact
 | 09-ambiguity-tests | the ambiguity regression tests and the LALR(1) check of the grammar | parse-examples.yml |
 | 10-document-excerpts | every TRIEL excerpt of the documents, every grammar excerpt of `TECHNICAL_REPORT.md` and every usage example of the grammar file conforms to the grammar | parse-examples.yml |
 | 11-paper-theorems | the session `TRIEL_Paper` builds: each of the 107 names is a theorem of `TRIEL_Core` that depends on no oracle, and each of the 21 definitions and 5 functions exists | — |
+| 12-conformance | the conformance suite (`examples/core/conformance/run.py`) with the reference implementation, on the levels `verdicts` and `monitor` | evaluator.yml |
+| 13-conformance-manifest | `examples/core/conformance/manifest.json` names the committed evaluator and every scenario, and the sha256 of every file it lists matches | evaluator.yml |
+| 14-conformance-self-check | `run.py` passes a command that prints the expected reports, on both levels, and fails a command that prints nothing | evaluator.yml |
 
 As in CI, the PDF document of `TRIEL_Core` is switched off (it needs LaTeX):
 step 02 applies the same `sed` to the scratch copy of `formal/core/ROOT` as the
