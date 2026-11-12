@@ -57,29 +57,32 @@ local
 
   fun oracle_names oracles = commas (map (fn ((oracle, _), _) => oracle) oracles)
 
+  (* The facts of the theory that depend on an oracle, with the oracles. One traversal
+     for the whole theory; the facts are traversed one by one only to name them. *)
   fun check thy =
     let
       val name = Context.theory_long_name thy
       val facts = own_facts thy
       val n = length facts
       val _ = if n = 0 then error ("Theory " ^ name ^ " has no named fact") else ()
-      (* One traversal for the whole theory; the facts are traversed one by one only to
-         name those that depend on an oracle. *)
-      val _ =
-        if null (Thm_Deps.all_oracles (maps #2 facts)) then ()
+      val bad =
+        if null (Thm_Deps.all_oracles (maps #2 facts)) then []
         else
-          let
-            val bad =
-              facts |> map_filter (fn (fact, ths) =>
-                (case Thm_Deps.all_oracles ths of
-                  [] => NONE
-                | oracles => SOME ("Fact " ^ fact ^ " depends on an oracle: " ^ oracle_names oracles)))
-          in
-            error (cat_lines (("Theory " ^ name ^ ": named facts that depend on an oracle") :: bad))
-          end
-    in (name, n) end
+          facts |> map_filter (fn (fact, ths) =>
+            (case Thm_Deps.all_oracles ths of
+              [] => NONE
+            | oracles => SOME ("Fact " ^ fact ^ " depends on an oracle: " ^ oracle_names oracles)))
+    in ((name, n), bad) end
 
-  val counts = map check theories
+  (* Every theory is checked before the build fails, so that the error names every
+     fact that depends on an oracle. *)
+  val results = map check theories
+  val bad = maps #2 results
+  val _ =
+    if null bad then ()
+    else error (cat_lines ("Named facts of TRIEL_Core that depend on an oracle:" :: bad))
+
+  val counts = map #1 results
   val total = fold (Integer.add o #2) counts 0
   val text =
     cat_lines (map (fn (name, n) => name ^ ": " ^ string_of_int n ^ " facts") counts) ^
