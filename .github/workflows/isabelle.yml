@@ -101,9 +101,10 @@ jobs:
       # The session TRIEL_Core_Checks (formal/checks), on the heap of
       # TRIEL_Core: no named theorem of the theories of ROOT depends on an
       # oracle, except the equations of the Quickcheck generators
-      # (full_exhaustive, narrowing) that the datatype package defines itself
-      # and whose termination HOL accepts with the oracle Pure.skip_proof; no
-      # other theorem depends on them (No_Oracles.thy states the exact rule).
+      # (full_exhaustive, narrowing), which Isabelle/HOL generates for a
+      # datatype and asserts with the oracle Pure.skip_proof instead of
+      # proving them; no other named theorem depends on them (No_Oracles.thy
+      # states the exact rule).
       # The grep above sees only the text of the theories; an oracle brought
       # in by a proof method is seen here. -e writes the number of named facts
       # checked in each theory and the excluded facts to
@@ -134,9 +135,9 @@ jobs:
             excluded=$(sed -nE 's/^  TRIEL_Core\.([A-Za-z0-9_]+): [0-9]+ excluded$/\1/p' "$out" | sort)
             sum_excluded=$(sed -nE 's/^  TRIEL_Core\.[A-Za-z0-9_]+: ([0-9]+) excluded$/\1/p' "$out" | awk '{ s += $1 } END { print s + 0 }')
             listed=$(grep -cE '^    [A-Za-z0-9_.]+$' "$out" || true)
-            line=$(grep -E '^Theorems of TRIEL_Core without oracles: ' "$out" || true)
-            total=$(echo "$line" | sed -nE 's/^Theorems of TRIEL_Core without oracles: ([0-9]+) \(excluded: [0-9]+ Quickcheck generator facts with Pure\.skip_proof\)$/\1/p')
-            total_excluded=$(echo "$line" | sed -nE 's/^Theorems of TRIEL_Core without oracles: [0-9]+ \(excluded: ([0-9]+) Quickcheck generator facts with Pure\.skip_proof\)$/\1/p')
+            line=$(grep -E '^Named facts of TRIEL_Core without oracles: ' "$out" || true)
+            total=$(echo "$line" | sed -nE 's/^Named facts of TRIEL_Core without oracles: ([0-9]+) \(excluded: [0-9]+ Quickcheck generator facts with Pure\.skip_proof\)$/\1/p')
+            total_excluded=$(echo "$line" | sed -nE 's/^Named facts of TRIEL_Core without oracles: [0-9]+ \(excluded: ([0-9]+) Quickcheck generator facts with Pure\.skip_proof\)$/\1/p')
             [ -n "$root" ] || { echo "error: no theories found in formal/core/ROOT"; exit 1; }
             if ! diff -u <(echo "$root") <(echo "$checked"); then
               echo "error: the theories of formal/core/ROOT (-) and those of $out (+) differ"

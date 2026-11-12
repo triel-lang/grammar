@@ -7,9 +7,10 @@
    -e writes the number of named facts checked in each theory, their sum and
    the excluded facts to output/no_oracles.txt. The build fails if a named
    theorem of a theory of formal/core/ROOT depends on an oracle, except the
-   equations of the Quickcheck generators (full_exhaustive, narrowing) that
-   the datatype package defines itself and whose termination HOL accepts with
-   the oracle Pure.skip_proof (No_Oracles.thy states the exact rule). *)
+   equations of the Quickcheck generators (full_exhaustive, narrowing), which
+   Isabelle/HOL generates for a datatype and asserts with the oracle
+   Pure.skip_proof instead of proving them; no other named theorem depends on
+   them (No_Oracles.thy states the exact rule). *)
 
 session TRIEL_Core_Checks = TRIEL_Core +
   options [document = false]

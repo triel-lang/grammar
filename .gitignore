@@ -3,3 +3,4 @@ __pycache__/
 evaluator/triel-eval
 evaluator/build/
 formal/core/output/
+formal/checks/output/
