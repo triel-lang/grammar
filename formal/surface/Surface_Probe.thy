@@ -103,4 +103,12 @@ export_code run ABool ANum AStr ATime Node Leaf Absent
 
 ML \<open>writeln ("probe timing: export_code " ^ Timing.message (Timing.result probe_export_start))\<close>
 
+
+section \<open>Control\<close>
+
+text \<open>A warning on purpose: it shows whether the warnings of this theory are read back from
+  the database of the session (build_log) and by process_theories.\<close>
+
+ML \<open>warning "probe: control warning"\<close>
+
 end

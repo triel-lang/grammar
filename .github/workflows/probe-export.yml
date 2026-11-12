@@ -67,8 +67,10 @@ jobs:
 
       # isabelle build does not print the warnings of the theories; they are kept
       # in the database of the session, which build_log reads in the same
-      # container. The second build_log, with -v, is read only for the message
-      # with the time of export_code that Surface_Probe.thy writes.
+      # container. build_log -v prints all messages, the time of export_code
+      # that Surface_Probe.thy writes among them. process_theories -O processes
+      # Surface_Probe.thy once more on the heap of TRIEL_Core and prints its
+      # warnings and errors directly, without the database.
       - name: Build TRIEL_Core and TRIEL_Surface, read the database of TRIEL_Surface
         id: build
         shell: bash
@@ -80,13 +82,21 @@ jobs:
             i=Isabelle/bin/isabelle
             $i build -e -v -d /work/formal/core -D /work/formal/surface > /out/build.log 2>&1; rc=$?
             $i build_log TRIEL_Surface > /out/build_log.txt 2>&1
-            $i build_log -v TRIEL_Surface 2>&1 | grep -A1 "probe timing" > /out/export-time.txt
+            echo "exit code $?" >> /out/build_log.txt
+            $i build_log -v TRIEL_Surface > /out/build_log_v.txt 2>&1
+            echo "exit code $?" >> /out/build_log_v.txt
+            grep -A1 "probe timing" /out/build_log_v.txt > /out/export-time.txt
+            $i process_theories -O -l TRIEL_Core -d /work/formal/core \
+              -f /work/formal/surface/Surface_Probe.thy > /out/process_theories.txt 2>&1
+            echo "exit code $?" >> /out/process_theories.txt
             exit $rc' || rc=$?
           cat "$RUNNER_TEMP/probe/build.log"
           echo "=== build_log TRIEL_Surface"
           cat "$RUNNER_TEMP/probe/build_log.txt"
-          echo "=== time of export_code"
-          cat "$RUNNER_TEMP/probe/export-time.txt"
+          echo "=== build_log -v TRIEL_Surface"
+          cat "$RUNNER_TEMP/probe/build_log_v.txt"
+          echo "=== process_theories -O"
+          cat "$RUNNER_TEMP/probe/process_theories.txt"
           exit $rc
 
       - name: Exported code, its declarations and signatures, calls of error
@@ -199,6 +209,7 @@ jobs:
           cat "$p/api.err" >> "$p/steps.txt"
           { grep -E '^(Finished|Timing|Exporting|Running|Building)' "$p/build.log"; cat "$p/export-time.txt"; } > "$p/times.txt" 2>/dev/null
           tail -n 60 "$p/build.log" > "$p/build-tail.txt" 2>/dev/null
+          grep 'TRIEL_Surface' "$p/build.log" > "$p/surface-lines.txt" 2>/dev/null
           {
             echo "Probe of the export of parse trees and strings: run ${{ github.run_id }} (number ${{ github.run_number }}, attempt ${{ github.run_attempt }}), commit ${{ github.sha }}"
             echo
@@ -206,13 +217,16 @@ jobs:
             section "Steps: conclusion and duration (API of this run; this step is still running)" "$p/steps.txt" 4000
             section "String.thy of the image: sha256sum and grep -n" "$p/string-thy.txt" 3000
             section "Parse tree (tree.py): STRING_LITERAL, __ANON_n and A lines; expected output of (a) and (b)" "$p/tree-summary.txt" 4000
-            section "build_log TRIEL_Surface" "$p/build_log.txt" 10000
+            section "build_log TRIEL_Surface" "$p/build_log.txt" 6000
+            section "build_log -v TRIEL_Surface" "$p/build_log_v.txt" 6000
+            section "process_theories -O -l TRIEL_Core -f Surface_Probe.thy" "$p/process_theories.txt" 5000
+            section "Lines of TRIEL_Surface in the build log (isabelle build -v)" "$p/surface-lines.txt" 2000
             section "Times of the sessions (isabelle build -v) and of export_code (build_log -v)" "$p/times.txt" 2500
             if [ "$BUILD" != success ]; then
               section "The build failed ($BUILD): last 60 lines of the build log" "$p/build-tail.txt" 9000
             fi
             section "Exported files" "$p/files.txt" 2000
-            section "Declarations and signatures of the exported code" "$p/signatures.txt" 11000
+            section "Declarations and signatures of the exported code" "$p/signatures.txt" 10000
             section "Code of the probe functions in the exported code" "$p/probe-code.txt" 4000
             section "Calls of error in the exported code (grep -n)" "$p/errors.txt" 2500
             section "GHC $(cat "$p/ghc-version.txt" 2>/dev/null): warnings (-Wincomplete-patterns)" "$p/ghc.log" 9000
