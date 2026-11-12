@@ -169,15 +169,27 @@ jobs:
           comment="$RUNNER_TEMP/comment.md"
           {
             echo "Job build failed (run ${{ github.run_id }})."
+            last=
             for log in isabelle-build.log no-oracles.log; do
               test -s "$RUNNER_TEMP/$log" || continue
+              last=$log
+              grep -q '^\*\*\*' "$RUNNER_TEMP/$log" || continue
               echo
               echo "Error lines of $log:"
               echo
               echo '```'
-              grep -n -A12 '^\*\*\*' "$RUNNER_TEMP/$log" | head -c 25000 || { echo "(no *** lines; last lines of the log)"; tail -n 40 "$RUNNER_TEMP/$log"; }
+              grep -n -A12 '^\*\*\*' "$RUNNER_TEMP/$log" | head -c 25000 || true
               echo '```'
+              found=1
             done
+            if [ -z "${found:-}" ] && [ -n "$last" ]; then
+              echo
+              echo "No *** lines; the last lines of $last:"
+              echo
+              echo '```'
+              tail -n 40 "$RUNNER_TEMP/$last"
+              echo '```'
+            fi
             if test -s "$RUNNER_TEMP/theories.log"; then
               echo
               echo "Comparison of the theories:"

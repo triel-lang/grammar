@@ -48,10 +48,12 @@ local
     if null theories then error "No theory of TRIEL_Core among the ancestors of No_Oracles"
     else ()
 
-  (* The named facts introduced by the theory itself, without concealed ones. *)
+  (* The named facts introduced by the theory itself, without concealed ones. The
+     theorems are stored without their theory and are transferred to this one. *)
   fun own_facts thy =
     Facts.dest_static false (map Global_Theory.facts_of (Theory.parents_of thy))
       (Global_Theory.facts_of thy)
+    |> map (apsnd (map (Thm.transfer \<^theory>)))
 
   fun oracle_names oracles = commas (map (fn ((oracle, _), _) => oracle) oracles)
 
