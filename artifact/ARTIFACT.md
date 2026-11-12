@@ -170,8 +170,12 @@ scenarios has been added (33 examples, 101 scenarios, 413 translator and driver
 tests); its runs are not in the table. Stage 42 added the command `triel check`
 (`parser/triel.py`) with the 512 tests of `parser/test_triel_check.py`, which
 the step pytest runs with those of the translator (925 translator and driver
-tests); its runs are not in the table. The time on a shared
-runner varies from run to run, and so does its CPU.
+tests); its runs are not in the table. Since then the translator rejects `==`
+and `!=` between values of different types and two invariants with one name,
+and the evaluator and the drivers read and write UTF-8 whatever the locale (483
+tests of `parser/test_triel_to_core.py` and 514 of `parser/test_triel_check.py`,
+997 translator and driver tests); their runs are not in the table. The time on
+a shared runner varies from run to run, and so does its CPU.
 
 ## Running
 
@@ -205,7 +209,7 @@ paper theorems found, without oracles        107 of 107
 named facts of TRIEL_Core without oracles    4160 (excluded: 55 Quickcheck generator facts with Pure.skip_proof)
 scenarios matching .expected                 101 of 101
 examples accepted by the core                31 of 33
-translator and driver tests (pytest)         925 passed in ...
+translator and driver tests (pytest)         997 passed in ...
 examples parsed with one derivation          33 of 33
 ambiguity regression checks passed           242
 document excerpts conforming to the grammar  15
@@ -386,7 +390,7 @@ The results rest on the following, which are not proved here:
   the Haskell code to the HOL definitions is the code generator's, not a theorem
   of this development.
 - **GHC 9.6.7** and its runtime, which build and run the evaluator.
-- **`evaluator/Main.hs`** (hand-written, 444 lines): reads the input
+- **`evaluator/Main.hs`** (hand-written, 446 lines): reads the input
   S-expression and prints the report; with `--last` it also selects, from the
   `MONITOR` lines, the decisions at the last entry. Every verdict is computed by
   the exported function `run`, but the reading, the selection and the printing
@@ -395,11 +399,11 @@ The results rest on the following, which are not proved here:
   specifications to terms of the core, written in Python. Nothing proves that it
   translates a specification into the core term with the intended meaning, or
   that it rejects exactly the constructs outside the core. It is checked only
-  by tests: the 413 tests of `parser/test_triel_to_core.py`, the classification
+  by tests: the 483 tests of `parser/test_triel_to_core.py`, the classification
   of the 33 examples, and the 101 scenarios. The same holds for
   `parser/triel_eval.py`, which converts a scenario into the input of the
   evaluator, for `parser/triel.py`, which reads a trace as a scenario or in
-  JSON and converts the report to JSON, checked by the 512 tests of
+  JSON and converts the report to JSON, checked by the 514 tests of
   `parser/test_triel_check.py`, and for the grammar `parser/triel.lark` with the parser library
   lark 1.3.1.
 - **The expected outputs** (`examples/core/classification.expected` and the
