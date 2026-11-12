@@ -1,0 +1,5 @@
+session TRIEL_Surface = TRIEL_Core +
+  options [document = false]
+  theories
+    Surface_Probe
+  export_files (in "generated") [3] "*:code/**"

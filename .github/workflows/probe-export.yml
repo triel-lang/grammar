@@ -1,0 +1,231 @@
+# A probe of the export of parse trees with the texts of their tokens, texts
+# outside ASCII among them, through Isabelle/HOL and the exported Haskell code
+# (formal/surface). It runs only on a push to the branch probe-export, which is
+# not merged into main. The logs of this workflow cannot be read from a cloud
+# session, so the last step posts the results as a comment on the commit.
+name: Probe of the export of parse trees and strings
+
+on:
+  push:
+    branches: [probe-export]
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    permissions:
+      # The comment on the commit.
+      contents: write
+      # The times of the steps, read from the API of this run.
+      actions: read
+    env:
+      # The image of the job build-log of isabelle.yml, pinned by digest.
+      IMAGE: makarius/isabelle:Isabelle2025-2_X11_Latex@sha256:7ae4b4e9eb3eea00185f9bffe4fdbff16dc9ec74a88b918f847c41bc475bd297
+      GEN: formal/surface/generated
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Pull the image
+        id: image
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/probe"
+          docker pull "$IMAGE"
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE")
+          echo "image: $digest"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: String.thy of the image
+        shell: bash
+        run: |
+          docker run --rm --entrypoint bash "$IMAGE" -c '
+            f=Isabelle/src/HOL/String.thy
+            sha256sum "$f"
+            grep -n -e "typedef literal" -e literal_of_asciis -e asciis_of_literal -e charOfAscii -e check_ascii "$f"
+          ' 2>&1 | tee "$RUNNER_TEMP/probe/string-thy.txt"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install lark
+        run: pip install lark==1.3.1
+
+      # The parse tree of the example and the expected output of (a) and (b),
+      # computed from the lark tree without HOL.
+      - name: Parse tree and expected output of (a) and (b)
+        shell: bash
+        run: |
+          p="$RUNNER_TEMP/probe"
+          python3 formal/surface/probe/tree.py formal/surface/probe/strings.triel "$p/tree.txt" "$p/expected.txt"
+          {
+            echo "tree.txt: $(wc -l < "$p/tree.txt") lines, sha256 $(sha256sum < "$p/tree.txt" | cut -d' ' -f1)"
+            echo "lines of STRING_LITERAL, __ANON_n and A:"
+            grep -nE '^(L STRING_LITERAL|L __ANON_|A$)' "$p/tree.txt" || true
+            echo "expected.txt:"
+            cat "$p/expected.txt"
+          } | tee "$p/tree-summary.txt"
+
+      # isabelle build does not print the warnings of the theories; they are kept
+      # in the database of the session, which build_log reads in the same
+      # container. The second build_log, with -v, is read only for the message
+      # with the time of export_code that Surface_Probe.thy writes.
+      - name: Build TRIEL_Core and TRIEL_Surface, read the database of TRIEL_Surface
+        id: build
+        shell: bash
+        run: |
+          mkdir -p formal/core/output "$GEN"
+          chmod -R a+rwX "$GITHUB_WORKSPACE" "$RUNNER_TEMP/probe"
+          rc=0
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" -v "$RUNNER_TEMP/probe:/out" --entrypoint bash "$IMAGE" -c '
+            i=Isabelle/bin/isabelle
+            $i build -e -v -d /work/formal/core -D /work/formal/surface > /out/build.log 2>&1; rc=$?
+            $i build_log TRIEL_Surface > /out/build_log.txt 2>&1
+            $i build_log -v TRIEL_Surface 2>&1 | grep -A1 "probe timing" > /out/export-time.txt
+            exit $rc' || rc=$?
+          cat "$RUNNER_TEMP/probe/build.log"
+          echo "=== build_log TRIEL_Surface"
+          cat "$RUNNER_TEMP/probe/build_log.txt"
+          echo "=== time of export_code"
+          cat "$RUNNER_TEMP/probe/export-time.txt"
+          exit $rc
+
+      - name: Exported code, its declarations and signatures, calls of error
+        shell: bash
+        run: |
+          p="$RUNNER_TEMP/probe"
+          mapfile -t hs < <(find "$GEN" -name '*.hs' | sort)
+          [ ${#hs[@]} -gt 0 ] || { echo "no exported .hs files in $GEN" | tee "$p/files.txt"; exit 1; }
+          { ls -laR "$GEN"; sha256sum "${hs[@]}"; } | tee "$p/files.txt"
+          grep -HnE '^(data|newtype|[a-z_A-Z0-9]+ ::)' "${hs[@]}" | tee "$p/signatures.txt" || true
+          grep -Hn 'error' "${hs[@]}" | tee "$p/errors.txt" || true
+          grep -HnE -A4 '^(str_leaves|str_const|lit_|codes_|name_fun|name_case)[a-z_]* ' "${hs[@]}" \
+            | tee "$p/probe-code.txt" || true
+
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: "9.6.7"
+
+      - name: Build the probe with GHC
+        shell: bash
+        run: |
+          p="$RUNNER_TEMP/probe"
+          ghc --numeric-version | tee "$p/ghc-version.txt"
+          mkdir -p "$RUNNER_TEMP/ghc"
+          ghc -v0 -Wincomplete-patterns -outputdir "$RUNNER_TEMP/ghc" -i"$GEN" \
+            -o "$RUNNER_TEMP/ghc/probe" formal/surface/probe/Probe.hs 2>&1 | tee "$p/ghc.log"
+
+      # The output of (c), (d) and of the two incomplete functions is kept as it
+      # is, without a check; an exit code other than 0 does not stop the run.
+      # LANG is set for the line of raw UTF-8.
+      - name: Run the probe
+        shell: bash
+        env:
+          LANG: C.UTF-8
+        run: |
+          p="$RUNNER_TEMP/probe"
+          rc=0
+          "$RUNNER_TEMP/ghc/probe" "$p/tree.txt" > "$p/probe.txt" 2> "$p/probe-stderr.txt" || rc=$?
+          echo "exit code $rc" >> "$p/probe-stderr.txt"
+          cat "$p/probe.txt" "$p/probe-stderr.txt"
+
+      - name: Compare (a) and (b) with the expected output of tree.py
+        shell: bash
+        run: |
+          p="$RUNNER_TEMP/probe"
+          grep -E '^\((a|b)\) ' "$p/probe.txt" > "$p/ab.txt" || true
+          if cmp "$p/ab.txt" "$p/expected.txt" > "$p/cmp.txt" 2>&1; then
+            echo "cmp: the $(wc -l < "$p/ab.txt") lines (a) and (b) of the probe are the expected output of tree.py" >> "$p/cmp.txt"
+            cat "$p/cmp.txt"
+          else
+            { echo "cmp: the lines (a) and (b) of the probe differ from the expected output of tree.py (diff expected probe):"
+              diff "$p/expected.txt" "$p/ab.txt" || true; } >> "$p/cmp.txt"
+            cat "$p/cmp.txt"
+            exit 1
+          fi
+
+      # The comment holds the run, the digest of the image, the time of each
+      # step, the output of build_log TRIEL_Surface (and the last 60 lines of
+      # the build log if the build failed), the declarations and signatures of
+      # the exported code, the warnings of GHC, the calls of error, the output
+      # of the probe and the comparison; at most 60000 characters.
+      - name: Post the results as a commit comment
+        if: always()
+        shell: bash --noprofile --norc -o pipefail {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+          BUILD: ${{ steps.build.outcome }}
+        run: |
+          p="$RUNNER_TEMP/probe"
+          mkdir -p "$p"
+          c="$p/comment.md"
+          section() {
+            echo
+            echo "**$1**"
+            echo
+            echo '```'
+            if [ -s "$2" ]; then
+              python3 -c '
+          import sys
+          t = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          n = int(sys.argv[2])
+          sys.stdout.write(t if len(t) <= n else t[:n] + "\n[... %d more characters]\n" % (len(t) - n))' "$2" "$3"
+            else
+              echo "(empty)"
+            fi
+            echo '```'
+          }
+          gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}" > "$p/run.json" 2> "$p/api.err"
+          gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}/jobs" > "$p/jobs.json" 2>> "$p/api.err"
+          python3 - "$p/run.json" "$p/jobs.json" > "$p/steps.txt" 2>&1 <<'EOF'
+          import json, sys
+          from datetime import datetime
+          try:
+              run = json.load(open(sys.argv[1]))
+              jobs = json.load(open(sys.argv[2]))["jobs"]
+          except Exception as e:
+              print("the run and its steps could not be read:", e)
+              sys.exit(0)
+          print("run created_at", run.get("created_at"), "| run_started_at", run.get("run_started_at"))
+          for job in jobs:
+              print("job", job["name"], "| started_at", job.get("started_at"))
+              for s in job["steps"]:
+                  t = "-"
+                  if s.get("started_at") and s.get("completed_at"):
+                      d = datetime.fromisoformat(s["completed_at"]) - datetime.fromisoformat(s["started_at"])
+                      t = "%d s" % round(d.total_seconds())
+                  print("%2d. %-72s %-11s %s" % (s["number"], s["name"], s.get("conclusion") or s["status"], t))
+          EOF
+          cat "$p/api.err" >> "$p/steps.txt"
+          { grep -E '^(Finished|Timing|Exporting|Running|Building)' "$p/build.log"; cat "$p/export-time.txt"; } > "$p/times.txt" 2>/dev/null
+          tail -n 60 "$p/build.log" > "$p/build-tail.txt" 2>/dev/null
+          {
+            echo "Probe of the export of parse trees and strings: run ${{ github.run_id }} (number ${{ github.run_number }}, attempt ${{ github.run_attempt }}), commit ${{ github.sha }}"
+            echo
+            echo "image: \`$DIGEST\`; build: ${BUILD:-not run}"
+            section "Steps: conclusion and duration (API of this run; this step is still running)" "$p/steps.txt" 4000
+            section "String.thy of the image: sha256sum and grep -n" "$p/string-thy.txt" 3000
+            section "Parse tree (tree.py): STRING_LITERAL, __ANON_n and A lines; expected output of (a) and (b)" "$p/tree-summary.txt" 4000
+            section "build_log TRIEL_Surface" "$p/build_log.txt" 10000
+            section "Times of the sessions (isabelle build -v) and of export_code (build_log -v)" "$p/times.txt" 2500
+            if [ "$BUILD" != success ]; then
+              section "The build failed ($BUILD): last 60 lines of the build log" "$p/build-tail.txt" 9000
+            fi
+            section "Exported files" "$p/files.txt" 2000
+            section "Declarations and signatures of the exported code" "$p/signatures.txt" 11000
+            section "Code of the probe functions in the exported code" "$p/probe-code.txt" 4000
+            section "Calls of error in the exported code (grep -n)" "$p/errors.txt" 2500
+            section "GHC $(cat "$p/ghc-version.txt" 2>/dev/null): warnings (-Wincomplete-patterns)" "$p/ghc.log" 9000
+            section "Output of the probe (LANG=C.UTF-8)" "$p/probe.txt" 6000
+            section "Standard error and exit code of the probe" "$p/probe-stderr.txt" 1500
+            section "Comparison of (a) and (b) with the expected output of tree.py" "$p/cmp.txt" 2500
+          } > "$c"
+          python3 - "$c" <<'EOF'
+          import sys
+          t = open(sys.argv[1], encoding="utf-8").read()
+          if len(t) > 60000:
+              t = t[:59000] + "\n```\n[the comment is cut at 59000 of %d characters]\n" % len(t)
+              open(sys.argv[1], "w", encoding="utf-8").write(t)
+          print("comment:", len(t), "characters")
+          EOF
+          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" -F body=@"$c" > /dev/null

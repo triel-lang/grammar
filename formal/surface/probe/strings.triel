@@ -1,0 +1,24 @@
+-- Probe of the export of parse trees: a string literal with Cyrillic and a
+-- character outside the BMP, the same text written with \u escapes (the
+-- character outside the BMP as a pair of surrogates), and an ASCII literal.
+
+SPECIFICATION probe_strings VERSION 1.0.0
+
+SUBJECTS {
+  carrier : PARTY
+}
+
+TERMS {
+  carrier MUST report
+}
+
+FACTORS {
+  status : String METADATA SOURCE carrier,
+  delay  : Decimal POLARITY 1.0 SOURCE carrier
+}
+
+INVARIANTS {
+  greeting  : LIVENESS : EVENTUALLY(status == "Привет 🎉");
+  escaped   : LIVENESS : EVENTUALLY(status == "\u041f\u0440\u0438\u0432\u0435\u0442 \ud83c\udf89");
+  delivered : LIVENESS : EVENTUALLY(status == "delivered")
+}
