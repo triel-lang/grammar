@@ -27,6 +27,13 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
   * `a < b` and `a <= b` are (lt a b) and (le a b); `a > b` is (lt b a) and
     `a >= b` is (le b a). The operands of an ordering comparison must be
     numbers: an Integer or Decimal factor, or a numeric literal.
+  * `a == b` and `a != b` need operands of one type, by the rule for the
+    fallback of DEFAULT: numbers (Integer and Decimal factors and numeric
+    literals, so `g == 2.5` is accepted for an Integer g), strings (String,
+    Hash and Address factors and string literals), DateTime (factors and
+    DATETIME(...), never a string literal or a number) or Boolean (factors,
+    true and false), in either order. Otherwise "comparison of different
+    types". An operand whose type was rejected is not checked.
   * IF c THEN t ELIF c2 THEN t2 ELSE e is (if c t (if c2 t2 e)); a missing ELSE
     is (skip), which completes Done at once. WHEN c THEN t is (if c t (skip)).
     The branches are composite terms, so a deadline in a branch is rejected.
@@ -73,6 +80,9 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
     semantics in the core. CAUSED_BY is rejected. A subject or a factor declared
     twice is rejected, and so are a subject and a factor with the same name and
     an undeclared subject of a term, a handler, NOTIFY, ESCALATE_TO or SOURCE.
+    Two invariants with one name are rejected ("duplicate invariant name"). A
+    string literal in which \\u gives a surrogate (U+D800 to U+DFFF) is rejected
+    ("surrogate escape"): it is not a character.
     By the rules of
     TECHNICAL_REPORT.md section 2.9, a factor whose SOURCE is an ORACLE
     requires PROVENANCE_REQUIRED: true, and a PENALTY requires CURRENCY.
@@ -168,6 +178,9 @@ CALENDAR_UNITS = {"BUSINESS_DAY", "BUSINESS_DAYS", "MONTH", "MONTHS", "YEAR", "Y
 PRIMITIVES = {"Integer": "int", "Decimal": "decimal", "Boolean": "bool", "String": "string",
               "DateTime": "datetime", "Hash": "string", "Address": "string"}
 NUMERIC = (["prim", "int"], ["prim", "decimal"])
+# The type of a literal (literal_value): "number" for a numeric literal.
+LITERAL_TYPES = {"int": "number", "dec": "number", "bool": ["prim", "bool"],
+                 "str": ["prim", "string"], "time": ["prim", "datetime"]}
 ISO_UTC = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
 
 
@@ -208,6 +221,14 @@ def unquote(tok: str) -> str:
                   lambda m: (chr(int(m.group(1)[1:], 16)) if m.group(1)[0] == "u"
                              else {"n": "\n", "t": "\t"}.get(m.group(1), m.group(1))),
                   body)
+
+
+def same_type(ta, tb) -> bool:
+    """The types of two values agree: the rule of DEFAULT(f, d) and of == and !=.
+    Integer, Decimal and numeric literals are one type, numbers; a type that is
+    "unknown" or None (after a rejection) agrees with any type."""
+    kind = lambda y: "number" if y == "number" or y in NUMERIC else y
+    return "unknown" in (ta, tb) or ta is None or tb is None or kind(ta) == kind(tb)
 
 
 def kids(t: Tree):
@@ -288,6 +309,15 @@ class Translation:
     def reject(self, what: str):
         self.rejected.add(what)
         return None
+
+    def string(self, tok: str):
+        """The text of a string literal. A \\u escape of a surrogate (U+D800 to
+        U+DFFF) is rejected: a surrogate is not a character, and the core AST
+        with it could not be printed in UTF-8."""
+        s = unquote(tok)
+        if any(0xD800 <= ord(ch) <= 0xDFFF for ch in s):
+            return self.reject("surrogate escape")
+        return s
 
     def subject(self, t: Tree):
         """An identifier that must name a subject declared in SUBJECTS."""
@@ -510,14 +540,18 @@ class Translation:
         return n * UNIT_SECONDS[unit]
 
     def datetime(self, t: Tree):
-        text = unquote([v for v in kids(t) if isinstance(v, Token) and v.type == "STRING_LITERAL"][0].value)
+        tok = [v for v in kids(t) if isinstance(v, Token) and v.type == "STRING_LITERAL"][0]
+        text = self.string(tok.value)
+        if text is None:
+            return None
         s = iso_seconds(text)
         return self.reject("DATETIME not ISO-8601 UTC") if s is None else s
 
     def literal_value(self, t: Tree):
         c = kids(t)[0]
         if isinstance(c, Token):
-            return ["str", Str(unquote(c.value))]
+            s = self.string(c.value)
+            return None if s is None else ["str", Str(s)]
         if c.data == "numeric_literal":
             tok = kids(c)[0]
             if tok.type == "DECIMAL_LITERAL":
@@ -615,6 +649,8 @@ class Translation:
         if a is None or b is None:
             return None
         if op in ("==", "!="):
+            if not same_type(ta, tb):
+                return self.reject("comparison of different types")
             return ["eq", a, b] if op == "==" else ["not", ["eq", a, b]]
         if any(x != "number" and x not in NUMERIC and x != "unknown" for x in (ta, tb)):
             return self.reject("ordering comparison of a non-number")
@@ -675,9 +711,10 @@ class Translation:
         return self.reject(RULES[x.data])
 
     def value(self, t: Tree):
-        """An operand of a comparison: a factor name or a literal. Its type is left
-        in self.operand_type: the declared type of a name, "number" for a numeric
-        literal, None otherwise."""
+        """An operand of a comparison: a factor name, a literal or DEFAULT. Its type
+        is left in self.operand_type: the declared type of a name (of f for
+        DEFAULT(f, d)), "number" for a numeric literal, the primitive type of any
+        other literal (LITERAL_TYPES), None if it is rejected."""
         self.operand_type = None
         p = self.primary_of(t)
         if p == "arithmetic":
@@ -698,9 +735,10 @@ class Translation:
             return self.reject("non-Boolean condition")
         if x.data == "literal":
             v = self.literal_value(x)
-            if v is not None and v[0] in ("int", "dec"):
-                self.operand_type = "number"
-            return None if v is None else ["const", v]
+            if v is None:
+                return None
+            self.operand_type = LITERAL_TYPES[v[0]]
+            return ["const", v]
         if x.data == "factor_ref":
             ty = self.path_type(x)
             if ty is None:
@@ -734,12 +772,7 @@ class Translation:
         fb = self.value(x)
         if fb is None:
             return None
-        tb = self.operand_type
-        if fb[0] == "const" and fb[1][0] in ("bool", "str", "time"):
-            tb = ["prim", {"bool": "bool", "str": "string", "time": "datetime"}[fb[1][0]]]
-        numeric = lambda y: y == "number" or y in NUMERIC
-        if not ("unknown" in (ty, tb) or tb is None or ty == tb
-                or (numeric(ty) and numeric(tb))):
+        if not same_type(ty, self.operand_type):
             return self.reject("DEFAULT fallback of another type")
         self.operand_type = ty
         return ["default", self.path(f), fb]
@@ -1143,7 +1176,14 @@ class Translation:
             terms.append(y)
             tops.append(self.top)
         self.check_binding(tops)
-        invs = [self.invariant(i) for i in subtrees(blocks["invariants_block"])]
+        invs = []
+        inames = set()
+        for i in subtrees(blocks["invariants_block"]):
+            name = ident(subtrees(i)[0])
+            if name in inames:
+                self.reject("duplicate invariant name")
+            inames.add(name)
+            invs.append(self.invariant(i))
         self.check_rules()
         self.metadata += self.metadata_sources
         if not self.rejected:
