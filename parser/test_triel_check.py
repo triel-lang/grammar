@@ -390,6 +390,60 @@ def test_evaluator_path_order(tmp_path):
     assert r.returncode == 0, r.stderr
 
 
+# --- Text outside ASCII, whatever the locale ----------------------------------------------
+#
+# The specification and the trace are UTF-8 files with letters outside ASCII in a
+# string and in a header line. triel check and triel_eval.py run in the C locale:
+# with the UTF-8 mode of Python, which the C locale turns on, the evaluator must
+# read its input as UTF-8; with PYTHONUTF8=0, the drivers too must read the files
+# and talk to the evaluator in UTF-8. The evaluator prints a string with show, in
+# decimal escapes; the header line is printed as written.
+
+GREETING_SPEC = """\
+SPECIFICATION greeting VERSION 1.0.0 JURISDICTION "Україна"
+SUBJECTS { a : PARTY }
+TERMS { a MUST_NOT send("Привет") WHEN s == "Привет" }
+FACTORS { s : String METADATA }
+INVARIANTS { i : ALWAYS(s != "Привет") }
+"""
+
+GREETING_TRACE = """\
+(scenario greeting (spec "%s")
+  (entry "2026-01-01T00:00:00Z" (activate) (data (s (str "Привет"))))
+  (entry "2026-01-01T00:00:01Z" (act a (send (str "Привет")) must_not)
+    (data (s (str "Привет")))))
+"""
+
+GREETING_REPORT = [
+    "SPEC greeting",
+    'METADATA JURISDICTION "Україна"',
+    "ACTIVATION OK",
+    "BLOCK OK",
+    "TYPES OK",
+    'TERM 1 MUST_NOT a send("\\1055\\1088\\1080\\1074\\1077\\1090") : BREACHED 1767225601',
+    "INVARIANT i : F",
+    "MONITOR 1 : ENTRY 1 BLOCK",
+]
+
+
+@needs_evaluator
+@pytest.mark.parametrize("utf8_mode", [None, "0"], ids=["LC_ALL=C", "LC_ALL=C,PYTHONUTF8=0"])
+def test_text_outside_ascii_in_the_c_locale(utf8_mode, tmp_path):
+    spec = tmp_path / "greeting.triel"
+    spec.write_text(GREETING_SPEC, encoding="utf-8")
+    trace = tmp_path / "greeting.scn"
+    trace.write_text(GREETING_TRACE % spec.resolve().as_posix(), encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONUTF8", "PYTHONIOENCODING")}
+    env["LC_ALL"] = "C"
+    if utf8_mode is not None:
+        env["PYTHONUTF8"] = utf8_mode
+    r = program(spec, trace, env=env)
+    assert (r.returncode, r.stdout.splitlines()) == (3, GREETING_REPORT), r.stderr
+    r = subprocess.run([sys.executable, str(REPO / "parser" / "triel_eval.py"), str(trace)],
+                       capture_output=True, text=True, encoding="utf-8", cwd=REPO, env=env)
+    assert (r.returncode, r.stdout.splitlines()) == (0, GREETING_REPORT), r.stderr
+
+
 # --- Exit code 4: the evaluator rejects the trace --------------------------------------
 
 @needs_evaluator
