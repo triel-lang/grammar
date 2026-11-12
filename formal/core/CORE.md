@@ -12,7 +12,7 @@ isabelle build -D .
 
 `isabelle build -e -D .` also writes the exported evaluator to `evaluator/generated/`.
 
-The build is checked with Isabelle2025-2 by CI on every push to main (`.github/workflows/isabelle.yml`). [`build.log`](build.log) is the output of a clean build (`isabelle build -c -v -D .`), with the PDF document, made on 27 October 2026 of the thirteen theories of that date; it does not include `TRIEL_Signals.thy`, which was added later. It was produced on Linux, in the Docker image `makarius/isabelle:Isabelle2025-2` with TeX Live added.
+The build is checked with Isabelle2025-2 by CI on every push to main (`.github/workflows/isabelle.yml`). The same workflow checks that no named theorem of the session depends on an oracle, except the equations of the Quickcheck generators (full_exhaustive, narrowing) that the datatype package defines itself and whose termination HOL accepts with the oracle `Pure.skip_proof`; no other theorem depends on them (the session in `formal/checks`). [`build.log`](build.log) is the output of a clean build (`isabelle build -c -v -D .`) of all theories of [`ROOT`](ROOT), with the PDF document, made by CI on 12 November 2026 in the Docker image `makarius/isabelle:Isabelle2025-2_X11_Latex` (`sha256:7ae4b4e9eb3eea00185f9bffe4fdbff16dc9ec74a88b918f847c41bc475bd297`).
 
 The build also typesets the theories, with a short introduction ([`document/root.tex`](document/root.tex)), into `output/document.pdf`. This step needs a LaTeX installation that provides `lualatex`, for example MiKTeX or TeX Live.
 
