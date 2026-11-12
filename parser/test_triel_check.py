@@ -129,7 +129,7 @@ def stub(tmp_path, lines, last_line=None):
     script = ["#!/bin/sh", "cat > /dev/null"] + [f"echo '{line}'" for line in lines]
     if last_line is not None:
         script.append(f"[ \"$1\" = --last ] && echo '{last_line}'")
-    f.write_text("\n".join(script + ["exit 0"]) + "\n")
+    f.write_text("\n".join(script + ["exit 0"]) + "\n", encoding="utf-8")
     f.chmod(0o755)
     return f
 
@@ -296,7 +296,7 @@ def with_tick(trace: str, time: str) -> str:
 @needs_evaluator
 def test_last_no_decision_on_a_tick_after_a_block(tmp_path, capsys):
     trace = tmp_path / "campaign_then_tick.json"
-    trace.write_text(with_tick(campaign("7500.00"), "2026-11-10T09:20:02Z"))
+    trace.write_text(with_tick(campaign("7500.00"), "2026-11-10T09:20:02Z"), encoding="utf-8")
     code, out, _ = check(capsys, MANDATE, trace)
     assert "MONITOR 4 : ENTRY 2 BLOCK" in out.splitlines() and code == 3
     code, out, _ = check(capsys, MANDATE, trace, "--last")
@@ -306,7 +306,7 @@ def test_last_no_decision_on_a_tick_after_a_block(tmp_path, capsys):
 @needs_evaluator
 def test_last_no_decision_on_the_activation_entry_alone(tmp_path, capsys):
     trace = tmp_path / "activation.json"
-    trace.write_text(campaign())
+    trace.write_text(campaign(), encoding="utf-8")
     code, out, _ = check(capsys, MANDATE, trace, "--last")
     assert out.splitlines()[-1] == "LAST ENTRY 0 : NO DECISION" and code == 5
     code, out, _ = check(capsys, MANDATE, trace)
@@ -316,7 +316,7 @@ def test_last_no_decision_on_the_activation_entry_alone(tmp_path, capsys):
 @needs_evaluator
 def test_last_allowed_after_an_earlier_block(tmp_path, capsys):
     trace = tmp_path / "campaigns.json"
-    trace.write_text(campaign("7500.00", "3000.00"))
+    trace.write_text(campaign("7500.00", "3000.00"), encoding="utf-8")
     code, out, _ = check(capsys, MANDATE, trace)
     assert "MONITOR 4 : ENTRY 2 BLOCK ENTRY 4 ALLOW" in out.splitlines() and code == 3
     code, out, _ = check(capsys, MANDATE, trace, "--last")
@@ -343,7 +343,7 @@ def test_exit_code_not_blocked():
 def test_exit_code_rejected_specification(tmp_path):
     scn = tmp_path / "rejected.scn"
     scn.write_text('(scenario rejected (spec "examples/semantics/execute_renaming.triel")\n'
-                   '  (entry "2026-01-01T00:00:00Z" (activate) (data)))\n')
+                   '  (entry "2026-01-01T00:00:00Z" (activate) (data)))\n', encoding="utf-8")
     r = program("examples/semantics/execute_renaming.triel", scn)
     assert r.returncode == 2 and r.stdout.splitlines()[-1] == "REJECTED: EXECUTE"
     r = program("examples/semantics/execute_renaming.triel", scn, "--json")
@@ -363,7 +363,7 @@ def test_exit_code_other_errors(tmp_path):
     r = program(MANDATE, scn, "--evaluator", tmp_path / "no-evaluator")
     assert r.returncode == 1 and "cannot run the evaluator" in r.stderr
     bad = tmp_path / "bad.json"
-    bad.write_text('{"scenario": "s", "spec": "x", "entries": [], "extra": 1}')
+    bad.write_text('{"scenario": "s", "spec": "x", "entries": [], "extra": 1}', encoding="utf-8")
     r = program(MANDATE, bad, "--json")
     assert r.returncode == 1 and r.stdout == "" and "expected a scenario" in r.stderr
     assert "Traceback" not in r.stderr
@@ -621,7 +621,8 @@ ACTIVATE = '{"time": "2026-11-10T09:00:00Z", "event": {"kind": "activate"}, "dat
 ])
 def test_json_trace_errors(data, message, tmp_path, capsys):
     trace = tmp_path / "t.json"
-    trace.write_text('{"scenario": "s", "spec": "%s", "entries": [%s]}' % (MANDATE, ACTIVATE % data))
+    trace.write_text('{"scenario": "s", "spec": "%s", "entries": [%s]}' % (MANDATE, ACTIVATE % data),
+                     encoding="utf-8")
     code, out, err = check(capsys, MANDATE, trace)
     assert code == 1 and out == "" and message in err
 
@@ -646,7 +647,7 @@ def test_json_trace_errors(data, message, tmp_path, capsys):
 ])
 def test_json_trace_structure_errors(text, message, tmp_path, capsys):
     trace = tmp_path / "t.json"
-    trace.write_text(text)
+    trace.write_text(text, encoding="utf-8")
     code, out, err = check(capsys, MANDATE, trace)
     assert code == 1 and out == "" and message in err
 
