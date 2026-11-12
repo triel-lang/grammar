@@ -68,7 +68,9 @@ jobs:
       # isabelle build does not print the warnings of the theories; they are kept
       # in the database of the session, which build_log reads in the same
       # container. build_log -v prints all messages, the time of export_code
-      # that Surface_Probe.thy writes among them. process_theories -O processes
+      # that Surface_Probe.thy writes among them. build_log -T and build_log
+      # TRIEL_Core show whether build_log finds the theories of a session in its
+      # database at all. process_theories -O processes
       # Surface_Probe.thy once more on the heap of TRIEL_Core and prints its
       # warnings and errors directly, without the database.
       - name: Build TRIEL_Core and TRIEL_Surface, read the database of TRIEL_Surface
@@ -86,6 +88,12 @@ jobs:
             $i build_log -v TRIEL_Surface > /out/build_log_v.txt 2>&1
             echo "exit code $?" >> /out/build_log_v.txt
             grep -A1 "probe timing" /out/build_log_v.txt > /out/export-time.txt
+            {
+              echo "> build_log -T TRIEL_Surface.Surface_Probe TRIEL_Surface"
+              $i build_log -T TRIEL_Surface.Surface_Probe TRIEL_Surface 2>&1; echo "exit code $?"
+              echo "> build_log TRIEL_Core"
+              $i build_log TRIEL_Core 2>&1 | head -c 3000; echo "exit code ${PIPESTATUS[0]}"
+            } > /out/build_log_checks.txt
             $i process_theories -O -l TRIEL_Core -d /work/formal/core \
               -f /work/formal/surface/Surface_Probe.thy > /out/process_theories.txt 2>&1
             echo "exit code $?" >> /out/process_theories.txt
@@ -95,6 +103,8 @@ jobs:
           cat "$RUNNER_TEMP/probe/build_log.txt"
           echo "=== build_log -v TRIEL_Surface"
           cat "$RUNNER_TEMP/probe/build_log_v.txt"
+          echo "=== build_log -T, build_log TRIEL_Core"
+          cat "$RUNNER_TEMP/probe/build_log_checks.txt"
           echo "=== process_theories -O"
           cat "$RUNNER_TEMP/probe/process_theories.txt"
           exit $rc
@@ -219,6 +229,7 @@ jobs:
             section "Parse tree (tree.py): STRING_LITERAL, __ANON_n and A lines; expected output of (a) and (b)" "$p/tree-summary.txt" 4000
             section "build_log TRIEL_Surface" "$p/build_log.txt" 6000
             section "build_log -v TRIEL_Surface" "$p/build_log_v.txt" 6000
+            section "build_log -T TRIEL_Surface.Surface_Probe TRIEL_Surface; build_log TRIEL_Core" "$p/build_log_checks.txt" 3500
             section "process_theories -O -l TRIEL_Core -f Surface_Probe.thy" "$p/process_theories.txt" 5000
             section "Lines of TRIEL_Surface in the build log (isabelle build -v)" "$p/surface-lines.txt" 2000
             section "Times of the sessions (isabelle build -v) and of export_code (build_log -v)" "$p/times.txt" 2500
