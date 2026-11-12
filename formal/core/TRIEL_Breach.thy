@@ -1499,6 +1499,4 @@ proof -
   from T2_monotone[OF assms(1) this assms(2)] show ?thesis .
 qed
 
-lemma oracle_probe: "(2::nat) + 2 = 4" by eval
-
 end
