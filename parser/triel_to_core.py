@@ -1216,7 +1216,7 @@ _parser = None
 def parser() -> Lark:
     global _parser
     if _parser is None:
-        _parser = Lark(GRAMMAR_PATH.read_text(), start="start", parser="earley",
+        _parser = Lark(GRAMMAR_PATH.read_text(encoding="utf-8"), start="start", parser="earley",
                        lexer="dynamic", ambiguity="resolve", keep_all_tokens=True)
     return _parser
 

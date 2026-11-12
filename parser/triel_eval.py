@@ -249,7 +249,7 @@ def main() -> int:
         print(inp)
         return 0
     ev = args.evaluator or default_evaluator()
-    res = subprocess.run([ev], input=inp, capture_output=True, text=True)
+    res = subprocess.run([ev], input=inp, capture_output=True, text=True, encoding="utf-8")
     if res.returncode != 0:
         print(res.stderr, file=sys.stderr, end="")
         return 1

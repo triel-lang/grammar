@@ -424,7 +424,7 @@ def corpus():
 
 
 def main():
-    grammar = GRAMMAR.read_text()
+    grammar = GRAMMAR.read_text(encoding="utf-8")
     parser = Lark(
         grammar,
         start="start",

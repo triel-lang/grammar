@@ -23,7 +23,7 @@ GRAMMAR_PATH = Path(__file__).parent / "triel.lark"
 
 
 def build_parser(ambiguity: str = "resolve") -> Lark:
-    grammar_text = GRAMMAR_PATH.read_text()
+    grammar_text = GRAMMAR_PATH.read_text(encoding="utf-8")
     return Lark(
         grammar_text,
         start="start",
@@ -43,7 +43,7 @@ def count_ambig_nodes(tree) -> int:
 
 
 def check_file(path: Path, check_ambiguity: bool) -> bool:
-    source = path.read_text()
+    source = path.read_text(encoding="utf-8")
     ok = True
 
     parser = build_parser(ambiguity="resolve")
@@ -70,6 +70,7 @@ def check_file(path: Path, check_ambiguity: bool) -> bool:
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("files", nargs="+", type=Path)
     ap.add_argument("--check-ambiguity", action="store_true",

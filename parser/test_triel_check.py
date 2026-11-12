@@ -129,7 +129,7 @@ def stub(tmp_path, lines, last_line=None):
     script = ["#!/bin/sh", "cat > /dev/null"] + [f"echo '{line}'" for line in lines]
     if last_line is not None:
         script.append(f"[ \"$1\" = --last ] && echo '{last_line}'")
-    f.write_text("\n".join(script + ["exit 0"]) + "\n")
+    f.write_text("\n".join(script + ["exit 0"]) + "\n", encoding="utf-8")
     f.chmod(0o755)
     return f
 
@@ -296,7 +296,7 @@ def with_tick(trace: str, time: str) -> str:
 @needs_evaluator
 def test_last_no_decision_on_a_tick_after_a_block(tmp_path, capsys):
     trace = tmp_path / "campaign_then_tick.json"
-    trace.write_text(with_tick(campaign("7500.00"), "2026-11-10T09:20:02Z"))
+    trace.write_text(with_tick(campaign("7500.00"), "2026-11-10T09:20:02Z"), encoding="utf-8")
     code, out, _ = check(capsys, MANDATE, trace)
     assert "MONITOR 4 : ENTRY 2 BLOCK" in out.splitlines() and code == 3
     code, out, _ = check(capsys, MANDATE, trace, "--last")
@@ -306,7 +306,7 @@ def test_last_no_decision_on_a_tick_after_a_block(tmp_path, capsys):
 @needs_evaluator
 def test_last_no_decision_on_the_activation_entry_alone(tmp_path, capsys):
     trace = tmp_path / "activation.json"
-    trace.write_text(campaign())
+    trace.write_text(campaign(), encoding="utf-8")
     code, out, _ = check(capsys, MANDATE, trace, "--last")
     assert out.splitlines()[-1] == "LAST ENTRY 0 : NO DECISION" and code == 5
     code, out, _ = check(capsys, MANDATE, trace)
@@ -316,7 +316,7 @@ def test_last_no_decision_on_the_activation_entry_alone(tmp_path, capsys):
 @needs_evaluator
 def test_last_allowed_after_an_earlier_block(tmp_path, capsys):
     trace = tmp_path / "campaigns.json"
-    trace.write_text(campaign("7500.00", "3000.00"))
+    trace.write_text(campaign("7500.00", "3000.00"), encoding="utf-8")
     code, out, _ = check(capsys, MANDATE, trace)
     assert "MONITOR 4 : ENTRY 2 BLOCK ENTRY 4 ALLOW" in out.splitlines() and code == 3
     code, out, _ = check(capsys, MANDATE, trace, "--last")
@@ -343,7 +343,7 @@ def test_exit_code_not_blocked():
 def test_exit_code_rejected_specification(tmp_path):
     scn = tmp_path / "rejected.scn"
     scn.write_text('(scenario rejected (spec "examples/semantics/execute_renaming.triel")\n'
-                   '  (entry "2026-01-01T00:00:00Z" (activate) (data)))\n')
+                   '  (entry "2026-01-01T00:00:00Z" (activate) (data)))\n', encoding="utf-8")
     r = program("examples/semantics/execute_renaming.triel", scn)
     assert r.returncode == 2 and r.stdout.splitlines()[-1] == "REJECTED: EXECUTE"
     r = program("examples/semantics/execute_renaming.triel", scn, "--json")
@@ -363,7 +363,7 @@ def test_exit_code_other_errors(tmp_path):
     r = program(MANDATE, scn, "--evaluator", tmp_path / "no-evaluator")
     assert r.returncode == 1 and "cannot run the evaluator" in r.stderr
     bad = tmp_path / "bad.json"
-    bad.write_text('{"scenario": "s", "spec": "x", "entries": [], "extra": 1}')
+    bad.write_text('{"scenario": "s", "spec": "x", "entries": [], "extra": 1}', encoding="utf-8")
     r = program(MANDATE, bad, "--json")
     assert r.returncode == 1 and r.stdout == "" and "expected a scenario" in r.stderr
     assert "Traceback" not in r.stderr
@@ -388,6 +388,60 @@ def test_evaluator_path_order(tmp_path):
     assert r.returncode == 1 and "no-evaluator" in r.stderr
     r = program(MANDATE, scn, "--evaluator", default_evaluator(), env=env)
     assert r.returncode == 0, r.stderr
+
+
+# --- Text outside ASCII, whatever the locale ----------------------------------------------
+#
+# The specification and the trace are UTF-8 files with letters outside ASCII in a
+# string and in a header line. triel check and triel_eval.py run in the C locale:
+# with the UTF-8 mode of Python, which the C locale turns on, the evaluator must
+# read its input as UTF-8; with PYTHONUTF8=0, the drivers too must read the files
+# and talk to the evaluator in UTF-8. The evaluator prints a string with show, in
+# decimal escapes; the header line is printed as written.
+
+GREETING_SPEC = """\
+SPECIFICATION greeting VERSION 1.0.0 JURISDICTION "Україна"
+SUBJECTS { a : PARTY }
+TERMS { a MUST_NOT send("Привет") WHEN s == "Привет" }
+FACTORS { s : String METADATA }
+INVARIANTS { i : ALWAYS(s != "Привет") }
+"""
+
+GREETING_TRACE = """\
+(scenario greeting (spec "%s")
+  (entry "2026-01-01T00:00:00Z" (activate) (data (s (str "Привет"))))
+  (entry "2026-01-01T00:00:01Z" (act a (send (str "Привет")) must_not)
+    (data (s (str "Привет")))))
+"""
+
+GREETING_REPORT = [
+    "SPEC greeting",
+    'METADATA JURISDICTION "Україна"',
+    "ACTIVATION OK",
+    "BLOCK OK",
+    "TYPES OK",
+    'TERM 1 MUST_NOT a send("\\1055\\1088\\1080\\1074\\1077\\1090") : BREACHED 1767225601',
+    "INVARIANT i : F",
+    "MONITOR 1 : ENTRY 1 BLOCK",
+]
+
+
+@needs_evaluator
+@pytest.mark.parametrize("utf8_mode", [None, "0"], ids=["LC_ALL=C", "LC_ALL=C,PYTHONUTF8=0"])
+def test_text_outside_ascii_in_the_c_locale(utf8_mode, tmp_path):
+    spec = tmp_path / "greeting.triel"
+    spec.write_text(GREETING_SPEC, encoding="utf-8")
+    trace = tmp_path / "greeting.scn"
+    trace.write_text(GREETING_TRACE % spec.resolve().as_posix(), encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONUTF8", "PYTHONIOENCODING")}
+    env["LC_ALL"] = "C"
+    if utf8_mode is not None:
+        env["PYTHONUTF8"] = utf8_mode
+    r = program(spec, trace, env=env)
+    assert (r.returncode, r.stdout.splitlines()) == (3, GREETING_REPORT), r.stderr
+    r = subprocess.run([sys.executable, str(REPO / "parser" / "triel_eval.py"), str(trace)],
+                       capture_output=True, text=True, encoding="utf-8", cwd=REPO, env=env)
+    assert (r.returncode, r.stdout.splitlines()) == (0, GREETING_REPORT), r.stderr
 
 
 # --- Exit code 4: the evaluator rejects the trace --------------------------------------
@@ -567,7 +621,8 @@ ACTIVATE = '{"time": "2026-11-10T09:00:00Z", "event": {"kind": "activate"}, "dat
 ])
 def test_json_trace_errors(data, message, tmp_path, capsys):
     trace = tmp_path / "t.json"
-    trace.write_text('{"scenario": "s", "spec": "%s", "entries": [%s]}' % (MANDATE, ACTIVATE % data))
+    trace.write_text('{"scenario": "s", "spec": "%s", "entries": [%s]}' % (MANDATE, ACTIVATE % data),
+                     encoding="utf-8")
     code, out, err = check(capsys, MANDATE, trace)
     assert code == 1 and out == "" and message in err
 
@@ -592,7 +647,7 @@ def test_json_trace_errors(data, message, tmp_path, capsys):
 ])
 def test_json_trace_structure_errors(text, message, tmp_path, capsys):
     trace = tmp_path / "t.json"
-    trace.write_text(text)
+    trace.write_text(text, encoding="utf-8")
     code, out, err = check(capsys, MANDATE, trace)
     assert code == 1 and out == "" and message in err
 

@@ -50,7 +50,7 @@ import Data.Char (isDigit, isSpace)
 import Data.List (intercalate)
 import System.Environment (getArgs)
 import System.Exit (exitWith, ExitCode (ExitFailure))
-import System.IO (hPutStrLn, stderr)
+import System.IO (hPutStrLn, hSetEncoding, stderr, stdin, stdout, utf8)
 import qualified TRIEL as T
 
 data SExp = Sym String | Str String | List [SExp]
@@ -423,6 +423,8 @@ lastLine j ls =
 
 main :: IO ()
 main = do
+  -- The input and the report are UTF-8 whatever the locale.
+  mapM_ (`hSetEncoding` utf8) [stdin, stdout, stderr]
   args <- getArgs
   lastEntry <- case args of
     [] -> return False

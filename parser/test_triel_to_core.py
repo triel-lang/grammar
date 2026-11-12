@@ -41,7 +41,7 @@ def rejected(src):
 # --- the rule table -------------------------------------------------------
 
 def test_rule_table_covers_the_grammar():
-    text = (PARSER / "triel.lark").read_text()
+    text = (PARSER / "triel.lark").read_text(encoding="utf-8")
     rules = set(re.findall(r"^([a-z_][a-z0-9_]*)\s*:", text, flags=re.M))
     assert rules == set(RULES)
 
@@ -861,7 +861,7 @@ def test_scenario_integers():
 def test_spec_path_is_relative_to_the_repository(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "examples/core").mkdir(parents=True)
-    (tmp_path / "examples/core/core_sequence.triel").write_text("not TRIEL")
+    (tmp_path / "examples/core/core_sequence.triel").write_text("not TRIEL", encoding="utf-8")
     assert find_spec(read_sexp('"examples/core/core_sequence.triel"')) == \
         REPO / "examples/core/core_sequence.triel"
     with pytest.raises(ScenarioError):
@@ -879,14 +879,15 @@ def test_times_are_not_reordered_by_the_driver():
 # --- command-line behaviour ----------------------------------------------
 
 def run(args, **kw):
-    return subprocess.run([sys.executable] + args, capture_output=True, text=True, **kw)
+    return subprocess.run([sys.executable] + args, capture_output=True, text=True, encoding="utf-8",
+                          **kw)
 
 
 def test_exit_codes(tmp_path):
     ok, bad, broken = tmp_path / "ok.triel", tmp_path / "bad.triel", tmp_path / "broken.triel"
-    ok.write_text(spec())
-    bad.write_text(spec(terms="a MUST b AND a MUST c"))
-    broken.write_text("SPECIFICATION")
+    ok.write_text(spec(), encoding="utf-8")
+    bad.write_text(spec(terms="a MUST b AND a MUST c"), encoding="utf-8")
+    broken.write_text("SPECIFICATION", encoding="utf-8")
     t2c = str(PARSER / "triel_to_core.py")
     assert run([t2c, str(ok)]).returncode == 0
     r = run([t2c, str(bad)])
@@ -896,11 +897,12 @@ def test_exit_codes(tmp_path):
 
 def test_deep_nesting_is_an_error_not_a_crash(tmp_path):
     deep = tmp_path / "deep.triel"
-    deep.write_text(spec(invariants="i : ALWAYS(" + "(" * 400 + "f" + ")" * 400 + ")"))
+    deep.write_text(spec(invariants="i : ALWAYS(" + "(" * 400 + "f" + ")" * 400 + ")"),
+                    encoding="utf-8")
     r = run([str(PARSER / "triel_to_core.py"), str(deep)])
     assert r.returncode == 1 and "nested too deeply" in r.stderr and "Traceback" not in r.stderr
     scn = tmp_path / "deep.scn"
-    scn.write_text("(scenario s " + "(" * 5000 + ")" * 5000 + ")")
+    scn.write_text("(scenario s " + "(" * 5000 + ")" * 5000 + ")", encoding="utf-8")
     r = run([str(PARSER / "triel_eval.py"), str(scn)])
     assert r.returncode == 1 and "nested too deeply" in r.stderr and "Traceback" not in r.stderr
 
