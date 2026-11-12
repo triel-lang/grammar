@@ -141,6 +141,96 @@ def test_integer_and_decimal_factors_compare():
     assert '(always (le (name (path "n")) (name (path "g"))))' in c
 
 
+# --- == and != compare values of one type ----------------------------------
+
+EQ_FACTORS = ("g : Integer METADATA, d : Decimal METADATA, s : String METADATA, "
+              "f : Boolean METADATA, t : DateTime METADATA, u : DateTime METADATA, "
+              "h : Hash METADATA, ad : Address METADATA, "
+              "og : Optional<Integer> METADATA, os : Optional<String> METADATA, "
+              "r : Record { x : Integer, q : Record { w : DateTime } } METADATA")
+JAN1 = 'DATETIME("2026-01-01T00:00:00Z")'
+
+
+@pytest.mark.parametrize("cond, why", [
+    ('g == "5"', "comparison of different types"),
+    ("f == 1", "comparison of different types"),
+    ("s == g", "comparison of different types"),
+    ('t == "2026-01-01T00:00:00Z"', "comparison of different types"),
+    ('g != "5"', "comparison of different types"),
+    ("t == 5", "comparison of different types"),
+    ("t == g", "comparison of different types"),
+    (f"{JAN1} == 1767225600", "comparison of different types"),
+    ('"5" == g', "comparison of different types"),
+    ("1 == f", "comparison of different types"),
+    ('1 == "1"', "comparison of different types"),
+    ("true == 1", "comparison of different types"),
+    ("s == -5", "comparison of different types"),
+    ("f == -1", "comparison of different types"),
+    ('r.x == "5"', "comparison of different types"),
+    ('DEFAULT(og, 0) == DEFAULT(os, "x")', "comparison of different types"),
+    ('og == "5"', "comparison of different types"),
+    # The fallback is rejected first; the comparison is not checked.
+    ('DEFAULT(og, "x") == 0', "DEFAULT fallback of another type"),
+])
+def test_comparison_of_different_types_is_rejected(cond, why):
+    assert rejected(spec(invariants=f"i : ALWAYS({cond})", factors=EQ_FACTORS)) == [why]
+
+
+@pytest.mark.parametrize("cond, expected", [
+    ("g == 5", '(eq (name (path "g")) (const (int 5)))'),
+    ("g == -5", '(eq (name (path "g")) (const (int -5)))'),
+    ("g == d", '(eq (name (path "g")) (name (path "d")))'),
+    ("g == 2.5", '(eq (name (path "g")) (const (dec 25 1)))'),
+    ("d == 2.5", '(eq (name (path "d")) (const (dec 25 1)))'),
+    ("5 == g", '(eq (const (int 5)) (name (path "g")))'),
+    ("5 == 5.0", '(eq (const (int 5)) (const (dec 50 1)))'),
+    ('s == "x"', '(eq (name (path "s")) (const (str "x")))'),
+    ('"x" != s', '(not (eq (const (str "x")) (name (path "s"))))'),
+    ("h == ad", '(eq (name (path "h")) (name (path "ad")))'),
+    ('h == "abc"', '(eq (name (path "h")) (const (str "abc")))'),
+    ("s == h", '(eq (name (path "s")) (name (path "h")))'),
+    (f"t == {JAN1}", '(eq (name (path "t")) (const (time 1767225600)))'),
+    ("t == u", '(eq (name (path "t")) (name (path "u")))'),
+    ("f == true", '(eq (name (path "f")) (const (bool true)))'),
+    ("f != false", '(not (eq (name (path "f")) (const (bool false))))'),
+    ("r.x == 5", '(eq (name (path "r" "x")) (const (int 5)))'),
+    ("r.q.w == t", '(eq (name (path "r" "q" "w")) (name (path "t")))'),
+    ("og == 5", '(eq (name (path "og")) (const (int 5)))'),
+    ('os == "x"', '(eq (name (path "os")) (const (str "x")))'),
+    ("DEFAULT(og, 0) == 2.5", '(eq (default (path "og") (const (int 0))) (const (dec 25 1)))'),
+])
+def test_comparison_of_one_type(cond, expected):
+    c = core(spec(invariants=f"i : ALWAYS({cond})", factors=EQ_FACTORS))
+    assert f"(always {expected})" in c
+
+
+@pytest.mark.parametrize("terms, invariants", [
+    ("a MUST b", "i : ALWAYS({c})"),
+    ("a MUST_NOT b WHEN {c}", "i : ALWAYS(f)"),
+    ("IF {c} THEN a MUST b", "i : ALWAYS(f)"),
+    ("a MUST b UNLESS {c} DO a MUST e", "i : ALWAYS(f)"),
+    ("a MUST b", "i : ALWAYS(NOT {c})"),
+], ids=["ALWAYS", "MUST_NOT WHEN", "IF", "UNLESS", "NOT"])
+@pytest.mark.parametrize("c, why", [
+    ('g == "5"', ["comparison of different types"]),
+    ('t != "2026-01-01T00:00:00Z"', ["comparison of different types"]),
+    ("g == 5", []),
+    (f"t != {JAN1}", []),
+])
+def test_comparison_rule_in_every_context(terms, invariants, c, why):
+    src = spec(terms=terms.format(c=c), invariants=invariants.format(c=c), factors=EQ_FACTORS)
+    assert rejected(src) == why
+
+
+@pytest.mark.parametrize("factors, cond", [
+    ("x : Duration METADATA", 'x == "5"'),
+    ("x : Duration METADATA", "x == 5"),
+    ("r : Record { x : Duration } METADATA", 'r.x == "5"'),
+])
+def test_comparison_with_a_rejected_type_is_not_checked(factors, cond):
+    assert rejected(spec(invariants=f"i : ALWAYS({cond})", factors=factors)) == ["type Duration"]
+
+
 @pytest.mark.parametrize("src", [
     spec(factors="f : Float METADATA"),
     spec(invariants="i : ALWAYS(g >= 1.5e3)", factors="g : Decimal METADATA"),
@@ -531,6 +621,16 @@ def test_declarations(terms, factors, why):
     assert rejected(spec(terms=terms, factors=factors)) == [why]
 
 
+@pytest.mark.parametrize("invariants, why", [
+    ("i : ALWAYS(f); i : ALWAYS(NOT f)", ["duplicate invariant name"]),
+    ("i : SAFETY : ALWAYS(f); j : ALWAYS(f); i : LIVENESS : EVENTUALLY(f)",
+     ["duplicate invariant name"]),
+    ("i : ALWAYS(f); j : ALWAYS(NOT f)", []),
+])
+def test_duplicate_invariant_name(invariants, why):
+    assert rejected(spec(invariants=invariants)) == why
+
+
 def test_duplicate_subject_is_rejected():
     src = spec().replace("a : PARTY, b2 : PARTY", "a : PARTY, a : ORACLE")
     assert rejected(src) == ["duplicate subject"]
@@ -803,6 +903,29 @@ def test_deep_nesting_is_an_error_not_a_crash(tmp_path):
     scn.write_text("(scenario s " + "(" * 5000 + ")" * 5000 + ")")
     r = run([str(PARSER / "triel_eval.py"), str(scn)])
     assert r.returncode == 1 and "nested too deeply" in r.stderr and "Traceback" not in r.stderr
+
+
+@pytest.mark.parametrize("literal", ['"\\uD83D\\uDE00"', '"\\uD83D"'])
+def test_surrogate_escape_is_rejected_not_a_crash(literal, tmp_path):
+    src = tmp_path / "surrogate.triel"
+    src.write_text(spec(invariants=f"i : ALWAYS(s == {literal})", factors="s : String METADATA"),
+                   encoding="utf-8")
+    r = run([str(PARSER / "triel_to_core.py"), str(src)])
+    assert r.returncode == 2, r.stderr
+    assert r.stdout.splitlines()[-1] == "REJECTED: surrogate escape"
+
+
+@pytest.mark.parametrize("terms", [
+    'a MUST pay("\\uDFFF")',
+    'a MUST b BY DATETIME("2026-01-01T00:00:00Z\\uD800")',
+])
+def test_surrogate_escape_anywhere_is_rejected(terms):
+    assert rejected(spec(terms=terms)) == ["surrogate escape"]
+
+
+def test_unicode_escape_outside_the_surrogates():
+    c = core(spec(invariants='i : ALWAYS(s == "\\u00e9\\uFFFD")', factors="s : String METADATA"))
+    assert '(const (str "\u00e9\ufffd"))' in c
 
 
 # --- scenarios ------------------------------------------------------------
