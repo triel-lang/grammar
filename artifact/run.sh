@@ -195,6 +195,59 @@ conformance_self_check() {
   tail -n 1 "$SCRATCH/self.txt"
 }
 
+# isabelle.yml: the theories of formal/core/ROOT, read as tools/make_afp_copy.sh
+# reads them.
+root_theories() {
+  awk '
+    /^[[:space:]]*theories[[:space:]]*$/ { on = 1; next }
+    /^[[:space:]]*(document_files|export_files|sessions|options)([[:space:](]|$)/ { on = 0 }
+    on && NF { print $1 }' formal/core/ROOT | sort
+}
+
+# isabelle.yml: formal/checks/No_Oracles.thy imports exactly the theories of
+# formal/core/ROOT (the imports read only between "imports" and "begin"); the
+# session TRIEL_Core_Checks is built on top of the heap of TRIEL_Core and fails
+# if a named theorem of these theories depends on an oracle, except the
+# equations of the Quickcheck generators (full_exhaustive, narrowing) that the
+# datatype package defines itself and whose termination HOL accepts with the
+# oracle Pure.skip_proof (No_Oracles.thy states the exact rule); the theories
+# that its output no_oracles.txt reports are those of ROOT, and its numbers add
+# up. The same checks as in CI.
+no_oracles() {
+  local root imports checked sum excluded sum_excluded listed line total total_excluded
+  local out=formal/checks/output/no_oracles.txt
+  root=$(root_theories)
+  [ -n "$root" ] || { echo "error: no theories found in formal/core/ROOT"; return 1; }
+  imports=$(awk '
+    /^theory[[:space:]]+[A-Za-z0-9_]+[[:space:]]*$/ { header = 1 }
+    header && /(^|[[:space:]])imports([[:space:]]|$)/ { on = 1 }
+    on && /(^|[[:space:]])begin([[:space:]]|$)/ { exit }
+    on { print }' formal/checks/No_Oracles.thy \
+    | grep -oE '"?TRIEL_Core\.[A-Za-z0-9_]+' | sed -E 's/^"?TRIEL_Core\.//' | sort)
+  diff -u <(echo "$root") <(echo "$imports") \
+    || { echo "error: the theories of formal/core/ROOT (-) and the imports of formal/checks/No_Oracles.thy (+) differ"; return 1; }
+  isabelle build -e -v -d formal/core -D formal/checks || return 1
+  cp "$out" "$RESULTS_DIR/no_oracles.txt"
+  checked=$(sed -nE 's/^TRIEL_Core\.([A-Za-z0-9_]+): [0-9]+ facts$/\1/p' "$out" | sort)
+  sum=$(sed -nE 's/^TRIEL_Core\.[A-Za-z0-9_]+: ([0-9]+) facts$/\1/p' "$out" | awk '{ s += $1 } END { print s + 0 }')
+  excluded=$(sed -nE 's/^  TRIEL_Core\.([A-Za-z0-9_]+): [0-9]+ excluded$/\1/p' "$out" | sort)
+  sum_excluded=$(sed -nE 's/^  TRIEL_Core\.[A-Za-z0-9_]+: ([0-9]+) excluded$/\1/p' "$out" | awk '{ s += $1 } END { print s + 0 }')
+  listed=$(grep -cE '^    [A-Za-z0-9_.]+$' "$out" || true)
+  line=$(grep -E '^Theorems of TRIEL_Core without oracles: ' "$out" || true)
+  total=$(echo "$line" | sed -nE 's/^Theorems of TRIEL_Core without oracles: ([0-9]+) \(excluded: [0-9]+ Quickcheck generator facts with Pure\.skip_proof\)$/\1/p')
+  total_excluded=$(echo "$line" | sed -nE 's/^Theorems of TRIEL_Core without oracles: [0-9]+ \(excluded: ([0-9]+) Quickcheck generator facts with Pure\.skip_proof\)$/\1/p')
+  diff -u <(echo "$root") <(echo "$checked") \
+    || { echo "error: the theories of formal/core/ROOT (-) and those of $out (+) differ"; return 1; }
+  diff -u <(echo "$root") <(echo "$excluded") \
+    || { echo "error: the theories of formal/core/ROOT (-) and those of the excluded facts in $out (+) differ"; return 1; }
+  [ -n "$total" ] && [ "$total" = "$sum" ] \
+    || { echo "error: the total in $out (${total:-none}) is not the sum of the theories ($sum)"; return 1; }
+  [ "$total_excluded" = "$sum_excluded" ] && [ "$total_excluded" = "$listed" ] \
+    || { echo "error: the number of excluded facts in $out (${total_excluded:-none}) is not the sum of the theories ($sum_excluded) or the number listed ($listed)"; return 1; }
+  echo
+  cat "$RESULTS_DIR/no_oracles.txt"
+}
+
 # --- Run -------------------------------------------------------------------
 
 echo "TRIEL artifact: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -224,6 +277,7 @@ step 11-paper-theorems     paper_theorems
 step 12-conformance        conformance
 step 13-conformance-manifest conformance_manifest
 step 14-conformance-self-check conformance_self_check
+step 15-no-oracles          no_oracles
 total_seconds=$(( $(date +%s) - total_start ))
 
 # --- Summary ---------------------------------------------------------------
@@ -236,6 +290,9 @@ statements=$(python3 "$WORK/artifact/count_statements.py" "$WORK"/formal/core/*.
 # Theorems only: the thm lines before the section on definitions.
 paper=$(sed -n '/^section .*Definitions used in the paper/q;p' "$WORK/artifact/isabelle/Paper_Theorems.thy" | grep -cE '^thm ')
 paper_ok=$(sed -nE 's/^Paper theorems without oracles: ([0-9]+)$/\1/p' "$RESULTS_DIR/paper_theorems.txt" 2>/dev/null)
+# The line of no_oracles.txt as it is: the number of theorems and of the
+# excluded facts.
+core_ok=$(sed -nE 's/^Theorems of TRIEL_Core without oracles: ([0-9]+ \(excluded: [0-9]+ Quickcheck generator facts with Pure\.skip_proof\))$/\1/p' "$RESULTS_DIR/no_oracles.txt" 2>/dev/null)
 scn_total=$(ls "$WORK"/examples/core/scenarios/*.scn | wc -l)
 scn_ok=$(grep -c '^ok ' "$RESULTS_DIR/06-scenarios.log" 2>/dev/null)
 ex_total=$(grep -c ': ' "$RESULTS_DIR/classification.txt" 2>/dev/null)
@@ -251,6 +308,7 @@ excerpts=$(sed -nE 's/^All ([0-9]+) excerpts conform to the grammar\.$/\1/p' "$R
   printf '%-44s %s\n' "theories checked by Isabelle (TRIEL_Core)" "$theories (.thy files in formal/core: $thy_files)"
   printf '%-44s %s\n' "proved statements (lemma/theorem/corollary)" "${statements:-?}"
   printf '%-44s %s\n' "paper theorems found, without oracles" "${paper_ok:-0} of $paper"
+  printf '%-44s %s\n' "theorems of TRIEL_Core without oracles" "${core_ok:-?}"
   printf '%-44s %s\n' "scenarios matching .expected" "${scn_ok:-0} of $scn_total"
   printf '%-44s %s\n' "examples accepted by the core" "${ex_accepted:-0} of ${ex_total:-0}"
   printf '%-44s %s\n' "translator and driver tests (pytest)" "${tests_line:-?}"
