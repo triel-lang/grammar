@@ -1,7 +1,7 @@
 (*  Title:      No_Oracles.thy
-    Purpose:    No named theorem of the theories of the session TRIEL_Core depends on
-                an oracle, except the equations of the Quickcheck generators
-                (full_exhaustive, narrowing) that the datatype package defines itself.
+    Purpose:    No named theorem of the theories of formal/core/ROOT depends on an
+                oracle, except the equations of the Quickcheck generators
+                (full_exhaustive, narrowing) that Isabelle/HOL generates for a datatype.
 
 The theory imports every theory of formal/core/ROOT. The ML block below takes the
 theories of TRIEL_Core among the ancestors of this theory (no list of names), and in each
@@ -11,12 +11,17 @@ must depend on no oracle (an unfinished proof or a result of evaluation by the c
 generator is one). The build fails if one does, naming the fact and the oracle, if
 no theory of TRIEL_Core is found, or if a theory has no named fact that is checked.
 
-The one exception: for a datatype T, the datatype package defines the Quickcheck
-generators of T, and HOL accepts their termination with the oracle Pure.skip_proof. A
-fact is excluded only if its name is T.full_exhaustive_T.simps or T.narrowing_T.simps in
-the theory that defines the datatype T, and its set of oracles is exactly
-{Pure.skip_proof}. Any other fact with an oracle fails the build, so no other theorem
-depends on the excluded facts.
+The one exception: for a datatype T, the Quickcheck plugins of the datatype package
+(quickcheck_full_exhaustive, quickcheck_narrowing) define the generator constants of T as
+undefined and assert their equations with the oracle Pure.skip_proof instead of proving
+them (Quickcheck_Common.define_functions). A fact is excluded only if its name is
+T.full_exhaustive_T.simps or T.narrowing_T.simps in the theory that defines the datatype
+T, and its set of oracles is exactly {Pure.skip_proof}. Any other fact with an oracle
+fails the build, so no other named fact depends on the excluded facts. For mutually
+recursive datatypes T1 and T2 the plugins name the facts differently
+(T1_T2.full_exhaustive_T1.simps), and for an auxiliary type of a nested datatype they use
+the name full_exhaustive_<auxname>; such facts are not excluded, and the build fails on
+them until the rule is extended.
 
 The number of named facts checked in each theory, their sum, and the excluded facts with
 their number in each theory are exported to output/no_oracles.txt. Run, from the root of
@@ -66,9 +71,9 @@ local
 
   fun oracle_names oracles = distinct (op =) (map (fn ((oracle, _), _) => oracle) oracles)
 
-  (* The equations of the Quickcheck generators of a datatype T of the theory, whose
-     termination HOL accepts with the oracle Pure.skip_proof: the name, the datatype
-     and the set of oracles must all be as stated. *)
+  (* The equations of the Quickcheck generators of a datatype T of the theory, which
+     HOL asserts with the oracle Pure.skip_proof: the name, the datatype and the set of
+     oracles must all be as stated. *)
   fun quickcheck_equations thy (fact, ths) =
     (case Long_Name.explode fact of
       [b, tname, c, "simps"] =>
@@ -114,12 +119,12 @@ local
   val text =
     cat_lines (map (fn {name, checked, ...} => name ^ ": " ^ string_of_int checked ^ " facts")
       results) ^
-    "\n\nTheorems of TRIEL_Core without oracles: " ^ string_of_int total ^
+    "\n\nNamed facts of TRIEL_Core without oracles: " ^ string_of_int total ^
       " (excluded: " ^ string_of_int total_excluded ^
       " Quickcheck generator facts with Pure.skip_proof)\n" ^
     "\nExcluded: the equations of the Quickcheck generators (full_exhaustive, narrowing) that\n" ^
-    "the datatype package defines for a datatype of the theory; the set of oracles of each is\n" ^
-    "exactly {Pure.skip_proof}.\n" ^
+    "Isabelle/HOL generates for a datatype of the theory and asserts with the oracle\n" ^
+    "Pure.skip_proof; the set of oracles of each is exactly {Pure.skip_proof}.\n" ^
     cat_lines (maps excluded_lines results) ^ "\n"
 in
   val _ = writeln text
