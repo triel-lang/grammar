@@ -116,41 +116,6 @@ local
   fun excluded_lines ({name, excluded, ...}: result) =
     ("  " ^ name ^ ": " ^ string_of_int (length excluded) ^ " excluded") ::
       map (prefix "    ") excluded
-  (* Probe: the concealed facts of each theory (dest_static true without dest_static
-     false), their number and those that depend on an oracle. Information only. *)
-  fun concealed thy =
-    let
-      fun dest verbose =
-        Facts.dest_static verbose (map Global_Theory.facts_of (Theory.parents_of thy))
-          (Global_Theory.facts_of thy)
-      val visible = Symtab.make_set (map #1 (dest false))
-    in
-      dest true |> filter_out (Symtab.defined visible o #1)
-      |> map (apsnd (map (Thm.transfer \<^theory>)))
-    end
-  fun probe thy =
-    let
-      val cs = concealed thy
-      val with_oracles =
-        cs |> map_filter (fn (fact, ths) =>
-          (case oracle_names (Thm_Deps.all_oracles ths) of
-            [] => NONE
-          | oracles => SOME (fact ^ ": " ^ commas oracles)))
-    in
-      (length cs, length with_oracles,
-        ("Concealed facts of " ^ Context.theory_long_name thy ^ ": " ^ string_of_int (length cs) ^
-          ", with oracles: " ^ string_of_int (length with_oracles)) ::
-        map (prefix "  - ") with_oracles)
-    end
-  val probes = map probe theories
-  val probe_lines = maps #3 probes
-  val probe_text =
-    "\nProbe: concealed facts in all: " ^ string_of_int (fold (Integer.add o #1) probes 0) ^
-    ", with oracles: " ^ string_of_int (fold (Integer.add o #2) probes 0) ^ "\n" ^
-    cat_lines (take 400 probe_lines) ^
-    (if length probe_lines > 400 then "\n  ... " ^ string_of_int (length probe_lines - 400) ^ " more lines" else "") ^
-    "\n"
-
   val text =
     cat_lines (map (fn {name, checked, ...} => name ^ ": " ^ string_of_int checked ^ " facts")
       results) ^
@@ -160,7 +125,7 @@ local
     "\nExcluded: the equations of the Quickcheck generators (full_exhaustive, narrowing) that\n" ^
     "Isabelle/HOL generates for a datatype of the theory and asserts with the oracle\n" ^
     "Pure.skip_proof; the set of oracles of each is exactly {Pure.skip_proof}.\n" ^
-    cat_lines (maps excluded_lines results) ^ "\n" ^ probe_text
+    cat_lines (maps excluded_lines results) ^ "\n"
 in
   val _ = writeln text
   val _ = Export.export \<^theory> (Path.binding0 (Path.basic "no_oracles.txt")) [XML.Text text]
