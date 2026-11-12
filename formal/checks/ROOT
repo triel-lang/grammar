@@ -1,0 +1,15 @@
+(* The check that no named theorem of the session TRIEL_Core depends on an
+   oracle. Built on top of the session TRIEL_Core of formal/core, which is not
+   changed:
+
+     isabelle build -e -v -d formal/core -D formal/checks
+
+   -e writes the number of named facts of each theory and their sum to
+   output/no_oracles.txt. The build fails if a named theorem of a theory of
+   formal/core/ROOT depends on an oracle. *)
+
+session TRIEL_Core_Checks = TRIEL_Core +
+  options [document = false]
+  theories
+    No_Oracles
+  export_files (in "output") [1] "*:no_oracles.txt"

@@ -62,14 +62,103 @@ jobs:
           grep -q 'options \[document = false\]' formal/core/ROOT
           cat formal/core/ROOT
 
+      # -b keeps the heap of TRIEL_Core for the session TRIEL_Core_Checks below.
       - name: Build session TRIEL_Core
         shell: bash
         run: |
           set -o pipefail
-          ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -v -D formal/core 2>&1 | tee "$RUNNER_TEMP/isabelle-build.log"
+          ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -b -v -D formal/core 2>&1 | tee "$RUNNER_TEMP/isabelle-build.log"
 
-      # The logs of this job cannot be read from a cloud session. When the
-      # build fails, the error lines are posted as a comment on the commit, so
+      # formal/checks/No_Oracles.thy imports exactly the theories of
+      # formal/core/ROOT (in any order), so that a new theory of ROOT cannot
+      # escape the check for oracles. The theories of ROOT are read as
+      # tools/make_afp_copy.sh reads them; the imports only between "imports"
+      # and "begin".
+      - name: Compare the theories of ROOT with the imports of No_Oracles.thy
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            root=$(awk '
+              /^[[:space:]]*theories[[:space:]]*$/ { on = 1; next }
+              /^[[:space:]]*(document_files|export_files|sessions|options)([[:space:](]|$)/ { on = 0 }
+              on && NF { print $1 }' formal/core/ROOT | sort)
+            imports=$(awk '
+              /^theory[[:space:]]/ { header = 1 }
+              header && /(^|[[:space:]])imports([[:space:]]|$)/ { on = 1 }
+              on && /(^|[[:space:]])begin([[:space:]]|$)/ { exit }
+              on { print }' formal/checks/No_Oracles.thy \
+              | grep -oE '"?TRIEL_Core\.[A-Za-z0-9_]+' | sed -E 's/^"?TRIEL_Core\.//' | sort)
+            [ -n "$root" ] || { echo "error: no theories found in formal/core/ROOT"; exit 1; }
+            if diff -u <(echo "$root") <(echo "$imports"); then
+              echo "The imports of formal/checks/No_Oracles.thy are the $(echo "$root" | wc -l) theories of formal/core/ROOT"
+            else
+              echo "error: the theories of formal/core/ROOT (-) and the imports of formal/checks/No_Oracles.thy (+) differ"
+              exit 1
+            fi
+          } 2>&1 | tee "$RUNNER_TEMP/theories.log"
+
+      # The session TRIEL_Core_Checks (formal/checks), on the heap of
+      # TRIEL_Core: no named theorem of the theories of ROOT depends on an
+      # oracle. The grep above sees only the text of the theories; an oracle
+      # brought in by a proof method is seen here. -e writes the number of
+      # named facts of each theory to formal/checks/output/no_oracles.txt.
+      - name: Check that no theorem of TRIEL_Core depends on an oracle
+        shell: bash
+        run: |
+          set -o pipefail
+          ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -e -v -d formal/core -D formal/checks 2>&1 | tee "$RUNNER_TEMP/no-oracles.log"
+          cat formal/checks/output/no_oracles.txt
+
+      # The theories that the check went through, read from no_oracles.txt, are
+      # those of ROOT, and the total is the sum of the numbers of the theories.
+      - name: Compare the theories of no_oracles.txt with ROOT
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            out=formal/checks/output/no_oracles.txt
+            root=$(awk '
+              /^[[:space:]]*theories[[:space:]]*$/ { on = 1; next }
+              /^[[:space:]]*(document_files|export_files|sessions|options)([[:space:](]|$)/ { on = 0 }
+              on && NF { print $1 }' formal/core/ROOT | sort)
+            checked=$(sed -nE 's/^TRIEL_Core\.([A-Za-z0-9_]+): [0-9]+ facts$/\1/p' "$out" | sort)
+            sum=$(sed -nE 's/^TRIEL_Core\.[A-Za-z0-9_]+: ([0-9]+) facts$/\1/p' "$out" | awk '{ s += $1 } END { print s + 0 }')
+            total=$(sed -nE 's/^Theorems of TRIEL_Core without oracles: ([0-9]+)$/\1/p' "$out")
+            [ -n "$root" ] || { echo "error: no theories found in formal/core/ROOT"; exit 1; }
+            if ! diff -u <(echo "$root") <(echo "$checked"); then
+              echo "error: the theories of formal/core/ROOT (-) and those of $out (+) differ"
+              exit 1
+            fi
+            if [ "$total" != "$sum" ]; then
+              echo "error: the total in $out (${total:-none}) is not the sum of the theories ($sum)"
+              exit 1
+            fi
+            echo "$out: the $(echo "$checked" | wc -l) theories of formal/core/ROOT, $total facts"
+          } 2>&1 | tee -a "$RUNNER_TEMP/theories.log"
+
+      # The logs of this workflow cannot be read from a cloud session, so on a
+      # push to a branch stage* the result of the check is posted as a comment
+      # on the commit. Not on main.
+      - name: Post the result of the check for oracles as a commit comment
+        if: ${{ !cancelled() && github.event_name == 'push' && startsWith(github.ref, 'refs/heads/stage') && hashFiles('formal/checks/output/no_oracles.txt') != '' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Check for oracles of TRIEL_Core (run ${{ github.run_id }}): formal/checks/output/no_oracles.txt"
+            echo
+            echo '```'
+            cat formal/checks/output/no_oracles.txt
+            echo '```'
+          } > "$RUNNER_TEMP/no-oracles-comment.md"
+          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
+            -F body=@"$RUNNER_TEMP/no-oracles-comment.md" > /dev/null
+
+      # The logs of this job cannot be read from a cloud session. When a step
+      # fails, the error lines of the Isabelle builds and the output of the
+      # comparisons of the theories are posted as a comment on the commit, so
       # that they can be read through the API.
       - name: Post the error lines as a commit comment
         if: failure() && github.event_name == 'push'
@@ -77,17 +166,113 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          log="$RUNNER_TEMP/isabelle-build.log"
-          test -s "$log" || { echo "no build log"; exit 0; }
+          comment="$RUNNER_TEMP/comment.md"
           {
-            echo "Isabelle build of formal/core failed (run ${{ github.run_id }}). Error lines:"
-            echo
-            echo '```'
-            grep -n -A12 '^\*\*\*' "$log" | head -c 60000 || { echo "(no *** lines; last lines of the log)"; tail -n 40 "$log"; }
-            echo '```'
-          } > "$RUNNER_TEMP/comment.md"
+            echo "Job build failed (run ${{ github.run_id }})."
+            for log in isabelle-build.log no-oracles.log; do
+              test -s "$RUNNER_TEMP/$log" || continue
+              echo
+              echo "Error lines of $log:"
+              echo
+              echo '```'
+              grep -n -A12 '^\*\*\*' "$RUNNER_TEMP/$log" | head -c 25000 || { echo "(no *** lines; last lines of the log)"; tail -n 40 "$RUNNER_TEMP/$log"; }
+              echo '```'
+            done
+            if test -s "$RUNNER_TEMP/theories.log"; then
+              echo
+              echo "Comparison of the theories:"
+              echo
+              echo '```'
+              head -c 8000 "$RUNNER_TEMP/theories.log"
+              echo '```'
+            fi
+          } > "$comment"
           gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
-            -f body="$(cat "$RUNNER_TEMP/comment.md")" > /dev/null
+            -F body=@"$comment" > /dev/null
+
+  # formal/core/build.log: a clean build of all theories of formal/core/ROOT,
+  # with the options of ROOT as they are (the PDF document included), in the
+  # Docker image of Isabelle2025-2 with LaTeX, pinned by digest. The log holds
+  # only the output of the container that runs isabelle build. It checks
+  # nothing that the job build does not; it makes the log.
+  build-log:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      BUILD_LOG_IMAGE: makarius/isabelle:Isabelle2025-2_X11_Latex
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Pull the image
+        id: image
+        shell: bash
+        run: |
+          docker pull "$BUILD_LOG_IMAGE"
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$BUILD_LOG_IMAGE")
+          echo "image: $digest"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Clean build of TRIEL_Core with the PDF document
+        id: build
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/build-log" formal/core/output
+          chmod -R a+rwX "$GITHUB_WORKSPACE"
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" "$BUILD_LOG_IMAGE" \
+            build -c -v -D /work/formal/core > "$RUNNER_TEMP/build-log/build.log" 2>&1 \
+            || { tail -n 60 "$RUNNER_TEMP/build-log/build.log"; exit 1; }
+          cat "$RUNNER_TEMP/build-log/build.log"
+          test -s formal/core/output/document.pdf
+          cp formal/core/output/document.pdf "$RUNNER_TEMP/build-log/document.pdf"
+          sha256sum "$RUNNER_TEMP/build-log/build.log"
+
+      - name: Keep the build log and the document
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: core-build-log
+          path: ${{ runner.temp }}/build-log/
+
+      # The logs and artifacts of this workflow cannot be read from a cloud
+      # session, so on a push to a branch stage* the digest of the image, the
+      # sha256 of the log and the log itself are posted as a comment on the
+      # commit; if the build failed, the last 60 lines of the log. Not on main.
+      - name: Post the build log as a commit comment
+        if: ${{ !cancelled() && github.event_name == 'push' && startsWith(github.ref, 'refs/heads/stage') && steps.build.outcome != 'skipped' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+          OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          log="$RUNNER_TEMP/build-log/build.log"
+          comment="$RUNNER_TEMP/build-log-comment.md"
+          {
+            echo "Build log of formal/core (run ${{ github.run_id }}, job build-log)"
+            echo
+            echo "image: \`$DIGEST\`"
+            if [ "$OUTCOME" = success ]; then
+              echo "sha256 of the log: \`$(sha256sum < "$log" | cut -d' ' -f1)\`"
+              echo
+              echo '```'
+              cat "$log"
+              echo '```'
+            else
+              echo "The build failed ($OUTCOME). Last 60 lines of the log:"
+              echo
+              echo '```'
+              tail -n 60 "$log"
+              echo '```'
+            fi
+          } > "$comment"
+          length=$(wc -m < "$comment")
+          if [ "$length" -gt 60000 ]; then
+            echo "::error::the comment with the build log has $length characters, more than 60000; it is not posted"
+            exit 1
+          fi
+          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
+            -F body=@"$comment" > /dev/null
 
   # The copy of formal/core for the Archive of Formal Proofs, made by
   # tools/make_afp_copy.sh and built as the AFP builds an entry, with the PDF
