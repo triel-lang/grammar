@@ -100,10 +100,15 @@ jobs:
 
       # The session TRIEL_Core_Checks (formal/checks), on the heap of
       # TRIEL_Core: no named theorem of the theories of ROOT depends on an
-      # oracle. The grep above sees only the text of the theories; an oracle
-      # brought in by a proof method is seen here. -e writes the number of
-      # named facts of each theory to formal/checks/output/no_oracles.txt.
-      - name: Check that no theorem of TRIEL_Core depends on an oracle
+      # oracle, except the equations of the Quickcheck generators
+      # (full_exhaustive, narrowing) that the datatype package defines itself
+      # and whose termination HOL accepts with the oracle Pure.skip_proof; no
+      # other theorem depends on them (No_Oracles.thy states the exact rule).
+      # The grep above sees only the text of the theories; an oracle brought
+      # in by a proof method is seen here. -e writes the number of named facts
+      # checked in each theory and the excluded facts to
+      # formal/checks/output/no_oracles.txt.
+      - name: Check the named theorems of TRIEL_Core for oracles
         shell: bash
         run: |
           set -o pipefail
@@ -111,7 +116,9 @@ jobs:
           cat formal/checks/output/no_oracles.txt
 
       # The theories that the check went through, read from no_oracles.txt, are
-      # those of ROOT, and the total is the sum of the numbers of the theories.
+      # those of ROOT; the total is the sum of the numbers of the theories, and
+      # the number of excluded facts is the sum of those of the theories and
+      # the number of the facts listed.
       - name: Compare the theories of no_oracles.txt with ROOT
         shell: bash
         run: |
@@ -124,17 +131,30 @@ jobs:
               on && NF { print $1 }' formal/core/ROOT | sort)
             checked=$(sed -nE 's/^TRIEL_Core\.([A-Za-z0-9_]+): [0-9]+ facts$/\1/p' "$out" | sort)
             sum=$(sed -nE 's/^TRIEL_Core\.[A-Za-z0-9_]+: ([0-9]+) facts$/\1/p' "$out" | awk '{ s += $1 } END { print s + 0 }')
-            total=$(sed -nE 's/^Theorems of TRIEL_Core without oracles: ([0-9]+)$/\1/p' "$out")
+            excluded=$(sed -nE 's/^  TRIEL_Core\.([A-Za-z0-9_]+): [0-9]+ excluded$/\1/p' "$out" | sort)
+            sum_excluded=$(sed -nE 's/^  TRIEL_Core\.[A-Za-z0-9_]+: ([0-9]+) excluded$/\1/p' "$out" | awk '{ s += $1 } END { print s + 0 }')
+            listed=$(grep -cE '^    [A-Za-z0-9_.]+$' "$out" || true)
+            line=$(grep -E '^Theorems of TRIEL_Core without oracles: ' "$out" || true)
+            total=$(echo "$line" | sed -nE 's/^Theorems of TRIEL_Core without oracles: ([0-9]+) \(excluded: [0-9]+ Quickcheck generator facts with Pure\.skip_proof\)$/\1/p')
+            total_excluded=$(echo "$line" | sed -nE 's/^Theorems of TRIEL_Core without oracles: [0-9]+ \(excluded: ([0-9]+) Quickcheck generator facts with Pure\.skip_proof\)$/\1/p')
             [ -n "$root" ] || { echo "error: no theories found in formal/core/ROOT"; exit 1; }
             if ! diff -u <(echo "$root") <(echo "$checked"); then
               echo "error: the theories of formal/core/ROOT (-) and those of $out (+) differ"
               exit 1
             fi
-            if [ "$total" != "$sum" ]; then
+            if ! diff -u <(echo "$root") <(echo "$excluded"); then
+              echo "error: the theories of formal/core/ROOT (-) and those of the excluded facts in $out (+) differ"
+              exit 1
+            fi
+            if [ -z "$total" ] || [ "$total" != "$sum" ]; then
               echo "error: the total in $out (${total:-none}) is not the sum of the theories ($sum)"
               exit 1
             fi
-            echo "$out: the $(echo "$checked" | wc -l) theories of formal/core/ROOT, $total facts"
+            if [ "$total_excluded" != "$sum_excluded" ] || [ "$total_excluded" != "$listed" ]; then
+              echo "error: the number of excluded facts in $out (${total_excluded:-none}) is not the sum of the theories ($sum_excluded) or the number listed ($listed)"
+              exit 1
+            fi
+            echo "$out: the $(echo "$checked" | wc -l) theories of formal/core/ROOT; $line"
           } 2>&1 | tee -a "$RUNNER_TEMP/theories.log"
 
       # The logs of this workflow cannot be read from a cloud session, so on a
