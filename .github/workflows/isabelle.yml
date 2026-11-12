@@ -84,7 +84,7 @@ jobs:
               /^[[:space:]]*(document_files|export_files|sessions|options)([[:space:](]|$)/ { on = 0 }
               on && NF { print $1 }' formal/core/ROOT | sort)
             imports=$(awk '
-              /^theory[[:space:]]/ { header = 1 }
+              /^theory[[:space:]]+[A-Za-z0-9_]+[[:space:]]*$/ { header = 1 }
               header && /(^|[[:space:]])imports([[:space:]]|$)/ { on = 1 }
               on && /(^|[[:space:]])begin([[:space:]]|$)/ { exit }
               on { print }' formal/checks/No_Oracles.thy \
@@ -232,7 +232,7 @@ jobs:
     permissions:
       contents: write
     env:
-      BUILD_LOG_IMAGE: makarius/isabelle:Isabelle2025-2_X11_Latex
+      BUILD_LOG_IMAGE: makarius/isabelle:Isabelle2025-2_X11_Latex@sha256:7ae4b4e9eb3eea00185f9bffe4fdbff16dc9ec74a88b918f847c41bc475bd297
     steps:
       - uses: actions/checkout@v7
 

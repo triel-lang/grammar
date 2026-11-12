@@ -8,8 +8,8 @@ theories of TRIEL_Core among the ancestors of this theory (no list of names), an
 of them every named fact introduced by that theory itself, not by its parents, the facts
 of locales included; concealed facts are not checked. Every theorem of every such fact
 must depend on no oracle (an unfinished proof or a result of evaluation by the code
-generator is one). The build fails if one does, naming the fact and the oracle, if no
-theory of TRIEL_Core is found, or if a theory has no named fact that is checked.
+generator is one). The build fails if one does, naming the fact and the oracle, if
+no theory of TRIEL_Core is found, or if a theory has no named fact that is checked.
 
 The one exception: for a datatype T, the datatype package defines the Quickcheck
 generators of T, and HOL accepts their termination with the oracle Pure.skip_proof. A
