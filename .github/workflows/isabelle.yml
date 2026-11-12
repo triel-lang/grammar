@@ -232,7 +232,7 @@ jobs:
     permissions:
       contents: write
     env:
-      BUILD_LOG_IMAGE: makarius/isabelle:Isabelle2025-2_X11_Latex
+      BUILD_LOG_IMAGE: makarius/isabelle:Isabelle2025-2_X11_Latex@sha256:7ae4b4e9eb3eea00185f9bffe4fdbff16dc9ec74a88b918f847c41bc475bd297
     steps:
       - uses: actions/checkout@v7
 
