@@ -1,6 +1,6 @@
 # License
 
-This repository contains material under different terms: the TRIEL Language Specification (section 1), code (section 2), and other files (section 3). This file governs; the summary in `README.md` does not.
+This repository contains material under different terms: the TRIEL Language Specification (section 1), code (section 2), the skill for AI agents (section 3), and other files (section 4). This file governs; the summary in `README.md` does not.
 
 ## 1. TRIEL Language Specification, version 2.5.1: OWFa 1.0
 
@@ -39,17 +39,25 @@ The full text of the Apache License 2.0 is in `LICENSE-APACHE`; the notice to ke
 
 Copyright 2026 Dmitri Chistyakov.
 
-## 3. Other files
+## 3. Skill for AI agents: CC BY 4.0
+
+The skill for AI agents in `.agents/skills/triel/`, which `.claude/skills/triel` links to, is licensed under the Creative Commons Attribution 4.0 International License (SPDX: `CC-BY-4.0`). The license covers the text only: the whole text of `SKILL.md`, the commands, traces and fragments of specifications in it included. It grants no patent rights (section 5). The code that the skill runs is in `parser/` and `evaluator/`, under section 2.
+
+Full text of the license: https://creativecommons.org/licenses/by/4.0/legalcode
+
+© 2026 Dmitri Chistyakov
+
+## 4. Other files
 
 `TRIEL-grammar-v2.3.3-core.ebnf`, an earlier grammar kept for reference, keeps the terms stated in its own header.
 
-All other files, including `README.md`, `RELATED_WORK.md` and `FOUNDATIONS.md`, are not licensed under this file. © 2026 Dmitri Chistyakov.
+All other files, including `README.md`, `AGENTS.md`, `RELATED_WORK.md` and `FOUNDATIONS.md`, are not licensed under this file. © 2026 Dmitri Chistyakov.
 
-## 4. Patents and trademarks
+## 5. Patents and trademarks
 
 No patent rights are granted other than those stated in OWFa 1.0 for the Specification and in section 3 of the Apache License 2.0 for the code. No trademark rights are granted.
 
-## 5. Contributions
+## 6. Contributions
 
 Contributions are accepted under the TRIEL Contributor License Agreement (`CLA.md`). How to sign it is described in `CONTRIBUTING.md`.
 
