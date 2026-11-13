@@ -21,6 +21,7 @@ import re
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -797,11 +798,12 @@ def test_the_example_settings():
         (h,) = group["hooks"]
         assert h["type"] == "command" and h["onFailure"] == "block"
         assert "async" not in h and "asyncRewake" not in h
-        assert h["timeout"] > 2 * cfg["check_timeout_seconds"]
+        assert h["timeout"] > 3 * cfg["check_timeout_seconds"]
         assert os.path.isabs(h["command"]) and h["args"][0] == "-I"
         assert h["args"][2:] == [command, "--config", h["args"][-1]]
         assert all(os.path.isabs(p) for p in (h["args"][1], h["args"][-1]))
     assert s["env"] == {"CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS": "0"}
+    assert s["requiredMinimumVersion"] == "2.1.295"
     assert s["allowManagedHooksOnly"] is True and s["allowManagedPermissionRulesOnly"] is True
     tools = [a["tool_name"] for a in cfg["actions"]] + [a["tool_name"] for a in cfg["allowed_tools"]]
     assert set(tools) <= set(s["permissions"]["allow"])
@@ -845,3 +847,323 @@ def test_the_example_mandate_end_to_end(tmp_path):
         2, held("triel check exit 3: BLOCK: monitor TERM 3 blocks the action"))
     assert x.pre(PAY, "t4", "2026-11-13T09:11:00Z", {"amount": "100.00"}) == (
         2, held("triel check exit 3: BLOCK: monitor TERM 1 blocks the action"))
+
+
+# --- Further cases ----------------------------------------------------------------------
+
+BLOCKED_PAY = (2, held("triel check exit 3: BLOCK: monitor TERM 1 blocks the action"))
+
+
+def test_resolve_gives_the_fact_again_when_the_host_module_failed(tmp_path):
+    """The host module cannot write its data when the call is executed: a
+    conflict. resolve --executed gives the fact to the module again; while the
+    module refuses it, the conflict stays; once it takes it, the approval is gone
+    and the same payment is blocked."""
+    x = Mandate(tmp_path, data={"approvals": [{"action": "pay", "tool_input": {"to": "acme"}}]})
+    x.activate()
+    assert x.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"to": "acme"}) == (0, "")
+    blocker = tmp_path / "host_data.json.tmp"
+    blocker.mkdir()
+    x.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    assert x.state()["conflicts"]["t1"]["why"].startswith(
+        "the host module did not take the execution: IsADirectoryError")
+    code, line = x.command("resolve", "t1", "--executed", "--at", "2026-11-13T09:10:01Z",
+                           now="2026-11-13T09:11:00Z")
+    assert code == 2 and line.startswith(held("the host module did not take the execution: "
+                                              "IsADirectoryError"))
+    assert "t1" in x.state()["conflicts"]
+    blocker.rmdir()
+    assert x.command("resolve", "t1", "--executed", "--at", "2026-11-13T09:10:01Z",
+                     now="2026-11-13T09:12:00Z") == (0, "")
+    assert x.data()["approvals"] == [] and x.data()["executed"] == {"t1": "pay"}
+    assert x.pre(PAY, "t3", "2026-11-13T09:20:00Z", {"to": "acme"}) == BLOCKED_PAY
+
+
+def test_a_second_post_is_a_conflict_without_a_second_entry(m):
+    assert m.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"to": "acme"}) == (0, "")
+    m.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    m.post(PAY, "t1", "2026-11-13T09:10:02Z", {"to": "acme"})
+    st = m.state()
+    assert [x["tool_use_id"] for x in st["history"]] == ["t1"]
+    assert st["conflicts"]["t1"]["why"] == "a second PostToolUse came for the executed call"
+
+
+def test_a_failure_of_the_host_module_stays_in_the_conflict(m):
+    """A second reason of a conflict on the same call does not hide the first."""
+    assert m.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"to": "acme"}) == (0, "")
+    (m.tmp / "host_data.json.tmp").mkdir()
+    m.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    m.post(PAY, "t1", "2026-11-13T09:10:02Z", {"to": "acme"})
+    why = m.state()["conflicts"]["t1"]["why"]
+    assert why.startswith("the host module did not take the execution: IsADirectoryError")
+    assert why.endswith("; a second PostToolUse came for the executed call")
+
+
+def test_the_example_host_module_takes_a_fact_once(tmp_path):
+    import host_example
+    data = tmp_path / "data.json"
+    a = {"action": "pay", "tool_input": {"to": "acme"}}
+    data.write_text(json.dumps({"approvals": [a, a]}))
+    fact = {"tool_use_id": "t1", "tool_name": PAY, "subject": "agent", "action": "pay",
+            "tool_input": {"to": "acme"}, "time": None}
+    host_example.executed(fact, {"data_file": str(data)})
+    host_example.executed(fact, {"data_file": str(data)})
+    d = json.loads(data.read_text())
+    assert d["approvals"] == [a] and d["executed"] == {"t1": "pay"}
+
+
+WEIRD = SCRIPTED + """
+
+class Weird(Exception):
+    def __str__(self):
+        raise RuntimeError("no text")
+
+
+_answers = answers
+
+
+def answers(call, now, factors, options):
+    if call is not None:
+        raise Weird()
+    return _answers(call, now, factors, options)
+"""
+
+
+def test_an_exception_that_cannot_be_printed_holds(tmp_path):
+    x = Mandate(tmp_path, terms=COUNTER_SPEC[0], factors=COUNTER_SPEC[1], host="scripted",
+                answers={"paid": 0})
+    (tmp_path / "scripted_host.py").write_text(WEIRD, encoding="utf-8")
+    x.activate()
+    assert x.pre(PAY, "t1", "2026-11-13T09:10:00Z") == (2, held("the gate failed: Weird"))
+
+
+def test_standard_error_that_cannot_be_flushed_still_exits_2(tmp_path):
+    assert os.path.exists("/dev/full")
+    with open("/dev/full", "w") as full:
+        r = subprocess.run([sys.executable, "-I", GATE, "pre", "--config", str(tmp_path / "no.json")],
+                           input="{}", stdout=subprocess.PIPE, stderr=full, text=True)
+    assert r.returncode == 2
+
+
+REPORT_TRIEL_PY = """import pathlib, sys
+print(pathlib.Path(__file__).with_name("report.json").read_text())
+sys.exit(0)
+"""
+LAST_REPORTS = [
+    ([{"line": "LAST", "entry": 0, "decisions": [{"term": 1, "decision": "ALLOW"}]}],
+     "triel check exit 0, but the LAST line is for entry 0, not for the last entry 2"),
+    ([{"line": "LAST", "entry": 2, "decisions": []}],
+     "triel check exit 0, but no monitor decided on the action"),
+    ([{"line": "LAST", "entry": 2, "decisions": [{"term": 1, "decision": "BLOCK"}]}],
+     "triel check exit 0, but a decision of the LAST line is not ALLOW"),
+    ([{"line": "LAST", "entry": 2, "decisions": [{"term": 1, "decision": "ALLOW"},
+                                                 {"term": 7, "decision": "ALLOW"}]}],
+     "the LAST line names TERM [7], which --actions does not give for this action"),
+    ([{"line": "SPEC", "name": "x"}], "triel check exit 0, but the report has no LAST line")]
+
+
+def test_reports_on_exit_0_that_do_not_allow(tmp_path):
+    """Conditions (b) and (c) of a silent 0, and no TERM beyond --actions: a
+    substitute triel.py prints each report with exit 0."""
+    repo = fake_repo(tmp_path, REPORT_TRIEL_PY)
+    x = Mandate(tmp_path, data={"approvals": [{"action": "pay", "tool_input": {}}]},
+                config={"repo": str(repo)})
+    x.activate()
+    for i, (report, reason) in enumerate(LAST_REPORTS):
+        (repo / "parser" / "report.json").write_text(json.dumps(report))
+        assert x.pre(PAY, f"t{i}", "2026-11-13T09:10:00Z") == (2, held(reason))
+
+
+STAMPING = """
+from datetime import datetime, timezone
+from triel_host import NO_NEW_READING, Reading
+
+
+def answers(call, now, factors, options):
+    stamp = open(options["mode"]).read().strip() == "now"
+    return {"f": Reading(False, datetime.now(timezone.utc)) if stamp else NO_NEW_READING}
+
+
+def executed(fact, options):
+    pass
+"""
+STAMP_SPEC = ("agent MUST_NOT pay WHEN DEFAULT(f, false)",
+              "f : Boolean METADATA MAX_AGE 60 SECONDS ON_STALE BLOCK")
+
+
+def stamping_mandate(tmp_path, mode):
+    x = Mandate(tmp_path, terms=STAMP_SPEC[0], factors=STAMP_SPEC[1], host="scripted")
+    (tmp_path / "scripted_host.py").write_text(STAMPING, encoding="utf-8")
+    x.config["host_options"]["mode"] = str(tmp_path / "mode")
+    x.write_config()
+    (tmp_path / "mode").write_text(mode)
+    return x
+
+
+def iso_of(t):
+    return t.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def test_a_reading_stamped_when_the_host_module_answers_is_not_from_the_future(tmp_path):
+    """The host clock h of a decision is read after the host module answered:
+    a reading stamped while it answers is not later than h. On the system
+    clock, since with --now both readings of the clock would be equal."""
+    x = stamping_mandate(tmp_path, "none")
+    past = datetime.now(timezone.utc) - timedelta(seconds=30)
+    r = x.run(["activate"], now=iso_of(past))
+    assert r.returncode == 0, r.stderr
+    (tmp_path / "mode").write_text("now")
+    assert x.pre(PAY, "t1", None) == (0, "")
+
+
+def test_an_activation_with_a_reading_stamped_when_the_module_answers(tmp_path):
+    x = stamping_mandate(tmp_path, "now")
+    r = x.run(["activate"])
+    assert r.returncode == 0, r.stderr
+    assert x.state()["readings"]["f"]["accepted"]
+
+
+def test_inputs_compared_as_json_values(tmp_path):
+    """An approval matches a call whose input has the same JSON value: a number
+    with a fraction matches, and true does not match 1."""
+    x = Mandate(tmp_path, data={"approvals": [{"action": "pay", "tool_input": {"flag": True}},
+                                              {"action": "pay", "tool_input": {"amount": 100.1}}]})
+    x.activate()
+    assert x.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"flag": 1}) == BLOCKED_PAY
+    assert x.pre(PAY, "t2", "2026-11-13T09:10:01Z", {"amount": 100.1}) == (0, "")
+
+
+def test_the_journal_says_allowed_only_once_the_state_is_written(m):
+    (m.state_dir / "state.json.tmp").mkdir()
+    code, line = m.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"to": "acme"})
+    assert code == 2 and line.startswith(held("the gate failed: IsADirectoryError"))
+    assert "allowed" not in [x["event"] for x in m.log()]
+
+
+def test_a_post_without_mcp_server_is_written_to_the_journal(m):
+    assert m.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"to": "acme"}) == (0, "")
+    m.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"}, server=None)
+    x = m.log()[-1]
+    assert (x["event"], x["tool_use_id"]) == ("post ignored", "t1")
+    assert "has no mcp_server" in x["reasons"][0]
+    assert list(m.state()["pending"]) == ["t1"]
+
+
+LOCK_HOLDER = """import fcntl, sys, time
+f = open(sys.argv[1], "a")
+fcntl.flock(f, fcntl.LOCK_EX)
+print("locked", flush=True)
+time.sleep(2)
+"""
+
+
+def test_pre_waits_for_the_lock_at_most_the_check_timeout_and_post_longer(m):
+    """check_timeout_seconds 1 and another process holds the lock for 2 s: pre
+    gives up after 1 s; the late PostToolUse of a call recorded as not executed
+    waits up to 3 s and records the conflict."""
+    assert m.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"to": "acme"}) == (0, "")
+    m.failure(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"}, is_interrupt=True)
+    assert m.command("resolve", "t1", "--not-executed", now="2026-11-13T09:11:00Z") == (0, "")
+    m.config["check_timeout_seconds"] = 1
+    m.write_config()
+    holder = subprocess.Popen([sys.executable, "-c", LOCK_HOLDER, str(m.state_dir / "lock")],
+                              stdout=subprocess.PIPE, text=True)
+    assert holder.stdout.readline().strip() == "locked"
+
+    def start(command, event, tid, now):
+        payload = {"hook_event_name": event, "tool_name": PAY, "tool_input": {"to": "acme"},
+                   "tool_use_id": tid, "mcp_server": {"name": "payments", "source": "managed"},
+                   "duration_ms": 5}
+        p = subprocess.Popen([sys.executable, "-I", GATE, command, "--config", str(m.config_path),
+                              "--now", now], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True)
+        p.stdin.write(json.dumps(payload))
+        p.stdin.close()
+        return p
+
+    pre = start("pre", "PreToolUse", "t2", "2026-11-13T09:12:00Z")
+    post = start("post", "PostToolUse", "t1", "2026-11-13T09:12:00Z")
+    assert (pre.wait(), pre.stderr.read().splitlines()[0]) == (
+        2, held("another decision of the gate is still running"))
+    assert post.wait() == 0
+    holder.wait()
+    assert m.state()["conflicts"]["t1"]["why"] == (
+        "PostToolUse came for a call recorded as not executed")
+
+
+def test_status_shows_the_age_of_a_pending_call_and_when_it_becomes_unknown(m):
+    assert m.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"to": "acme"}) == (0, "")
+    r = m.run(["status"], now="2026-11-13T09:12:00Z")
+    st = json.loads(r.stdout)
+    assert (st["pending"]["t1"]["age_seconds"], st["pending"]["t1"]["unknown_in_seconds"]) == (120, 480)
+    r = m.run(["status"], now="2026-11-13T09:30:00Z")
+    st = json.loads(r.stdout)
+    assert st["pending"] == {} and st["unknown"]["t1"]["why"] == (
+        "no PostToolUse or PostToolUseFailure within 600 s")
+    assert list(m.state()["pending"]) == ["t1"]  # status changes nothing
+
+
+def test_do_not_retry_is_said_only_to_a_call_before_it_runs(tmp_path):
+    bad = str(tmp_path / "no.json")
+    for command, said in (("pre", True), ("post", False), ("failure", False)):
+        r = subprocess.run([sys.executable, "-I", GATE, command, "--config", bad], input="{}",
+                           capture_output=True, text=True)
+        assert r.returncode == 2 and ("Do not retry" in r.stderr) == said
+
+
+def test_the_key_of_the_cache_has_the_version_of_lark_and_separators():
+    k = gate.cache_key(b"spec", [b"ab", b"c"], "1.3.1")
+    assert k != gate.cache_key(b"spec", [b"a", b"bc"], "1.3.1")
+    assert k != gate.cache_key(b"spec", [b"ab", b"c"], "1.3.2")
+    assert k == gate.cache_key(b"spec", [b"ab", b"c"], "1.3.1")
+
+
+PRINTING = SCRIPTED + """
+import os
+_answers, _executed = answers, executed
+
+
+def answers(call, now, factors, options):
+    print("a line from answers")
+    os.write(1, b"a line written to fd 1\\n")
+    return _answers(call, now, factors, options)
+
+
+def executed(fact, options):
+    print("a line from executed")
+    _executed(fact, options)
+"""
+
+
+def test_what_the_host_module_prints_does_not_reach_the_hook_output(tmp_path):
+    x = Mandate(tmp_path, terms=COUNTER_SPEC[0], factors=COUNTER_SPEC[1], host="scripted",
+                answers={"paid": 0})
+    (tmp_path / "scripted_host.py").write_text(PRINTING, encoding="utf-8")
+    x.activate()
+    assert x.pre(PAY, "t1", "2026-11-13T09:10:00Z") == (0, "")
+    r = x.post(PAY, "t1", "2026-11-13T09:10:01Z")
+    assert r.stdout == ""
+
+
+PROBE = """import json, os, sys
+print(json.dumps({"env": dict(os.environ), "isolated": sys.flags.isolated,
+                  "executable": sys.executable}))
+"""
+
+
+def test_the_child_has_the_environment_of_the_gate_and_runs_isolated(tmp_path, monkeypatch):
+    """The two protections of the child process, each on its own: the
+    environment that the gate sets, and sys.executable -I."""
+    (tmp_path / "probe.py").write_text(PROBE)
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    (fake / "python3").write_text("#!/bin/sh\necho '{}'\n")
+    (fake / "python3").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake}:{os.environ.get('PATH', '')}")
+    for k in ("TRIEL_EVALUATOR", "PYTHONPATH", "TRIEL_GATE_CONFIG", "TRIEL_GATE_NOW"):
+        monkeypatch.setenv(k, str(tmp_path))
+    code, out, err = gate.child({"repo": str(tmp_path), "check_timeout_seconds": 30},
+                                [str(tmp_path / "probe.py")])
+    d = json.loads(out)
+    assert code == 0 and d["isolated"] == 1 and d["executable"] == sys.executable
+    assert d["env"]["PATH"] == os.defpath and set(d["env"]) <= {"PATH", "LC_CTYPE"}
