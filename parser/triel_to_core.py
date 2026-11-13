@@ -81,7 +81,8 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
     twice is rejected, and so are a subject and a factor with the same name and
     an undeclared subject of a term, a handler, NOTIFY, ESCALATE_TO or SOURCE.
     Two invariants with one name are rejected ("duplicate invariant name"). A
-    string literal in which \\u gives a surrogate (U+D800 to U+DFFF) is rejected
+    string literal of a condition, of an action argument or of DATETIME in
+    which \\u gives a surrogate (U+D800 to U+DFFF) is rejected
     ("surrogate escape"): it is not a character.
     By the rules of
     TECHNICAL_REPORT.md section 2.9, a factor whose SOURCE is an ORACLE

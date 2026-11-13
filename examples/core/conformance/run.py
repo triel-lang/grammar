@@ -88,6 +88,7 @@ def first_difference(expected, actual):
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description="Run an implementation on the TRIEL core conformance suite.")
     ap.add_argument("--impl", default=REFERENCE,
                     help="command to run for each case; {spec} and {trace} are replaced "
