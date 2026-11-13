@@ -163,3 +163,13 @@ jobs:
       # path, section and TRIEL excerpt they state, and every pitfall, by a run.
       - name: Tests of the skill for AI agents and of AGENTS.md
         run: python3 -m pytest -q parser/test_skill.py
+
+      # parser/triel_host.py, the trace that a host builds from its own records,
+      # and triel_to_core.py --actions, against the reports of triel check.
+      - name: Tests of the trace of a host and of --actions
+        run: python3 -m pytest -q parser/test_host.py
+
+      # hosts/claude-code: the hooks for Claude Code, each run as Claude Code
+      # runs a hook, with the clock as an argument.
+      - name: Tests of the adapter for Claude Code
+        run: python3 -m pytest -q hosts/claude-code/test_gate.py
