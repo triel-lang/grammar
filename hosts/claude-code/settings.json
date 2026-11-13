@@ -1,4 +1,5 @@
 {
+  "requiredMinimumVersion": "2.1.295",
   "hooks": {
     "PreToolUse": [
       {

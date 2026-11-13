@@ -36,6 +36,10 @@ The JSON file, read with its numbers as Decimal:
    "executed":  {TOOL_USE_ID: ACTION}}
 A factor without MAX_AGE that is not in values has no value; a factor with
 MAX_AGE that is not in readings has no new reading.
+
+executed reads, changes and replaces the whole file. The host changes the file
+only while no call is pending (gate.py status), or under a lock of its own
+that this module takes too.
 """
 import json
 import os
@@ -61,11 +65,27 @@ def _write(options, data):
     os.replace(tmp, options["data_file"])
 
 
+def _norm(x):
+    """A JSON value for comparison: numbers as Decimal (a float by its repr), and
+    true and false apart from the numbers 1 and 0."""
+    if isinstance(x, bool) or x is None:
+        return ("literal", x)
+    if isinstance(x, float):
+        return ("number", Decimal(repr(x)))
+    if isinstance(x, (int, Decimal)):
+        return ("number", Decimal(x))
+    if isinstance(x, str):
+        return ("string", x)
+    if isinstance(x, list):
+        return ("array", [_norm(y) for y in x])
+    if isinstance(x, dict):
+        return ("object", {k: _norm(v) for k, v in x.items()})
+    return ("other", repr(x))
+
+
 def _same_input(a, b):
-    """Two inputs with the same JSON, numbers compared as Decimal."""
-    def norm(x):
-        return json.loads(json.dumps(x, default=str), parse_float=Decimal)
-    return norm(a) == norm(b)
+    """Two inputs with the same JSON value."""
+    return _norm(a) == _norm(b)
 
 
 def _approved(data, call):

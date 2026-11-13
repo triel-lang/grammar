@@ -9,7 +9,7 @@
   "approval": "payment_approved",
   "counters": {"payments_executed": "pay"}
  },
- "check_timeout_seconds": 50,
+ "check_timeout_seconds": 35,
  "pending_timeout_seconds": 600,
  "execution_delay_flag_seconds": 5,
  "managed_servers": [
@@ -20,7 +20,7 @@
  ],
  "actions": [
   {"server": "payments", "tool_name": "mcp__payments__pay",
-   "subject": "agent", "action": "pay", "atomic": true},
+   "subject": "agent", "action": "pay", "atomic": false},
   {"server": "payments", "tool_name": "mcp__payments__convert",
    "subject": "agent", "action": "convert", "atomic": false}
  ]
