@@ -16,6 +16,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -26,7 +27,7 @@ import triel  # noqa: E402
 import triel_host as th  # noqa: E402
 from triel_eval import default_evaluator  # noqa: E402
 from triel_host import NO_NEW_READING, Reading, seconds  # noqa: E402
-from triel_to_core import header, pretty, show_string, translate  # noqa: E402
+from triel_to_core import show_string, translate  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 TRANSLATOR = str(REPO / "parser" / "triel_to_core.py")
@@ -323,6 +324,9 @@ def test_decimal_values(value, expected):
     (["prim", "datetime"], "2026-11-13T09:00:00Z", {"time": "2026-11-13T09:00:00Z"}),
     (["prim", "datetime"], "2026-11-13T09:00:00.5Z", None),
     (["prim", "datetime"], 1794560400, None),
+    (["prim", "datetime"], "1794560400", None), (["prim", "datetime"], "99999999999999999", None),
+    (["prim", "datetime"], datetime(2026, 11, 13, 9, tzinfo=timezone.utc), {"time": "2026-11-13T09:00:00Z"}),
+    (["prim", "datetime"], datetime(2026, 11, 13, 9), None),
     (["optional", ["prim", "int"]], None, None), (["optional", ["prim", "int"]], 3, {"int": 3})])
 def test_other_types(ty, value, expected):
     if expected is None and value is not None:
@@ -441,6 +445,91 @@ def test_case_h_no_new_reading_after_a_fresh_true(tmp_path, cond):
     assert [c for c, _ in out] == [3, 3]
 
 
+# --- Further properties of the trace -----------------------------------------------
+
+def test_a_stale_value_does_not_come_back_in_the_tick_of_an_earlier_action(tmp_path):
+    """A factor under ON_STALE BLOCK that is stale at the decision by the exact
+    times is absent from the data of its tick entry and of its action, as it is
+    for the monitor. A reading that the host learns later, stamped before that
+    decision, then cannot make the old value fresh in the entry of the earlier
+    action: the earlier action stays PENDING, not BREACHED."""
+    spec = write_spec(tmp_path, "agent MUST_NOT pay WHEN DEFAULT(f, false);\n"
+                                "  agent ON_BREACH NOTIFY supplier",
+                      "f : Boolean METADATA MAX_AGE 5 SECONDS ON_STALE BLOCK")
+    host = Host(tmp_path, spec, {"f": NO_NEW_READING}, at="2026-11-13T09:00:00Z")
+    assert host.decide({"f": Reading(True, "2026-11-13T09:00:01Z")}, "2026-11-13T09:00:02Z",
+                       action="inspect")[0] == 5
+    code, lines, trace = host.decide({"f": NO_NEW_READING}, "2026-11-13T09:00:10Z")
+    assert code == 0 and trace["entries"][-2]["data"] == {} == trace["entries"][-1]["data"]
+    host.executed("2026-11-13T09:00:10Z", "2026-11-13T09:00:10Z")
+    code, lines, trace = host.decide({"f": Reading(False, "2026-11-13T09:00:08Z")},
+                                     "2026-11-13T09:00:12Z")
+    assert code == 0 and lines[-1] == "LAST ENTRY 6 : MONITOR 1 ALLOW"
+    code, lines = triel.check(str(spec), str(tmp_path / f"trace{host.n}.json"), last=False)
+    assert code == 0 and "TERM 1 MUST_NOT agent pay : PENDING" in lines
+    assert "MONITOR 1 : ENTRY 4 ALLOW ENTRY 6 ALLOW" in lines
+
+
+def test_a_reading_exactly_max_age_old_with_fractions(tmp_path):
+    host = case_host(tmp_path, CONDITIONS["DEFAULT"], "MAX_AGE 5 SECONDS ON_STALE BLOCK")
+    assert outcomes(host, [(Reading(True, "2026-11-13T09:09:55.5Z"), "2026-11-13T09:10:00.5Z")]) == [
+        (2, ["factor f: a fresh reading that the trace cannot express"])]
+
+
+def test_a_reading_at_the_moment_of_the_activation(tmp_path):
+    host = case_host(tmp_path, CONDITIONS["DEFAULT"], at="2026-11-13T09:00:00.6Z",
+                     first=Reading(True, "2026-11-13T09:00:00.6Z"))
+    code, lines, trace = host.decide({"f": NO_NEW_READING}, "2026-11-13T09:00:03Z")
+    assert code == 3
+    assert (trace["entries"][1]["time"], trace["entries"][1]["event"]) == ("2026-11-13T09:00:00Z", ARRIVE)
+
+
+def test_arrive_entries_in_time_order_with_the_history(tmp_path):
+    """A reading before the T of an executed action and one between its T and
+    its E: the arrive entries stand between the entries of that action."""
+    host = case_host(tmp_path, CONDITIONS["DEFAULT"])
+    assert host.decide({"f": Reading(False, "2026-11-13T09:10:00.2Z")}, "2026-11-13T09:10:00.5Z")[0] == 0
+    host.executed("2026-11-13T09:10:00.5Z", "2026-11-13T09:10:04.2Z")
+    code, lines, trace = host.decide({"f": Reading(False, "2026-11-13T09:10:02.5Z")},
+                                     "2026-11-13T09:10:20Z")
+    assert code == 0
+    assert [(x["time"][11:19], x["event"]["kind"]) for x in trace["entries"]] == [
+        ("09:00:00", "activate"), ("09:10:00", "arrive"), ("09:10:01", "tick"), ("09:10:02", "arrive"),
+        ("09:10:05", "act"), ("09:10:20", "tick"), ("09:10:20", "act")]
+
+
+def test_an_action_is_never_recorded_before_its_decision(tmp_path):
+    host = case_host(tmp_path, CONDITIONS["DEFAULT"])
+    host.decide({"f": NO_NEW_READING}, "2026-11-13T09:10:00.5Z")
+    host.executed("2026-11-13T09:10:00.5Z", "2026-11-13T09:09:59.5Z")
+    code, lines, trace = host.decide({"f": NO_NEW_READING}, "2026-11-13T09:20:00Z")
+    assert [(x["time"][11:19], x["event"]["kind"]) for x in trace["entries"][1:3]] == [
+        ("09:10:01", "tick"), ("09:10:01", "act")]
+
+
+def test_two_factors_with_max_age(tmp_path):
+    spec = write_spec(tmp_path, "agent MUST_NOT pay WHEN DEFAULT(f, false) OR DEFAULT(g, false)",
+                      "f : Boolean METADATA MAX_AGE 5 SECONDS ON_STALE BLOCK,\n"
+                      "  g : Boolean METADATA MAX_AGE 60 SECONDS ON_STALE BLOCK")
+    host = Host(tmp_path, spec, {"f": NO_NEW_READING, "g": NO_NEW_READING})
+    # f true but stale, g false and fresh: allowed, and f is not in the data
+    code, lines, trace = host.decide({"f": Reading(True, "2026-11-13T09:09:50Z"),
+                                      "g": Reading(False, "2026-11-13T09:09:58Z")},
+                                     "2026-11-13T09:10:00Z")
+    assert code == 0 and trace["entries"][-1]["data"] == {"g": {"bool": False}}
+    assert host.decide({"f": NO_NEW_READING, "g": Reading(True, "2026-11-13T09:10:05Z")},
+                       "2026-11-13T09:10:06Z")[0] == 3
+    assert host.decide({"f": Reading(False, "2026-11-13T09:10:07.9Z"), "g": NO_NEW_READING},
+                       "2026-11-13T09:10:12.1Z")[:2] == (
+        2, ["factor f: a fresh reading that the trace cannot express"])
+
+
+def test_a_reading_without_a_value(tmp_path):
+    host = case_host(tmp_path, CONDITIONS["DEFAULT"])
+    assert outcomes(host, [(Reading(None, "2026-11-13T09:09:59Z"), "2026-11-13T09:10:00Z")]) == [
+        (2, ["factor f: a reading without a value"])]
+
+
 # --- B: triel_to_core.py --actions -------------------------------------------------
 
 def actions(path):
@@ -514,6 +603,20 @@ def test_actions_of_nested_and_referenced_prohibitions(tmp_path):
          "composite_prohibitions": [6]}]
 
 
+def test_actions_in_else_elif_before_unless_and_of_two_subjects(tmp_path):
+    terms = """IF flag THEN agent MUST deliver ELSE agent MUST_NOT audit;
+  IF flag THEN agent MUST deliver ELIF amount > 5 THEN agent MUST_NOT recall ELSE agent MUST invoice;
+  agent MUST_NOT void UNLESS flag DO agent MUST deliver;
+  agent MUST_NOT pay WHEN flag;
+  supplier MUST_NOT pay WHEN flag"""
+    spec = write_spec(tmp_path, terms, "flag : Boolean METADATA,\n  amount : Decimal METADATA",
+                      name="branches")
+    objs = check_against_report(tmp_path, spec)
+    assert [(o["subject"], o["action"], o["monitors"], o["composite_prohibitions"]) for o in objs] == [
+        ("agent", "audit", [], [1]), ("agent", "recall", [], [2]), ("agent", "void", [], [3]),
+        ("agent", "pay", [4], []), ("supplier", "pay", [5], [])]
+
+
 def test_actions_with_arguments_as_the_term_lines_print_them(tmp_path):
     terms = ('agent MUST_NOT pay(supplier, 12.50, -3, true, "a\\"b\\\\c é1 ☃") WHEN flag;\n'
              '  agent MUST_NOT pay(DATETIME("2026-11-13T09:00:00Z"), r.f, 0.0)')
@@ -547,15 +650,10 @@ def test_actions_refusals(tmp_path):
         assert r.returncode == 1 and r.stdout == "" and "Traceback" not in r.stderr
 
 
-def test_the_output_without_flags_is_unchanged():
-    """--actions changes nothing else: the classification of the examples is the
-    expected one (CI), and without flags the translator prints the header lines
-    and the core AST."""
+def test_the_classification_of_the_examples_is_unchanged():
+    """With --actions added, the classification of the examples is still the
+    expected one. That the translation itself is unchanged is checked against
+    the branch main, outside this test."""
     r = subprocess.run([sys.executable, TRANSLATOR, "--classify", "examples"], capture_output=True,
                        text=True, encoding="utf-8", cwd=REPO)
     assert r.stdout == (REPO / "examples/core/classification.expected").read_text(encoding="utf-8")
-    path = REPO / "examples/core/merchant_mandate.triel"
-    r = subprocess.run([sys.executable, TRANSLATOR, str(path)], capture_output=True, text=True,
-                       encoding="utf-8", cwd=REPO)
-    tr = translate(path.read_text(encoding="utf-8"))
-    assert r.returncode == 0 and r.stdout == "\n".join(header(tr) + [pretty(tr.core)]) + "\n"
