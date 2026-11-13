@@ -15,13 +15,25 @@ The trace is the JSON trace of evaluator/README.md ("The trace in JSON"):
               and with the same data.
 
 The functions are pure: the host clock, the records and the data are their
-arguments, and nothing here reads a clock, a file or the environment. A time
-is the exact number of seconds since 1970-01-01T00:00:00Z (a Decimal); the
-trace counts whole seconds, so the time T of the decision is the host clock
-rounded up, and the time of an arrive entry is the time of its source rounded
-down: the trace never shows a reading fresher than it is. Where the trace
-would say something other than the readings, the action is held: the reasons
-are returned, and the host holds the action whenever there is one.
+arguments, and nothing here reads a clock, a file or the environment, apart
+from the grammar that the translator reads. A time is the exact number of
+seconds since 1970-01-01T00:00:00Z (a Decimal); the trace counts whole
+seconds, so the time T of the decision is the host clock rounded up, and the
+time of an arrive entry is the time of its source rounded down: at the
+decision the trace never shows a reading fresher than it is. Where the tick
+entry of the decision would say something other than the readings, the action
+is held: the reasons are returned (answers that are not a dict raise
+HostError), and the host holds the action whenever there is one. A factor
+under ON_STALE BLOCK whose reading is stale by the exact times is absent from
+the tick entry and the action of the decision, as it is for the monitor. The
+entries of earlier actions carry the data of their own decisions; the lines
+of the report about them are not read for the decision.
+
+The lines of the report about obligations are exact to two seconds at a
+deadline and to one second at FROM, since the activation is rounded down and
+the time of execution up; and an obligation whose action is named with
+arguments is never fulfilled in this trace, which writes actions without
+arguments.
 
 What the host gives for each declared factor (answers):
   - a factor without MAX_AGE: its value, or None for "no value";
@@ -208,13 +220,12 @@ def typed(ty, v, where: str):
         if any(0xD800 <= ord(c) <= 0xDFFF for c in v):
             raise HostError(f"{where}: a string with a surrogate")
         return {"str": v}
-    if kind == "datetime":
+    if kind == "datetime" and (isinstance(v, datetime) or (isinstance(v, str) and ISO.fullmatch(v))):
         try:
-            if isinstance(v, (datetime, str)):
-                s = seconds(v)
-                if s == int(s):
-                    return {"time": iso(int(s))}
-        except ValueError:
+            s = seconds(v)
+            if s == int(s):
+                return {"time": iso(int(s))}
+        except (ValueError, OverflowError):
             pass
     raise HostError(f"{where}: {v!r} is not a value of the declared type {_type_text(ty)}")
 
@@ -264,12 +275,12 @@ def accept(factors: dict, store: dict, answers: dict, h: Decimal):
             pass
         elif not isinstance(a, Reading) or a.time is None:
             reasons.append(f"factor {name}: a value without a source time")
+        elif a.value is None:
+            reasons.append(f"factor {name}: a reading without a value")
         else:
             try:
                 t = seconds(a.time)
                 v = typed(f["type"], a.value, f"factor {name}")
-                if v is None:
-                    raise HostError(f"factor {name}: a reading without a value")
             except ValueError as e:
                 reasons.append(f"factor {name}: {e}")
                 continue
@@ -372,7 +383,8 @@ def decide(factors: dict, spec_path: str, activation_record: dict, history: list
 
     Returns (trace or None, store, reasons, data): the trace is None whenever
     there is a reason to hold the action; the store is to be kept in either
-    case; data is the data of the tick entry of the decision."""
+    case; data is the data of the tick entry of the decision, without a factor
+    under ON_STALE BLOCK whose reading is stale by the exact times."""
     reasons = []
     check_names(factors, answers, reasons)
     store, more = accept(factors, store, answers, h)
@@ -393,6 +405,8 @@ def decide(factors: dict, spec_path: str, activation_record: dict, history: list
         fresh_trace = r[0] >= act_at and t_now - floor_s(r[0]) <= f["max_age"]
         if fresh_exact and not fresh_trace:
             reasons.append(f"factor {name}: a fresh reading that the trace cannot express")
+        elif not fresh_exact:
+            data.pop(name, None)  # stale at the decision: absent, as it is for the monitor
     if reasons:
         return None, store, reasons, data
 
