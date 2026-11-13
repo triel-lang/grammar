@@ -9,7 +9,7 @@ This repository holds TRIEL: the grammar of the language, the semantics of its c
 - `evaluator/`: the evaluator, `evaluator/generated/TRIEL.hs` exported from `formal/core/` and `evaluator/Main.hs`.
 - `parser/`: the reference parser, the translator to the core, the scenario driver, `triel check` and their tests (`parser/README.md`).
 - `examples/`: example specifications; `examples/core/` holds those inside the core, with scenarios, expected reports and the conformance suite.
-- `artifact/`: Docker image and `run.sh`, which repeats the CI checks in one command, except `parser/test_skill.py`.
+- `artifact/`: Docker image and `run.sh`, which repeats the CI checks in one command, except `parser/test_skill.py` and `parser/test_host.py`.
 - `tools/`: helper scripts.
 - `.github/workflows/`: the CI workflows.
 - `.agents/skills/triel/`: the skill for agents that use TRIEL; `.claude/skills/triel` is a link to it.
@@ -33,6 +33,7 @@ python3 examples/core/conformance/run.py --level monitor
 python3 -m pytest -q parser/test_triel_to_core.py
 python3 -m pytest -q parser/test_triel_check.py
 python3 -m pytest -q parser/test_skill.py
+python3 -m pytest -q parser/test_host.py
 ```
 
 The workflow also runs every scenario of `examples/core/scenarios/` with `python3 parser/triel_eval.py` and compares the report with its expected report, checks the sha256 of every file in `examples/core/conformance/manifest.json`, and checks the conformance runner itself. Before the Isabelle build it switches off the PDF document in its copy of `formal/core/ROOT`, since LaTeX is not installed; do the same locally without LaTeX, and do not commit that change.

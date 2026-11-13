@@ -35,8 +35,9 @@ behind the paper. It contains:
 
 `artifact/run.sh` runs, in one command, every check of the repository's CI
 (`isabelle.yml`, `evaluator.yml`, `parse-examples.yml`) except the test of the
-documentation for AI agents (`parser/test_skill.py`), builds `TRIEL_Paper`,
-and prints a summary whose numbers are all computed by the run.
+documentation for AI agents (`parser/test_skill.py`) and the tests of the trace
+of a host (`parser/test_host.py`), builds `TRIEL_Paper`, and prints a summary
+whose numbers are all computed by the run.
 
 ## Requirements
 
