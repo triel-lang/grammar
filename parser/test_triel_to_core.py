@@ -921,7 +921,7 @@ def test_surrogate_escape_is_rejected_not_a_crash(literal, tmp_path):
     'a MUST pay("\\uDFFF")',
     'a MUST b BY DATETIME("2026-01-01T00:00:00Z\\uD800")',
 ])
-def test_surrogate_escape_anywhere_is_rejected(terms):
+def test_surrogate_escape_in_an_argument_or_datetime_is_rejected(terms):
     assert rejected(spec(terms=terms)) == ["surrogate escape"]
 
 
