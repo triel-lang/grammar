@@ -1,0 +1,115 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3",
+            "args": [
+              "-I",
+              "/opt/triel/grammar/hosts/claude-code/gate.py",
+              "pre",
+              "--config",
+              "/etc/triel/gate.json"
+            ],
+            "timeout": 120,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3",
+            "args": [
+              "-I",
+              "/opt/triel/grammar/hosts/claude-code/gate.py",
+              "post",
+              "--config",
+              "/etc/triel/gate.json"
+            ],
+            "timeout": 120,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3",
+            "args": [
+              "-I",
+              "/opt/triel/grammar/hosts/claude-code/gate.py",
+              "failure",
+              "--config",
+              "/etc/triel/gate.json"
+            ],
+            "timeout": 120,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3",
+            "args": [
+              "-I",
+              "/opt/triel/grammar/hosts/claude-code/gate.py",
+              "denied",
+              "--config",
+              "/etc/triel/gate.json"
+            ],
+            "timeout": 120,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  },
+  "allowManagedHooksOnly": true,
+  "allowManagedPermissionRulesOnly": true,
+  "env": {
+    "CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS": "0"
+  },
+  "permissions": {
+    "allow": [
+      "mcp__payments__pay",
+      "mcp__payments__convert",
+      "mcp__docs__search"
+    ],
+    "deny": [
+      "WebFetch(domain:payments.example.com)",
+      "WebFetch(domain:*.payments.example.com)",
+      "Edit(//etc/triel/**)",
+      "Edit(//opt/triel/**)",
+      "Edit(//var/lib/triel/**)",
+      "Edit(//etc/claude-code/**)",
+      "Edit(//**/.claude/**)",
+      "Edit(//**/.mcp.json)",
+      "Edit(~/.claude.json)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowUnsandboxedCommands": false,
+    "network": {
+      "allowManagedDomainsOnly": true
+    }
+  }
+}
