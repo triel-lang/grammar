@@ -22,6 +22,9 @@ A reference parser for TRIEL v2.5, built from the published grammar
   evaluator on a specification and a trace, a scenario or the same scenario in
   JSON, and prints the report as text or JSON (`evaluator/README.md`).
 - `test_triel_check.py`: the tests of `triel check`.
+- `triel_host.py`: the trace that a host, the system that runs an agent, builds
+  from its own records for `triel check --last` before an action of the agent.
+- `test_host.py`: the tests of `triel_host.py` and of `triel_to_core.py --actions`.
 
 ## What the parser is
 
@@ -75,9 +78,20 @@ unsupported construct is reported.
 ```bash
 python3 parser/triel_to_core.py examples/core/core_deadline_cure.triel   # core AST
 python3 parser/triel_to_core.py --classify examples                      # ACCEPTED / REJECTED
+python3 parser/triel_to_core.py --actions examples/core/merchant_mandate.triel   # actions, JSON
 python3 parser/triel_eval.py examples/core/scenarios/deadline_cure_ok.scn
 python3 -m pytest parser/test_triel_to_core.py
 ```
+
+`--actions` prints a JSON array with one object for each pair of a subject and
+the name of an action that a prohibition names, in the order of first
+appearance: `monitors`, the numbers of the `TERM` lines of the top-level
+prohibitions of that action, whose monitors decide it; `monitor_actions`, the
+action of each of them as its `TERM` line prints it, with its arguments; and
+`composite_prohibitions`, the numbers of the `TERM` lines of the composite
+terms that hold a prohibition of that action, which no monitor decides. The
+exit code is 2, with the line `REJECTED: ...`, for a rejected specification,
+and 1 for a file that cannot be read or does not parse.
 
 `triel_eval.py` runs a scenario through the evaluator built from
 [`evaluator/`](../evaluator/README.md). The path in `(spec PATH)` is relative

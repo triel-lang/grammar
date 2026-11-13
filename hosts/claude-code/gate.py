@@ -16,8 +16,9 @@ Commands of the operator, never available to the agent:
   resolve ID --not-executed                the call ID was not executed
   status                                   print the state of the mandate
 --now TIME fixes the host clock (ISO-8601 UTC, a fraction of a second allowed);
-without it the clock of the system is read. Nothing else is read from the
-environment.
+without it the clock of the system is read: by pre once it holds the lock,
+before it asks the host module for the data; by post when it starts, as the
+time PostToolUse came. Nothing else is read from the environment.
 
 Exit code: 0 lets the call go on to the permission flow of Claude Code, with
 nothing on standard output, or a command succeeded; 2, with the reason on
@@ -98,7 +99,8 @@ def run(argv) -> int:
         if not isinstance(hook, dict):
             raise Held(["the input of the hook is not a JSON object"])
         if args.command == "pre":
-            return pre(cfg, hook, h)
+            # the decision reads the clock again once it holds the lock
+            return pre(cfg, hook, h, lambda: clock(args.now, triel_host))
         return after(cfg, hook, h, args.command)
     if args.command == "activate":
         return activate(cfg, h)
@@ -412,7 +414,7 @@ def moment(h):
 
 # --- PreToolUse ---------------------------------------------------------------------
 
-def pre(cfg, hook, h) -> int:
+def pre(cfg, hook, h, now) -> int:
     import json
     from pathlib import Path
     import triel_host
@@ -429,6 +431,7 @@ def pre(cfg, hook, h) -> int:
         raise Held([f"{tool}: the input of the hook has no tool_use_id"])
     m = info
     with locked(cfg):
+        h = now()
         st = load_state(cfg)
         if st is None or st["activation"] is None:
             reasons = ["the mandate has no activation: the operator runs gate.py activate"]

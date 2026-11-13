@@ -97,7 +97,7 @@ TRIEL is a separate piece of work that draws on several traditions: strong Kleen
 ## License
 
 - The TRIEL Language Specification, versions 2.5 and 2.5.1 (`TRIEL-grammar-v2_5-core.ebnf`, `TECHNICAL_REPORT.md`, `formal/core/CORE.md`), is made available under the Open Web Foundation Final Specification Agreement 1.0 (OWFa 1.0). The OWFa 1.0 statement for version 2.4 remains in effect.
-- The code in `formal/core/` (the Isabelle theories, `ROOT`, `document/` and the build log) is available under the [Apache License 2.0](LICENSE-APACHE) or the [BSD 3-Clause License](LICENSE-BSD), at your option. The other code (`evaluator/`, `parser/`, `examples/`, `.github/`) is licensed under the [Apache License 2.0](LICENSE-APACHE).
+- The code in `formal/core/` (the Isabelle theories, `ROOT`, `document/` and the build log) is available under the [Apache License 2.0](LICENSE-APACHE) or the [BSD 3-Clause License](LICENSE-BSD), at your option. The other code (`evaluator/`, `parser/`, `examples/`, `hosts/`, `.github/`) is licensed under the [Apache License 2.0](LICENSE-APACHE).
 - The skill for AI agents (`.agents/skills/triel/`, which `.claude/skills/triel` links to) is text licensed under the [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/legalcode) (CC BY 4.0), with no patent license.
 - Contributions are accepted under the [TRIEL Contributor License Agreement](CLA.md); see [CONTRIBUTING.md](CONTRIBUTING.md).
 
