@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Reproduce every check of the CI workflows isabelle.yml, evaluator.yml and
-# parse-examples.yml with one command, then build the session of the theorems
+# parse-examples.yml with one command, except the test of the documentation for
+# AI agents (parser/test_skill.py), then build the session of the theorems
 # cited in the paper (and further ones) and print a summary. All numbers in the summary are
 # computed by this run.
 #

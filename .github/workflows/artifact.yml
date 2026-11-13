@@ -24,7 +24,8 @@ jobs:
       - name: Image size
         run: docker image ls triel-artifact
 
-      # artifact/run.sh: every check of isabelle.yml and evaluator.yml, the
+      # artifact/run.sh: every check of isabelle.yml and evaluator.yml except the
+      # test of the documentation for AI agents (parser/test_skill.py), the
       # session of the paper theorems, and the summary. The peak of the memory
       # charged to the container is read from memory.peak of its cgroup (cgroup
       # v2, page cache included) every 2 s while it runs; the value only grows,

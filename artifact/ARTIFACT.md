@@ -34,7 +34,8 @@ behind the paper. It contains:
   The tools need network access to install, so this is not a step of `run.sh`.
 
 `artifact/run.sh` runs, in one command, every check of the repository's CI
-(`isabelle.yml`, `evaluator.yml`, `parse-examples.yml`), builds `TRIEL_Paper`,
+(`isabelle.yml`, `evaluator.yml`, `parse-examples.yml`) except the test of the
+documentation for AI agents (`parser/test_skill.py`), builds `TRIEL_Paper`,
 and prints a summary whose numbers are all computed by the run.
 
 ## Requirements
