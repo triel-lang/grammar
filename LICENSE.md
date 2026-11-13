@@ -33,6 +33,7 @@ All other code is licensed under the Apache License, Version 2.0:
 - `evaluator/`: the evaluator, including the Haskell code exported from `formal/core/`.
 - `parser/`: the reference parser, the translator to the core and their tests.
 - `examples/`: example specifications, scenarios and expected results.
+- `hosts/`: the adapters that call `triel check` from the system that runs an agent, and their tests.
 - `.github/`: the CI workflows.
 
 The full text of the Apache License 2.0 is in `LICENSE-APACHE`; the notice to keep when redistributing under it is in `NOTICE`. The full text of the BSD 3-Clause License is in `LICENSE-BSD`.

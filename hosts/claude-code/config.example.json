@@ -1,0 +1,27 @@
+{
+ "repo": "/opt/triel/grammar",
+ "evaluator": "/opt/triel/grammar/evaluator/triel-eval",
+ "spec": "/etc/triel/mandate.triel",
+ "state_dir": "/var/lib/triel/mandate",
+ "host_module": "/etc/triel/host.py",
+ "host_options": {
+  "data_file": "/var/lib/triel/host_data.json",
+  "approval": "payment_approved",
+  "counters": {"payments_executed": "pay"}
+ },
+ "check_timeout_seconds": 50,
+ "pending_timeout_seconds": 600,
+ "execution_delay_flag_seconds": 5,
+ "managed_servers": [
+  {"name": "payments", "source": "managed"}
+ ],
+ "allowed_tools": [
+  {"server": "docs", "source": "managed", "tool_name": "mcp__docs__search"}
+ ],
+ "actions": [
+  {"server": "payments", "tool_name": "mcp__payments__pay",
+   "subject": "agent", "action": "pay", "atomic": true},
+  {"server": "payments", "tool_name": "mcp__payments__convert",
+   "subject": "agent", "action": "convert", "atomic": false}
+ ]
+}

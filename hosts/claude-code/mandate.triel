@@ -1,0 +1,31 @@
+-- The specification of the example of README.md: an agent that pays and
+-- converts currency through the tools of the MCP server "payments". The host
+-- reports the approval of the payment about to be made, the number of payments
+-- executed so far, the exchange rate from its rate feed, with the time the feed
+-- stamped it, and the owner's limit on the rate.
+
+SPECIFICATION payments_mandate VERSION 1.0.0
+    PROVENANCE_REQUIRED: true
+
+SUBJECTS {
+  owner : PARTY,
+  agent : SYSTEM,
+  rates : ORACLE
+}
+
+TERMS {
+  agent MUST_NOT pay WHEN NOT payment_approved OR payments_executed >= 3;
+  agent ON_BREACH NOTIFY owner;
+  agent MUST_NOT convert WHEN fx_rate > rate_limit
+}
+
+FACTORS {
+  payment_approved  : Boolean METADATA,
+  payments_executed : Integer METADATA,
+  fx_rate           : Decimal METADATA SOURCE rates MAX_AGE 60 SECONDS ON_STALE BLOCK,
+  rate_limit        : Decimal METADATA
+}
+
+INVARIANTS {
+  limit_set : SAFETY : ALWAYS(rate_limit > 0)
+}
