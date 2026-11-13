@@ -158,3 +158,8 @@ jobs:
       # report, --last, and the exit codes.
       - name: Tests of triel check
         run: python3 -m pytest -q parser/test_triel_check.py
+
+      # .agents/skills/triel/SKILL.md and AGENTS.md: every command, exit code,
+      # path, section and TRIEL excerpt they state, and every pitfall, by a run.
+      - name: Tests of the skill for AI agents and of AGENTS.md
+        run: python3 -m pytest -q parser/test_skill.py
