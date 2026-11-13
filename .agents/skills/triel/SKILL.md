@@ -95,16 +95,16 @@ SUBJECTS {
 }
 
 TERMS {
-  editor MUST review_draft WITHIN 2 DAYS;
-  agent MUST_NOT publish WHEN NOT draft_reviewed
+  editor MUST proofread_draft WITHIN 2 DAYS;
+  agent MUST_NOT publish WHEN NOT draft_proofread
 }
 
 FACTORS {
-  draft_reviewed : Boolean METADATA
+  draft_proofread : Boolean METADATA
 }
 
 INVARIANTS {
-  review_known : LIVENESS : EVENTUALLY(PRESENT(draft_reviewed))
+  proofread_known : LIVENESS : EVENTUALLY(PRESENT(draft_proofread))
 }
 ```
 
