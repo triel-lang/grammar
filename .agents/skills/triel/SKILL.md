@@ -81,7 +81,7 @@ Checked as written, it ends with `LAST ENTRY 3 : MONITOR 2 BLOCK`, exit code 3: 
 5. If a rule does not say who, by when, on which data and what follows a breach, ask the user. If there is nobody to ask, write the assumption down next to the specification.
 6. Do not invent syntax. If the translator rejects a construct, tell the user which rule cannot be checked in the core. Do not drop the rule silently, and do not replace it by another meaning without saying so.
 7. Keep your files outside `examples/`, for instance in a folder `work/` of your own. The `spec` path of a trace is relative to the root of the repository.
-8. Say plainly that acceptance by the translator and passing scenarios do not show that the specification says what the user meant.
+8. In your answer, say plainly that neither the acceptance by the translator nor passing scenarios show that the specification says what the user meant: name both.
 9. Do not use a specification you wrote yourself to allow your own actions until the user has confirmed it.
 
 The blocks every specification needs, in order, `INVARIANTS` included:
