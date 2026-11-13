@@ -204,7 +204,8 @@ class Mandate:
         return json.loads((self.state_dir / "state.json").read_text(encoding="utf-8"))
 
     def log(self):
-        return [json.loads(x) for x in (self.state_dir / "log.jsonl").read_text().splitlines()]
+        p = self.state_dir / "log.jsonl"
+        return [json.loads(x) for x in p.read_text().splitlines()] if p.exists() else []
 
 
 def first(r):

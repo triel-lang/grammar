@@ -16,15 +16,20 @@ Commands of the operator, never available to the agent:
   resolve ID --not-executed                the call ID was not executed
   status                                   print the state of the mandate
 --now TIME fixes the host clock (ISO-8601 UTC, a fraction of a second allowed);
-without it the clock of the system is read: by pre once it holds the lock,
-before it asks the host module for the data; by post when it starts, as the
-time PostToolUse came. Nothing else is read from the environment.
+without it the clock of the system is read: by pre and activate once they hold
+the lock, as the time they give the host module, and again once the module has
+answered, as the time of the decision or of the activation, so that a reading
+its source stamped while the module answered is not from the future; by post,
+failure and denied when they start, as the time the event came. Nothing else is
+read from the environment.
 
 Exit code: 0 lets the call go on to the permission flow of Claude Code, with
 nothing on standard output, or a command succeeded; 2, with the reason on
 standard error, holds the call or refuses the command. Any failure of the gate
 itself, an import included, gives 2: every import but sys is made inside the
-handler of main.
+handler of main, an exception whose text cannot be printed gives 2 too, and so
+does a standard error that cannot be written. What the host module prints on
+standard output is discarded.
 """
 import sys
 
@@ -57,20 +62,29 @@ class Held(Exception):
 
 
 def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    before = bool(argv) and argv[0] == "pre"
     try:
-        return run(sys.argv[1:] if argv is None else argv)
+        return run(argv)
     except Held as e:
-        say(e.reasons)
+        say(e.reasons, before)
         return HOLD
     except BaseException as e:  # noqa: B902 - any failure of the gate holds the call
-        say([f"the gate failed: {type(e).__name__}: {e}"])
+        try:
+            reason = f"the gate failed: {type(e).__name__}: {e}"
+        except BaseException:  # noqa: B902 - an exception whose text cannot be printed
+            reason = f"the gate failed: {type(e).__name__}"
+        say([reason], before)
         return HOLD
 
 
-def say(reasons):
+def say(reasons, before=False):
+    """The reasons on standard error; before a call runs (pre), also that it is
+    held and is not to be retried."""
     try:
         lines = [f"TRIEL gate: held: {reasons[0]}"] + [f"  {r}" for r in reasons[1:]]
-        lines.append("  The call is held. Do not retry it; the operator of the host decides.")
+        if before:
+            lines.append("  The call is held. Do not retry it; the operator of the host decides.")
         sys.stderr.write("\n".join(lines) + "\n")
     except BaseException:  # noqa: B902
         pass
@@ -93,20 +107,23 @@ def run(argv) -> int:
     cfg = load_config(args.config)
     sys.path.insert(0, cfg["repo"] + "/parser")
     import triel_host  # the library of the trace, from the clone of the configuration
-    h = clock(args.now, triel_host)
+
+    def now():
+        return clock(args.now, triel_host)
+
+    h = now()
     if args.command in ("pre", "post", "failure", "denied"):
         hook = json.loads(sys.stdin.buffer.read().decode("utf-8"))
         if not isinstance(hook, dict):
             raise Held(["the input of the hook is not a JSON object"])
         if args.command == "pre":
-            # the decision reads the clock again once it holds the lock
-            return pre(cfg, hook, h, lambda: clock(args.now, triel_host))
+            return pre(cfg, hook, h, now)
         return after(cfg, hook, h, args.command)
     if args.command == "activate":
-        return activate(cfg, h)
+        return activate(cfg, now)
     if args.command == "resolve":
         return resolve(cfg, args, h)
-    return status(cfg)
+    return status(cfg, h)
 
 
 # --- Clock and configuration ---------------------------------------------------
@@ -243,16 +260,20 @@ def state_dir(cfg):
 
 
 class locked:
-    """One decision or one update of the state at a time, on this machine."""
+    """One decision or one update of the state at a time, on this machine. pre
+    waits for the lock at most check_timeout_seconds, so that it can still run
+    its two child processes within the timeout of the hook; the events after a
+    call and the commands of the operator wait up to three times as long, since
+    a fact of execution they do not record is lost."""
 
-    def __init__(self, cfg):
-        self.cfg = cfg
+    def __init__(self, cfg, waits=3, gave_up=None):
+        self.cfg, self.waits, self.gave_up = cfg, waits, gave_up
 
     def __enter__(self):
         import fcntl
         import time
         self.f = open(state_dir(self.cfg) / "lock", "a")
-        deadline = time.monotonic() + 3 * self.cfg["check_timeout_seconds"]
+        deadline = time.monotonic() + self.waits * self.cfg["check_timeout_seconds"]
         while True:
             try:
                 fcntl.flock(self.f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -260,13 +281,41 @@ class locked:
             except BlockingIOError:
                 if time.monotonic() > deadline:
                     self.f.close()
-                    raise Held(["another decision of the gate is still running"]) from None
+                    reasons = ["another decision of the gate is still running"]
+                    if self.gave_up:
+                        self.gave_up(reasons)
+                    raise Held(reasons) from None
                 time.sleep(0.05)
 
     def __exit__(self, *exc):
         import fcntl
         fcntl.flock(self.f, fcntl.LOCK_UN)
         self.f.close()
+        return False
+
+
+class quiet:
+    """What the host module prints on standard output, through sys.stdout or
+    the file descriptor 1, is discarded: on exit 0 a hook prints nothing."""
+
+    def __enter__(self):
+        import contextlib
+        import io
+        import os
+        sys.stdout.flush()
+        self.fd = os.dup(1)
+        null = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(null, 1)
+        os.close(null)
+        self.redirect = contextlib.redirect_stdout(io.StringIO())
+        self.redirect.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        import os
+        self.redirect.__exit__(*exc)
+        os.dup2(self.fd, 1)
+        os.close(self.fd)
         return False
 
 
@@ -328,9 +377,13 @@ def expire(cfg, st, h):
     for tid, p in list(st["pending"].items()):
         if h - Decimal(p["decided"]) > limit:
             del st["pending"][tid]
-            why = f"no PostToolUse or PostToolUseFailure within {cfg['pending_timeout_seconds']} s"
+            why = expired(cfg)
             st["unknown"][tid] = dict(p, why=why)
             log(cfg, h, event="unknown", tool_use_id=tid, tool_name=p["tool_name"], why=why)
+
+
+def expired(cfg):
+    return f"no PostToolUse or PostToolUseFailure within {cfg['pending_timeout_seconds']} s"
 
 
 def find(st, tid):
@@ -364,15 +417,15 @@ def spec_info(cfg, st):
     """The factors of the specification (triel_host.spec_factors) and the output
     of triel_to_core.py --actions, kept in the state by the sha256 of the
     specification and of the programs that read it."""
-    import hashlib
     import json
     from pathlib import Path
+    import lark
     import triel_host
     parser = Path(cfg["repo"]) / "parser"
     text = Path(cfg["spec"]).read_bytes()
-    key = hashlib.sha256(text + b"".join(
-        (parser / f).read_bytes() for f in ("triel_to_core.py", "triel.lark", "triel_host.py",
-                                            "triel.py", "triel_eval.py"))).hexdigest()
+    key = cache_key(text, [(parser / f).read_bytes() for f in (
+        "triel_to_core.py", "triel.lark", "triel_host.py", "triel.py", "triel_eval.py")],
+        lark.__version__)
     if st["cache"] and st["cache"]["key"] == key:
         return st["cache"]["factors"], st["cache"]["actions"]
     code, out, err = child(cfg, [str(parser / "triel_to_core.py"), "--actions", cfg["spec"]])
@@ -390,6 +443,17 @@ def spec_info(cfg, st):
     factors = triel_host.spec_factors(text.decode("utf-8"))
     st["cache"] = {"key": key, "factors": factors, "actions": actions}
     return factors, actions
+
+
+def cache_key(spec, files, lark_version):
+    """The sha256 of the specification, of the programs that read it, of the
+    version of lark and of Python, each part with its length before it."""
+    import hashlib
+    h = hashlib.sha256()
+    for part in [lark_version.encode(), sys.version.encode(), spec] + list(files):
+        h.update(len(part).to_bytes(8, "big"))
+        h.update(part)
+    return h.hexdigest()
 
 
 def host_module(cfg):
@@ -430,7 +494,7 @@ def pre(cfg, hook, h, now) -> int:
     if not (isinstance(tid, str) and tid):
         raise Held([f"{tool}: the input of the hook has no tool_use_id"])
     m = info
-    with locked(cfg):
+    with locked(cfg, waits=1):
         h = now()
         st = load_state(cfg)
         if st is None or st["activation"] is None:
@@ -456,7 +520,9 @@ def pre(cfg, hook, h, now) -> int:
                          and a["action"] == m["action"]), None)
             call = {"tool_use_id": tid, "tool_name": tool, "tool_input": hook.get("tool_input"),
                     "subject": m["subject"], "action": m["action"], "mcp_server": hook["mcp_server"]}
-            answers = host_module(cfg).answers(call, moment(h), factors, cfg["host_options"])
+            with quiet():
+                answers = host_module(cfg).answers(call, moment(h), factors, cfg["host_options"])
+            h = now()  # after the answers: a reading stamped while they were made is not later
             trace, st["readings"], reasons, data = triel_host.decide(
                 factors, cfg["spec"], st["activation"], st["history"], st["readings"], answers,
                 m["subject"], m["action"], h)
@@ -476,13 +542,12 @@ def pre(cfg, hook, h, now) -> int:
             log(cfg, h, event="held", tool_use_id=tid, tool_name=tool, reasons=e.reasons)
             save_state(cfg, st)
             raise
-        t = triel_host.decision_time(h)
-        log(cfg, h, event="allowed", tool_use_id=tid, tool_name=tool, subject=m["subject"],
-            action=m["action"], T=iso(t))
         st["pending"][tid] = {"tool_name": tool, "tool_input": hook.get("tool_input"),
                               "subject": m["subject"], "action": m["action"],
                               "decided": triel_host.exact(h), "data": data}
-        save_state(cfg, st)  # the pending record is written last, then exit 0
+        save_state(cfg, st)  # the pending record, then the line of the journal, then exit 0
+        log(cfg, h, event="allowed", tool_use_id=tid, tool_name=tool, subject=m["subject"],
+            action=m["action"], T=iso(triel_host.decision_time(h)))
     return 0
 
 
@@ -566,10 +631,19 @@ def after(cfg, hook, h, event) -> int:
     from decimal import Decimal, InvalidOperation
     import triel_host
     kind, m = classify(cfg, hook)
+    tid = hook.get("tool_use_id")
+    if kind == "hold":
+        log(cfg, h, event=f"{event} ignored", tool_use_id=tid, tool_name=hook.get("tool_name"),
+            reasons=[m])
+        return 0
     if kind != "managed":
         return 0
-    tid = hook.get("tool_use_id")
-    with locked(cfg):
+
+    def gave_up(reasons):  # the fact is not recorded: the journal says so, without the lock
+        log(cfg, h, event=f"{event} not recorded", tool_use_id=tid, tool_name=hook["tool_name"],
+            reasons=reasons)
+
+    with locked(cfg, gave_up=gave_up):
         st = load_state(cfg)
         if st is None:
             log(cfg, h, event=f"{event} without a state", tool_use_id=tid, tool_name=hook["tool_name"])
@@ -602,6 +676,8 @@ def after(cfg, hook, h, event) -> int:
                 elif not same:
                     conflict(cfg, st, tid, h, "the late PostToolUse has another input than "
                                               "PreToolUse")
+            elif any(x["tool_use_id"] == tid for x in st["history"]):
+                conflict(cfg, st, tid, h, "a second PostToolUse came for the executed call")
             else:
                 rec = {"tool_name": hook["tool_name"], "tool_input": hook.get("tool_input"),
                        "subject": m["subject"], "action": m["action"],
@@ -653,20 +729,23 @@ def execute(cfg, st, tid, rec, executed_at, tool_input, h):
     fact = {"tool_use_id": tid, "tool_name": rec["tool_name"], "subject": rec["subject"],
             "action": rec["action"], "tool_input": tool_input, "time": moment(Decimal(e))}
     try:
-        host_module(cfg).executed(fact, cfg["host_options"])
+        with quiet():
+            host_module(cfg).executed(fact, cfg["host_options"])
     except Exception as e:  # noqa: B902 - an approval left in place must not allow a repeat
         conflict(cfg, st, tid, h, f"the host module did not take the execution: "
                                   f"{type(e).__name__}: {e}")
 
 
 def conflict(cfg, st, tid, h, why):
-    st["conflicts"][tid] = {"why": why}
+    """A conflict on the call tid; a second reason does not hide the first."""
+    old = st["conflicts"].get(tid)
+    st["conflicts"][tid] = {"why": why if old is None else f"{old['why']}; {why}"}
     log(cfg, h, event="conflict", tool_use_id=tid, why=why)
 
 
 # --- Commands of the operator ----------------------------------------------------
 
-def activate(cfg, h) -> int:
+def activate(cfg, now) -> int:
     import triel_host
     with locked(cfg):
         if load_state(cfg) is not None:
@@ -674,7 +753,9 @@ def activate(cfg, h) -> int:
                         "the history is kept"])
         st = empty_state()
         factors, _ = spec_info(cfg, st)
-        answers = host_module(cfg).answers(None, moment(h), factors, cfg["host_options"])
+        with quiet():
+            answers = host_module(cfg).answers(None, moment(now()), factors, cfg["host_options"])
+        h = now()  # after the answers, as for a decision
         rec, st["readings"], reasons = triel_host.activation(factors, answers, h)
         if reasons:
             raise Held(["activation refused"] + reasons)
@@ -712,6 +793,18 @@ def resolve(cfg, args, h) -> int:
                             "resolve it with --executed --at TIME"])
             x = next(x for x in st["history"] if x["tool_use_id"] == tid)
             x["executed"] = triel_host.exact(at_time(x["decided"]))
+            # The host module takes the fact again: the conflict may be that it did not take it.
+            e = triel_host.execution_time(Decimal(x["decided"]), Decimal(x["executed"]))
+            fact = {"tool_use_id": tid, "tool_name": x["tool_name"], "subject": x["subject"],
+                    "action": x["action"], "tool_input": x["tool_input"],
+                    "time": moment(Decimal(e))}
+            try:
+                with quiet():
+                    host_module(cfg).executed(fact, cfg["host_options"])
+            except Exception as err:  # noqa: B902 - the conflict stays
+                raise Held([f"the host module did not take the execution: "
+                            f"{type(err).__name__}: {err}",
+                            f"the conflict on the call {tid} stays"]) from None
             del st["conflicts"][tid]
             log(cfg, h, event="resolved conflict", tool_use_id=tid, executed=x["executed"])
             save_state(cfg, st)
@@ -731,18 +824,46 @@ def resolve(cfg, args, h) -> int:
     return 0
 
 
-def status(cfg) -> int:
+def status(cfg, h) -> int:
+    """The state at the host clock h, without changing it: the age of each
+    pending call and the seconds until its outcome becomes unknown; a pending
+    call whose time is over is shown as unknown."""
     import json
+    from decimal import Decimal
     with locked(cfg):
         st = load_state(cfg)
     if st is None:
         print(json.dumps({"activation": None}))
         return 0
-    print(json.dumps({k: st[k] for k in ("activation", "pending", "unknown", "conflicts")}
-                     | {"executed": len(st["history"]), "not_executed": sorted(st["not_executed"])},
-                     ensure_ascii=False, indent=1))
+
+    def number(x):
+        return int(x) if x == int(x) else float(x)
+
+    limit = Decimal(str(cfg["pending_timeout_seconds"]))
+    pending, unknown = {}, dict(st["unknown"])
+    for tid, p in st["pending"].items():
+        age = h - Decimal(p["decided"])
+        if age > limit:
+            unknown[tid] = dict(p, why=expired(cfg))
+        else:
+            pending[tid] = dict(p, age_seconds=number(age), unknown_in_seconds=number(limit - age))
+    print(json.dumps({"activation": st["activation"], "pending": pending, "unknown": unknown,
+                      "conflicts": st["conflicts"], "executed": len(st["history"]),
+                      "not_executed": sorted(st["not_executed"])}, ensure_ascii=False, indent=1))
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    code = main()
+    if code == HOLD:
+        # Exit 2 even when standard error cannot be flushed, where Python would exit 120.
+        try:
+            sys.stderr.flush()
+        except BaseException:  # noqa: B902
+            pass
+        try:
+            import os
+            os._exit(HOLD)
+        except BaseException:  # noqa: B902
+            sys.exit(HOLD)
+    sys.exit(code)
