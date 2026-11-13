@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-triel_host: the trace that a host builds, from its own records, for the
-command triel check --last before an action of an agent (evaluator/README.md,
-"Calling from a host").
+triel_host: the trace that a host, the system that runs an agent, builds
+from its own records for the command triel check --last before an action of
+the agent.
 
 The trace is the JSON trace of evaluator/README.md ("The trace in JSON"):
 
