@@ -591,7 +591,8 @@ def test_a_nested_prohibition_is_not_decided_by_code_0(tmp_path):
     assert composite["undefined"].endswith("STATUS OPEN")
     text = " ".join(skill().split())
     for words in ("a second violation gives no new line", "is not violated (`STATUS OPEN`)",
-                  "`STATUS VIOLATED ENTRY J` confirms a violation"):
+                  "`STATUS VIOLATED ENTRY J` confirms a violation",
+                  "which the report gives only as a `TERM K COMPOSITE` line; find it in the specification"):
         assert words in text
 
 
@@ -756,6 +757,25 @@ def test_an_approval_without_max_age_goes_stale_too(tmp_path):
     assert "an approval that the host withdrew after its last entry still counts" in " ".join(skill().split())
 
 
+def max_age_factors(spec: str):
+    """The factors of a specification declared with MAX_AGE."""
+    block = read(REPO / spec).split("FACTORS {", 1)[1].split("}", 1)[0]
+    return set(re.findall(r"^\s*(\w+)\s*:[^\n]*\bMAX_AGE\b", block, re.M))
+
+
+def test_the_example_of_readme_needs_no_tick_at_the_time_of_the_action():
+    """mandate_price_over_limit has its tick entry earlier than the action and is
+    still right: none of the factors in its data has a MAX_AGE in the
+    specification (stock_units has one, and is not in its data)."""
+    with_max_age = max_age_factors(MANDATE)
+    assert with_max_age == {"stock_units"}
+    data = set(re.findall(r"\((\w+) \((?:bool|int|dec|str|time|record)\b",
+                          read(SCENARIOS / "mandate_price_over_limit.scn")))
+    assert data and not data & with_max_age
+    for doc in (SKILL, REPO / "README.md", REPO / "evaluator" / "README.md"):
+        assert "none of the factors in its data has a `MAX_AGE`" in " ".join(read(doc).split()), doc
+
+
 # --- 7. Pitfalls --------------------------------------------------------------
 
 def pitfalls():
@@ -779,7 +799,21 @@ def pitfall_undefined(tmp_path):
     assert "TERM 2 MUST_NOT agent pay(supplier) : PENDING" in lines and "MONITOR 2 : ENTRY 3 BLOCK" in lines
     _, lines = scenario("sensor_stale")
     assert "TERM 3 MUST_NOT arm move : PENDING" in lines and "MONITOR 3 : ENTRY 4 BLOCK" in lines
-    mentions(TITLES["undefined"], "invoice_stale_quote", "sensor_stale", "`PENDING`")
+    # The rest of the condition can decide it: the price change is within the
+    # limit, so the absent approval does not matter (false AND undefined).
+    _, lines = scenario("mandate_price_within_limit_no_approval")
+    assert "MONITOR 1 : ENTRY 2 ALLOW" in lines
+    # The same in the trace of the tick entry of SKILL.md, with the approval
+    # given: the stale quote leaves the condition false.
+    t = tick_example()
+    for e in t["entries"]:
+        e["data"]["owner_approved"] = boolean(True)
+    p = tmp_path / "approved.json"
+    p.write_text(json.dumps(t), encoding="utf-8")
+    code, lines = check(INVOICE, p, last=True)
+    assert (code, lines[-1]) == (0, "LAST ENTRY 3 : MONITOR 2 ALLOW")
+    mentions(TITLES["undefined"], "invoice_stale_quote", "sensor_stale", "`PENDING`",
+             "mandate_price_within_limit_no_approval", "false `AND` undefined is false")
 
 
 def pitfall_data(tmp_path):
@@ -848,7 +882,17 @@ def pitfall_types(tmp_path):
         assert result(minimal(f'agent MUST_NOT pay(supplier) WHEN approved {op} "yes"')) == \
             "rejected: comparison of different types"
     assert result(minimal("agent MUST_NOT pay(supplier) WHEN approved == true")) == "accepted"
-    mentions(TITLES["types"], "`REJECTED: comparison of different types`", 'approved == "yes"')
+    # Integer and Decimal are one type: a Decimal factor against an Integer
+    # literal, and an Integer factor against a Decimal literal.
+    assert result(minimal("agent MUST_NOT pay(supplier) WHEN quote == 5")) == "accepted"
+    source = minimal("agent MUST_NOT pay(supplier) WHEN units != 2.5").replace(
+        "approved : Boolean METADATA,", "units : Integer METADATA,\n  approved : Boolean METADATA,")
+    assert result(source) == "accepted"
+    core = " ".join(read(REPO / "formal/core/CORE.md").split("### 10.6 The translator and the trusted base")[1]
+                    .split("\n### ")[0].split())
+    assert "Integer and Decimal factors and numeric literals, negative ones included, are one type, numbers" in core
+    mentions(TITLES["types"], "`REJECTED: comparison of different types`", 'approved == "yes"',
+             "Integer and Decimal count as one type, numbers")
 
 
 def pitfall_handler(tmp_path):
@@ -954,6 +998,19 @@ def test_statements_of_the_report_part(tmp_path):
         assert words in " ".join(skill().split())
 
 
+def test_the_examples_named_in_part_2():
+    """merchant_mandate: the prohibitions on prices and restocks are lifted by
+    their own approval factors, the one on campaigns by none."""
+    terms = read(REPO / MANDATE).split("TERMS {", 1)[1].split("}", 1)[0]
+    rule = {a: re.search(rf"agent MUST_NOT {a} WHEN ([^;\n]*)", terms).group(1)
+            for a in ("apply_price_change", "apply_restock", "apply_campaign")}
+    assert "NOT price_change_approved" in rule["apply_price_change"]
+    assert "NOT restock_approved" in rule["apply_restock"]
+    assert "approved" not in rule["apply_campaign"]
+    assert ("those on prices and restocks are lifted by their own approval factors, the one on campaigns by none"
+            in " ".join(skill().split()))
+
+
 def test_statements_of_the_proof_part():
     """Part 5 says no more than README.md and evaluator/README.md."""
     readme = " ".join(read(REPO / "README.md").split())
@@ -962,10 +1019,14 @@ def test_statements_of_the_proof_part():
     assert "The translator, the reading of the trace and the printing are tested, not proved." in readme
     assert "nothing here checks that they are true" in evaluator
     assert "hold the action back on any exit code other than 0" in evaluator
+    assert "call the command with `--last` before the action" in evaluator
+    assert "That interception is outside the command and is not checked." in evaluator
     part = " ".join(skill().split("\n## 5. ", 1)[1].split())
     for words in ("the command only reads the files, runs the translator and the evaluator, and prints",
                   "The translator, the reading of the trace and the printing are tested, not proved.",
-                  "holds the action back on any exit code other than 0", "not the interception"):
+                  "holds the action back on any exit code other than 0", "not the interception",
+                  "calls the command with `--last` itself before the action",
+                  "that interception is outside the command and is not checked"):
         assert words in part
 
 
