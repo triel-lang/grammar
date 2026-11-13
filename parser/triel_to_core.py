@@ -11,6 +11,7 @@ construct it rejects.
 Usage:
     python3 triel_to_core.py FILE.triel            # header lines and the core AST
     python3 triel_to_core.py --classify PATH ...   # ACCEPTED / REJECTED per file
+    python3 triel_to_core.py --actions FILE.triel  # the actions of the prohibitions, as JSON
 
 Exit codes: 0 accepted, 2 rejected, 1 parse or usage error. With --classify the
 exit code is 0 whenever every file parses.
@@ -104,9 +105,11 @@ Conventions of the translation (formal/core/CORE.md, section on the evaluator):
 """
 import argparse
 import calendar
+import json
 import re
 import sys
 from datetime import datetime
+from fractions import Fraction
 from pathlib import Path
 
 from lark import Lark, Token, Tree, UnexpectedInput
@@ -1233,6 +1236,123 @@ def header(tr: Translation):
     return [f"SPEC {tr.name}"] + tr.metadata
 
 
+# --- --actions: the actions that the monitors decide ----------------------------
+#
+# For every pair (subject, name of the action) that a prohibition of the core
+# names, in the order of first appearance: the numbers of the TERM lines of the
+# top-level prohibitions of that action, each with its action as the TERM line
+# prints it, and the numbers of the TERM lines of the composite terms that hold
+# a prohibition of that action. A TERM number is the index of the element in
+# (terms T*) plus 1, as in the report of the evaluator.
+
+# The names of the ASCII control characters, as Haskell's show writes them.
+_ASCII_NAMES = ["NUL", "SOH", "STX", "ETX", "EOT", "ENQ", "ACK", "a", "b", "t", "n", "v",
+                "f", "r", "SO", "SI", "DLE", "DC1", "DC2", "DC3", "DC4", "NAK", "SYN", "ETB",
+                "CAN", "EM", "SUB", "ESC", "FS", "GS", "RS", "US"]
+
+
+def show_string(s: str) -> str:
+    """A string as evaluator/Main.hs prints it, with Haskell's show: in quotes,
+    with \\" and \\\\, a control character by its name, and a character above
+    DEL by its decimal code, followed by \\& before a digit (and \\SO by \\& before H)."""
+    parts = []
+    for c in s:
+        o = ord(c)
+        if c == '"':
+            parts.append('\\"')
+        elif c == "\\":
+            parts.append("\\\\")
+        elif o == 127:
+            parts.append("\\DEL")
+        elif o > 127:
+            parts.append(f"\\{o}")
+        elif o < 32:
+            parts.append("\\" + _ASCII_NAMES[o])
+        else:
+            parts.append(c)
+    out = []
+    for i, p in enumerate(parts):
+        out.append(p)
+        nxt = parts[i + 1][:1] if i + 1 < len(parts) else ""
+        if (re.fullmatch(r"\\[0-9]+", p) and nxt.isdigit()) or (p == "\\SO" and nxt == "H"):
+            out.append("\\&")
+    return '"' + "".join(out) + '"'
+
+
+def show_number(m: int, k: int = 0) -> str:
+    """The number m / 10^k as evaluator/Main.hs prints it: in lowest terms, with
+    the fewest decimal places."""
+    q = Fraction(m, 10 ** k)
+    n, d = q.numerator, q.denominator
+    for places in range(4 * len(str(d)) + 1):
+        if 10 ** places % d == 0:
+            digits = str(abs(n) * (10 ** places // d))
+            padded = "0" * (places + 1 - len(digits)) + digits
+            whole, frac = padded[:len(padded) - places], padded[len(padded) - places:]
+            return ("-" if n < 0 else "") + whole + ("." + frac if places else "")
+    return f"{n}/{d}"
+
+
+def show_action(a) -> str:
+    """An action of the core as the TERM lines of the report print it."""
+    if isinstance(a, str):
+        return a
+
+    def arg(x):
+        if x[0] == "path":
+            return ".".join(x[1:])
+        if x[0] == "bool":
+            return str(x[1])
+        if x[0] == "int":
+            return show_number(x[1])
+        if x[0] == "dec":
+            return show_number(x[1], x[2])
+        if x[0] == "str":
+            return show_string(x[1])
+        return str(x[1])  # (time T): the seconds since the epoch
+
+    return a[1] + ("(" + ", ".join(arg(x) for x in a[2:]) + ")" if a[2:] else "")
+
+
+def monitored_actions(core):
+    """The objects that --actions prints for an accepted specification."""
+    terms = core[2][1:]
+    out = {}
+
+    def pair(s, a):
+        name = a if isinstance(a, str) else a[1]
+        return out.setdefault((s, name), {"subject": s, "action": name, "monitors": [],
+                                          "monitor_actions": {}, "composite_prohibitions": []})
+
+    def inside(t, seen):
+        """The prohibitions inside a composite term, through REF."""
+        if t[0] == "must_not":
+            yield t
+        elif t[0] in ("then", "or", "and"):
+            yield from inside(t[1], seen)
+            yield from inside(t[2], seen)
+        elif t[0] == "unless":
+            yield from inside(t[1], seen)
+            yield from inside(t[3], seen)
+        elif t[0] == "if":
+            yield from inside(t[2], seen)
+            yield from inside(t[3], seen)
+        elif t[0] == "ref" and t[1] not in seen:
+            yield from inside(terms[t[1]], seen | {t[1]})
+
+    for i, t in enumerate(terms, 1):
+        if t[0] == "must_not":
+            p = pair(t[1], t[2])
+            p["monitors"].append(i)
+            p["monitor_actions"][str(i)] = show_action(t[2])
+        elif t[0] not in ("must", "may", "must_else", "on_breach"):
+            for x in inside(t, {i - 1}):
+                p = pair(x[1], x[2])
+                if i not in p["composite_prohibitions"]:
+                    p["composite_prohibitions"].append(i)
+    return list(out.values())
+
+
 def classify(paths):
     files = []
     for p in paths:
@@ -1258,14 +1378,46 @@ def classify(paths):
     return out, ok
 
 
+def actions_command(args) -> int:
+    """--actions FILE: exit code 0 and the JSON array; 2 and the line REJECTED:
+    as without flags, if the translator rejects the specification; 1 for a file
+    that cannot be read or does not parse, with the message on standard error."""
+    if args.classify or len(args.paths) != 1:
+        print("--actions takes one file and no other option", file=sys.stderr)
+        return 1
+    path = Path(args.paths[0])
+    try:
+        tr = translate(path.read_text(encoding="utf-8"))
+    except UnexpectedInput as e:
+        print(f"{path}: parse error at line {e.line}, column {e.column}", file=sys.stderr)
+        return 1
+    except RecursionError:
+        print(f"{path}: nested too deeply", file=sys.stderr)
+        return 1
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"{path}: cannot read the file: {getattr(e, 'strerror', None) or e}", file=sys.stderr)
+        return 1
+    if tr.rejected:
+        print("\n".join(header(tr) + ["REJECTED: " + "; ".join(sorted(tr.rejected))]))
+        return 2
+    objs = monitored_actions(tr.core)
+    print("[\n" + ",\n".join(json.dumps(o, ensure_ascii=False) for o in objs) + "\n]" if objs else "[]")
+    return 0
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--classify", action="store_true",
                     help="classify every given file (directories are searched for *.triel)")
+    ap.add_argument("--actions", action="store_true",
+                    help="print as JSON, for every action of a prohibition, the monitors that "
+                         "decide it and the composite terms that hold a prohibition of it")
     ap.add_argument("paths", nargs="+")
     args = ap.parse_args()
+    if args.actions:
+        return actions_command(args)
     if args.classify:
         out, ok = classify(args.paths)
         print("\n".join(out))
