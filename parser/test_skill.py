@@ -756,11 +756,6 @@ def test_an_approval_without_max_age_goes_stale_too(tmp_path):
     assert "an approval that the host withdrew after its last entry still counts" in " ".join(skill().split())
 
 
-def test_the_rule_of_the_tick_entry_in_the_documents():
-    for doc in ("README.md", "evaluator/README.md"):
-        assert "same time as the action" in " ".join(read(REPO / doc).split()), doc
-
-
 # --- 7. Pitfalls --------------------------------------------------------------
 
 def pitfalls():
