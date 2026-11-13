@@ -2,7 +2,7 @@
 
 `gate.py` holds a call of an MCP tool in Claude Code unless `triel check --last` allows the action that the call maps to. It runs as hooks that the operator of the host deploys in managed settings; the agent does not run it, and the configuration of the host keeps the agent from changing it (section "What the agent must not be able to change"). The gate decides only on MCP tools; every other path to an action of the specification is closed by the configuration of the host. It needs Claude Code 2.1.295 or later, for `onFailure`; the input of the hook has `mcp_server` from 2.1.274 ([hooks](https://code.claude.com/docs/en/hooks#pretooluse-input)).
 
-The library `parser/triel_host.py` and this adapter are not covered by the proof of `formal/core`; they are checked by tests (`parser/test_host.py`, `test_gate.py`) and by the runs in Claude Code below.
+The contract that any host follows is in [`evaluator/README.md`](../../evaluator/README.md#calling-from-a-host), section "Calling from a host"; this folder follows it for Claude Code. The library `parser/triel_host.py` and this adapter are not covered by the proof of `formal/core`; they are checked by tests (`parser/test_host.py`, `test_gate.py`) and by the runs in Claude Code below.
 
 ## Files
 
