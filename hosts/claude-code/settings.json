@@ -1,5 +1,5 @@
 {
-  "requiredMinimumVersion": "2.1.295",
+  "requiredMinimumVersion": "2.1.323",
   "hooks": {
     "PreToolUse": [
       {
@@ -85,9 +85,11 @@
   "allowManagedHooksOnly": true,
   "allowManagedPermissionRulesOnly": true,
   "env": {
-    "CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS": "0"
+    "CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS": "0",
+    "CLAUDE_CODE_EXPERIMENTAL_CODE_MODE": "0"
   },
   "permissions": {
+    "disableBypassPermissionsMode": "disable",
     "allow": [
       "mcp__payments__pay",
       "mcp__payments__convert",
@@ -109,8 +111,22 @@
     "enabled": true,
     "failIfUnavailable": true,
     "allowUnsandboxedCommands": false,
+    "enableWeakerNestedSandbox": false,
+    "enableWeakerNetworkIsolation": false,
+    "allowAppleEvents": false,
+    "allowNestedUserNamespaces": false,
+    "filesystem": {
+      "denyWrite": [
+        "/etc/triel",
+        "/opt/triel",
+        "/var/lib/triel",
+        "/etc/claude-code"
+      ]
+    },
     "network": {
-      "allowManagedDomainsOnly": true
+      "allowManagedDomainsOnly": true,
+      "allowAllUnixSockets": false,
+      "allowLocalBinding": false
     }
   }
 }
