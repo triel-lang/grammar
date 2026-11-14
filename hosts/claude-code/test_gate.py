@@ -21,6 +21,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -1193,10 +1194,12 @@ def test_pre_waits_for_the_lock_at_most_the_check_timeout_and_post_longer(m):
         p.stdin.close()
         return p
 
+    began = time.monotonic()
     pre = start("pre", "PreToolUse", "t2", "2026-11-13T09:12:00Z")
     post = start("post", "PostToolUse", "t1", "2026-11-13T09:12:00Z")
     assert (pre.wait(), pre.stderr.read().splitlines()[0]) == (
         2, held("another decision of the gate is still running"))
+    assert time.monotonic() - began < 3 * m.config["check_timeout_seconds"]  # less than post waits
     holder.stdin.write("release\n")
     holder.stdin.close()
     holder.wait()
