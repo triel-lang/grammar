@@ -20,18 +20,25 @@ without it the clock of the system is read: by pre and activate once they hold
 the lock, as the time they give the host module, and again once the module has
 answered, as the time of the decision or of the activation, so that a reading
 its source stamped while the module answered is not from the future; by post,
-failure and denied when they start, as the time the event came. Nothing else is
-read from the environment.
+failure and denied when they start, as the time the event came. The gate reads
+nothing else from the environment; the interpreter and the dynamic loader read
+theirs (README.md, "The command of the hook").
 
 Exit code: 0 lets the call go on to the permission flow of Claude Code, with
-nothing on standard output, or a command succeeded; 2, with the reason on
-standard error, holds the call or refuses the command. Any failure of the gate
+nothing on standard output, or a command succeeded. 2 gives the reason on
+standard error: before a call (pre) the call is held, and the first line is
+"TRIEL gate: held: REASON"; after a call (post, failure, denied) its fact was
+not recorded, and the first line is "TRIEL gate: not recorded: REASON"; a
+command of the operator is refused, and the first line is "TRIEL gate: held:
+REASON". Any failure of the gate
 itself, an import included, gives 2: every import but sys is made inside the
 handler of main, an exception whose text cannot be printed gives 2 too, and so
 does a standard error that cannot be written, or an exception whose class has
 no readable name. A hook sends its standard output to /dev/null for its whole
-run, so nothing that the host module prints there reaches Claude Code; the
-commands of the operator discard what the module prints while it runs.
+run, so nothing that the host module prints there reaches Claude Code. For the
+commands of the operator, what the module prints through sys.stdout or writes to
+the file descriptor 1 while it runs is discarded; what it leaves in a buffer of
+its own can still come out when the command ends.
 """
 import sys
 
@@ -65,11 +72,11 @@ class Held(Exception):
 
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    before = bool(argv) and argv[0] == "pre"
+    command = argv[0] if argv else None
     try:
         return run(argv)
     except Held as e:
-        say(e.reasons, before)
+        say(e.reasons, command)
         return HOLD
     except BaseException as e:  # noqa: B902 - any failure of the gate holds the call
         try:
@@ -79,16 +86,19 @@ def main(argv=None) -> int:
                 reason = f"the gate failed: {type(e).__name__}"
             except BaseException:  # noqa: B902 - nor the name of its class
                 reason = "the gate failed"
-        say([reason], before)
+        say([reason], command)
         return HOLD
 
 
-def say(reasons, before=False):
-    """The reasons on standard error; before a call runs (pre), also that it is
-    held and is not to be retried."""
+def say(reasons, command=None):
+    """The reasons on standard error. After a call (post, failure, denied) the
+    fact of the call was not recorded; before it (pre) and for a command of the
+    operator, the call or the command is held, and before a call also that it is
+    not to be retried."""
     try:
-        lines = [f"TRIEL gate: held: {reasons[0]}"] + [f"  {r}" for r in reasons[1:]]
-        if before:
+        head = "not recorded" if command in ("post", "failure", "denied") else "held"
+        lines = [f"TRIEL gate: {head}: {reasons[0]}"] + [f"  {r}" for r in reasons[1:]]
+        if command == "pre":
             lines.append("  The call is held. Do not retry it; the operator of the host decides.")
         sys.stderr.write("\n".join(lines) + "\n")
     except BaseException:  # noqa: B902
@@ -115,8 +125,9 @@ def run(argv) -> int:
         # sys.__stdout__ or the stdio of C, goes to /dev/null for the whole run of the hook.
         import os
         null = os.open(os.devnull, os.O_WRONLY)
-        os.dup2(null, 1)
-        os.close(null)
+        if null != 1:  # 1 when the hook started with its standard output closed
+            os.dup2(null, 1)
+            os.close(null)
     cfg = load_config(args.config)
     sys.path.insert(0, cfg["repo"] + "/parser")
     import triel_host  # the library of the trace, from the clone of the configuration
@@ -308,16 +319,18 @@ class locked:
 
 
 class quiet:
-    """What the host module prints on standard output, through sys.stdout or
-    the file descriptor 1, while it runs is discarded. A hook has sent its
-    standard output to /dev/null already (run); for the commands of the
-    operator, the output of the command stays."""
+    """What the host module prints through sys.stdout or writes to the file
+    descriptor 1 while it runs is discarded; what it leaves in a buffer of its
+    own, such as that of sys.__stdout__ or of the stdio of C, can still come out
+    when the process ends. A hook has sent its standard output to /dev/null for
+    its whole run already (run)."""
 
     def __enter__(self):
         import contextlib
         import io
         import os
-        sys.stdout.flush()
+        if sys.stdout is not None:
+            sys.stdout.flush()
         self.fd = os.dup(1)
         null = os.open(os.devnull, os.O_WRONLY)
         os.dup2(null, 1)
@@ -360,6 +373,19 @@ def save_state(cfg, st):
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, d / "state.json")
+    lines = LATER[:]
+    LATER.clear()
+    for at, fields in lines:  # the journal of this update, once the state is written
+        log(cfg, at, **fields)
+
+
+# The lines of the journal that describe an update of the state, written by
+# save_state once the state is: a line without its change never stands alone.
+LATER = []
+
+
+def later(h, **fields):
+    LATER.append((h, fields))
 
 
 def log(cfg, h, **fields):
@@ -394,7 +420,7 @@ def expire(cfg, st, h):
             del st["pending"][tid]
             why = expired(cfg)
             st["unknown"][tid] = dict(p, why=why)
-            log(cfg, h, event="unknown", tool_use_id=tid, tool_name=p["tool_name"], why=why)
+            later(h, event="unknown", tool_use_id=tid, tool_name=p["tool_name"], why=why)
 
 
 def expired(cfg):
@@ -529,6 +555,9 @@ def pre(cfg, hook, h, now) -> int:
             others = [p for p in st["pending"] if p != tid]
             if others:
                 raise Held([f"waits for the outcome of the previous action, the call {others[0]}"])
+            if tid in st["not_executed"] or any(x["tool_use_id"] == tid for x in st["history"]):
+                raise Held([f"the call {tid} already has an outcome; a new call has a new "
+                            "tool_use_id"])
             st["pending"].pop(tid, None)  # a repeated PreToolUse replaces the record
             factors, actions = spec_info(cfg, st)
             pair = next((a for a in actions if a["subject"] == m["subject"]
@@ -681,8 +710,8 @@ def after(cfg, hook, h, event) -> int:
                 else:
                     why = "the input of PostToolUse differs from the input of PreToolUse"
                     st["unknown"][tid] = dict(rec, why=why, post_input=hook.get("tool_input"))
-                    log(cfg, h, event="unknown", tool_use_id=tid, tool_name=rec["tool_name"],
-                        why=why, pre_input=rec["tool_input"], post_input=hook.get("tool_input"))
+                    later(h, event="unknown", tool_use_id=tid, tool_name=rec["tool_name"],
+                          why=why, pre_input=rec["tool_input"], post_input=hook.get("tool_input"))
             elif where in ("unknown", "not_executed"):
                 del st[where][tid]
                 execute(cfg, st, tid, rec, executed_at, hook.get("tool_input"), h)
@@ -704,20 +733,20 @@ def after(cfg, hook, h, event) -> int:
             if event == "denied":
                 why = "PermissionDenied: auto mode denied the call"
                 st["not_executed"][tid] = dict(rec, why=why)
-                log(cfg, h, event="not executed", tool_use_id=tid, tool_name=rec["tool_name"], why=why)
+                later(h, event="not executed", tool_use_id=tid, tool_name=rec["tool_name"], why=why)
             elif hook.get("is_interrupt") is True:
                 why = "PostToolUseFailure with is_interrupt"
                 st["unknown"][tid] = dict(rec, why=why)
-                log(cfg, h, event="unknown", tool_use_id=tid, tool_name=rec["tool_name"], why=why)
+                later(h, event="unknown", tool_use_id=tid, tool_name=rec["tool_name"], why=why)
             elif m["atomic"]:
                 why = "PostToolUseFailure of a tool that the configuration declares atomic"
                 st["not_executed"][tid] = dict(rec, why=why)
-                log(cfg, h, event="not executed", tool_use_id=tid, tool_name=rec["tool_name"],
-                    why=why, error=hook.get("error"))
+                later(h, event="not executed", tool_use_id=tid, tool_name=rec["tool_name"],
+                      why=why, error=hook.get("error"))
             else:
                 why = "PostToolUseFailure of a tool that the configuration does not declare atomic"
                 st["unknown"][tid] = dict(rec, why=why)
-                log(cfg, h, event="unknown", tool_use_id=tid, tool_name=rec["tool_name"], why=why)
+                later(h, event="unknown", tool_use_id=tid, tool_name=rec["tool_name"], why=why)
         else:
             log(cfg, h, event=f"{event} for a call that is not pending", tool_use_id=tid,
                 tool_name=hook["tool_name"], recorded_as=where)
@@ -739,8 +768,8 @@ def execute(cfg, st, tid, rec, executed_at, tool_input, h):
     t = triel_host.decision_time(decided)
     e = triel_host.execution_time(decided, executed_at)
     flag = e - t > cfg["execution_delay_flag_seconds"]
-    log(cfg, h, event="executed", tool_use_id=tid, tool_name=rec["tool_name"], T=iso(t), E=iso(e),
-        delay_flagged=flag)
+    later(h, event="executed", tool_use_id=tid, tool_name=rec["tool_name"], T=iso(t), E=iso(e),
+          delay_flagged=flag)
     fact = {"tool_use_id": tid, "tool_name": rec["tool_name"], "subject": rec["subject"],
             "action": rec["action"], "tool_input": tool_input, "time": moment(Decimal(e))}
     try:
@@ -755,7 +784,7 @@ def conflict(cfg, st, tid, h, why):
     """A conflict on the call tid; a second reason does not hide the first."""
     old = st["conflicts"].get(tid)
     st["conflicts"][tid] = {"why": why if old is None else f"{old['why']}; {why}"}
-    log(cfg, h, event="conflict", tool_use_id=tid, why=why)
+    later(h, event="conflict", tool_use_id=tid, why=why)
 
 
 # --- Commands of the operator ----------------------------------------------------
@@ -775,7 +804,7 @@ def activate(cfg, now) -> int:
         if reasons:
             raise Held(["activation refused"] + reasons)
         st["activation"] = rec
-        log(cfg, h, event="activated", time=iso(triel_host.floor_s(h)))
+        later(h, event="activated", time=iso(triel_host.floor_s(h)))
         save_state(cfg, st)
     return 0
 
@@ -804,8 +833,8 @@ def resolve(cfg, args, h) -> int:
 
         if tid in st["conflicts"]:
             if not args.executed:
-                raise Held([f"the call {tid} is in the history: Claude Code reported its execution; "
-                            "resolve it with --executed --at TIME"])
+                raise Held([f"the call {tid} is in the history as executed; end the conflict "
+                            "with --executed --at TIME"])
             x = next(x for x in st["history"] if x["tool_use_id"] == tid)
             x["executed"] = triel_host.exact(at_time(x["decided"]))
             # The host module takes the fact again: the conflict may be that it did not take it.
@@ -821,7 +850,7 @@ def resolve(cfg, args, h) -> int:
                             f"{type(err).__name__}: {err}",
                             f"the conflict on the call {tid} stays"]) from None
             del st["conflicts"][tid]
-            log(cfg, h, event="resolved conflict", tool_use_id=tid, executed=x["executed"])
+            later(h, event="resolved conflict", tool_use_id=tid, executed=x["executed"])
             save_state(cfg, st)
             return 0
         rec, where = find(st, tid)
@@ -839,7 +868,7 @@ def resolve(cfg, args, h) -> int:
         else:
             del st[where][tid]
             st["not_executed"][tid] = dict(rec, why="resolve --not-executed")
-            log(cfg, h, event="not executed", tool_use_id=tid, why="resolve --not-executed")
+            later(h, event="not executed", tool_use_id=tid, why="resolve --not-executed")
         save_state(cfg, st)
     return 0
 
