@@ -28,17 +28,18 @@ Exit code: 0 lets the call go on to the permission flow of Claude Code, with
 nothing on standard output, or a command succeeded. 2 gives the reason on
 standard error: before a call (pre) the call is held, and the first line is
 "TRIEL gate: held: REASON"; after a call (post, failure, denied) its fact was
-not recorded, and the first line is "TRIEL gate: not recorded: REASON"; a
-command of the operator is refused, and the first line is "TRIEL gate: held:
-REASON". Any failure of the gate
-itself, an import included, gives 2: every import but sys is made inside the
-handler of main, an exception whose text cannot be printed gives 2 too, and so
-does a standard error that cannot be written, or an exception whose class has
-no readable name. A hook sends its standard output to /dev/null for its whole
-run, so nothing that the host module prints there reaches Claude Code. For the
-commands of the operator, what the module prints through sys.stdout or writes to
-the file descriptor 1 while it runs is discarded; what it leaves in a buffer of
-its own can still come out when the command ends.
+not recorded, or it was recorded and its line of the journal was not written,
+and the first line is "TRIEL gate: not recorded: REASON"; a command of the
+operator is refused, and the first line is "TRIEL gate: held: REASON". Any
+failure of the gate itself, an import included, gives 2: every import but sys
+is made inside the handler of main, an exception whose text cannot be printed
+gives 2 too, and so does a standard error that cannot be written, or an
+exception whose class has no readable name. A hook sends its standard output to
+/dev/null for its whole run, so nothing that the host module prints there
+reaches Claude Code. For the commands of the operator, what the module prints
+through sys.stdout or writes to the file descriptor 1 while it runs is
+discarded; what it leaves in a buffer of its own can still come out when the
+command ends.
 """
 import sys
 
