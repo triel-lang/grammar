@@ -28,8 +28,10 @@ nothing on standard output, or a command succeeded; 2, with the reason on
 standard error, holds the call or refuses the command. Any failure of the gate
 itself, an import included, gives 2: every import but sys is made inside the
 handler of main, an exception whose text cannot be printed gives 2 too, and so
-does a standard error that cannot be written. What the host module prints on
-standard output is discarded.
+does a standard error that cannot be written, or an exception whose class has
+no readable name. A hook sends its standard output to /dev/null for its whole
+run, so nothing that the host module prints there reaches Claude Code; the
+commands of the operator discard what the module prints while it runs.
 """
 import sys
 
@@ -73,7 +75,10 @@ def main(argv=None) -> int:
         try:
             reason = f"the gate failed: {type(e).__name__}: {e}"
         except BaseException:  # noqa: B902 - an exception whose text cannot be printed
-            reason = f"the gate failed: {type(e).__name__}"
+            try:
+                reason = f"the gate failed: {type(e).__name__}"
+            except BaseException:  # noqa: B902 - nor the name of its class
+                reason = "the gate failed"
         say([reason], before)
         return HOLD
 
@@ -104,6 +109,14 @@ def run(argv) -> int:
     ap.add_argument("--not-executed", action="store_true")
     ap.add_argument("--at")
     args = ap.parse_args(argv)
+    if args.command in ("pre", "post", "failure", "denied"):
+        # A hook prints nothing on standard output, and Claude Code reads what a hook prints
+        # there on exit 0 as its JSON output: whatever the host module writes, through
+        # sys.__stdout__ or the stdio of C, goes to /dev/null for the whole run of the hook.
+        import os
+        null = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(null, 1)
+        os.close(null)
     cfg = load_config(args.config)
     sys.path.insert(0, cfg["repo"] + "/parser")
     import triel_host  # the library of the trace, from the clone of the configuration
@@ -296,7 +309,9 @@ class locked:
 
 class quiet:
     """What the host module prints on standard output, through sys.stdout or
-    the file descriptor 1, is discarded: on exit 0 a hook prints nothing."""
+    the file descriptor 1, while it runs is discarded. A hook has sent its
+    standard output to /dev/null already (run); for the commands of the
+    operator, the output of the command stays."""
 
     def __enter__(self):
         import contextlib
@@ -677,7 +692,7 @@ def after(cfg, hook, h, event) -> int:
                     conflict(cfg, st, tid, h, "the late PostToolUse has another input than "
                                               "PreToolUse")
             elif any(x["tool_use_id"] == tid for x in st["history"]):
-                conflict(cfg, st, tid, h, "a second PostToolUse came for the executed call")
+                conflict(cfg, st, tid, h, "a PostToolUse came for a call already in the history")
             else:
                 rec = {"tool_name": hook["tool_name"], "tool_input": hook.get("tool_input"),
                        "subject": m["subject"], "action": m["action"],
@@ -816,6 +831,11 @@ def resolve(cfg, args, h) -> int:
             at = at_time(rec["decided"])
             del st[where][tid]
             execute(cfg, st, tid, rec, at, rec.get("post_input", rec["tool_input"]), h)
+            if tid in st["conflicts"]:  # the host module did not take the fact
+                save_state(cfg, st)
+                raise Held([st["conflicts"][tid]["why"],
+                            f"the conflict on the call {tid} is recorded; gate.py resolve {tid} "
+                            "--executed --at TIME gives the fact to the module again"])
         else:
             del st[where][tid]
             st["not_executed"][tid] = dict(rec, why="resolve --not-executed")
