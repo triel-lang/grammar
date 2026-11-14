@@ -123,7 +123,7 @@ The library `parser/triel_host.py` and the adapter below are not covered by the 
 - The adapter checks only MCP tools. Every other path to an action of the specification, the built-in tools such as Bash and WebFetch, another MCP server that reaches the same backend, is closed by the configuration of the host: managed settings and `managed-mcp.json`.
 - Of the exit codes of a command hook only 2 blocks a tool call; any other non-zero code, a hook that cannot start and a timeout are non-blocking errors: the call goes on ([hooks](https://code.claude.com/docs/en/hooks#exit-code-output)). `"onFailure": "block"` on the hook blocks the call in those cases too ([hooks](https://code.claude.com/docs/en/hooks#block-the-action-when-a-hook-fails)). In runs in Claude Code 2.1.323, a hook in shell form whose command was not found (exit code 127 of the shell), a hook in exec form whose program was not found, a hook that exited 1 and a hook that timed out let the call reach the MCP server without `onFailure`, and held it with `"onFailure": "block"`; the adapter exits 2 on every code of the command other than 0 and on every failure of its own, and its settings set `"onFailure": "block"`.
 - When the check allows the call, the hook exits 0 and prints nothing: an `ALLOW` of the monitors is not the consent of the user, and the call goes on to the permission rules of Claude Code.
-- The adapter needs Claude Code 2.1.295 or later, the first version with `onFailure`.
+- The adapter needs Claude Code 2.1.295 or later, the first version with `onFailure`; its example settings require 2.1.323, for fixes of managed settings and of the sandbox ([`hosts/claude-code/README.md`](../hosts/claude-code/README.md)).
 
 ### The trace in JSON
 

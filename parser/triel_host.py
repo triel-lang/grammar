@@ -9,8 +9,9 @@ The trace is the JSON trace of evaluator/README.md ("The trace in JSON"):
   entry 0     the activation: the time and the data the host recorded when it
               gave the mandate;
   then        the actions the host recognised as executed, each with its tick
-              entry, and an arrive entry for every accepted reading of a
-              factor under MAX_AGE ... ON_STALE BLOCK, all in time order;
+              entry, and an arrive entry for every accepted reading, not
+              earlier than the activation, of a factor under MAX_AGE ...
+              ON_STALE BLOCK, all in time order;
   last        a tick entry and the action, both at the time T of the decision
               and with the same data.
 
