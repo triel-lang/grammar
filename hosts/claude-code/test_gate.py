@@ -419,6 +419,34 @@ def test_a_pending_call_holds_the_next_and_a_repeated_pre_replaces_it(m):
         2, held("waits for the outcome of the previous action, the call t1"))
 
 
+def test_a_repeated_pre_that_is_held_leaves_no_pending_record(m):
+    """A PreToolUse that comes again for a pending call is decided anew on its
+    own input; held, it leaves the call without a pending record."""
+    assert m.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"to": "acme"}) == (0, "")
+    assert m.pre(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "mallory"}) == (
+        2, held("triel check exit 3: BLOCK: monitor TERM 1 blocks the action"))
+    assert m.state()["pending"] == {}
+    assert m.pre(PAY, "t2", "2026-11-13T09:10:02Z", {"to": "acme"}) == (0, "")
+
+
+OUTCOME = "the call t1 already has an outcome; a new call has a new tool_use_id"
+
+
+def test_a_pre_for_a_call_in_the_history_is_held(m):
+    assert m.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"to": "acme"}) == (0, "")
+    m.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    assert m.pre(PAY, "t1", "2026-11-13T09:11:00Z", {"to": "acme"}) == (2, held(OUTCOME))
+    assert [x["tool_use_id"] for x in m.state()["history"]] == ["t1"]
+
+
+def test_a_pre_for_a_call_recorded_as_not_executed_is_held(m):
+    assert m.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"to": "acme"}) == (0, "")
+    m.failure(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    assert list(m.state()["not_executed"]) == ["t1"]
+    assert m.pre(PAY, "t1", "2026-11-13T09:11:00Z", {"to": "acme"}) == (2, held(OUTCOME))
+    assert m.state()["pending"] == {} and m.state()["history"] == []
+
+
 def test_two_decisions_at_once_allow_exactly_one(m):
     procs = []
     for tid in ("p1", "p2"):
@@ -803,8 +831,10 @@ def test_the_example_settings():
         assert os.path.isabs(h["command"]) and h["args"][0] == "-I"
         assert h["args"][2:] == [command, "--config", h["args"][-1]]
         assert all(os.path.isabs(p) for p in (h["args"][1], h["args"][-1]))
-    assert s["env"] == {"CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS": "0"}
-    assert s["requiredMinimumVersion"] == "2.1.295"
+    assert s["env"] == {"CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS": "0",
+                        "CLAUDE_CODE_EXPERIMENTAL_CODE_MODE": "0"}
+    assert s["requiredMinimumVersion"] == "2.1.323"
+    assert s["permissions"]["disableBypassPermissionsMode"] == "disable"
     assert s["allowManagedHooksOnly"] is True and s["allowManagedPermissionRulesOnly"] is True
     tools = [a["tool_name"] for a in cfg["actions"]] + [a["tool_name"] for a in cfg["allowed_tools"]]
     assert set(tools) <= set(s["permissions"]["allow"])
@@ -815,6 +845,16 @@ def test_the_example_settings():
     sb = s["sandbox"]
     assert sb["enabled"] is True and sb["failIfUnavailable"] is True
     assert sb["allowUnsandboxedCommands"] is False and "excludedCommands" not in sb
+    # sandbox.filesystem set in managed settings: only they can turn filesystem isolation off
+    assert sb["filesystem"] == {"denyWrite": ["/etc/triel", "/opt/triel", "/var/lib/triel",
+                                              "/etc/claude-code"]}
+    for p in ("/etc/triel/", "/var/lib/triel/"):
+        assert any(cfg[k].startswith(p) for k in ("spec", "state_dir", "host_module"))
+    assert cfg["repo"].startswith("/opt/triel/")
+    for k in ("enableWeakerNestedSandbox", "enableWeakerNetworkIsolation", "allowAppleEvents",
+              "allowNestedUserNamespaces"):
+        assert sb[k] is False, k
+    assert sb["network"]["allowAllUnixSockets"] is False and sb["network"]["allowLocalBinding"] is False
 
 
 def test_the_example_configuration_and_specification():
@@ -1120,25 +1160,26 @@ def test_a_post_without_mcp_server_is_written_to_the_journal(m):
     assert list(m.state()["pending"]) == ["t1"]
 
 
-LOCK_HOLDER = """import fcntl, sys, time
+LOCK_HOLDER = """import fcntl, sys
 f = open(sys.argv[1], "a")
 fcntl.flock(f, fcntl.LOCK_EX)
 print("locked", flush=True)
-time.sleep(2)
+sys.stdin.readline()
 """
 
 
 def test_pre_waits_for_the_lock_at_most_the_check_timeout_and_post_longer(m):
-    """check_timeout_seconds 1 and another process holds the lock for 2 s: pre
-    gives up after 1 s; the late PostToolUse of a call recorded as not executed
-    waits up to 3 s and records the conflict."""
+    """check_timeout_seconds 1 and another process holds the lock until pre has
+    given up: pre waits at most 1 s; the late PostToolUse of a call recorded as
+    not executed waits up to 3 s, gets the lock once it is released and records
+    the conflict."""
     assert m.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"to": "acme"}) == (0, "")
     m.failure(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"}, is_interrupt=True)
     assert m.command("resolve", "t1", "--not-executed", now="2026-11-13T09:11:00Z") == (0, "")
     m.config["check_timeout_seconds"] = 1
     m.write_config()
     holder = subprocess.Popen([sys.executable, "-c", LOCK_HOLDER, str(m.state_dir / "lock")],
-                              stdout=subprocess.PIPE, text=True)
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
     assert holder.stdout.readline().strip() == "locked"
 
     def start(command, event, tid, now):
@@ -1156,8 +1197,10 @@ def test_pre_waits_for_the_lock_at_most_the_check_timeout_and_post_longer(m):
     post = start("post", "PostToolUse", "t1", "2026-11-13T09:12:00Z")
     assert (pre.wait(), pre.stderr.read().splitlines()[0]) == (
         2, held("another decision of the gate is still running"))
-    assert post.wait() == 0
+    holder.stdin.write("release\n")
+    holder.stdin.close()
     holder.wait()
+    assert post.wait() == 0
     assert m.state()["conflicts"]["t1"]["why"] == (
         "PostToolUse came for a call recorded as not executed")
 
@@ -1180,6 +1223,17 @@ def test_do_not_retry_is_said_only_to_a_call_before_it_runs(tmp_path):
         r = subprocess.run([sys.executable, "-I", GATE, command, "--config", bad], input="{}",
                            capture_output=True, text=True)
         assert r.returncode == 2 and ("Do not retry" in r.stderr) == said
+
+
+def test_a_hook_after_a_call_says_not_recorded(tmp_path):
+    """After the call (post, failure, denied) exit 2 means that the fact was not
+    recorded; before it (pre) and for a command of the operator, held."""
+    bad = str(tmp_path / "no.json")
+    for command, head in (("pre", "held"), ("post", "not recorded"), ("failure", "not recorded"),
+                          ("denied", "not recorded"), ("status", "held")):
+        r = subprocess.run([sys.executable, "-I", GATE, command, "--config", bad], input="{}",
+                           capture_output=True, text=True)
+        assert r.returncode == 2 and first(r).startswith(f"TRIEL gate: {head}: "), (command, r.stderr)
 
 
 def test_the_key_of_the_cache_has_the_version_of_lark_and_separators():
@@ -1214,6 +1268,52 @@ def test_what_the_host_module_prints_does_not_reach_the_hook_output(tmp_path):
     assert x.pre(PAY, "t1", "2026-11-13T09:10:00Z") == (0, "")
     r = x.post(PAY, "t1", "2026-11-13T09:10:01Z")
     assert r.stdout == ""
+
+
+def test_what_the_host_module_prints_does_not_reach_the_output_of_a_command(tmp_path):
+    """activate and resolve --executed discard what the module prints with print()
+    or writes to the file descriptor 1 while answers and executed run."""
+    x = Mandate(tmp_path, terms=COUNTER_SPEC[0], factors=COUNTER_SPEC[1], host="scripted",
+                answers={"paid": 0})
+    (tmp_path / "scripted_host.py").write_text(PRINTING, encoding="utf-8")
+    r = x.run(["activate"], now=ACT)
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+    assert x.pre(PAY, "t1", "2026-11-13T09:10:00Z") == (0, "")
+    r = x.run(["resolve", "t1", "--executed", "--at", "2026-11-13T09:10:01Z"],
+              now="2026-11-13T09:11:00Z")
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+    assert [f["tool_use_id"] for f in x.facts()] == ["t1"]
+
+
+def test_a_hook_started_with_its_standard_output_closed(m):
+    """The file descriptor 1 is closed when the hook starts: /dev/null takes it."""
+    for tid, tool, server in (("c1", PAY, MANAGED), ("c2", "mcp__docs__search", ("docs", "managed"))):
+        payload = {"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": {"to": "acme"},
+                   "tool_use_id": tid, "mcp_server": {"name": server[0], "source": server[1]}}
+        p = subprocess.Popen([sys.executable, "-I", GATE, "pre", "--config", str(m.config_path),
+                              "--now", "2026-11-13T09:10:00Z"], stdin=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True, preexec_fn=lambda: os.close(1))
+        _, err = p.communicate(json.dumps(payload))
+        assert (p.returncode, err) == (0, ""), (tool, err)
+    assert list(m.state()["pending"]) == ["c1"]
+
+
+def test_the_journal_follows_the_state(m):
+    """The state cannot be written after the host module refused the fact: the
+    journal has no executed and no conflict, and the call is still pending."""
+    assert m.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"to": "acme"}) == (0, "")
+    (m.tmp / "host_data.json.tmp").mkdir()
+    (m.state_dir / "state.json.tmp").mkdir()
+    r = m.run(["resolve", "t1", "--executed", "--at", "2026-11-13T09:10:01Z"],
+              now="2026-11-13T09:11:00Z")
+    (m.state_dir / "state.json.tmp").rmdir()
+    assert r.returncode == 2 and first(r).startswith(held("the gate failed: IsADirectoryError"))
+    st = m.state()
+    assert list(st["pending"]) == ["t1"] and st["conflicts"] == {} and st["history"] == []
+    events = [x["event"] for x in m.log()]
+    assert "executed" not in events and "conflict" not in events, events
+    assert m.pre(PAY, "t2", "2026-11-13T09:12:00Z", {"to": "acme"}) == (
+        2, held("waits for the outcome of the previous action, the call t1"))
 
 
 LEAKING = SCRIPTED + """
