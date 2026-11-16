@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Reproduce every check of the CI workflows isabelle.yml, evaluator.yml and
-# parse-examples.yml with one command, except the test of the documentation for
+# parse-examples.yml with one command, except the check of the corpus of the
+# translator (parser/test_corpus.py), the test of the documentation for
 # AI agents (parser/test_skill.py), the tests of the trace of a host
 # (parser/test_host.py) and of the adapter for Claude Code
 # (hosts/claude-code/test_gate.py), then build the session of the theorems

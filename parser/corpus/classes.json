@@ -1,0 +1,385 @@
+{
+ "classes": {
+  "fragment": "a construct outside the fragment of the core: the rejections by the name of a rule (the values of RULES) and others like them",
+  "names": "names and their scope: undeclared, declared twice, REF forward or to an undeclared name",
+  "types": "the types of operands and conditions: conditions, comparisons, DEFAULT, PRESENT, the amount of PENALTY",
+  "time": "deadlines and time: WITHIN, BY, the deadline of ELSE, durations, DATETIME, calendar units, a deadline in a composite term, staleness (MAX_AGE, ON_STALE)",
+  "structure": "the structure of the block: ON_BREACH, continuations, ELSE, REF to a handler and to a term with a deadline",
+  "flow": "the flow rule for hidden factors (TECHNICAL_REPORT.md §2.7)",
+  "metadata": "the parameters and the binding of ZK proofs (TECHNICAL_REPORT.md §2.8), ORACLE and PROVENANCE_REQUIRED, CURRENCY (§2.9)"
+ },
+ "reasons": {
+  "== on a condition": {
+   "class": "types",
+   "section": "formal/core/CORE.md §10.6, further rejections (== on a record or on a condition)"
+  },
+  "== on a record": {
+   "class": "types",
+   "section": "formal/core/CORE.md §10.6, further rejections (== on a record or on a condition)"
+  },
+  "ANCHOR_MODE": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core); formal/core/CORE.md §10.6",
+   "from": "computed c.value"
+  },
+  "AND (term)": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): AND between terms"
+  },
+  "BOUND_TO subject without DID": {
+   "class": "metadata",
+   "section": "TECHNICAL_REPORT.md §2.8; formal/core/CORE.md §10.6 rule 13"
+  },
+  "BY and WITHIN": {
+   "class": "time",
+   "section": "formal/core/CORE.md §10.6, further rejections (BY together with WITHIN; a deadline on a term that is not an obligation)"
+  },
+  "CAP (not a number)": {
+   "class": "types",
+   "section": "formal/core/CORE.md §10.6 rule 1"
+  },
+  "CAUSED_BY": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): CAUSED_BY with WEIGHT; formal/core/CORE.md §10.6 (metadata)"
+  },
+  "CONSTRAINT": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): CONSTRAINT, field DEFAULTs, the types Duration, List, Map, Progress and enumerations"
+  },
+  "CROSS_MODAL": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core); formal/core/CORE.md §10.6"
+  },
+  "CROSS_MODAL_CONSISTENT": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core); formal/core/CORE.md §10.6"
+  },
+  "CTL formula": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): LTL and CTL formulas, causal invariants"
+  },
+  "CURE_BY (not a duration)": {
+   "class": "structure",
+   "section": "TECHNICAL_REPORT.md §4 (CURE_BY with a deadline that is not a duration); TECHNICAL_REPORT.md §2.6 (continuations)"
+  },
+  "DATETIME not ISO-8601 UTC": {
+   "class": "time",
+   "section": "formal/core/CORE.md §10.5"
+  },
+  "DEFAULT fallback (not a value)": {
+   "class": "types",
+   "section": "formal/core/CORE.md §10.6 rule 8"
+  },
+  "DEFAULT fallback of another type": {
+   "class": "types",
+   "section": "formal/core/CORE.md §10.6 rule 8"
+  },
+  "DEFAULT of a record": {
+   "class": "types",
+   "section": "formal/core/CORE.md §10.6 rule 8"
+  },
+  "ELSE (non-obligation)": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6 rule 12; TECHNICAL_REPORT.md §2.6 (a fallback)"
+  },
+  "ELSE deadline not after the first deadline": {
+   "class": "time",
+   "section": "formal/core/CORE.md §10.6, further rejections; TECHNICAL_REPORT.md §2.6 (the fallback ends after the first deadline); decision 27"
+  },
+  "EXECUTE": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core); formal/core/CORE.md §10.6"
+  },
+  "FROM in ELSE": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6 rule 12; TECHNICAL_REPORT.md §2.6 (a fallback)"
+  },
+  "FROM in a composite term": {
+   "class": "time",
+   "section": "formal/core/CORE.md §10.6 rule 10"
+  },
+  "FROM of a non-DateTime factor": {
+   "class": "time",
+   "section": "formal/core/CORE.md §10.6, further rejections (a deadline or FROM from a factor that is not a DateTime)",
+   "from": "template f'{what} of a non-DateTime factor'"
+  },
+  "FROM with ELSE": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6 rule 12; TECHNICAL_REPORT.md §2.6 (a fallback)"
+  },
+  "IF expression": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): arithmetic, IF expressions and function calls in conditions"
+  },
+  "IMPORT": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core); formal/core/CORE.md §10.6",
+   "from": "computed c.value"
+  },
+  "LET": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core); formal/core/CORE.md §10.6"
+  },
+  "LTL formula": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): LTL and CTL formulas, causal invariants"
+  },
+  "MAX_AGE without ON_STALE": {
+   "class": "time",
+   "section": "TECHNICAL_REPORT.md §2.9 (staleness); formal/core/CORE.md §10.6, further rejections"
+  },
+  "MODALITIES": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core); formal/core/CORE.md §10.6"
+  },
+  "ON ... DO": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core); formal/core/CORE.md §10.6"
+  },
+  "ON_BREACH bound to WITHIN ... ELSE": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6 rule 12; TECHNICAL_REPORT.md §2.6 (a fallback)"
+  },
+  "ON_BREACH bound to no obligation or prohibition": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6, further rejections (the checks of wf_block, decisions 8 and 9); TECHNICAL_REPORT.md §2.6 (binding ON_BREACH)"
+  },
+  "ON_BREACH in a composite term": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6, further rejections (the checks of wf_block, decisions 8 and 9); TECHNICAL_REPORT.md §2.6 (binding ON_BREACH)"
+  },
+  "ON_STALE ESCALATE_TO": {
+   "class": "time",
+   "section": "TECHNICAL_REPORT.md §2.9 (staleness); formal/core/CORE.md §10.6, further rejections"
+  },
+  "ON_STALE without MAX_AGE": {
+   "class": "time",
+   "section": "TECHNICAL_REPORT.md §2.9 (staleness); formal/core/CORE.md §10.6, further rejections"
+  },
+  "ORACLE source without PROVENANCE_REQUIRED": {
+   "class": "metadata",
+   "section": "TECHNICAL_REPORT.md §2.9; formal/core/CORE.md §10.6, further rejections (decision 28)"
+  },
+  "PENALTY of a non-number": {
+   "class": "types",
+   "section": "formal/core/CORE.md §10.6 rule 1"
+  },
+  "PENALTY without CURRENCY": {
+   "class": "metadata",
+   "section": "TECHNICAL_REPORT.md §2.9; formal/core/CORE.md §10.6, further rejections (decision 28)"
+  },
+  "PRESENT of a record": {
+   "class": "types",
+   "section": "formal/core/CORE.md §10.6 rule 3"
+  },
+  "PUBLIC_WITNESS": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): PUBLIC_WITNESS and a ZK<T> type inside another type; formal/core/CORE.md §10.6 rule 13"
+  },
+  "QUORUM_THRESHOLD": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core); formal/core/CORE.md §10.6",
+   "from": "computed c.value"
+  },
+  "REF to a breach handler": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6 rules 7, 10 and 12",
+   "from": "referable (why)"
+  },
+  "REF to a name declared later": {
+   "class": "names",
+   "section": "formal/core/CORE.md §10.6 rule 7"
+  },
+  "REF to a term with FROM": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6 rules 7, 10 and 12",
+   "from": "referable (why)"
+  },
+  "REF to a term with a deadline": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6 rules 7, 10 and 12",
+   "from": "referable (why)"
+  },
+  "REF to an undeclared name": {
+   "class": "names",
+   "section": "formal/core/CORE.md §10.6 rule 7"
+  },
+  "REPLACES": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core); formal/core/CORE.md §10.6",
+   "from": "computed c.value"
+  },
+  "WITHIN (non-obligation)": {
+   "class": "time",
+   "section": "formal/core/CORE.md §10.6, further rejections (BY together with WITHIN; a deadline on a term that is not an obligation)"
+  },
+  "WITHIN ... ELSE in a composite term": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6 rule 12; TECHNICAL_REPORT.md §2.6 (a fallback)"
+  },
+  "ZK flow rule": {
+   "class": "flow",
+   "section": "TECHNICAL_REPORT.md §2.7; formal/core/CORE.md §10.6 rule 13"
+  },
+  "ZK type without BOUND_TO": {
+   "class": "metadata",
+   "section": "TECHNICAL_REPORT.md §2.8; formal/core/CORE.md §10.6 rule 13"
+  },
+  "ZK type without CURVE": {
+   "class": "metadata",
+   "section": "TECHNICAL_REPORT.md §2.8; formal/core/CORE.md §10.6 rule 13",
+   "from": "template f'ZK type without {k}'"
+  },
+  "ZK type without PROOF_SYSTEM": {
+   "class": "metadata",
+   "section": "TECHNICAL_REPORT.md §2.8; formal/core/CORE.md §10.6 rule 13",
+   "from": "template f'ZK type without {k}'"
+  },
+  "action argument (not a name or literal)": {
+   "class": "fragment",
+   "section": "formal/core/CORE.md §10.6 rule 9; TECHNICAL_REPORT.md §2.6 (an expression in an argument position has no meaning)"
+  },
+  "action argument (undeclared name)": {
+   "class": "names",
+   "section": "formal/core/CORE.md §10.6 rule 9"
+  },
+  "arithmetic": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): arithmetic, IF expressions and function calls in conditions"
+  },
+  "calendar unit": {
+   "class": "time",
+   "section": "formal/core/CORE.md §10.5"
+  },
+  "causal invariant": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): LTL and CTL formulas, causal invariants"
+  },
+  "comparison of different types": {
+   "class": "types",
+   "section": "formal/core/CORE.md §10.6 rule 5"
+  },
+  "deadline in a composite term": {
+   "class": "time",
+   "section": "formal/core/CORE.md §10.6, further rejections (a deadline inside a composite term)"
+  },
+  "deadline of a non-DateTime factor": {
+   "class": "time",
+   "section": "formal/core/CORE.md §10.6, further rejections (a deadline or FROM from a factor that is not a DateTime)",
+   "from": "template f'{what} of a non-DateTime factor'"
+  },
+  "division in PENALTY": {
+   "class": "fragment",
+   "section": "formal/core/CORE.md §10.6 rule 1; TECHNICAL_REPORT.md §2.6 (no division in the amount)"
+  },
+  "duplicate factor": {
+   "class": "names",
+   "section": "formal/core/CORE.md §10.6, further rejections; decision 29"
+  },
+  "duplicate field": {
+   "class": "names",
+   "section": "formal/core/CORE.md §10.6, further rejections (a record type with a field declared twice)"
+  },
+  "duplicate invariant name": {
+   "class": "names",
+   "section": "formal/core/CORE.md §10.6, further rejections (duplicate invariant name)"
+  },
+  "duplicate subject": {
+   "class": "names",
+   "section": "formal/core/CORE.md §10.6, further rejections; decision 29"
+  },
+  "duplicate term name": {
+   "class": "names",
+   "section": "formal/core/CORE.md §10.6 rule 7"
+  },
+  "duration value": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): durations used as values"
+  },
+  "enum type": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): CONSTRAINT, field DEFAULTs, the types Duration, List, Map, Progress and enumerations"
+  },
+  "field DEFAULT": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): CONSTRAINT, field DEFAULTs, the types Duration, List, Map, Progress and enumerations"
+  },
+  "function call": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): arithmetic, IF expressions and function calls in conditions"
+  },
+  "nested ZK type": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): PUBLIC_WITNESS and a ZK<T> type inside another type; formal/core/CORE.md §10.6 rule 13"
+  },
+  "non-Boolean condition": {
+   "class": "types",
+   "section": "formal/core/CORE.md §10.6, further rejections (a condition that is not Boolean); TECHNICAL_REPORT.md §4"
+  },
+  "ordering comparison of a non-number": {
+   "class": "types",
+   "section": "formal/core/CORE.md §10.6 rule 5"
+  },
+  "subject and factor with the same name": {
+   "class": "names",
+   "section": "formal/core/CORE.md §10.6, further rejections; decision 30"
+  },
+  "surrogate escape": {
+   "class": "types",
+   "section": "formal/core/CORE.md §10.6, further rejections (a surrogate is not a character)"
+  },
+  "two ON_BREACH bound to one norm": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6, further rejections (the checks of wf_block, decisions 8 and 9); TECHNICAL_REPORT.md §2.6 (binding ON_BREACH)"
+  },
+  "two continuation-determining actions": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6, further rejections (the checks of wf_block, decisions 8 and 9); TECHNICAL_REPORT.md §2.6 (binding ON_BREACH)"
+  },
+  "type Duration": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): CONSTRAINT, field DEFAULTs, the types Duration, List, Map, Progress and enumerations",
+   "from": "template f'type {p}'"
+  },
+  "type List": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): CONSTRAINT, field DEFAULTs, the types Duration, List, Map, Progress and enumerations",
+   "from": "template f'type {kind}'"
+  },
+  "type Map": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): CONSTRAINT, field DEFAULTs, the types Duration, List, Map, Progress and enumerations",
+   "from": "template f'type {kind}'"
+  },
+  "type Progress": {
+   "class": "fragment",
+   "section": "TECHNICAL_REPORT.md §4 (constructs outside the formal core): CONSTRAINT, field DEFAULTs, the types Duration, List, Map, Progress and enumerations",
+   "from": "template f'type {kind}'"
+  },
+  "undeclared factor": {
+   "class": "names",
+   "section": "TECHNICAL_REPORT.md §4 (every name is declared); formal/core/CORE.md §10.6"
+  },
+  "undeclared field": {
+   "class": "names",
+   "section": "TECHNICAL_REPORT.md §4 (every name is declared); formal/core/CORE.md §10.6"
+  },
+  "undeclared nonce": {
+   "class": "metadata",
+   "section": "TECHNICAL_REPORT.md §2.8; formal/core/CORE.md §10.6 rule 13"
+  },
+  "undeclared salt": {
+   "class": "metadata",
+   "section": "TECHNICAL_REPORT.md §2.8; formal/core/CORE.md §10.6 rule 13"
+  },
+  "undeclared subject": {
+   "class": "names",
+   "section": "formal/core/CORE.md §10.6, further rejections; decision 29"
+  },
+  "§2.6 defines continuations only for obligations": {
+   "class": "structure",
+   "section": "formal/core/CORE.md §10.6 rule 4; TECHNICAL_REPORT.md §2.6",
+   "from": "PROHIBITION_CONTINUATION"
+  }
+ }
+}

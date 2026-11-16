@@ -1,0 +1,29 @@
+[
+ {
+  "function": "bool_operand",
+  "index": 2,
+  "reason": "non-Boolean condition",
+  "kind": "unreachable",
+  "argument": "The call is made when the primary of a condition has no subtree. Every alternative of primary (literal, factor_ref, function_call, ( expr ), presence_expr, default_expr) has one, so inner is never empty.",
+  "input": "SPECIFICATION reach VERSION 1.0.0 \nSUBJECTS { a : PARTY, b2 : PARTY }\nTERMS { a MUST b }\nFACTORS { f : Boolean METADATA }\nINVARIANTS { i : ALWAYS((f)) }\n",
+  "where": "triel.lark:277-282 (primary): a condition in parentheses reaches bool_operand with inner = [expr], and is translated"
+ },
+ {
+  "function": "value",
+  "index": 3,
+  "reason": "non-Boolean condition",
+  "kind": "unreachable",
+  "argument": "The call is made when the primary of an operand of a comparison has no subtree. Every alternative of primary has one, so x is never None.",
+  "input": "SPECIFICATION reach VERSION 1.0.0 \nSUBJECTS { a : PARTY, b2 : PARTY }\nTERMS { a MUST b }\nFACTORS { f : Boolean METADATA }\nINVARIANTS { i : ALWAYS((f) == true) }\n",
+  "where": "triel.lark:277-282 (primary): the operand (f) reaches value with x = expr and is rejected there as \"== on a condition\""
+ },
+ {
+  "function": "fallback",
+  "index": 2,
+  "reason": "WITHIN (non-obligation)",
+  "kind": "unreachable",
+  "argument": "first is the base term before ELSE translated with the deadline of WITHIN. inner rejects every such base term that is not an obligation and returns None, and obligation returns (must ...) or None, so first[0] is \"must\" whenever first is not None.",
+  "input": "SPECIFICATION reach VERSION 1.0.0 \nSUBJECTS { a : PARTY, b2 : PARTY }\nTERMS { a MAY b WITHIN 2 DAYS ELSE a MUST c }\nFACTORS { f : Boolean METADATA }\nINVARIANTS { i : ALWAYS(f) }\n",
+  "where": "inner, call 6: the permission with a deadline is rejected as \"WITHIN (non-obligation)\" and inner returns None, so fallback returns before its check"
+ }
+]

@@ -18,6 +18,11 @@ A reference parser for TRIEL v2.5, built from the published grammar
 - `triel_to_core.py`: the translator to the formal core.
 - `triel_eval.py`: the scenario driver of the evaluator.
 - `test_triel_to_core.py`: the tests of the translator and of the driver.
+- `corpus/`: the corpus of the translator, specifications with the outcome of
+  their translation and the exact core term or the classes of the reasons, the
+  table of the classes of the reasons, and `measure.py`, which counts what the
+  corpus catches (`corpus/README.md`).
+- `test_corpus.py`: the check of the corpus against the translator.
 - `triel.py`: the command `triel check`, which runs the translator and the
   evaluator on a specification and a trace, a scenario or the same scenario in
   JSON, and prints the report as text or JSON (`evaluator/README.md`).
