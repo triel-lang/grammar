@@ -29,7 +29,7 @@ import rejects  # noqa: E402
 
 # False while the accepted cases written before the first run of the translator
 # have no term and no header; True once every accepted case has both.
-TERMS_RECORDED = False
+TERMS_RECORDED = True
 
 CASES_TEXT = (CORPUS / "cases.jsonl").read_bytes().decode("utf-8")
 CASES = [json.loads(line) for line in CASES_TEXT.splitlines()]
