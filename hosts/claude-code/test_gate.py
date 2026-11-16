@@ -1765,8 +1765,10 @@ class Direct:
 
 
 def test_the_example_host_module_amounts(tmp_path):
+    """An amount is a decimal string; a JSON number has no value, the float 0.01 and the
+    integer 2 among them. Wrong module: amount_from_a_json_number."""
     d = Direct(tmp_path)
-    for amount, total in (("0.01", Decimal("0.01")), (0.01, Decimal("0.01")), (2, Decimal(2)),
+    for amount, total in (("0.01", Decimal("0.01")), (0.01, None), (2, None),
                           ("0.010", Decimal("0.01")), ("0", None), ("-0.01", None),
                           (0, None), ("abc", None), ("1e-2", None), (True, None), (None, None),
                           ("NaN", None), (" 0.01", None), ([1], None)):
@@ -2060,7 +2062,8 @@ def test_the_example_a_fact_given_again_with_another_time(tmp_path):
 BAD_FILES = {  # a content that is not a file of its kind, for each file the module reads
     "ledger_file": ["{", "[]", "", '{"selected": {}, "spent": {}}'],
     "executions_file": ["{", "[]", "", '{"done": {}}'],
-    "data_file": ["{", "[]", ""]}
+    "data_file": ["{", "[]", "", "{}",
+                  '{"values": {"daily_limit": "0.01", "rate_limit": "1.20"}}']}
 
 
 @pytest.mark.parametrize("content", BAD_FILES["ledger_file"])
@@ -2090,12 +2093,14 @@ def test_the_example_host_module_executions_that_cannot_be_read(tmp_path, conten
 
 @pytest.mark.parametrize("content", BAD_FILES["data_file"])
 def test_the_example_host_module_data_that_cannot_be_read(tmp_path, content):
-    """Wrong module: data_bad_content_is_empty, which puts data without limits in the place
-    of a file it cannot read."""
+    """Wrong modules: data_bad_content_is_empty, which puts data without limits in the place
+    of a file it cannot read, and data_without_payees_lists_everyone, which takes a file
+    without the list of payees for a list with every payee on it."""
     d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1])])
     Path(d.options["data_file"]).write_text(content, encoding="utf-8")
     a = d.ask(INVOICE[1])
-    assert (a["daily_limit"], a["rate_limit"], a["payee_listed"]) == (None, None, None)
+    limits = ("0.01", "1.20") if '"values"' in content else (None, None)
+    assert (a["daily_limit"], a["rate_limit"], a["payee_listed"]) == limits + (None,)
     assert a["call_approved"] is True
 
 
@@ -2216,6 +2221,11 @@ def test_the_example_host_module_an_exact_age(tmp_path):
     d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1],
                                              granted="1794560699.999999999999999999999999999")])
     assert d.ask(INVOICE[1], now="2026-11-13T09:15:00Z")["approval_age"] == 601
+    # The same in ISO-8601, 1e-19 s before g: the stamp is read exactly too. Wrong module:
+    # age_stamp_read_outside_exact, which reads it with 28 digits and gets 600.
+    d = Direct(tmp_path / "iso", approvals=[approval(
+        "A1", INVOICE[1], granted="2026-11-13T09:04:59.9999999999999999999Z")])
+    assert d.ask(INVOICE[1], now="2026-11-13T09:15:00Z")["approval_age"] == 601
 
 
 def test_the_example_host_module_a_sum_or_an_age_too_long_to_be_exact(tmp_path):
@@ -2226,3 +2236,25 @@ def test_the_example_host_module_a_sum_or_an_age_too_long_to_be_exact(tmp_path):
     d.take("t0", INVOICE[2], "2026-11-13T09:09:00Z")
     a = d.ask(call, now="2026-11-13T09:15:00Z")
     assert (a["call_approved"], a["day_total"], a["approval_age"]) == (True, None, None)
+    # An ISO-8601 stamp whose fraction is longer than 50 digits needs more than 60 digits
+    # itself; a stamp 1e-19 s later than the clock is later than it. Neither has an age.
+    # Wrong module: age_stamp_read_outside_exact, which reads them with 28 digits, as 600
+    # and as 0.
+    for i, granted in enumerate(("2026-11-13T09:04:59." + "9" * 51 + "Z",
+                                 "2026-11-13T09:15:00.0000000000000000001Z")):
+        d = Direct(tmp_path / f"iso{i}", approvals=[approval("A1", INVOICE[1], granted=granted)])
+        a = d.ask(INVOICE[1], now="2026-11-13T09:15:00Z")
+        assert (a["call_approved"], a["approval_age"]) == (True, None), granted
+
+
+def test_the_example_an_amount_written_as_a_json_number(tmp_path):
+    """The gate reads the input of the hook as JSON, where 0.01 written as a number is a
+    binary float: 0.0100000000000000000001 and 1e-2 would be the same number. An amount
+    written as a JSON number has no value, so the call, approved with that very number, is
+    held by TERM 5 with PENDING. Wrong module: amount_from_a_json_number, which reads a
+    float by its repr and an integer as it is."""
+    call = dict(INVOICE[1], amount=0.01)
+    x = Example(tmp_path, approvals=[approval("A1", call)])
+    code, terms, r = x.decide(PAY, "t1", T0, call)
+    assert (code, terms) == (2, [5])
+    assert x.verdicts(r) == {2: OPEN, 3: OPEN, 4: OPEN, 5: UNDEFINED, 6: OPEN}
