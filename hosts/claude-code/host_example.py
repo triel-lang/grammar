@@ -70,10 +70,13 @@ the monitor decides"):
     executed calls of the payment tool whose E is on the calendar day of UTC
     of ceil(now), the clock of the module rounded up (T, the clock of the
     decision rounded up, is read later). An amount is a decimal string of
-    digits with an optional fraction, or a JSON number; it must be greater
-    than 0. A float is read as Decimal(repr(x)).
-  - the total and the age are computed exactly, in the context EXACT; a
-    result that 60 significant digits do not hold has no value.
+    digits with an optional fraction, greater than 0, as the schema of the
+    server requires; an amount written as a JSON number has no value, since
+    the gate reads the input of the hook as JSON, where a number with a
+    fraction becomes a binary float.
+  - the total, the stamp of an approval and its age are computed exactly, in
+    the context EXACT; a sum, a stamp or an age that 60 significant digits do
+    not hold has no value.
   - the payee: true when "to" is on the owner's list. A string is the same
     payee only if it is the whole string; two hexadecimal addresses (0x and
     hexadecimal digits) are compared without regard to case.
@@ -267,18 +270,13 @@ def _same_input(a, b):
 
 
 def _amount(x):
-    """A positive amount as Decimal, or None."""
-    if isinstance(x, bool):
+    """A positive amount given as a decimal string, as Decimal; None otherwise. A JSON
+    number has no value: the gate reads the input of the hook as JSON, where a number
+    with a fraction becomes a binary float, so two different amounts could look the same."""
+    if not (isinstance(x, str) and AMOUNT.fullmatch(x)):
         return None
-    if isinstance(x, float):
-        d = Decimal(repr(x))
-    elif isinstance(x, (int, Decimal)):
-        d = Decimal(x)
-    elif isinstance(x, str) and AMOUNT.fullmatch(x):
-        d = Decimal(x)
-    else:
-        return None
-    return d if d.is_finite() and d > 0 else None
+    d = Decimal(x)
+    return d if d > 0 else None
 
 
 def _payee(s):
@@ -408,12 +406,12 @@ def _approval(call, now_s, options, af):
 
 def _age(granted, now_s):
     try:
-        g = seconds(granted)
-        if g > now_s:
-            return None
-        with localcontext(EXACT):
+        with localcontext(EXACT):  # the stamp too: ISO-8601 adds its fraction to the seconds
+            g = seconds(granted)
+            if g > now_s:
+                return None
             return _ceil(now_s - g)
-    except Exception:  # noqa: B902 - not a time of the channel, or no exact age: no value
+    except Exception:  # noqa: B902 - not a time of the channel, or not exact: no value
         return None
 
 
@@ -428,7 +426,8 @@ def _day_total(tool_input, now_s, options, pay):
         if rec["tool"] != pay["tool"]:
             continue
         try:
-            e = seconds(rec["time"])
+            with localcontext(EXACT):
+                e = seconds(rec["time"])
         except Exception:  # noqa: B902 - an execution whose day is unknown
             return None
         if _floor(e) // DAY != day:
