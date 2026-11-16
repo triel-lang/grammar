@@ -1660,7 +1660,8 @@ def test_the_example_c7_a_revocation_written_after_pre(tmp_path, when):
 
 
 def test_the_example_c8_a_fresh_approval_of_this_call_within_the_limit(tmp_path):
-    """The control: without it, a gate that always holds would give the same results."""
+    """The control: the call that every rule allows is allowed, so a gate that always holds
+    fails the scenarios."""
     x = Example(tmp_path, limit="0.01", approvals=[approval("A1", INVOICE[1])])
     assert x.decide(PAY, "t1", T0, INVOICE[1])[:2] == (0, [])
     x.post(PAY, "t1", "2026-11-13T09:10:01Z", INVOICE[1])
