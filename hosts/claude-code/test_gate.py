@@ -1963,3 +1963,7 @@ def test_the_example_scripted_agent_with_and_without_the_gate(tmp_path):
         ("pay", INVOICE[1], "ok")]
     # The reasons of the run are the conditions of mandate.triel, TERM by TERM.
     assert sorted(scripted_run.REASONS) == list(range(1, len(EXAMPLE_TERMS) + 1))
+    # README.md shows the table of this run.
+    readme = (HERE / "README.md").read_text(encoding="utf-8").splitlines()
+    missing = [line for line in scripted_run.table(plain, gated) if line not in readme]
+    assert missing == []
