@@ -34,7 +34,8 @@ behind the paper. It contains:
   The tools need network access to install, so this is not a step of `run.sh`.
 
 `artifact/run.sh` runs, in one command, every check of the repository's CI
-(`isabelle.yml`, `evaluator.yml`, `parse-examples.yml`) except the test of the
+(`isabelle.yml`, `evaluator.yml`, `parse-examples.yml`) except the check of the
+corpus of the translator (`parser/test_corpus.py`), the test of the
 documentation for AI agents (`parser/test_skill.py`), the tests of the trace of
 a host (`parser/test_host.py`) and of the adapter for Claude Code
 (`hosts/claude-code/test_gate.py`), builds `TRIEL_Paper`, and prints a

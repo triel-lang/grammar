@@ -10,7 +10,7 @@ This repository holds TRIEL: the grammar of the language, the semantics of its c
 - `parser/`: the reference parser, the translator to the core, the scenario driver, `triel check` and their tests (`parser/README.md`).
 - `examples/`: example specifications; `examples/core/` holds those inside the core, with scenarios, expected reports and the conformance suite.
 - `hosts/`: adapters that call `triel check` from the system that runs an agent; `hosts/claude-code/` holds the hooks for Claude Code (`hosts/claude-code/README.md`).
-- `artifact/`: Docker image and `run.sh`, which repeats the CI checks in one command, except `parser/test_skill.py`, `parser/test_host.py` and `hosts/claude-code/test_gate.py`.
+- `artifact/`: Docker image and `run.sh`, which repeats the CI checks in one command, except `parser/test_corpus.py`, `parser/test_skill.py`, `parser/test_host.py` and `hosts/claude-code/test_gate.py`.
 - `tools/`: helper scripts.
 - `.github/workflows/`: the CI workflows.
 - `.agents/skills/triel/`: the skill for agents that use TRIEL; `.claude/skills/triel` is a link to it.
@@ -32,6 +32,7 @@ diff -u examples/core/classification.expected /tmp/classification.txt
 python3 examples/core/conformance/run.py --level verdicts
 python3 examples/core/conformance/run.py --level monitor
 python3 -m pytest -q parser/test_triel_to_core.py
+python3 -m pytest -q parser/test_corpus.py
 python3 -m pytest -q parser/test_triel_check.py
 python3 -m pytest -q parser/test_skill.py
 python3 -m pytest -q parser/test_host.py
