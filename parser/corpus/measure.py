@@ -115,8 +115,8 @@ OUT = []
 
 
 def say(s=""):
+    """A line of the current section; the sections are printed in order at the end."""
     OUT.append(s)
-    print(s, flush=True)
 
 
 # --- the translator, the parse trees ----------------------------------------------
@@ -558,6 +558,36 @@ def corpus_runner():
 
 
 COVERAGE = None
+PENDING = None
+
+
+def start_coverage(tmp):
+    """Start, in a child process, the two runs under coverage: the corpus, then
+    test_triel_to_core.py. They run while section 4 runs; coverage_data waits."""
+    global PENDING
+    if PENDING is not None or COVERAGE is not None:
+        return
+    copy = _copy_repo(tmp / "repo")
+    target = copy / "parser" / "triel_to_core.py"
+    rc = tmp / "coveragerc"
+    rc.write_text(f"[run]\nbranch = True\npatch = subprocess\nparallel = True\n"
+                  f"data_file = {tmp / 'cov' / '.coverage'}\ninclude = {target}\n", encoding="utf-8")
+    (tmp / "cov").mkdir()
+    (tmp / "cov-corpus").mkdir()
+    corpus_rc = tmp / "coveragerc-corpus"
+    corpus_rc.write_text(rc.read_text(encoding="utf-8").replace(str(tmp / "cov"), str(tmp / "cov-corpus")),
+                         encoding="utf-8")
+    py = sys.executable
+    script = (f"import subprocess, sys, time\n"
+              f"subprocess.run([{py!r}, '-m', 'coverage', 'run', '--rcfile={corpus_rc}', "
+              f"{str(Path(__file__).resolve())!r}, '--translate-corpus', {str(target)!r}], check=True)\n"
+              f"t = time.monotonic()\n"
+              f"r = subprocess.run([{py!r}, '-m', 'coverage', 'run', '--rcfile={rc}', '-m', 'pytest', '-q', "
+              f"'-p', 'no:cacheprovider', 'parser/test_triel_to_core.py'], capture_output=True, text=True, "
+              f"env=dict(__import__('os').environ, TRIEL_EVALUATOR={EVALUATOR!r}))\n"
+              f"open({str(tmp / 'tests.out')!r}, 'w').write(r.stdout)\n"
+              f"open({str(tmp / 'tests.time')!r}, 'w').write('%f %d' % (time.monotonic() - t, r.returncode))\n")
+    PENDING = (subprocess.Popen([py, "-c", script], cwd=copy, env=_env()), target)
 
 
 def coverage_data(tmp):
@@ -566,24 +596,16 @@ def coverage_data(tmp):
     global COVERAGE
     if COVERAGE is not None:
         return COVERAGE
-    copy = _copy_repo(tmp / "repo")
-    target = copy / "parser" / "triel_to_core.py"
-    rc = tmp / "coveragerc"
-    rc.write_text(f"[run]\nbranch = True\npatch = subprocess\nparallel = True\n"
-                  f"data_file = {tmp / 'cov' / '.coverage'}\ninclude = {target}\n", encoding="utf-8")
-    (tmp / "cov").mkdir()
-    ev = {"TRIEL_EVALUATOR": EVALUATOR}
-    subprocess.run([sys.executable, "-m", "coverage", "run", f"--rcfile={rc}", str(Path(__file__).resolve()),
-                    "--translate-corpus", str(target)], cwd=copy, env=_env(), check=True)
-    corpus_files = sorted((tmp / "cov").glob(".coverage*"))
-    t = time.monotonic()
-    r = subprocess.run([sys.executable, "-m", "coverage", "run", f"--rcfile={rc}", "-m", "pytest", "-q",
-                        "-p", "no:cacheprovider", "parser/test_triel_to_core.py"],
-                       cwd=copy, env=_env(ev), capture_output=True, text=True)
-    tests_time = time.monotonic() - t
-    tests_summary = without_time(r.stdout.strip().splitlines()[-1]) if r.stdout.strip() else r.stderr[-300:]
-    all_files = sorted((tmp / "cov").glob(".coverage*"))
-    test_files = [f for f in all_files if f not in corpus_files]
+    start_coverage(tmp)
+    proc, target = PENDING
+    if proc.wait() != 0:
+        raise SystemExit("the runs under coverage failed")
+    out = (tmp / "tests.out").read_text(encoding="utf-8").strip()
+    tests_time, code = (tmp / "tests.time").read_text().split()
+    tests_time, code = float(tests_time), int(code)
+    tests_summary = without_time(out.splitlines()[-1]) if out else "no output"
+    corpus_files = sorted((tmp / "cov-corpus").glob(".coverage*"))
+    test_files = sorted((tmp / "cov").glob(".coverage*"))
     reports = {}
     import coverage
     for name, files in (("corpus", corpus_files), ("corpus and tests", corpus_files + test_files)):
@@ -595,8 +617,7 @@ def coverage_data(tmp):
             cov.json_report(outfile=str(out), include=[str(target)])
         rep = json.loads(out.read_text(encoding="utf-8"))
         reports[name] = list(rep["files"].values())[0]
-    COVERAGE = {"reports": reports, "tests": tests_summary, "tests_time": tests_time,
-                "tests_ok": r.returncode == 0}
+    COVERAGE = {"reports": reports, "tests": tests_summary, "tests_time": tests_time, "tests_ok": code == 0}
     return COVERAGE
 
 
@@ -852,18 +873,27 @@ def section_random(tmp):
             survivors.append((rows[-1], text))
     have_eval = os.path.exists(EVALUATOR)
     if survivors:
-        rc, last = run_tests(tmp, SOURCE, "control", EVALUATOR if have_eval else str(tmp / "no-evaluator"),
-                             stop_at_first=False)
+        # The control run (the translator itself, every test) and the runs of the
+        # survivors go together, as many at a time as there are processors; if
+        # the control run does not pass, the survivors run again without the
+        # evaluator, so that a test that fails on the translator itself catches
+        # no mutant.
+        from concurrent.futures import ThreadPoolExecutor
+        no_eval = str(tmp / "no-evaluator")
+        first = EVALUATOR if have_eval else no_eval
+        jobs = [(SOURCE, "control", False)] + [(text, f"mutant{k}", True) for k, (_, text) in enumerate(survivors)]
+        with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:
+            results = list(pool.map(lambda j: run_tests(tmp, j[0], j[1], first, stop_at_first=j[2]), jobs))
+        rc, last = results[0]
+        done = results[1:]
         control_ok = rc == 0 and (not have_eval or " skipped" not in last)
         say(f"- control run of test_triel_to_core.py on the translator itself: {last} "
             f"(evaluator: {'built, ' + EVALUATOR if have_eval else 'not built'})")
-        use = EVALUATOR if have_eval and control_ok else str(tmp / "no-evaluator")
         if have_eval and not control_ok:
-            say("- the control run did not pass: the survivors are run without the evaluator")
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:
-            done = list(pool.map(lambda k: run_tests(tmp, survivors[k][1], f"mutant{k}", use),
-                                 range(len(survivors))))
+            say("- the control run did not pass: the survivors are run again without the evaluator")
+            with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:
+                done = list(pool.map(lambda k: run_tests(tmp, survivors[k][1], f"mutant{k}", no_eval),
+                                     range(len(survivors))))
         for (row, text), (rc, last) in zip(survivors, done):
             if rc != 0:
                 row[1] = "caught by test_triel_to_core.py"
@@ -897,34 +927,42 @@ def main():
     args = ap.parse_args()
     sections = [args.section] if args.section else [1, 2, 3, 4]
     times = []
-    say(f"# Measurements of the corpus: {TRANSLATOR.relative_to(T_REPO) if TRANSLATOR.is_relative_to(T_REPO) else TRANSLATOR}")
-    say()
+    title = TRANSLATOR.relative_to(T_REPO) if TRANSLATOR.is_relative_to(T_REPO) else TRANSLATOR
+    text = {}
+    start = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="corpus-measure-") as d:
         tmp = Path(d)
+        if 2 in sections or 3 in sections:
+            start_coverage(tmp)  # runs while sections 1 and 4 run
         t0 = time.monotonic()
         setup()
         times.append(("parse trees of the corpus", time.monotonic() - t0))
-        cov = None
-        for s in sections:
+        # Section 4 before 2 and 3: they wait for the runs under coverage.
+        for s in sorted(sections, key=lambda x: {1: 0, 4: 1, 2: 2, 3: 3}[x]):
+            OUT.clear()
             t = time.monotonic()
             if s == 1:
                 section_corpus()
             elif s == 2:
-                if cov is None:
-                    cov = coverage_data(tmp)
+                cov = coverage_data(tmp)
                 executed = set(cov["reports"]["corpus and tests"]["executed_lines"])
                 section_rejects(executed)
             elif s == 3:
-                cov = section_coverage(tmp)
+                section_coverage(tmp)
             elif s == 4:
                 section_random(tmp)
             times.append((f"section {s}", time.monotonic() - t))
-        say("## 5. Time")
-        say()
-        for name, t in times:
-            say(f"- {name}: {t:.0f} s (time)")
-        if COVERAGE is not None:
-            say(f"- of which test_triel_to_core.py under coverage: {COVERAGE['tests_time']:.0f} s (time)")
+            text[s] = list(OUT)
+    print(f"# Measurements of the corpus: {title}\n")
+    for s in sections:
+        print("\n".join(text[s]))
+    print("## 5. Time\n")
+    for name, t in times:
+        print(f"- {name}: {t:.0f} s (time)")
+    if COVERAGE is not None:
+        print(f"- the runs under coverage went on while section 4 ran; of them, test_triel_to_core.py took "
+              f"{COVERAGE['tests_time']:.0f} s (time)")
+    print(f"- in all: {time.monotonic() - start:.0f} s on {os.cpu_count()} processors (time)")
     return 0
 
 
