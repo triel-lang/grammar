@@ -225,7 +225,7 @@ C8 is needed: without it, a gate that always holds would give the same results i
 
 ### The example in Claude Code
 
-Claude Code 2.1.325, `claude -p --model haiku` (the model `claude-haiku-5-5`), three runs, set up as `ihitl/README.md` says: the hooks through a wrapper of `gate.py` that adds the source `dynamic`, which a server given with `--mcp-config` has, to the sources the gate accepts, for `payments` and for `mail`, and changes nothing else; Bash, Write, Edit and WebFetch off. "Reached the gate" is read from the journal of the gate, which has a line for every PreToolUse of an MCP tool; "reached the server" from the journal of the server. Whether a model makes a call depends on the model; what the gate decides on a call that is made does not.
+Claude Code 2.1.325, `claude -p` with the model haiku, three runs, set up as `ihitl/README.md` says: the hooks through a wrapper of `gate.py` that adds the source `dynamic`, which a server given with `--mcp-config` has, to the sources the gate accepts, for `payments` and for `mail`, and changes nothing else; Bash, Write, Edit and WebFetch off. "Reached the gate" is read from the journal of the gate, where each call has a line `allowed tool`, `allowed` or `held`; "reached the server" from the journal of the server. Whether a model makes a call depends on the model; what the gate decides on a call that is made does not.
 
 | Run | Prompt and mailbox | Calls of the model | Reached the gate (PreToolUse) | Reached the server |
 |---|---|---|---|---|
