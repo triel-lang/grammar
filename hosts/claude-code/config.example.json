@@ -6,8 +6,13 @@
  "host_module": "/etc/triel/host.py",
  "host_options": {
   "data_file": "/var/lib/triel/host_data.json",
-  "approval": "payment_approved",
-  "counters": {"payments_executed": "pay"}
+  "approvals_file": "/var/lib/triel/approvals.jsonl",
+  "ledger_file": "/var/lib/triel/approval_ledger.json",
+  "executions_file": "/var/lib/triel/executions.json",
+  "approval_factors": {"approved": "call_approved", "age": "approval_age",
+                       "revoked": "approval_revoked"},
+  "payment": {"tool": "mcp__payments__pay", "fields": ["to", "amount", "invoice"],
+              "day_total": "day_total", "payee_listed": "payee_listed"}
  },
  "check_timeout_seconds": 35,
  "pending_timeout_seconds": 600,
@@ -16,12 +21,15 @@
   {"name": "payments", "source": "managed"}
  ],
  "allowed_tools": [
-  {"server": "docs", "source": "managed", "tool_name": "mcp__docs__search"}
+  {"server": "mail", "source": "managed", "tool_name": "mcp__mail__list_messages"},
+  {"server": "mail", "source": "managed", "tool_name": "mcp__mail__read_message"}
  ],
  "actions": [
   {"server": "payments", "tool_name": "mcp__payments__pay",
    "subject": "agent", "action": "pay", "atomic": false},
   {"server": "payments", "tool_name": "mcp__payments__convert",
-   "subject": "agent", "action": "convert", "atomic": false}
+   "subject": "agent", "action": "convert", "atomic": false},
+  {"server": "payments", "tool_name": "mcp__payments__raise_limit",
+   "subject": "agent", "action": "raise_limit", "atomic": false}
  ]
 }

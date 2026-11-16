@@ -1,10 +1,15 @@
--- The specification of the example of README.md: an agent that pays and
--- converts currency through the tools of the MCP server "payments". The host
--- reports the approval of the payment about to be made, the number of payments
--- executed so far, the exchange rate from its rate feed, with the time the feed
--- stamped it, and the owner's limit on the rate.
+-- The specification of the example of README.md: an agent that pays invoices
+-- and converts currency through the tools of the MCP server "payments". Each
+-- reason to hold a payment is a prohibition of its own, so the gate names it by
+-- the number of its TERM. The host module (host_example.py) reports, for the call
+-- about to be made, whether one standing approval of the owner names it, the age
+-- of that approval in seconds and whether it is revoked; the total of the
+-- payments of the day together with this one; whether the payee is on the
+-- owner's list; and the owner's daily limit. It also reports the exchange rate
+-- from its rate feed, with the time the feed stamped it, and the owner's limit on
+-- the rate. Raising the limit is never allowed.
 
-SPECIFICATION payments_mandate VERSION 1.0.0
+SPECIFICATION payments_mandate VERSION 2.0.0
     PROVENANCE_REQUIRED: true
 
 SUBJECTS {
@@ -14,16 +19,24 @@ SUBJECTS {
 }
 
 TERMS {
-  agent MUST_NOT pay WHEN NOT payment_approved OR payments_executed >= 3;
-  agent ON_BREACH NOTIFY owner;
+  agent MUST_NOT raise_limit;
+  agent MUST_NOT pay WHEN NOT call_approved;
+  agent MUST_NOT pay WHEN call_approved AND approval_age > 600;
+  agent MUST_NOT pay WHEN call_approved AND approval_revoked;
+  agent MUST_NOT pay WHEN day_total > daily_limit;
+  agent MUST_NOT pay WHEN NOT payee_listed;
   agent MUST_NOT convert WHEN fx_rate > rate_limit
 }
 
 FACTORS {
-  payment_approved  : Boolean METADATA,
-  payments_executed : Integer METADATA,
-  fx_rate           : Decimal METADATA SOURCE rates MAX_AGE 60 SECONDS ON_STALE BLOCK,
-  rate_limit        : Decimal METADATA
+  call_approved    : Boolean METADATA,
+  approval_age     : Integer METADATA,
+  approval_revoked : Boolean METADATA,
+  day_total        : Decimal METADATA,
+  daily_limit      : Decimal METADATA,
+  payee_listed     : Boolean METADATA,
+  fx_rate          : Decimal METADATA SOURCE rates MAX_AGE 60 SECONDS ON_STALE BLOCK,
+  rate_limit       : Decimal METADATA
 }
 
 INVARIANTS {
