@@ -19,7 +19,8 @@ The gate calls two functions:
       execution E). Everything that depends on executed actions is updated
       from these facts only. The gate may give the same fact twice; each file
       that the module writes remembers the tool_use_ids it has taken, and a
-      fact given again adds only what a file does not have yet.
+      fact given again adds only what a file does not have yet, except the
+      time of execution, which follows the last fact.
 
 The options are the host_options of the configuration, in one of two forms.
 
@@ -40,6 +41,8 @@ The example of README.md (config.example.json, mandate.triel):
   executions_file   written by this module only:
                       {"executed": {TOOL_USE_ID: {"tool": TOOL, "tool_input": {...},
                                                   "time": E}}}
+                    a record with other keys, or whose tool is not a string,
+                    makes the file unreadable
   approval_factors  {"approved": F, "age": F, "revoked": F}: the Boolean, the
                     Integer and the Boolean factor of the approval of the call
   payment           {"tool": TOOL, "fields": [KEY], "day_total": F,
@@ -65,9 +68,12 @@ the monitor decides"):
     revoked no value, unless a revocation of the id of that form is there too.
   - the total of the day: the amount of the call and the amounts of the
     executed calls of the payment tool whose E is on the calendar day of UTC
-    of T, the host clock rounded up, as in the trace. An amount is a decimal
-    string of digits with an optional fraction, or a JSON number; it must be
-    greater than 0. A float is read as Decimal(repr(x)).
+    of ceil(now), the clock of the module rounded up (T, the clock of the
+    decision rounded up, is read later). An amount is a decimal string of
+    digits with an optional fraction, or a JSON number; it must be greater
+    than 0. A float is read as Decimal(repr(x)).
+  - the total and the age are computed exactly, in the context EXACT; a
+    result that 60 significant digits do not hold has no value.
   - the payee: true when "to" is on the owner's list. A string is the same
     payee only if it is the whole string; two hexadecimal addresses (0x and
     hexadecimal digits) are compared without regard to case.
@@ -81,12 +87,15 @@ reading the data; it raises ValueError for options it cannot use, and the gate
 then holds every call.
 
 What executed does with a fact: in ledger_file, unless the tool_use_id is
-taken, the approval chosen for it is spent, or, when no approval was chosen for
-it, every approval of the tool and the input of the fact; the ids spent and the
-tool_use_id are written in one replacement of the file. Then, in
-executions_file, unless the tool_use_id is there, the call with its time E. If
-a file cannot be read or written, executed raises the exception, and the gate
-records a conflict and holds every action (README.md, "The host module").
+taken, the approval chosen for it is spent; when no approval was chosen for it,
+or the call was executed with another input than that of the chosen approval,
+every standing approval of the tool and the input of the fact is spent too.
+The ids spent and the tool_use_id are written in one replacement of the file.
+Then, in executions_file, the call with its time E, or, for a tool_use_id that
+is there, the time of the last fact. executed reads approvals_file, ledger_file
+and executions_file; if a file cannot be read or written, it raises the
+exception, and the gate records a conflict and holds every action (README.md,
+"The host module").
 
 The earlier form, without the keys above:
   data_file  the absolute path of the JSON file;
@@ -104,7 +113,10 @@ The earlier form, without the keys above:
   executed removes the approval of the call, counts the call, and ignores a
   fact whose tool_use_id is known; it reads, changes and replaces the whole
   file. The host changes the file only while no call is pending (gate.py
-  status), or under a lock of its own that this module takes too.
+  status), or under a lock of its own that this module takes too. In this
+  form answers reads the file without catching an error: a file that cannot
+  be read raises, and the gate holds the call, since under DEFAULT or PRESENT
+  a factor without a value could allow it.
 
 In both forms, a factor without MAX_AGE that is not in values has no value; a
 factor with MAX_AGE that is not in readings has no new reading.
@@ -112,7 +124,8 @@ factor with MAX_AGE that is not in readings has no new reading.
 import json
 import os
 import re
-from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
+from decimal import (ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_EVEN, Context, Decimal, Inexact,
+                     InvalidOperation, Overflow, localcontext)
 
 from triel_host import NO_NEW_READING, Reading, exact, iso, seconds
 
@@ -122,6 +135,10 @@ AMOUNT = re.compile(r"[0-9]+(\.[0-9]+)?")
 NEW_KEYS = ("approvals_file", "ledger_file", "executions_file", "approval_factors", "payment")
 APPROVAL = {"type", "id", "tool", "tool_input", "granted"}
 REVOCATION = {"type", "id", "time"}
+EXECUTION = {"tool", "tool_input", "time"}
+# The arithmetic of the total of the day and of the age of an approval: exact, or no
+# value. A result that 60 significant digits do not hold raises Inexact.
+EXACT = Context(prec=60, rounding=ROUND_HALF_EVEN, traps=[Inexact, InvalidOperation, Overflow])
 
 
 def answers(call, now, factors, options):
@@ -167,7 +184,8 @@ def _ledger(options):
 def _executions(options):
     x = _load(options["executions_file"], "a record of executions", ("executed",))
     if not (isinstance(x["executed"], dict)
-            and all(isinstance(v, dict) for v in x["executed"].values())):
+            and all(isinstance(v, dict) and set(v) == EXECUTION and isinstance(v["tool"], str)
+                    for v in x["executed"].values())):
         raise ValueError(f"{options['executions_file']} is not a record of executions")
     return x
 
@@ -391,9 +409,12 @@ def _approval(call, now_s, options, af):
 def _age(granted, now_s):
     try:
         g = seconds(granted)
-    except Exception:  # noqa: B902 - not a time of the channel: no value
+        if g > now_s:
+            return None
+        with localcontext(EXACT):
+            return _ceil(now_s - g)
+    except Exception:  # noqa: B902 - not a time of the channel, or no exact age: no value
         return None
-    return None if g > now_s else _ceil(now_s - g)
 
 
 def _day_total(tool_input, now_s, options, pay):
@@ -401,22 +422,26 @@ def _day_total(tool_input, now_s, options, pay):
     ex = _or_none(_executions, options)
     if amount is None or ex is None:
         return None
-    day = _ceil(now_s) // DAY  # T, as in the trace
+    day = _ceil(now_s) // DAY  # the clock of the module rounded up, as T is in the trace
     total = amount
     for rec in ex["executed"].values():
-        if rec.get("tool") != pay["tool"]:
+        if rec["tool"] != pay["tool"]:
             continue
         try:
-            e = seconds(rec.get("time"))
+            e = seconds(rec["time"])
         except Exception:  # noqa: B902 - an execution whose day is unknown
             return None
         if _floor(e) // DAY != day:
             continue
-        spent = rec.get("tool_input")
+        spent = rec["tool_input"]
         a = _amount(spent.get("amount")) if isinstance(spent, dict) else None
         if a is None:
             return None
-        total += a
+        try:
+            with localcontext(EXACT):
+                total += a
+        except ArithmeticError:  # Inexact among them: a total that is not exact is unknown
+            return None
     return total
 
 
@@ -433,23 +458,31 @@ def _executed(fact, options):
     tid = fact["tool_use_id"]
     ledger = _ledger(options)
     if tid not in ledger["taken"]:
+        approvals, _ = _channel(options)
+
+        def of(a):  # an approval of the tool and the input that were executed
+            return a["tool"] == fact["tool_name"] and _same_input(a["tool_input"],
+                                                                  fact["tool_input"])
         chosen = ledger["selected"].get(tid)
-        if chosen is not None:
-            ids = [chosen]
-        else:
-            approvals, _ = _channel(options)
-            ids = [a["id"] for a in approvals if a["tool"] == fact["tool_name"]
-                   and a["id"] not in ledger["spent"]
-                   and _same_input(a["tool_input"], fact["tool_input"])]
+        ids = [chosen] if chosen is not None else []
+        if chosen is None or not any(a["id"] == chosen and of(a) for a in approvals):
+            # No choice, or the call was executed with another input than the one
+            # decided on: every standing approval of the executed input is spent too.
+            ids += [a["id"] for a in approvals if of(a) and a["id"] not in ledger["spent"]]
         for i in ids:
             ledger["spent"].setdefault(i, tid)
         ledger["taken"].append(tid)
         _write(options["ledger_file"], ledger)  # the ids spent and the fact taken, at once
     ex = _executions(options)
-    if tid not in ex["executed"]:
-        e = seconds(fact["time"])
+    e = seconds(fact["time"])
+    time = iso(int(e)) if e == int(e) else exact(e)
+    rec = ex["executed"].get(tid)
+    if rec is None:
         ex["executed"][tid] = {"tool": fact["tool_name"], "tool_input": fact["tool_input"],
-                               "time": iso(int(e)) if e == int(e) else exact(e)}
+                               "time": time}
+        _write(options["executions_file"], ex)
+    elif rec["time"] != time:  # the last fact the gate gave: resolve --executed --at
+        rec["time"] = time
         _write(options["executions_file"], ex)
 
 
@@ -470,19 +503,23 @@ def _approved(data, call):
 
 
 def _answers_earlier(call, factors, options):
-    data = _or_none(_read, options)
+    """As before: a file that cannot be read raises, and the gate holds the call. Under
+    DEFAULT or PRESENT, a factor without a value could allow it."""
+    data = _read(options)
     counters = options.get("counters", {})
     out = {}
     for name, f in factors.items():
         if name == options.get("approval"):
-            out[name] = None if data is None else _or_none(_approved, data, call)
+            out[name] = _approved(data, call)
         elif name in counters:
-            out[name] = None if data is None else _or_none(
-                lambda: sum(1 for a in data["executed"].values() if a == counters[name]))
+            out[name] = sum(1 for a in data["executed"].values() if a == counters[name])
         elif f["stale"] == "none":
-            out[name] = _value(data, name)
+            out[name] = data["values"].get(name)
+        elif name in data["readings"]:
+            r = data["readings"][name]
+            out[name] = Reading(r.get("value"), r.get("time"))
         else:
-            out[name] = _reading(data, name)
+            out[name] = NO_NEW_READING
     return out
 
 
