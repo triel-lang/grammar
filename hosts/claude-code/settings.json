@@ -93,7 +93,9 @@
     "allow": [
       "mcp__payments__pay",
       "mcp__payments__convert",
-      "mcp__docs__search"
+      "mcp__payments__raise_limit",
+      "mcp__mail__list_messages",
+      "mcp__mail__read_message"
     ],
     "deny": [
       "WebFetch(domain:payments.example.com)",
