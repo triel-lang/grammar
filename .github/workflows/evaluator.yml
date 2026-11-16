@@ -153,6 +153,12 @@ jobs:
       - name: Tests of the translator and the driver
         run: python3 -m pytest -q parser/test_triel_to_core.py
 
+      # parser/corpus: every case of the corpus against the translator, the
+      # format of the corpus, the rules of the grammar it covers, a pair of cases
+      # for every reason of rejection, and the table of classes of the reasons.
+      - name: Corpus of the translation
+        run: python3 -m pytest -q parser/test_corpus.py
+
       # triel check on every scenario: the text report is the .expected file,
       # the JSON report converts back to it, the scenario in JSON gives the same
       # report, --last, and the exit codes.
