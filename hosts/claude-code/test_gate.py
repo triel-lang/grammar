@@ -1425,9 +1425,9 @@ def test_the_child_has_the_environment_of_the_gate_and_runs_isolated(tmp_path, m
 
 # --- The example: the approval of a payment (README.md, section "The example") ----------
 #
-# The setting of the paper (README.md): a wallet with a daily limit of 0.01, three
-# invoices of 0.01 to a known payee, the approvals of the owner in the store of the host,
-# and a code of six digits in the mail that raises the limit of the wallet. Each scenario
+# The setting follows the paper (README.md): a daily limit of 0.01 and three invoices of
+# 0.01; in the example the payee is on the owner's list, the approvals of the owner are in
+# the store of the host, and the code in the mail has six digits. Each scenario
 # C1 to C11 of README.md is a test; the blocking TERMs come from the first line of the
 # standard error of the gate, the verdicts, where they matter, from triel check on the
 # trace that the gate kept. The expectations were written before the module was.
@@ -1912,7 +1912,7 @@ def test_the_example_host_module_executed_raises_when_it_cannot_read(tmp_path, k
 
 def test_the_example_host_module_day_of_utc(tmp_path):
     """The executed payments count by their time of execution E, the payment of the
-    call by T, the clock of the module rounded up, as in the trace."""
+    call by the clock of the module rounded up."""
     d = Direct(tmp_path)
     d.take("t1", INVOICE[1], "2026-11-13T23:59:59Z")
     for now, total in (("2026-11-13T23:59:58.2Z", "0.02"), ("2026-11-13T23:59:59Z", "0.02"),
