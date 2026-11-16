@@ -861,6 +861,8 @@ def test_the_example_settings():
     # section II-C of the paper describes.
     files = option_paths(cfg["host_options"])
     assert files and all(p.startswith(("/etc/triel/", "/var/lib/triel/")) for p in files), files
+    for k in ("data_file", "approvals_file", "ledger_file", "executions_file"):
+        assert cfg["host_options"][k].startswith(("/etc/triel/", "/var/lib/triel/")), k
 
 
 def option_paths(v):
@@ -1967,3 +1969,259 @@ def test_the_example_scripted_agent_with_and_without_the_gate(tmp_path):
     readme = (HERE / "README.md").read_text(encoding="utf-8").splitlines()
     missing = [line for line in scripted_run.table(plain, gated) if line not in readme]
     assert missing == []
+
+
+# --- The example: further cases of the host module and of the gate -----------------------
+#
+# Each test below fails on a wrong host module that the tests above let pass; the wrong
+# module is named in the docstring.
+
+@pytest.mark.parametrize("how", ["missing", "a directory", "half-written JSON"])
+def test_the_example_host_module_earlier_form_holds_when_its_file_cannot_be_read(tmp_path, how):
+    """The earlier form reads its file without catching an error: under DEFAULT, a file
+    that cannot be read holds the call ("the gate failed"), never leaves the factor
+    without a value, which DEFAULT would turn into ALLOW. Wrong module: the earlier form
+    reads its file with the rule of the example and gives no value."""
+    x = Mandate(tmp_path, terms="agent MUST_NOT pay WHEN DEFAULT(frozen, false)",
+                factors="frozen : Boolean METADATA", data={"values": {"frozen": True}})
+    x.activate()
+    assert x.pre(PAY, "t0", T0, {"to": "acme"}) == BLOCKED_PAY
+    data = tmp_path / "host_data.json"
+    data.unlink()
+    if how == "a directory":
+        data.mkdir()
+    elif how == "half-written JSON":
+        data.write_text('{"values": {"frozen": tr', encoding="utf-8")
+    error = {"missing": "FileNotFoundError", "a directory": "IsADirectoryError",
+             "half-written JSON": "JSONDecodeError"}[how]
+    code, line = x.pre(PAY, "t1", "2026-11-13T09:10:05Z", {"to": "acme"})
+    assert code == 2 and line.startswith(held(f"the gate failed: {error}")), line
+
+
+def test_the_example_an_execution_with_another_input_spends_the_approval_of_that_input(tmp_path):
+    """The gate decided on INV-1 (A1 chosen); PostToolUse came with the input of INV-2, and
+    the operator resolved the call as executed with that input. The execution spends A1
+    and the approval of INV-2, so INV-2 cannot be paid again with it. Wrong module: it
+    spends only the approval chosen at pre."""
+    x = Example(tmp_path, approvals=[approval("A1", INVOICE[1]), approval("A2", INVOICE[2])])
+    assert x.decide(PAY, "t1", T0, INVOICE[1])[:2] == (0, [])
+    assert x.ledger()["selected"]["t1"] == "A1"
+    x.post(PAY, "t1", "2026-11-13T09:10:01Z", INVOICE[2])
+    assert x.state()["unknown"]["t1"]["why"] == (
+        "the input of PostToolUse differs from the input of PreToolUse")
+    assert x.command("resolve", "t1", "--executed", "--at", "2026-11-13T09:10:01Z",
+                     now="2026-11-13T09:11:00Z") == (0, "")
+    assert x.ledger()["spent"] == {"A1": "t1", "A2": "t1"} and x.standing() == []
+    assert x.executions()["executed"]["t1"]["tool_input"] == INVOICE[2]
+    assert x.decide(PAY, "t2", "2026-11-13T09:12:00Z", INVOICE[2])[:2] == (2, [2])
+
+
+@pytest.mark.parametrize("old", ["too old", "revoked"])
+def test_the_example_an_old_approval_keeps_a_new_one_of_the_same_input_from_counting(tmp_path,
+                                                                                      old):
+    """An approval older than its term, or revoked, is still a candidate: a new approval of
+    the same input makes two, and the call is held by TERMs 2, 3 and 4 with PENDING until
+    the old approval is taken out of approvals_file. Wrong module: one that drops the
+    approvals that cannot allow a payment from the candidates."""
+    first = ([approval("A1", INVOICE[1], granted="2026-11-13T08:50:00Z")] if old == "too old"
+             else [approval("A1", INVOICE[1]), revocation("A1")])
+    x = Example(tmp_path, approvals=first)
+    assert x.decide(PAY, "t1", T0, INVOICE[1])[:2] == (2, [3] if old == "too old" else [4])
+    renewed = approval("A2", INVOICE[1], granted="2026-11-13T09:10:30Z")
+    x.add(renewed)
+    code, terms, r = x.decide(PAY, "t2", "2026-11-13T09:11:00Z", INVOICE[1])
+    assert (code, terms) == (2, [2, 3, 4])
+    assert x.verdicts(r) == {2: UNDEFINED, 3: UNDEFINED, 4: UNDEFINED, 5: OPEN, 6: OPEN}
+    Path(x.options["approvals_file"]).write_text(json.dumps(renewed) + "\n", encoding="utf-8")
+    assert x.decide(PAY, "t3", "2026-11-13T09:11:05Z", INVOICE[1])[:2] == (0, [])
+
+
+def test_the_example_a_fact_given_again_with_another_time(tmp_path):
+    """A late PostToolUse records the payment at 23:59:20; the operator ends the conflict
+    with resolve --executed --at 00:00:05 of the next day. The module follows the last
+    fact the gate gave: the payment counts on the next day, as in the history of the
+    gate. Wrong module: it keeps the time of the first fact."""
+    x = Example(tmp_path, limit="0.01",
+                approvals=[approval("A1", INVOICE[1], granted="2026-11-13T23:55:00Z"),
+                           approval("A2", INVOICE[2], granted="2026-11-13T23:55:00Z")])
+    assert x.decide(PAY, "t1", "2026-11-13T23:59:10Z", INVOICE[1])[:2] == (0, [])
+    x.failure(PAY, "t1", "2026-11-13T23:59:11Z", INVOICE[1], is_interrupt=True)
+    assert x.command("resolve", "t1", "--not-executed", now="2026-11-13T23:59:15Z") == (0, "")
+    x.post(PAY, "t1", "2026-11-13T23:59:20Z", INVOICE[1])
+    assert x.executions()["executed"]["t1"]["time"] == "2026-11-13T23:59:20Z"
+    assert x.command("resolve", "t1", "--executed", "--at", "2026-11-14T00:00:05Z",
+                     now="2026-11-14T00:00:30Z") == (0, "")
+    assert x.state()["history"][0]["executed"] == "1794614405"
+    assert x.executions()["executed"]["t1"]["time"] == "2026-11-14T00:00:05Z"
+    assert x.decide(PAY, "t2", "2026-11-14T00:01:00Z", INVOICE[2])[:2] == (2, [5])
+
+
+BAD_FILES = {  # a content that is not a file of its kind, for each file the module reads
+    "ledger_file": ["{", "[]", "", '{"selected": {}, "spent": {}}'],
+    "executions_file": ["{", "[]", "", '{"done": {}}'],
+    "data_file": ["{", "[]", ""]}
+
+
+@pytest.mark.parametrize("content", BAD_FILES["ledger_file"])
+def test_the_example_host_module_a_ledger_that_cannot_be_read(tmp_path, content):
+    """The file can be written but not read as a ledger: the factors of the approval have
+    no value, and executed raises. Wrong modules: ledger_bad_content_is_empty and
+    ledger_unreadable_is_empty, which read such a ledger as empty, so that every spent
+    id is forgotten."""
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    Path(d.options["ledger_file"]).write_text(content, encoding="utf-8")
+    a = d.ask(INVOICE[1])
+    assert (a["call_approved"], a["approval_age"], a["approval_revoked"]) == (None, None, None)
+    with pytest.raises((OSError, ValueError)):
+        d.take("t1", INVOICE[1], "2026-11-13T09:10:01Z")
+
+
+@pytest.mark.parametrize("content", BAD_FILES["executions_file"])
+def test_the_example_host_module_executions_that_cannot_be_read(tmp_path, content):
+    """Wrong module: executions_bad_content_is_empty, a total of the day without the
+    executed payments."""
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    Path(d.options["executions_file"]).write_text(content, encoding="utf-8")
+    assert d.ask(INVOICE[1])["day_total"] is None
+    with pytest.raises((OSError, ValueError)):
+        d.take("t1", INVOICE[1], "2026-11-13T09:10:01Z")
+
+
+@pytest.mark.parametrize("content", BAD_FILES["data_file"])
+def test_the_example_host_module_data_that_cannot_be_read(tmp_path, content):
+    """Wrong module: data_bad_content_is_empty, which puts data without limits in the place
+    of a file it cannot read."""
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    Path(d.options["data_file"]).write_text(content, encoding="utf-8")
+    a = d.ask(INVOICE[1])
+    assert (a["daily_limit"], a["rate_limit"], a["payee_listed"]) == (None, None, None)
+    assert a["call_approved"] is True
+
+
+def test_the_example_host_module_a_choice_that_cannot_be_recorded(tmp_path):
+    """Wrong module: selection_write_failure_ignored, which approves a call whose choice
+    executed would not find."""
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    Path(d.options["ledger_file"] + ".tmp").mkdir()
+    a = d.ask(INVOICE[1])
+    assert (a["call_approved"], a["approval_age"], a["approval_revoked"]) == (None, None, None)
+
+
+def test_the_example_host_module_a_recorded_choice_of_none_spends_every_approval(tmp_path):
+    """Two approvals of one input: pre records no choice; the execution spends both.
+    Wrong module: recorded_no_choice_spends_nothing."""
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1]), approval("A2", INVOICE[1])])
+    assert d.ask(INVOICE[1])["call_approved"] is None
+    assert d.file("ledger_file")["selected"] == {"t1": None}
+    d.take("t1", INVOICE[1], "2026-11-13T09:10:01Z")
+    assert d.file("ledger_file")["spent"] == {"A1": "t1", "A2": "t1"}
+
+
+def test_the_example_host_module_an_activation_keeps_the_files_of_the_module(tmp_path):
+    """Wrong module: activation_wipes_files, which writes empty files at an activation and
+    forgets the spent ids and the executed payments."""
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    assert d.ask(INVOICE[1])["call_approved"] is True
+    d.take("t1", INVOICE[1], "2026-11-13T09:10:01Z")
+    d.module.answers(None, at("2026-11-13T09:20:00Z"), d.factors, d.options)
+    assert d.file("ledger_file")["spent"] == {"A1": "t1"}
+    assert list(d.file("executions_file")["executed"]) == ["t1"]
+    assert d.ask(INVOICE[1], now="2026-11-13T09:20:00Z", tid="t2")["call_approved"] is False
+
+
+def test_the_example_host_module_an_approval_with_a_key_of_its_own(tmp_path):
+    """Wrong module: approval_form_not_checked."""
+    d = Direct(tmp_path, approvals=[dict(approval("A1", INVOICE[1]), note="x")])
+    a = d.ask(INVOICE[1])
+    assert (a["call_approved"], a["approval_age"], a["approval_revoked"]) == (None, None, None)
+
+
+def test_the_example_host_module_values_do_not_replace_what_it_computes(tmp_path):
+    """data_file names factors that the module computes: the module's value counts. Wrong
+    module: data_file_values_override_computed."""
+    d = Direct(tmp_path)
+    data = example_data("0.01", [PAYEE_A])
+    data["values"].update({"call_approved": True, "approval_age": 0, "approval_revoked": False,
+                           "day_total": "0", "payee_listed": True})
+    Path(d.options["data_file"]).write_text(json.dumps(data), encoding="utf-8")
+    a = d.ask(dict(INVOICE[1], to=STRANGER))
+    assert {k: a[k] for k in CALL_FACTORS} == {
+        "call_approved": False, "approval_age": None, "approval_revoked": None,
+        "day_total": Decimal("0.01"), "payee_listed": False}
+
+
+def test_the_example_host_module_an_execution_whose_time_cannot_be_read(tmp_path):
+    """Wrong module: executed_time_unreadable_skipped."""
+    d = Direct(tmp_path)
+    Path(d.options["executions_file"]).write_text(json.dumps({"executed": {"t0": {
+        "tool": PAY, "tool_input": INVOICE[2], "time": "yesterday"}}}), encoding="utf-8")
+    assert d.ask(INVOICE[1])["day_total"] is None
+
+
+def test_the_example_host_module_a_list_of_payees_with_a_non_string(tmp_path):
+    """Wrong module: payee_list_non_strings_ignored."""
+    d = Direct(tmp_path, payees=[PAYEE_A, 5])
+    assert d.ask(INVOICE[1])["payee_listed"] is None
+
+
+def test_the_example_host_module_a_revocation_before_its_approval(tmp_path):
+    """A revocation counts wherever it stands in the file. Wrong module:
+    revocation_counts_only_after_its_approval."""
+    d = Direct(tmp_path, approvals=[revocation("A1"), approval("A1", INVOICE[1])])
+    assert d.ask(INVOICE[1])["approval_revoked"] is True
+
+
+def test_the_example_host_module_a_time_with_an_offset_that_would_look_fresh(tmp_path):
+    """09:10 at +03:00 is 06:10 UTC; read as UTC it would be an approval of 5 minutes,
+    earlier than the clock. Wrong module: one that reads the time without its offset."""
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1],
+                                             granted="2026-11-13T09:10:00+03:00")])
+    a = d.ask(INVOICE[1], now="2026-11-13T09:15:00Z")
+    assert (a["call_approved"], a["approval_age"]) == (True, None)
+
+
+@pytest.mark.parametrize("record", [
+    {"tool_input": INVOICE[2], "time": "2026-11-13T09:09:00Z"},
+    {"tool": None, "tool_input": INVOICE[2], "time": "2026-11-13T09:09:00Z"},
+    {"tool": 5, "tool_input": INVOICE[2], "time": "2026-11-13T09:09:00Z"},
+    {"tool": PAY, "tool_input": INVOICE[2], "time": "2026-11-13T09:09:00Z", "by": "x"}])
+def test_the_example_host_module_an_execution_not_of_its_form(tmp_path, record):
+    """A record of executions_file with other keys than tool (a string), tool_input and
+    time makes the file unreadable: the total of the day has no value, and executed
+    raises. Wrong module: one that takes a record without tool for a call of another
+    tool."""
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    Path(d.options["executions_file"]).write_text(json.dumps({"executed": {"t0": record}}),
+                                                  encoding="utf-8")
+    assert d.ask(INVOICE[1])["day_total"] is None
+    with pytest.raises(ValueError):
+        d.take("t1", INVOICE[1], "2026-11-13T09:10:01Z")
+
+
+def test_the_example_host_module_an_exact_total_of_the_day(tmp_path):
+    """0.01 executed and 0.0100000000000000000000000000001 asked for: the total is the
+    exact sum, greater than a limit of 0.02. Wrong module: one that adds with the 28
+    digits of the default context and gets 0.02."""
+    d = Direct(tmp_path, limit="0.02")
+    d.take("t0", INVOICE[2], "2026-11-13T09:09:00Z")
+    total = d.ask(dict(INVOICE[1], amount="0.0100000000000000000000000000001"))["day_total"]
+    assert total == Decimal("0.0200000000000000000000000000001") and total > Decimal("0.02")
+
+
+def test_the_example_host_module_an_exact_age(tmp_path):
+    """Granted 1e-27 s before g, decided at g + 600: the exact age is over 600, so it is
+    601. Wrong module: one that subtracts with the 28 digits of the default context and
+    gets 600."""
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1],
+                                             granted="1794560699.999999999999999999999999999")])
+    assert d.ask(INVOICE[1], now="2026-11-13T09:15:00Z")["approval_age"] == 601
+
+
+def test_the_example_host_module_a_sum_or_an_age_too_long_to_be_exact(tmp_path):
+    """A sum or an age that the exact context cannot hold has no value. Wrong module: one
+    that rounds them."""
+    call = dict(INVOICE[1], amount="0.01" + "0" * 80 + "1")
+    d = Direct(tmp_path, approvals=[approval("A1", call, granted="1794560699." + "9" * 80)])
+    d.take("t0", INVOICE[2], "2026-11-13T09:09:00Z")
+    a = d.ask(call, now="2026-11-13T09:15:00Z")
+    assert (a["call_approved"], a["day_total"], a["approval_age"]) == (True, None, None)
