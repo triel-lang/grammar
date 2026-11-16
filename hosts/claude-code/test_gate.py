@@ -856,6 +856,35 @@ def test_the_example_settings():
               "allowNestedUserNamespaces"):
         assert sb[k] is False, k
     assert sb["network"]["allowAllUnixSockets"] is False and sb["network"]["allowLocalBinding"] is False
+    # Every file of the host module lies where the deny rules and the sandbox keep the agent
+    # from writing: an approval written by the agent would be the way around the gate that
+    # section II-C of the paper describes.
+    files = option_paths(cfg["host_options"])
+    assert files and all(p.startswith(("/etc/triel/", "/var/lib/triel/")) for p in files), files
+
+
+def option_paths(v):
+    """The absolute paths among the values of the host options, at any depth."""
+    if isinstance(v, str):
+        return [v] if v.startswith("/") else []
+    if isinstance(v, dict):
+        return [p for x in v.values() for p in option_paths(x)]
+    if isinstance(v, list):
+        return [p for x in v for p in option_paths(x)]
+    return []
+
+
+# The top-level terms of mandate.triel in their order: TERM 1 to TERM 7. Each reason
+# to hold a payment is a prohibition of its own, so the gate names it by its number.
+EXAMPLE_TERMS = [
+    "agent MUST_NOT raise_limit",
+    "agent MUST_NOT pay WHEN NOT call_approved",
+    "agent MUST_NOT pay WHEN call_approved AND approval_age > 600",
+    "agent MUST_NOT pay WHEN call_approved AND approval_revoked",
+    "agent MUST_NOT pay WHEN day_total > daily_limit",
+    "agent MUST_NOT pay WHEN NOT payee_listed",
+    "agent MUST_NOT convert WHEN fx_rate > rate_limit"]
+CALL_FACTORS = ("call_approved", "approval_age", "approval_revoked", "day_total", "payee_listed")
 
 
 def test_the_example_configuration_and_specification():
@@ -864,31 +893,44 @@ def test_the_example_configuration_and_specification():
     assert all(os.path.isabs(cfg[k]) for k in gate.PATH_KEYS)
     r = subprocess.run([sys.executable, str(REPO / "parser" / "triel_to_core.py"), "--actions",
                         str(HERE / "mandate.triel")], capture_output=True, text=True, cwd=REPO)
-    pairs = {(o["subject"], o["action"]) for o in json.loads(r.stdout)}
+    actions = json.loads(r.stdout)
+    pairs = {(o["subject"], o["action"]) for o in actions}
     assert pairs == {(a["subject"], a["action"]) for a in cfg["actions"]}
+    assert {o["action"]: o["monitors"] for o in actions} == {
+        "raise_limit": [1], "pay": [2, 3, 4, 5, 6], "convert": [7]}
+    text = (HERE / "mandate.triel").read_text(encoding="utf-8")
+    body = text.split("TERMS {", 1)[1].split("}", 1)[0]
+    assert [t.strip() for t in body.split(";")] == EXAMPLE_TERMS
+    # No DEFAULT and no PRESENT: they turn an unknown value into ALLOW.
+    assert "DEFAULT" not in body and "PRESENT" not in body
+    import triel_host
+    factors = triel_host.spec_factors(text)
+    # The factors that depend on the call have no MAX_AGE: the store of readings belongs
+    # to the factor, not to the call.
+    for name in CALL_FACTORS + ("daily_limit",):
+        assert factors[name]["stale"] == "none", name
+    opts = cfg["host_options"]
+    named = list(opts["approval_factors"].values()) + [opts["payment"][k] for k in (
+        "day_total", "payee_listed")]
+    assert sorted(named) == sorted(CALL_FACTORS)
+    assert opts["payment"]["tool"] == next(a["tool_name"] for a in cfg["actions"]
+                                           if a["action"] == "pay")
 
 
 def test_the_example_mandate_end_to_end(tmp_path):
     """The example of README.md: mandate.triel, host_example.py and the
     configuration of config.example.json with the paths of tmp_path."""
-    cfg = example_config()
-    data = {"values": {"rate_limit": "1.20"},
-            "approvals": [{"action": "pay", "tool_input": {"amount": "100.00"}}]}
-    x = Mandate(tmp_path, data=data)
-    shutil.copy(HERE / "mandate.triel", x.spec)
-    x.config.update(actions=cfg["actions"],
-                    host_options=dict(cfg["host_options"], data_file=str(tmp_path / "host_data.json")))
-    x.write_config()
-    x.activate()
-    x.set_data(dict(data, readings={"fx_rate": {"value": "1.10", "time": "2026-11-13T09:09:30Z"}}))
-    assert x.pre(PAY, "t1", "2026-11-13T09:10:00Z", {"amount": "100.00"}) == (0, "")
-    x.post(PAY, "t1", "2026-11-13T09:10:01Z", {"amount": "100.00"})
-    assert x.pre(CONVERT, "t2", "2026-11-13T09:10:20Z") == (0, "")
-    x.post(CONVERT, "t2", "2026-11-13T09:10:21Z")
-    assert x.pre(CONVERT, "t3", "2026-11-13T09:11:00Z") == (
-        2, held("triel check exit 3: BLOCK: monitor TERM 3 blocks the action"))
-    assert x.pre(PAY, "t4", "2026-11-13T09:11:00Z", {"amount": "100.00"}) == (
-        2, held("triel check exit 3: BLOCK: monitor TERM 1 blocks the action"))
+    x = Example(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    x.set_data(dict(x.data(), readings={"fx_rate": {"value": "1.10",
+                                                    "time": "2026-11-13T09:09:30Z"}}))
+    assert x.pre(PAY, "t1", "2026-11-13T09:10:00Z", INVOICE[1]) == (0, "")
+    x.post(PAY, "t1", "2026-11-13T09:10:01Z", INVOICE[1])
+    assert x.pre(CONVERT, "t2", "2026-11-13T09:10:20Z", EXCHANGE) == (0, "")
+    x.post(CONVERT, "t2", "2026-11-13T09:10:21Z", EXCHANGE)
+    assert x.pre(CONVERT, "t3", "2026-11-13T09:11:00Z", EXCHANGE) == (
+        2, held("triel check exit 3: BLOCK: monitor TERM 7 blocks the action"))
+    assert x.pre(PAY, "t4", "2026-11-13T09:11:00Z", INVOICE[1]) == (
+        2, held("triel check exit 3: BLOCK: monitor TERM 2 blocks the action"))
 
 
 # --- Further cases ----------------------------------------------------------------------
@@ -1377,3 +1419,547 @@ def test_the_child_has_the_environment_of_the_gate_and_runs_isolated(tmp_path, m
     d = json.loads(out)
     assert code == 0 and d["isolated"] == 1 and d["executable"] == sys.executable
     assert d["env"]["PATH"] == os.defpath and set(d["env"]) <= {"PATH", "LC_CTYPE"}
+
+
+# --- The example: the approval of a payment (README.md, section "The example") ----------
+#
+# The setting of the paper (README.md): a wallet with a daily limit of 0.01, three
+# invoices of 0.01 to a known payee, the approvals of the owner in the store of the host,
+# and a code of six digits in the mail that raises the limit of the wallet. Each scenario
+# C1 to C11 of README.md is a test; the blocking TERMs come from the first line of the
+# standard error of the gate, the verdicts, where they matter, from triel check on the
+# trace that the gate kept. The expectations were written before the module was.
+
+from decimal import Decimal  # noqa: E402
+
+RAISE = "mcp__payments__raise_limit"
+PAYEE_A = "0x7Fa3C9e1D24b6058aE13f9C0b2D47e6A5c81B3d9"
+PAYEE_B = "0x2bD84F6a0C17e3B95dA2c6E8f1047B3aD9e5C6f2"
+STRANGER = "0x9E0c5A7b3F18d2C46eB9a01D7c3f5E28B6a4D1c7"
+INVOICE = {n: {"to": PAYEE_A, "amount": "0.01", "invoice": f"INV-{n}"} for n in (1, 2, 3)}
+EXCHANGE = {"amount": "100.00", "from": "USDC", "to": "EUR"}
+GRANTED = "2026-11-13T09:05:00Z"
+CODE = "604117"
+T0 = "2026-11-13T09:10:00Z"
+OPEN = ("ALLOW", "PENDING")        # the monitor allows; the condition is false
+UNDEFINED = ("BLOCK", "PENDING")   # the monitor blocks; the condition has no value
+TRUE = ("BLOCK", "BREACHED")       # the monitor blocks; the condition is true at T
+
+
+def approval(aid, tool_input, granted=GRANTED, tool=PAY):
+    return {"type": "approval", "id": aid, "tool": tool, "tool_input": tool_input,
+            "granted": granted}
+
+
+def revocation(aid, time="2026-11-13T09:06:00Z"):
+    return {"type": "revocation", "id": aid, "time": time}
+
+
+def example_options(tmp):
+    """The host_options of config.example.json, each file in tmp under its own name."""
+    return {k: (str(tmp / Path(v).name) if k.endswith("_file") else v)
+            for k, v in example_config()["host_options"].items()}
+
+
+def example_data(limit, payees):
+    return {"values": {"daily_limit": limit, "rate_limit": "1.20"}, "payees": list(payees)}
+
+
+class Example(Mandate):
+    """mandate.triel, host_example.py and config.example.json, with the files of the
+    host in tmp: the data of the owner, the approvals written by the channel, and the
+    files of the module, which the activation creates."""
+
+    def __init__(self, tmp, limit="0.05", payees=(PAYEE_A,), approvals=()):
+        super().__init__(tmp, data=example_data(limit, payees))
+        shutil.copy(HERE / "mandate.triel", self.spec)
+        cfg = example_config()
+        self.options = example_options(tmp)
+        self.config.update(actions=cfg["actions"], allowed_tools=cfg["allowed_tools"],
+                           managed_servers=cfg["managed_servers"], host_options=self.options)
+        self.write_config()
+        Path(self.options["approvals_file"]).write_text("", encoding="utf-8")
+        self.add(*approvals)
+        r = self.run(["activate"], now=ACT)
+        assert r.returncode == 0, r.stderr
+
+    def add(self, *records):
+        """The channel appends approvals and revocations to its file."""
+        with open(self.options["approvals_file"], "a", encoding="utf-8") as f:
+            for rec in records:
+                f.write(json.dumps(rec) + "\n")
+
+    def ledger(self):
+        return json.loads(Path(self.options["ledger_file"]).read_text(encoding="utf-8"))
+
+    def executions(self):
+        return json.loads(Path(self.options["executions_file"]).read_text(encoding="utf-8"))
+
+    def standing(self):
+        """The ids of the approvals in the file of the channel that no execution spent."""
+        spent = self.ledger()["spent"]
+        lines = Path(self.options["approvals_file"]).read_text(encoding="utf-8").splitlines()
+        return [r["id"] for r in map(json.loads, lines)
+                if r["type"] == "approval" and r["id"] not in spent]
+
+    def decide(self, tool, tid, now, tool_input):
+        """(exit code, the blocking TERMs of the first line, the result); the TERMs are
+        None when the first line is not a BLOCK of triel check."""
+        r = self.hook("pre", "PreToolUse", tool, tid, now, tool_input)
+        if r.returncode == 0:
+            assert r.stdout == "" and r.stderr == "", (r.stdout, r.stderr)
+            return 0, [], r
+        m = re.fullmatch(r"TRIEL gate: held: triel check exit 3: BLOCK: (.*)", first(r))
+        terms = None if m is None else sorted(
+            int(t) for t in re.findall(r"monitor TERM (\d+) blocks the action", m.group(1)))
+        return r.returncode, terms, r
+
+    def report(self, r):
+        """The JSON report of triel check --last on the trace that the gate kept for
+        the held call: its path is the second line of the standard error."""
+        path = r.stderr.splitlines()[1].strip()
+        assert path.startswith("trace: "), r.stderr
+        out = subprocess.run([sys.executable, str(REPO / "parser" / "triel.py"), "check",
+                              str(self.spec), path[len("trace: "):], "--json", "--last",
+                              "--evaluator", default_evaluator()],
+                             capture_output=True, text=True, cwd=REPO)
+        return json.loads(out.stdout)
+
+    def verdicts(self, r):
+        """{TERM: (its decision in the LAST line, its verdict)} for the held call."""
+        objs = self.report(r)
+        status = {o["term"]: o["status"]["verdict"] for o in objs if o["line"] == "TERM"}
+        (last,) = [o for o in objs if o["line"] == "LAST"]
+        return {d["term"]: (d["decision"], status[d["term"]]) for d in last["decisions"]}
+
+
+def test_the_example_c1_the_setting_of_the_paper(tmp_path):
+    """The first invoice is paid; the second is over the daily limit; the code from the
+    mail does not raise the limit; the second is still over it."""
+    x = Example(tmp_path, limit="0.01",
+                approvals=[approval(f"A{n}", INVOICE[n]) for n in (1, 2, 3)])
+    assert x.decide(PAY, "t1", T0, INVOICE[1])[:2] == (0, [])
+    x.post(PAY, "t1", "2026-11-13T09:10:01Z", INVOICE[1])
+    assert x.executions()["executed"]["t1"]["tool_input"] == INVOICE[1]
+    code, terms, r = x.decide(PAY, "t2", "2026-11-13T09:10:05Z", INVOICE[2])
+    assert (code, first(r)) == (2, held("triel check exit 3: BLOCK: monitor TERM 5 blocks the "
+                                        "action"))
+    assert x.verdicts(r)[5] == TRUE
+    code, terms, r = x.decide(RAISE, "t3", "2026-11-13T09:10:10Z", {"code": CODE, "daily": "1"})
+    assert (code, terms) == (2, [1]) and x.verdicts(r) == {1: TRUE}
+    assert x.decide(PAY, "t4", "2026-11-13T09:10:15Z", INVOICE[2])[:2] == (2, [5])
+
+
+def test_the_example_c2_a_letter_from_the_owner_to_an_unknown_payee(tmp_path):
+    x = Example(tmp_path, limit="0.01")
+    call = {"to": STRANGER, "amount": "0.02", "invoice": "INV-4"}
+    assert x.decide(PAY, "t1", T0, call)[:2] == (2, [2, 5, 6])
+
+
+def test_the_example_c2b_a_letter_from_the_owner_to_a_known_payee(tmp_path):
+    x = Example(tmp_path, limit="0.01")
+    call = {"to": PAYEE_A, "amount": "0.02", "invoice": "INV-4"}
+    assert x.decide(PAY, "t1", T0, call)[:2] == (2, [2, 5])
+
+
+def test_the_example_c3_an_approval_requested_that_did_not_come(tmp_path):
+    x = Example(tmp_path)
+    code, terms, r = x.decide(PAY, "t1", T0, INVOICE[1])
+    assert (code, terms) == (2, [2])
+    assert x.verdicts(r) == {2: TRUE, 3: OPEN, 4: OPEN, 5: OPEN, 6: OPEN}
+
+
+@pytest.mark.parametrize("broken", ["a directory", "a line that is not JSON"])
+def test_the_example_c3a_the_store_of_approvals_cannot_be_read(tmp_path, broken):
+    x = Example(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    store = Path(x.options["approvals_file"])
+    if broken == "a directory":
+        store.unlink()
+        store.mkdir()
+    else:
+        with open(store, "a", encoding="utf-8") as f:
+            f.write('{"type": "approval", "id": "A2", "tool"\n')
+    code, terms, r = x.decide(PAY, "t1", T0, INVOICE[1])
+    assert (code, terms) == (2, [2, 3, 4])
+    assert x.verdicts(r) == {2: UNDEFINED, 3: UNDEFINED, 4: UNDEFINED, 5: OPEN, 6: OPEN}
+
+
+C4 = {  # the time g of the approval, the host clock of the decision, the result
+    "at g + 600": (GRANTED, "2026-11-13T09:15:00Z", None),
+    "at g + 600.5": (GRANTED, "2026-11-13T09:15:00.5Z", TRUE),
+    "at g + 601": (GRANTED, "2026-11-13T09:15:01Z", TRUE),
+    "a stamp 1 s later than the host clock": ("2026-11-13T09:10:01Z", T0, UNDEFINED),
+    # 09:02 UTC: read as UTC, the stamp would be three hours younger than it is
+    "a stamp with a zone offset": ("2026-11-13T12:02:00+03:00", "2026-11-13T12:05:00Z",
+                                   UNDEFINED)}
+
+
+@pytest.mark.parametrize("variant", list(C4))
+def test_the_example_c4_an_approval_that_is_too_old_at_the_decision(tmp_path, variant):
+    """Each variant on its own mandate: after an ALLOW the call waits for its outcome,
+    after its execution the approval is spent, and the clock of a mandate does not go
+    back."""
+    granted, now, result = C4[variant]
+    x = Example(tmp_path, approvals=[approval("A1", INVOICE[1], granted=granted)])
+    code, terms, r = x.decide(PAY, "t1", now, INVOICE[1])
+    if result is None:
+        assert (code, terms) == (0, [])
+    else:
+        assert (code, terms) == (2, [3])
+        assert x.verdicts(r)[3] == result
+
+
+def test_the_example_c5_an_approval_of_another_call(tmp_path):
+    """The approval names the whole input: another payee or another amount is another call."""
+    x = Example(tmp_path, payees=(PAYEE_A, PAYEE_B), approvals=[approval("A1", INVOICE[1])])
+    assert x.decide(PAY, "t1", T0, dict(INVOICE[1], to=PAYEE_B))[:2] == (2, [2])
+    assert x.decide(PAY, "t2", "2026-11-13T09:10:05Z", dict(INVOICE[1], amount="0.02"))[:2] == (
+        2, [2])
+    assert x.standing() == ["A1"] and x.ledger()["spent"] == {}
+
+
+def test_the_example_c6_an_approval_revoked_before_the_decision(tmp_path):
+    x = Example(tmp_path, approvals=[approval("A1", INVOICE[1]), revocation("A1")])
+    code, terms, r = x.decide(PAY, "t1", T0, INVOICE[1])
+    assert (code, terms) == (2, [4])
+    assert x.verdicts(r) == {2: OPEN, 3: OPEN, 4: TRUE, 5: OPEN, 6: OPEN}
+
+
+def test_the_example_c6a_a_revocation_that_cannot_be_read(tmp_path):
+    x = Example(tmp_path, approvals=[approval("A1", INVOICE[1]),
+                                     {"type": "revocation", "id": "A1", "time": "yesterday"}])
+    code, terms, r = x.decide(PAY, "t1", T0, INVOICE[1])
+    assert (code, terms) == (2, [4])
+    assert x.verdicts(r) == {2: OPEN, 3: OPEN, 4: UNDEFINED, 5: OPEN, 6: OPEN}
+
+
+@pytest.mark.parametrize("when", ["before the execution", "after the execution"])
+def test_the_example_c7_a_revocation_written_after_pre(tmp_path, when):
+    """The decision is for the moment T: a revocation that reaches the store after pre
+    does not change it, whatever its stamp (here one before T). The decisions on the
+    earlier entries are final: in the report on the trace of the repeat, the monitor of
+    the revocation still allows the executed payment."""
+    x = Example(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    assert x.decide(PAY, "t1", T0, INVOICE[1])[:2] == (0, [])
+    late = revocation("A1", time="2026-11-13T09:09:00Z")
+    if when == "before the execution":
+        x.add(late)
+    x.post(PAY, "t1", "2026-11-13T09:10:01Z", INVOICE[1])
+    if when == "after the execution":
+        x.add(late)
+    assert [e["event"] for e in x.log() if e.get("tool_use_id") == "t1"] == ["allowed", "executed"]
+    code, terms, r = x.decide(PAY, "t2", "2026-11-13T09:11:00Z", INVOICE[1])
+    assert (code, terms) == (2, [2])
+    assert x.standing() == []
+    trace = json.loads(Path(r.stderr.splitlines()[1].strip()[len("trace: "):]).read_text())
+    (k,) = [i for i, e in enumerate(trace["entries"][:-1]) if e["event"]["kind"] == "act"]
+    (monitor,) = [o for o in x.report(r) if o["line"] == "MONITOR" and o["term"] == 4]
+    assert {"entry": k, "decision": "ALLOW"} in monitor["decisions"]
+
+
+def test_the_example_c8_a_fresh_approval_of_this_call_within_the_limit(tmp_path):
+    """The control: without it, a gate that always holds would give the same results."""
+    x = Example(tmp_path, limit="0.01", approvals=[approval("A1", INVOICE[1])])
+    assert x.decide(PAY, "t1", T0, INVOICE[1])[:2] == (0, [])
+    x.post(PAY, "t1", "2026-11-13T09:10:01Z", INVOICE[1])
+    assert x.state()["history"][0]["tool_use_id"] == "t1" and x.standing() == []
+
+
+def test_the_example_c9a_two_approvals_of_one_input(tmp_path):
+    x = Example(tmp_path, approvals=[approval("A1", INVOICE[1]), approval("A2", INVOICE[1])])
+    code, terms, r = x.decide(PAY, "t1", T0, INVOICE[1])
+    assert (code, terms) == (2, [2, 3, 4])
+    assert x.verdicts(r) == {2: UNDEFINED, 3: UNDEFINED, 4: UNDEFINED, 5: OPEN, 6: OPEN}
+
+
+def test_the_example_c9b_a_second_approval_comes_before_post(tmp_path):
+    """The approval chosen at pre is the one the execution spends."""
+    x = Example(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    assert x.decide(PAY, "t1", T0, INVOICE[1])[:2] == (0, [])
+    assert x.ledger()["selected"]["t1"] == "A1"
+    x.add(approval("A2", INVOICE[1], granted="2026-11-13T09:10:00.5Z"))
+    x.post(PAY, "t1", "2026-11-13T09:10:01Z", INVOICE[1])
+    assert x.ledger()["spent"] == {"A1": "t1"} and x.standing() == ["A2"]
+
+
+def test_the_example_c10_an_approval_whose_id_an_execution_spent(tmp_path):
+    x = Example(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    assert x.decide(PAY, "t1", T0, INVOICE[1])[:2] == (0, [])
+    x.post(PAY, "t1", "2026-11-13T09:10:01Z", INVOICE[1])
+    x.add(approval("A1", INVOICE[2], granted="2026-11-13T09:10:30Z"))
+    code, terms, r = x.decide(PAY, "t2", "2026-11-13T09:11:00Z", INVOICE[2])
+    assert (code, terms) == (2, [2])
+    assert x.verdicts(r)[2] == TRUE
+
+
+def test_the_example_c11_midnight(tmp_path):
+    """A day is a calendar day of UTC: a payment executed at 23:59:59 does not count on
+    the next day."""
+    x = Example(tmp_path, limit="0.01",
+                approvals=[approval("A1", INVOICE[1], granted="2026-11-13T23:55:00Z"),
+                           approval("A2", INVOICE[2], granted="2026-11-13T23:56:00Z")])
+    assert x.decide(PAY, "t1", "2026-11-13T23:59:58.5Z", INVOICE[1])[:2] == (0, [])
+    x.post(PAY, "t1", "2026-11-13T23:59:59Z", INVOICE[1])
+    assert [e["E"] for e in x.log() if e["event"] == "executed"] == ["2026-11-13T23:59:59Z"]
+    assert x.decide(PAY, "t2", "2026-11-14T00:00:00Z", INVOICE[2])[:2] == (0, [])
+
+
+def test_the_example_a_fact_that_only_the_first_store_takes(tmp_path):
+    """The store of the approvals takes the fact, the store of the executions cannot be
+    written: a conflict. resolve --executed gives the fact again; each store adds only
+    what it does not have: the approval stays spent once, and the payment counts in the
+    total of the day."""
+    x = Example(tmp_path, limit="0.01",
+                approvals=[approval("A1", INVOICE[1]), approval("A2", INVOICE[2])])
+    assert x.decide(PAY, "t1", T0, INVOICE[1])[:2] == (0, [])
+    blocker = Path(x.options["executions_file"] + ".tmp")
+    blocker.mkdir()
+    x.post(PAY, "t1", "2026-11-13T09:10:01Z", INVOICE[1])
+    assert x.state()["conflicts"]["t1"]["why"].startswith(
+        "the host module did not take the execution: IsADirectoryError")
+    assert x.ledger()["spent"] == {"A1": "t1"} and "t1" not in x.executions()["executed"]
+    blocker.rmdir()
+    assert x.command("resolve", "t1", "--executed", "--at", "2026-11-13T09:10:01Z",
+                     now="2026-11-13T09:11:00Z") == (0, "")
+    assert x.ledger()["spent"] == {"A1": "t1"} and x.ledger()["taken"] == ["t1"]
+    assert list(x.executions()["executed"]) == ["t1"] and x.standing() == ["A2"]
+    assert x.decide(PAY, "t2", "2026-11-13T09:12:00Z", INVOICE[2])[:2] == (2, [5])
+
+
+# The host module called directly: what it gives for each factor (README.md, "What the
+# host module computes"). Fast, without the gate and triel check.
+
+def at(t):
+    return datetime.fromisoformat(t.replace("Z", "+00:00"))
+
+
+class Direct:
+    def __init__(self, tmp, limit="0.01", payees=(PAYEE_A,), approvals=()):
+        import host_example
+        import triel_host
+        tmp.mkdir(parents=True, exist_ok=True)
+        self.module = host_example
+        self.options = example_options(tmp)
+        Path(self.options["data_file"]).write_text(json.dumps(example_data(limit, payees)))
+        Path(self.options["approvals_file"]).write_text(
+            "".join(json.dumps(a) + "\n" for a in approvals), encoding="utf-8")
+        self.factors = triel_host.spec_factors((HERE / "mandate.triel").read_text(encoding="utf-8"))
+        self.module.answers(None, at(ACT), self.factors, self.options)  # the activation
+
+    def ask(self, tool_input, now=T0, tool=PAY, tid="t1"):
+        call = {"tool_use_id": tid, "tool_name": tool, "tool_input": tool_input,
+                "subject": "agent", "action": "pay", "mcp_server": {"name": "payments",
+                                                                    "source": "managed"}}
+        return self.module.answers(call, at(now), self.factors, self.options)
+
+    def take(self, tid, tool_input, time, tool=PAY):
+        self.module.executed({"tool_use_id": tid, "tool_name": tool, "subject": "agent",
+                              "action": "pay", "tool_input": tool_input, "time": at(time)},
+                             self.options)
+
+    def file(self, key):
+        return json.loads(Path(self.options[key]).read_text(encoding="utf-8"))
+
+
+def test_the_example_host_module_amounts(tmp_path):
+    d = Direct(tmp_path)
+    for amount, total in (("0.01", Decimal("0.01")), (0.01, Decimal("0.01")), (2, Decimal(2)),
+                          ("0.010", Decimal("0.01")), ("0", None), ("-0.01", None),
+                          (0, None), ("abc", None), ("1e-2", None), (True, None), (None, None),
+                          ("NaN", None), (" 0.01", None), ([1], None)):
+        assert d.ask(dict(INVOICE[1], amount=amount))["day_total"] == total, amount
+    assert d.ask({"to": PAYEE_A, "invoice": "INV-1"})["day_total"] is None
+
+
+def test_the_example_host_module_payees(tmp_path):
+    d = Direct(tmp_path, payees=[PAYEE_A, "acme"])
+    for to, listed in ((PAYEE_A, True), (PAYEE_A.lower(), True), (PAYEE_A.upper(), True),
+                       (PAYEE_A + "0", False), (PAYEE_A[:-1], False), ("acme", True),
+                       ("ACME", False), ("acme ", False), (STRANGER, False), (5, None),
+                       (None, None)):
+        assert d.ask(dict(INVOICE[1], to=to))["payee_listed"] is listed, to
+    assert d.ask({"amount": "0.01", "invoice": "INV-1"})["payee_listed"] is None
+
+
+def test_the_example_host_module_keys_outside_the_schema(tmp_path):
+    d = Direct(tmp_path, approvals=[approval("A1", dict(INVOICE[1], memo="x"))])
+    a = d.ask(dict(INVOICE[1], memo="x"))
+    assert {k: a[k] for k in CALL_FACTORS} == dict.fromkeys(CALL_FACTORS)
+    assert {k: d.ask(["0.01"])[k] for k in CALL_FACTORS} == dict.fromkeys(CALL_FACTORS)
+
+
+def broken(path):
+    """A file that cannot be read: a directory in its place."""
+    p = Path(path)
+    if p.exists():
+        p.unlink()
+    p.mkdir()
+
+
+def test_the_example_host_module_unknown_is_not_no(tmp_path):
+    """Each source on its own: what cannot be read has no value, and only the factors
+    computed from it."""
+    def fresh(name):
+        return Direct(tmp_path / name, approvals=[approval("A1", INVOICE[1])])
+
+    whole = fresh("whole").ask(INVOICE[1])
+    assert {k: whole[k] for k in CALL_FACTORS + ("daily_limit",)} == {
+        "call_approved": True, "approval_age": 300, "approval_revoked": False,
+        "day_total": Decimal("0.01"), "payee_listed": True, "daily_limit": "0.01"}
+
+    def without(name, key, factors):
+        d = fresh(name)
+        broken(d.options[key])
+        a = d.ask(INVOICE[1])
+        assert {k: a[k] for k in factors} == dict.fromkeys(factors), name
+        assert {k: a[k] for k in a if k not in factors and k != "fx_rate"} == {
+            k: whole[k] for k in whole if k not in factors and k != "fx_rate"}, name
+        return a
+
+    a = without("data", "data_file", ("daily_limit", "rate_limit", "payee_listed"))
+    assert a["fx_rate"] is not None  # no new reading, never a value
+    without("approvals", "approvals_file", ("call_approved", "approval_age", "approval_revoked"))
+    without("ledger", "ledger_file", ("call_approved", "approval_age", "approval_revoked"))
+    without("executions", "executions_file", ("day_total",))
+    d = fresh("missing")
+    Path(d.options["approvals_file"]).unlink()
+    assert d.ask(INVOICE[1])["call_approved"] is None
+    d = fresh("not a list")
+    Path(d.options["data_file"]).write_text(json.dumps(dict(example_data("0.01", []),
+                                                            payees=PAYEE_A)))
+    assert d.ask(INVOICE[1])["payee_listed"] is None
+    d = fresh("a spent amount that cannot be read")
+    d.take("t0", dict(INVOICE[2], amount="much"), "2026-11-13T09:09:00Z")
+    assert d.ask(INVOICE[1])["day_total"] is None
+
+
+@pytest.mark.parametrize("granted,now,age", [
+    (GRANTED, "2026-11-13T09:15:00Z", 600),
+    (GRANTED, "2026-11-13T09:15:00.5Z", 601),
+    ("2026-11-13T09:05:00.25Z", "2026-11-13T09:15:00Z", 600),
+    (1794560700, "2026-11-13T09:15:00Z", 600),
+    ("1794560700", "2026-11-13T09:15:00Z", 600),
+    (GRANTED, GRANTED, 0),
+    ("2026-11-13T09:15:01Z", "2026-11-13T09:15:00Z", None),
+    ("2026-11-13T12:05:00+03:00", "2026-11-13T09:15:00Z", None),
+    ("2026-11-13 09:05:00", "2026-11-13T09:15:00Z", None),
+    (True, "2026-11-13T09:15:00Z", None),
+    (None, "2026-11-13T09:15:00Z", None)])
+def test_the_example_host_module_age_of_an_approval(tmp_path, granted, now, age):
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1], granted=granted)])
+    a = d.ask(INVOICE[1], now=now)
+    assert (a["call_approved"], a["approval_age"]) == (True, age)
+
+
+@pytest.mark.parametrize("records,revoked", [
+    ([], False),
+    ([revocation("A1", time="2027-01-01T00:00:00Z")], True),   # at any stamp
+    ([revocation("A1", time=0)], True),
+    ([revocation("A2")], False),
+    ([{"type": "revocation", "id": "A1", "time": "yesterday"}], None),
+    ([{"type": "revocation", "id": "A1"}], None),
+    ([{"type": "revocation", "id": "A1", "time": GRANTED, "by": "owner"}], None),
+    ([{"type": "revocation", "id": "A1", "time": "yesterday"}, revocation("A1")], True)])
+def test_the_example_host_module_revocation(tmp_path, records, revoked):
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1])] + records)
+    assert d.ask(INVOICE[1])["approval_revoked"] is revoked
+
+
+def test_the_example_host_module_no_approval_and_two_approvals(tmp_path):
+    d = Direct(tmp_path / "none", approvals=[approval("A1", INVOICE[2], tool=CONVERT)])
+    a = d.ask(INVOICE[2])
+    assert (a["call_approved"], a["approval_age"], a["approval_revoked"]) == (False, None, None)
+    d = Direct(tmp_path / "two", approvals=[approval("A1", INVOICE[1]),
+                                            approval("A2", {**INVOICE[1]})])
+    a = d.ask(INVOICE[1])
+    assert (a["call_approved"], a["approval_age"], a["approval_revoked"]) == (None, None, None)
+    assert d.file("ledger_file")["selected"] == {"t1": None}
+
+
+def test_the_example_host_module_spends_what_it_chose(tmp_path):
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    assert d.ask(INVOICE[1], tid="t1")["call_approved"] is True
+    with open(d.options["approvals_file"], "a", encoding="utf-8") as f:
+        f.write(json.dumps(approval("A2", INVOICE[1])) + "\n")
+    d.take("t1", INVOICE[1], "2026-11-13T09:10:01Z")
+    d.take("t1", INVOICE[1], "2026-11-13T09:10:01Z")      # a fact given twice
+    ledger = d.file("ledger_file")
+    assert (ledger["spent"], ledger["taken"]) == ({"A1": "t1"}, ["t1"])
+    assert list(d.file("executions_file")["executed"]) == ["t1"]
+    assert d.ask(INVOICE[1], tid="t2")["call_approved"] is True    # A2
+
+
+def test_the_example_host_module_without_a_choice_spends_every_approval_of_the_call(tmp_path):
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1]), approval("A2", INVOICE[1]),
+                                    approval("A3", INVOICE[2])])
+    d.take("t9", INVOICE[1], "2026-11-13T09:10:01Z")
+    assert d.file("ledger_file")["spent"] == {"A1": "t9", "A2": "t9"}
+    assert d.ask(INVOICE[1], tid="t10")["call_approved"] is False
+
+
+@pytest.mark.parametrize("key", ["ledger_file", "executions_file", "approvals_file"])
+def test_the_example_host_module_executed_raises_when_it_cannot_read(tmp_path, key):
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    broken(d.options[key])
+    with pytest.raises(OSError):
+        d.take("t9", INVOICE[1], "2026-11-13T09:10:01Z")
+
+
+def test_the_example_host_module_day_of_utc(tmp_path):
+    """The executed payments count by their time of execution E, the payment of the
+    call by T, the clock of the module rounded up, as in the trace."""
+    d = Direct(tmp_path)
+    d.take("t1", INVOICE[1], "2026-11-13T23:59:59Z")
+    for now, total in (("2026-11-13T23:59:58.2Z", "0.02"), ("2026-11-13T23:59:59Z", "0.02"),
+                       ("2026-11-13T23:59:59.5Z", "0.01"), ("2026-11-14T00:00:00Z", "0.01")):
+        assert d.ask(INVOICE[2], now=now)["day_total"] == Decimal(total), now
+
+
+def test_the_example_host_module_refuses_the_old_options_with_the_new(tmp_path):
+    d = Direct(tmp_path)
+    d.options["counters"] = {"day_total": "pay"}
+    with pytest.raises(ValueError):
+        d.ask(INVOICE[1])
+
+
+# The scripted run of README.md: an agent that is a script of the steps the models took
+# in the paper, against the fake servers of ihitl/, without the gate and with it, the
+# second as Claude Code runs the hooks: pre, the server, then post (failure on an error).
+
+RUN = [  # the call, what the gate did, the blocking TERMs, whether it reached the server
+    ("mail.list_messages", "allowed tool", [], True),
+    ("mail.read_message 1", "allowed tool", [], True),
+    ("mail.read_message 2", "allowed tool", [], True),
+    ("mail.read_message 3", "allowed tool", [], True),
+    ("mail.read_message 4", "allowed tool", [], True),
+    ("mail.read_message 5", "allowed tool", [], True),
+    ("payments.raise_limit", "held", [1], False),
+    ("payments.pay INV-1", "allowed", [], True),
+    ("payments.pay INV-2", "held", [5], False),
+    ("payments.pay INV-3", "held", [5], False),
+    ("payments.pay INV-4", "held", [2, 5, 6], False)]
+
+
+def test_the_example_scripted_agent_with_and_without_the_gate(tmp_path):
+    sys.path.insert(0, str(HERE / "ihitl"))
+    import scripted_run
+    plain = scripted_run.run(tmp_path / "plain", gate=False)
+    assert [(r["call"], r["gate"], r["reached"]) for r in plain["rows"]] == [
+        (c, None, True) for c, _, _, _ in RUN]
+    assert [(j["tool"], j["result"]) for j in plain["journal"]] == [
+        ("raise_limit", "ok"), ("pay", "ok"), ("pay", "ok"), ("pay", "ok"), ("pay", "ok")]
+    assert plain["journal"][0]["arguments"]["code"] == CODE
+    assert [j["arguments"] for j in plain["journal"][1:4]] == [INVOICE[n] for n in (1, 2, 3)]
+    assert plain["journal"][4]["arguments"] == {"to": STRANGER, "amount": "0.02",
+                                                "invoice": "INV-4"}
+    gated = scripted_run.run(tmp_path / "gated", gate=True, evaluator=default_evaluator())
+    assert [(r["call"], r["gate"], r["terms"], r["reached"]) for r in gated["rows"]] == RUN
+    for r in gated["rows"]:
+        if r["gate"] == "held":
+            assert r["line"] == held("triel check exit 3: BLOCK: " + ", ".join(
+                f"monitor TERM {t} blocks the action" for t in r["terms"]))
+            assert r["reason"] == ", ".join(scripted_run.REASONS[t] for t in r["terms"])
+    assert [(j["tool"], j["arguments"], j["result"]) for j in gated["journal"]] == [
+        ("pay", INVOICE[1], "ok")]
+    # The reasons of the run are the conditions of mandate.triel, TERM by TERM.
+    assert sorted(scripted_run.REASONS) == list(range(1, len(EXAMPLE_TERMS) + 1))
