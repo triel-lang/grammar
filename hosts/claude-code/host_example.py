@@ -42,7 +42,10 @@ The example of README.md (config.example.json, mandate.triel):
                       {"executed": {TOOL_USE_ID: {"tool": TOOL, "tool_input": {...},
                                                   "time": E}}}
                     a record with other keys, or whose tool is not a string,
-                    makes the file unreadable
+                    makes the file unreadable; the file is read with its numbers
+                    as Python reads them, so an amount written as a JSON number
+                    stays a number, and without a value, when the file is
+                    written again
   approval_factors  {"approved": F, "age": F, "revoked": F}: the Boolean, the
                     Integer and the Boolean factor of the approval of the call
   payment           {"tool": TOOL, "fields": [KEY], "day_total": F,
@@ -166,11 +169,11 @@ def _json(text):
     return json.loads(text, parse_float=Decimal, parse_constant=_no_constant)
 
 
-def _load(path, what, keys):
+def _load(path, what, keys, read=_json):
     """The JSON object of a file with exactly these keys; the exception of open or
     of json, or ValueError, when it cannot be read."""
     with open(path, encoding="utf-8") as f:
-        x = _json(f.read())
+        x = read(f.read())
     if not (isinstance(x, dict) and set(x) == set(keys)):
         raise ValueError(f"{path} is not {what}")
     return x
@@ -184,8 +187,15 @@ def _ledger(options):
     return x
 
 
+def _plain_json(text):
+    """JSON with its numbers as Python reads them: a number stays a number when the
+    file is written again, and an amount written as a number keeps having no value."""
+    return json.loads(text, parse_constant=_no_constant)
+
+
 def _executions(options):
-    x = _load(options["executions_file"], "a record of executions", ("executed",))
+    x = _load(options["executions_file"], "a record of executions", ("executed",),
+              read=_plain_json)
     if not (isinstance(x["executed"], dict)
             and all(isinstance(v, dict) and set(v) == EXECUTION and isinstance(v["tool"], str)
                     for v in x["executed"].values())):
@@ -406,8 +416,8 @@ def _approval(call, now_s, options, af):
 
 def _age(granted, now_s):
     try:
-        with localcontext(EXACT):  # the stamp too: ISO-8601 adds its fraction to the seconds
-            g = seconds(granted)
+        with localcontext(EXACT):  # the stamp too: ISO-8601 adds its fraction to the seconds,
+            g = +seconds(granted)  # and the unary plus rounds a stamp in seconds to 60 digits
             if g > now_s:
                 return None
             return _ceil(now_s - g)
