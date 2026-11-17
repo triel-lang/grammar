@@ -101,9 +101,6 @@ EQUIVALENT = {
                               "specification is rejected and the term built with None is never printed.",
     (675, 27, "constant", 1): "u is a unary_expr, which has exactly one subtree, so [-1] is [0].",
     (739, 31, "constant", 2): "The line is unreachable (unreachable.json: value, call 3).",
-    (777, 8, "statement", 0): "fb is None only after a reason was added; then operand_type is None or the type "
-                              "of an inner fallback already rejected as \"DEFAULT fallback of another type\", so "
-                              "the check below adds no other reason and no term is printed.",
     (846, 24, "constant", 1): "c is a matched_term or an unmatched_term, each with exactly one subtree, so [-1] "
                               "is [0].",
     (887, 15, "and/or", 0): "a and c are None only after a reason was added, so with one of them None the "
@@ -443,7 +440,7 @@ def section_rejects(coverage_lines):
         raise SystemExit("the null mutant (the translator parsed and compiled again) differs from the translator")
     say(f"- null mutant: the same output as the translator on all {len(CASES)} cases")
     say(f"- time of the translator on the corpus (parse trees cached): {BASE_TIME:.2f} s; "
-        f"limit of a mutant: {limit():.1f} s, then x10")
+        f"limit of a mutant: {limit():.1f} s, then x10 (time)")
     entries = {(u["function"], u["index"]): u for u in UNREACHABLE}
     pos = {(c["function"], c["index"]): c for c in calls}
     errors = []
@@ -660,7 +657,7 @@ def section_coverage(tmp):
     calls = rejects.calls(SOURCE)
     call_lines = {c["line"]: (c["function"], c["index"]) for c in calls}
     say(f"- test_triel_to_core.py under coverage: {data['tests']} "
-        f"(evaluator: {'built, ' + EVALUATOR if os.path.exists(EVALUATOR) else 'not built'})")
+        f"(evaluator: {'built, ' + os.path.relpath(EVALUATOR, REPO) if os.path.exists(EVALUATOR) else 'not built'})")
     for name, rep in data["reports"].items():
         s = rep["summary"]
         say(f"- {name}: statements {s['covered_lines']} of {s['num_statements']} "
@@ -888,7 +885,7 @@ def section_random(tmp):
         done = results[1:]
         control_ok = rc == 0 and (not have_eval or " skipped" not in last)
         say(f"- control run of test_triel_to_core.py on the translator itself: {last} "
-            f"(evaluator: {'built, ' + EVALUATOR if have_eval else 'not built'})")
+            f"(evaluator: {'built, ' + os.path.relpath(EVALUATOR, REPO) if have_eval else 'not built'})")
         if have_eval and not control_ok:
             say("- the control run did not pass: the survivors are run again without the evaluator")
             with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:

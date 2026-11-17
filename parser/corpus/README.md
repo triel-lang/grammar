@@ -14,9 +14,14 @@ Run the implementation on the `source` of every case and compare:
 
 - the outcome: `accepted`, `rejected`, or `parse_error` (the text does not parse
   with `parser/triel.lark`), equal to `outcome`;
-- for `accepted`: the core term, printed as an S-expression on one line as
-  `sexp` of `parser/triel_to_core.py` prints it (the grammar of the term is in
-  `evaluator/Main.hs`), equal to `term`, character for character;
+- for `accepted`: the core term as `sexp` of `parser/triel_to_core.py` prints
+  it, equal to `term`, character for character (the grammar of the term is in
+  `evaluator/Main.hs`). A string in the term is printed between double quotes,
+  with `\` and `"` escaped by `\` and every other character as itself, so a
+  newline or a tab in a string is printed as it is. The evaluator also reads
+  `\n` and `\t` in a string of the term as a newline and a tab, so a term that
+  prints them as `\n` and `\t` has the same value; the corpus compares the form
+  that `sexp` prints;
 - for `rejected`: the classes of the reasons (`classes.json` gives the class of
   every reason of the reference translator; another implementation maps its own
   reasons to the same seven classes). For a case with `single_defect` the set of
@@ -26,7 +31,13 @@ Run the implementation on the `source` of every case and compare:
 `reasons` and `header` are for reference: they are the texts of the reference
 translator (its reasons, and its lines `SPEC` and `METADATA`), and another
 implementation need not reproduce them. `parser/test_corpus.py` compares them
-exactly, since it checks the reference translator.
+exactly, `header` of a rejected case as well as of an accepted one, since it
+checks the reference translator.
+
+A case with `disputed` records what the reference translator does where the
+text of the specification does not decide the question or reads otherwise.
+Another implementation is not bound by it there: a difference on such a case is
+a question about the text, not a failure.
 
 ## Files
 
@@ -47,7 +58,7 @@ exactly, since it checks the reference translator.
 | `source` | always | the whole text of a specification |
 | `outcome` | always | `accepted`, `rejected` or `parse_error` |
 | `term` | `accepted` | the core term, `sexp(translate(source).core)` |
-| `header` | `accepted` | the lines `SPEC …` and `METADATA …` (for reference) |
+| `header` | `accepted`, `rejected` | the lines `SPEC …` and `METADATA …` (for reference) |
 | `classes` | `rejected` | the sorted list of the classes of the reasons |
 | `reasons` | `rejected` | the sorted list of the reasons of the reference translator (for reference) |
 | `single_defect` | `rejected`, optional | `true`: the input has exactly one defect, and one reason |
@@ -140,8 +151,10 @@ the lines with times.
   term.
 - Inputs that are not in it: a construct, a combination or a value it does not
   contain may be translated wrongly without a failed case. `measure.py` lists
-  the deletions of calls of `reject` and the random mutants that no case
-  catches.
+  the deletions of calls of `reject` that no case catches, and those of its 100
+  random mutants that no case catches; the random mutants are a sample of the
+  places of mutation, and a mutant outside the sample that no case catches is
+  not shown.
 - Inputs nested too deeply for the recursion of the parser or the translator.
 - The grammar itself: its ambiguity (`parser/test_ambiguity.py`) and its
   agreement with `TRIEL-grammar-v2_5-core.ebnf`.
