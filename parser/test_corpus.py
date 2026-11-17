@@ -28,7 +28,8 @@ from triel_to_core import RULES, header, sexp, translate  # noqa: E402
 import rejects  # noqa: E402
 
 # False while the accepted cases written before the first run of the translator
-# have no term and no header; True once every accepted case has both.
+# have no term and no header; True once every accepted case has both, and every
+# rejected case has its header.
 TERMS_RECORDED = True
 
 CASES_TEXT = (CORPUS / "cases.jsonl").read_bytes().decode("utf-8")
@@ -143,7 +144,7 @@ def format_errors():
             err("origin is neither new nor a sorted list of test_triel_to_core.py::<test>")
         if (origin == "new") != i.startswith("new."):
             err("an id starts with new. exactly when origin is new")
-        accepted_only = ("term", "header")
+        accepted_only = ("term",)
         rejected_only = ("classes", "reasons", "single_defect")
         for k in accepted_only:
             if o != "accepted" and k in c:
@@ -154,10 +155,15 @@ def format_errors():
                     err(f"accepted without {k}")
             if "term" in c and not isinstance(c["term"], str):
                 err("term is not a string")
-            if "header" in c and not (isinstance(c["header"], list) and c["header"]
-                                      and c["header"][0].startswith("SPEC ")
-                                      and all(h.startswith("METADATA ") for h in c["header"][1:])):
-                err("header is not SPEC and METADATA lines")
+        if "header" in c and not (isinstance(c["header"], list) and c["header"]
+                                  and isinstance(c["header"][0], str) and c["header"][0].startswith("SPEC ")
+                                  and all(isinstance(h, str) and h.startswith("METADATA ")
+                                          for h in c["header"][1:])):
+            err("header is not SPEC and METADATA lines")
+        if TERMS_RECORDED and o in ("accepted", "rejected") and "header" not in c:
+            err(f"{o} without header")
+        if TERMS_RECORDED and o == "parse_error" and "header" in c:
+            err("header on a case that does not parse")
         for k in rejected_only:
             if o != "rejected" and k in c:
                 err(f"{k} on a case that is not rejected")
@@ -218,6 +224,8 @@ def test_case(c):
         if "same_term" in c:
             assert term == output(BY_ID[c["same_term"]])[1]
     if outcome == "rejected":
+        if "header" in c or TERMS_RECORDED:
+            assert head == c["header"]
         unknown = [r for r in reasons if r not in CLASSES]
         assert unknown == [], "reasons not in classes.json"
         assert sorted({CLASSES[r]["class"] for r in reasons}) == c["classes"]
