@@ -1910,6 +1910,23 @@ def test_the_example_host_module_executed_raises_when_it_cannot_read(tmp_path, k
         d.take("t9", INVOICE[1], "2026-11-13T09:10:01Z")
 
 
+def test_the_example_host_module_an_executed_amount_written_as_a_json_number(tmp_path):
+    """A payment executed with an amount written as a JSON number (a PostToolUse with
+    another input, then resolve --executed) leaves the total of the day without a value,
+    also after the file of executions is written again, by the fact of another call or by
+    the same fact with another time. Wrong modules: a_number_in_executions_becomes_a_string,
+    which reads the file with its numbers as Decimal and writes them back as strings, and
+    executed_amount_from_a_json_number, which counts such an amount."""
+    d = Direct(tmp_path, limit="0.05")
+    d.take("t1", dict(INVOICE[1], amount=0.01), "2026-11-13T09:08:00Z")
+    assert d.ask(INVOICE[2], tid="t2")["day_total"] is None
+    d.take("t3", EXCHANGE, "2026-11-13T09:09:00Z", tool=CONVERT)          # the file is written again
+    assert d.ask(INVOICE[2], tid="t2")["day_total"] is None
+    d.take("t1", dict(INVOICE[1], amount=0.01), "2026-11-13T09:08:30Z")   # resolve --executed --at
+    assert d.ask(INVOICE[2], tid="t2")["day_total"] is None
+    assert d.file("executions_file")["executed"]["t1"]["tool_input"]["amount"] == 0.01
+
+
 def test_the_example_host_module_day_of_utc(tmp_path):
     """The executed payments count by their time of execution E, the payment of the
     call by the clock of the module rounded up."""
@@ -2245,6 +2262,17 @@ def test_the_example_host_module_a_sum_or_an_age_too_long_to_be_exact(tmp_path):
         d = Direct(tmp_path / f"iso{i}", approvals=[approval("A1", INVOICE[1], granted=granted)])
         a = d.ask(INVOICE[1], now="2026-11-13T09:15:00Z")
         assert (a["call_approved"], a["approval_age"]) == (True, None), granted
+    # A stamp in seconds keeps the same rule: 61 significant digits have no age, 60 have
+    # one, and so do more digits with zeros after the 60th. Wrong module:
+    # stamp_in_seconds_at_any_length, which reads a stamp in seconds without rounding it
+    # in the exact context.
+    for i, (granted, age) in enumerate((("1794560700." + "0" * 50 + "1", None),
+                                        ("1794560700." + "0" * 49 + "1", 600),
+                                        ("1794560700." + "0" * 49 + "1" + "0" * 5, 600))):
+        d = Direct(tmp_path / f"seconds{i}",
+                   approvals=[approval("A1", INVOICE[1], granted=granted)])
+        a = d.ask(INVOICE[1], now="2026-11-13T09:15:00Z")
+        assert (a["call_approved"], a["approval_age"]) == (True, age), granted
 
 
 def test_the_example_an_amount_written_as_a_json_number(tmp_path):
