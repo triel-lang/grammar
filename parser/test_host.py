@@ -484,6 +484,33 @@ def test_a_reading_at_the_moment_of_the_activation(tmp_path):
     assert (trace["entries"][1]["time"], trace["entries"][1]["event"]) == ("2026-11-13T09:00:00Z", ARRIVE)
 
 
+def test_an_activation_takes_a_reading_stamped_up_to_until(tmp_path):
+    """The activation is at the clock h that the host gave its sources; until, the
+    clock read once they answered, bounds the readings. A reading stamped between the
+    two is accepted, is not in the data of entry 0, and has its arrive entry after it,
+    so a decision while it is fresh is not held. Wrong libraries: until_ignored, which
+    takes h as the bound, and record_at_until, which records the activation at until."""
+    spec = write_spec(tmp_path, "agent MUST_NOT pay WHEN DEFAULT(f, false)", BLOCK60)
+    factors = th.spec_factors(spec.read_text(encoding="utf-8"))
+    h, until = t("2026-11-13T09:00:00.25Z"), t("2026-11-13T09:00:00.75Z")
+    rec, store, reasons = th.activation(factors, {"f": Reading(False, "2026-11-13T09:00:00.5Z")},
+                                        h, until=until)
+    assert reasons == [] and rec == {"time": th.exact(h), "data": {}}
+    assert store["f"]["accepted"] == [[th.exact(t("2026-11-13T09:00:00.5Z")), {"bool": False}]]
+    trace, store, reasons, data = th.decide(factors, str(spec), rec, [], store,
+                                            {"f": NO_NEW_READING}, "agent", "pay",
+                                            t("2026-11-13T09:00:01.5Z"))
+    assert reasons == [] and data == {"f": {"bool": False}}
+    assert [(x["time"][11:19], x["event"]["kind"]) for x in trace["entries"]] == [
+        ("09:00:00", "activate"), ("09:00:00", "arrive"), ("09:00:02", "tick"), ("09:00:02", "act")]
+    # a reading later than until is from the future, and so is one later than h without until
+    _, _, reasons = th.activation(factors, {"f": Reading(False, "2026-11-13T09:00:00.8Z")}, h,
+                                  until=until)
+    assert reasons == ["factor f: a reading from the future"]
+    _, _, reasons = th.activation(factors, {"f": Reading(False, "2026-11-13T09:00:00.5Z")}, h)
+    assert reasons == ["factor f: a reading from the future"]
+
+
 def test_arrive_entries_in_time_order_with_the_history(tmp_path):
     """A reading before the T of an executed action and one between its T and
     its E: the arrive entries stand between the entries of that action."""
