@@ -15,7 +15,9 @@ used here; the runs in Claude Code are described in README.md.
 The test does not skip: without the evaluator it fails.
 """
 import ast
+import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -35,6 +37,7 @@ sys.path.insert(0, str(HERE))
 from triel_eval import default_evaluator  # noqa: E402
 
 import gate  # noqa: E402
+import triel_host  # noqa: E402
 
 ACT = "2026-11-13T09:00:00Z"
 PAY, CONVERT, INSPECT, REPORT = ("mcp__payments__pay", "mcp__payments__convert",
@@ -863,6 +866,16 @@ def test_the_example_settings():
     assert files and all(p.startswith(("/etc/triel/", "/var/lib/triel/")) for p in files), files
     for k in ("data_file", "approvals_file", "ledger_file", "executions_file"):
         assert cfg["host_options"][k].startswith(("/etc/triel/", "/var/lib/triel/")), k
+    # Each path of the configuration and each file of the host module lies under a path of
+    # sandbox.filesystem.denyWrite and under a deny rule Edit(//DIR/**). Wrong settings and
+    # configuration: settings.json without Edit(//opt/triel/**), and a spec in /srv.
+    rules = [d[len("Edit(/"):-len("/**)")] for d in deny
+             if d.startswith("Edit(//") and d.endswith("/**)")]
+    paths = [cfg[k] for k in gate.PATH_KEYS] + [v for k, v in cfg["host_options"].items()
+                                                if k.endswith("_file")]
+    for p in paths:
+        assert any(p == d or p.startswith(d.rstrip("/") + "/") for d in sb["filesystem"]["denyWrite"]), p
+        assert any(p == d or p.startswith(d + "/") for d in rules), p
 
 
 def option_paths(v):
@@ -1022,6 +1035,8 @@ def test_a_failure_of_the_host_module_stays_in_the_conflict(m):
     why = m.state()["conflicts"]["t1"]["why"]
     assert why.startswith("the host module did not take the execution: IsADirectoryError")
     assert why.endswith("; a PostToolUse came for a call already in the history")
+    # The line of the execution comes before the line of the conflict it caused.
+    assert events(m) == ["allowed", "executed", "conflict", "conflict"]
 
 
 def test_the_example_host_module_takes_a_fact_once(tmp_path):
@@ -1172,11 +1187,67 @@ def test_a_reading_stamped_when_the_host_module_answers_is_not_from_the_future(t
     assert x.pre(PAY, "t1", None) == (0, "")
 
 
+CLOCKED = """
+import time
+from triel_host import NO_NEW_READING, Reading
+
+
+def answers(call, now, factors, options):
+    if call is not None:
+        return {"f": NO_NEW_READING}
+    with open(options["given"], "w", encoding="utf-8") as f:
+        f.write(now.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
+    ahead = int(open(options["ahead"], encoding="utf-8").read())
+    t = time.time_ns() // 1000 + ahead * 1000000
+    time.sleep(0.002)  # the module answers at least 1 ms after its source stamped the reading
+    return {"f": Reading(False, f"{t // 1000000}.{t % 1000000:06d}")}
+
+
+def executed(fact, options):
+    pass
+"""
+
+
+def clocked_mandate(tmp_path, ahead):
+    """A mandate whose host module stamps a reading by the clock of the system when it
+    answers the activation, ahead seconds ahead of it, and writes the clock it was given."""
+    x = Mandate(tmp_path, terms="agent MUST_NOT pay WHEN f",
+                factors="f : Boolean METADATA MAX_AGE 60 SECONDS ON_STALE BLOCK", host="scripted")
+    (tmp_path / "scripted_host.py").write_text(CLOCKED, encoding="utf-8")
+    (tmp_path / "ahead").write_text(str(ahead))
+    x.config["host_options"].update(given=str(tmp_path / "given"), ahead=str(tmp_path / "ahead"))
+    x.write_config()
+    return x
+
+
 def test_an_activation_with_a_reading_stamped_when_the_module_answers(tmp_path):
-    x = stamping_mandate(tmp_path, "now")
+    """The activation is at the clock given to the host module; the clock read once it
+    has answered only bounds the readings. A reading stamped while the module answered is
+    later than the activation, so the next decision, with no new reading, is allowed. On
+    the clock of the system, since with --now both readings of the clock would be equal.
+    Wrong gate: activation_time_after_answers, which takes the clock read once the module
+    has answered as the time of the activation."""
+    x = clocked_mandate(tmp_path, 0)
     r = x.run(["activate"])
     assert r.returncode == 0, r.stderr
-    assert x.state()["readings"]["f"]["accepted"]
+    given = triel_host.seconds((tmp_path / "given").read_text())
+    st = x.state()
+    assert triel_host.seconds(st["activation"]["time"]) == given
+    (line,) = [y for y in x.log() if y["event"] == "activated"]
+    assert (triel_host.seconds(line["at"]), line["time"]) == (given, gate.iso(int(given)))
+    [(stamp, value)] = st["readings"]["f"]["accepted"]
+    assert triel_host.seconds(stamp) >= given and value == {"bool": False}
+    assert x.pre(PAY, "t1", None) == (0, "")
+
+
+def test_an_activation_with_a_reading_from_the_future(tmp_path):
+    """A reading an hour ahead of the clock of the module is from the future at the
+    activation too. Wrong gate: no_future_check_at_activation."""
+    x = clocked_mandate(tmp_path, 3600)
+    r = x.run(["activate"])
+    assert (r.returncode, first(r)) == (2, held("activation refused"))
+    assert "  factor f: a reading from the future" in r.stderr.splitlines()
+    assert not (x.state_dir / "state.json").exists()
 
 
 def test_inputs_compared_as_json_values(tmp_path):
@@ -2078,7 +2149,10 @@ def test_the_example_a_fact_given_again_with_another_time(tmp_path):
 
 BAD_FILES = {  # a content that is not a file of its kind, for each file the module reads
     "ledger_file": ["{", "[]", "", '{"selected": {}, "spent": {}}'],
-    "executions_file": ["{", "[]", "", '{"done": {}}'],
+    "executions_file": ["{", "[]", "", '{"done": {}}'] + [
+        # a payment of the day before, whose amount the total of the day would not read
+        '{"executed": {"t0": {"tool": "mcp__payments__pay", "tool_input": {"amount": %s}, '
+        '"time": "2026-11-12T09:00:00Z"}}}' % c for c in ("NaN", "Infinity", "-Infinity")],
     "data_file": ["{", "[]", "", "{}",
                   '{"values": {"daily_limit": "0.01", "rate_limit": "1.20"}}']}
 
@@ -2099,8 +2173,9 @@ def test_the_example_host_module_a_ledger_that_cannot_be_read(tmp_path, content)
 
 @pytest.mark.parametrize("content", BAD_FILES["executions_file"])
 def test_the_example_host_module_executions_that_cannot_be_read(tmp_path, content):
-    """Wrong module: executions_bad_content_is_empty, a total of the day without the
-    executed payments."""
+    """Wrong modules: executions_bad_content_is_empty, a total of the day without the
+    executed payments, and executions_constants_accepted, which reads NaN, Infinity and
+    -Infinity as numbers."""
     d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1])])
     Path(d.options["executions_file"]).write_text(content, encoding="utf-8")
     assert d.ask(INVOICE[1])["day_total"] is None
@@ -2286,3 +2361,1076 @@ def test_the_example_an_amount_written_as_a_json_number(tmp_path):
     code, terms, r = x.decide(PAY, "t1", T0, call)
     assert (code, terms) == (2, [5])
     assert x.verdicts(r) == {2: OPEN, 3: OPEN, 4: OPEN, 5: UNDEFINED, 6: OPEN}
+
+
+# --- Values that the gate cannot write -----------------------------------------------------
+#
+# Each test below fails on a wrong gate, or a wrong host module, that the tests above let
+# pass; it is named in the docstring.
+
+NOT_A_NUMBER = "a number that JSON cannot write"
+NOT_UTF8 = "a string that UTF-8 cannot write"
+TOO_LONG = "an integer too long to read"
+BAD = {  # the JSON text of a value that the gate cannot write, and its kind
+    "1e400": ("1e400", NOT_A_NUMBER), "-1e400": ("-1e400", NOT_A_NUMBER),
+    "NaN": ("NaN", NOT_A_NUMBER), "Infinity": ("Infinity", NOT_A_NUMBER),
+    "-Infinity": ("-Infinity", NOT_A_NUMBER), "a lone surrogate": (r'"\ud800"', NOT_UTF8),
+    "5000 digits": ("1" + "0" * 5000, TOO_LONG)}
+PLACES = [  # an input of convert with the value at @, and the path to it
+    ('{"amount": "1", "note": @}', 'tool_input["note"]'),
+    ('{"amount": "1", "items": ["a", "b", @]}', 'tool_input["items"][2]'),
+    ('{"amount": "1", "meta": {"x": {"y": @}}}', 'tool_input["meta"]["x"]["y"]'),
+    ("@", "tool_input"),
+    (r'{"amount": "1", "n\u00e9 \"q\"": [@]}', r'tool_input["n\u00e9 \"q\""][0]')]
+# a key with a lone surrogate in a nested object: the path ends with the key
+KEY = (r'{"amount": "1", "meta": {"\ud800": "x"}}', r'tool_input["meta"]["\ud800"]', NOT_UTF8)
+NOT_RECORDED = "TRIEL gate: not recorded: "
+AFTER = {"post": ("PostToolUse", {"duration_ms": 5, "tool_response": {"ok": True}}),
+         "failure": ("PostToolUseFailure", {"error": "Error: failed"}),
+         "denied": ("PermissionDenied", {"reason": "[Irreversible]"})}
+
+
+def raw_hook(x, event, tool, tid, tool_input, tail="", **extra):
+    """The JSON input of a hook as text, with the text tool_input as the input of the call
+    and tail before the closing brace: Python writes neither 1e400 nor an integer of 5000
+    digits."""
+    head = {"session_id": "s", "transcript_path": "/dev/null", "cwd": str(x.tmp),
+            "permission_mode": "default", "hook_event_name": event, "tool_name": tool,
+            "tool_use_id": tid, "mcp_server": {"name": "payments", "source": "managed"}, **extra}
+    return json.dumps(head)[:-1] + ', "tool_input": ' + tool_input + tail + "}"
+
+
+def reason_of(kind, path):
+    return f"the input of the call has {kind}: {path}"
+
+
+def strict(data):
+    """The strict parse of the bytes of a file: UTF-8, JSON without NaN, Infinity or
+    -Infinity, every number finite, and no string or key with a lone surrogate."""
+    def refuse(c):
+        raise ValueError(c)
+
+    x = json.loads(data.decode("utf-8"), parse_constant=refuse)
+    todo = [x]
+    while todo:
+        v = todo.pop()
+        if isinstance(v, float):
+            assert math.isfinite(v), data[:80]
+        elif isinstance(v, str):
+            v.encode("utf-8")
+        elif isinstance(v, dict):
+            todo += list(v) + list(v.values())
+        elif isinstance(v, list):
+            todo += v
+    return x
+
+
+def all_strict(x, files=()):
+    """Every file of the state of the mandate, and each of files, passes the strict parse;
+    a file of JSON Lines line by line."""
+    paths = [p for p in sorted(x.state_dir.rglob("*")) if p.is_file() and p.name != "lock"]
+    for p in paths + [Path(f) for f in files]:
+        data = p.read_bytes()
+        for part in (data.splitlines() if p.suffix == ".jsonl" else [data]):
+            strict(part)
+
+
+def example_with_a_rate(tmp):
+    """The example of README.md with a fresh rate, so that convert is allowed."""
+    x = Example(tmp, approvals=[approval("A1", INVOICE[1])])
+    x.set_data(dict(x.data(), readings={"fx_rate": {"value": "1.10",
+                                                    "time": "2026-11-13T09:09:50Z"}}))
+    return x
+
+
+def module_files(x):
+    return [x.options[k] for k in ("data_file", "approvals_file", "ledger_file", "executions_file")]
+
+
+@pytest.mark.parametrize("bad", list(BAD) + ["a key"])
+def test_an_input_that_the_gate_cannot_write_holds_the_call(tmp_path, bad):
+    """A value that the gate cannot write, in the input of convert of the example: as a
+    value of an object, an element of an array, in a nested object, as the whole input, and
+    under a key that JSON escapes; or a key with a lone surrogate. The call is held with
+    the kind and the path of the value, the journal has held with the same reason, no
+    record is pending, and every file of the gate and of the module stays strict JSON.
+    Wrong gates: json_loads_as_now, top_level_only, keys_not_checked, arrays_not_checked
+    and path_key_not_escaped."""
+    x = example_with_a_rate(tmp_path)
+    cases = ([KEY] if bad == "a key" else
+             [(text.replace("@", BAD[bad][0]), path, BAD[bad][1]) for text, path in PLACES])
+    for i, (text, path, kind) in enumerate(cases):
+        r = x.run(["pre"], stdin=raw_hook(x, "PreToolUse", CONVERT, f"c{i}", text), now=T0)
+        assert (r.returncode, first(r)) == (2, held(reason_of(kind, path))), text[:80]
+        line = x.log()[-1]
+        assert (line["event"], line["tool_use_id"], line["reasons"]) == (
+            "held", f"c{i}", [reason_of(kind, path)])
+        assert x.state()["pending"] == {}
+        all_strict(x, module_files(x))
+
+
+def test_a_repeated_pre_with_an_input_that_the_gate_cannot_write_removes_the_record(tmp_path):
+    """A PreToolUse that comes again for a pending call with such an input is held for a
+    reason of the decision: the earlier record goes. Wrong gate: input_check_before_lock,
+    which holds the call before it takes the lock and leaves the record."""
+    x = example_with_a_rate(tmp_path)
+    assert x.pre(CONVERT, "c1", T0, EXCHANGE) == (0, "")
+    assert list(x.state()["pending"]) == ["c1"]
+    r = x.run(["pre"], stdin=raw_hook(x, "PreToolUse", CONVERT, "c1", '{"amount": NaN}'),
+              now="2026-11-13T09:10:01Z")
+    assert (r.returncode, first(r)) == (2, held(reason_of(NOT_A_NUMBER, 'tool_input["amount"]')))
+    assert x.state()["pending"] == {}
+
+
+def sha(tid):
+    return hashlib.sha256(tid.encode("utf-8")).hexdigest()
+
+
+def mark_file(x, tid, event):
+    return x.state_dir / "unrecorded" / f"{sha(tid)}.{event}"
+
+
+def mark_names(x):
+    d = x.state_dir / "unrecorded"
+    return sorted(os.listdir(d)) if d.exists() else []
+
+
+def unrecorded(event, tid):
+    return held(f"the {AFTER[event][0]} of the call {tid} was not recorded; every action is held "
+                f"until the operator runs gate.py resolve {tid}")
+
+
+@pytest.mark.parametrize("record", ["pending", "not executed"])
+@pytest.mark.parametrize("event", sorted(AFTER))
+def test_an_event_with_an_input_that_the_gate_cannot_write_is_not_recorded(m, event, record):
+    """Each value that the gate cannot write, and a key with a lone surrogate, in the input
+    of PostToolUse, PostToolUseFailure or PermissionDenied, for a pending call and for a
+    call recorded as not executed: the event is not recorded, its mark stays with the input
+    null, and the same payment is held by the mark; every file stays strict JSON. The
+    operator removes the mark after each value. Wrong gates: after_events_unchecked,
+    null_only_for_numbers and mark_only_for_not_executed."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    if record == "not executed":
+        assert m.command("resolve", "t1", "--not-executed", now="2026-11-13T09:10:30Z") == (0, "")
+    name, extra = AFTER[event]
+    cases = [(f'{{"to": "acme", "note": {text}}}', 'tool_input["note"]', kind)
+             for text, kind in BAD.values()] + [(r'{"to": "acme", "meta": {"\ud800": "x"}}',
+                                                  r'tool_input["meta"]["\ud800"]', NOT_UTF8)]
+    for i, (text, path, kind) in enumerate(cases):
+        r = m.run([event], stdin=raw_hook(m, name, PAY, "t1", text, **extra),
+                  now=f"2026-11-13T09:11:{i:02d}Z")
+        assert (r.returncode, first(r)) == (2, NOT_RECORDED + reason_of(kind, path)), text[:80]
+        assert mark_file(m, "t1", event).exists(), text[:80]
+        mark = json.loads(mark_file(m, "t1", event).read_text())
+        assert (mark["tool_use_id"], mark["event"], mark["tool_input"], mark["input_written"]) == (
+            "t1", name, None, False), text[:80]
+        assert m.log()[-1]["event"] == f"{event} not recorded"
+        assert m.pre(PAY, "t2", f"2026-11-13T09:12:{i:02d}Z", {"to": "acme"}) == (
+            2, unrecorded(event, "t1"))
+        all_strict(m, [m.tmp / "host_data.json"])
+        assert m.command("resolve", "t1", "--drop-mark", now=f"2026-11-13T09:13:{i:02d}Z") == (0, "")
+        assert mark_names(m) == []
+    assert ("t1" in m.state()["pending"]) == (record == "pending")
+
+
+def test_a_value_that_the_gate_cannot_write_outside_the_input_of_the_call(m):
+    """The gate checks the input of the call only: NaN in tool_response changes nothing,
+    and the call is executed. Wrong gate: whole_input_checked."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    r = m.run(["post"], stdin=raw_hook(m, "PostToolUse", PAY, "t1", '{"to": "acme"}',
+                                       tail=', "duration_ms": 5, "tool_response": {"n": NaN}'),
+              now="2026-11-13T09:10:01Z")
+    assert r.returncode == 0, r.stderr
+    assert [x["tool_use_id"] for x in m.state()["history"]] == ["t1"] and mark_names(m) == []
+
+
+def test_a_duration_that_is_not_a_finite_number_is_left_out(tmp_path):
+    """duration_ms that is not a finite number of milliseconds from 0 up, an integer too
+    long to read among them, is left out: E is the time PostToolUse came, rounded up, here
+    3 s after T. NaN is the control. Wrong gate: duration_inf_taken, which subtracts an
+    infinite duration and makes E = T."""
+    x = Mandate(tmp_path, host="scripted", answers={"approved": True})
+    x.activate()
+    for i, d in enumerate(["Infinity", "-Infinity", "1e400", "-1e400", "1" + "0" * 5000, "NaN"]):
+        assert x.pre(PAY, f"t{i}", f"2026-11-13T09:{10 + i}:00Z", {"to": "acme"}) == (0, "")
+        r = x.run(["post"], stdin=raw_hook(x, "PostToolUse", PAY, f"t{i}", '{"to": "acme"}',
+                                           tail=f', "duration_ms": {d}'),
+                  now=f"2026-11-13T09:{10 + i}:02.5Z")
+        assert r.returncode == 0, r.stderr
+        line = x.log()[-1]
+        assert (line["event"], line["T"], line["E"]) == (
+            "executed", f"2026-11-13T09:{10 + i}:00Z", f"2026-11-13T09:{10 + i}:03Z"), d[:12]
+
+
+def mark_fields(tid="t1", event="post", came="2026-11-13T09:10:01Z", tool_input=None):
+    return {"tool_use_id": tid, "event": AFTER[event][0],
+            "came": triel_host.exact(triel_host.seconds(came)), "tool_name": PAY,
+            "subject": "agent", "action": "pay",
+            "tool_input": {"to": "acme"} if tool_input is None else tool_input,
+            "input_written": True}
+
+
+def writer_of(name):
+    import host_example
+
+    def write(cfg, d, v):
+        if name == "state":
+            gate.save_state(cfg, {"x": v})
+        elif name == "journal":
+            gate.log(cfg, Decimal(1), x=v)
+        elif name == "trace":
+            gate.write_trace(cfg, "t1", {"x": v})
+        elif name == "host module":
+            host_example._write(str(d / "module.json"), {"x": v})
+        else:
+            gate.create_mark(cfg, "post", mark_fields(tool_input={"x": v}))
+    return write
+
+
+WRITES = [(w, v) for w in ("state", "journal", "trace", "host module", "mark")
+          for v in ("NaN", "a lone surrogate") if (w, v) != ("mark", "a lone surrogate")]
+
+
+@pytest.mark.parametrize("writer,value", WRITES)
+def test_the_writers_refuse_a_value_that_they_cannot_write(tmp_path, writer, value):
+    """The state, the journal, a trace, a file of the host module and a mark, each given NaN
+    and (but the mark, which has no such string by its making) a lone surrogate: the writer
+    raises, and every file stays as it was, byte for byte. Wrong writers: allow_nan_default
+    for each writer, and surrogate_written for each writer but the mark."""
+    cfg = {"state_dir": str(tmp_path / "state")}
+    d = Path(cfg["state_dir"])
+    (d / "traces").mkdir(parents=True)
+    (d / "unrecorded").mkdir()
+    for f in ("state.json", "log.jsonl", "traces/t1.json", "module.json"):
+        (d / f).write_bytes(b'{"old": 1}\n')
+    before = {p: p.read_bytes() for p in d.rglob("*") if p.is_file()}
+    with pytest.raises(ValueError):
+        writer_of(writer)(cfg, d, float("nan") if value == "NaN" else "\ud800")
+    assert {p: p.read_bytes() for p in d.rglob("*") if p.is_file()} == before
+
+
+@pytest.mark.parametrize("field", ["amount", "invoice"])
+@pytest.mark.parametrize("number", ["1e400", "-1e400", "1.5e309"])
+def test_the_example_host_module_a_number_that_a_binary_float_does_not_hold(tmp_path, number,
+                                                                           field):
+    """A number that a binary float does not hold, written by hand into a payment of the day
+    before, makes the file of executions unreadable at once, before any write: the total of
+    the day has no value, and executed raises. Wrong module: plain_json_takes_infinity,
+    which reads such a number as an infinity, so the file is read and the payment of the
+    day before is left out."""
+    d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1])])
+    rec = {"tool": PAY, "tool_input": dict(INVOICE[2], **{field: "@"}), "time": "2026-11-12T09:00:00Z"}
+    Path(d.options["executions_file"]).write_text(
+        json.dumps({"executed": {"t0": rec}}).replace('"@"', number), encoding="utf-8")
+    assert d.ask(INVOICE[1])["day_total"] is None
+    with pytest.raises(ValueError):
+        d.take("t1", INVOICE[1], "2026-11-13T09:10:01Z")
+
+
+@pytest.mark.parametrize("time,total", [
+    ("1794560880.5", None), ("1794560880.0", None), ("1.79456088e9", None),
+    ("1794560881.25", None), ("1794560880", Decimal("0.02"))])
+def test_the_example_host_module_a_time_of_execution_written_as_a_number(tmp_path, time, total):
+    """A time of execution written as a JSON number with a fraction or an exponent is a
+    binary float and has no value, so the total of the day has none; an integer is read.
+    Wrong module: execution_time_from_a_float, which reads such a number by its repr."""
+    d = Direct(tmp_path, limit="0.05")
+    rec = {"tool": PAY, "tool_input": INVOICE[2], "time": "@"}
+    Path(d.options["executions_file"]).write_text(
+        json.dumps({"executed": {"t0": rec}}).replace('"@"', time), encoding="utf-8")
+    assert d.ask(INVOICE[1])["day_total"] == total
+
+
+def test_an_error_that_utf8_cannot_write_is_written_as_null(m):
+    """The error of PostToolUseFailure goes into the journal only as a string that UTF-8
+    can write; the failure of an atomic tool is recorded. Wrong gate: error_logged_raw."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    r = m.hook("failure", "PostToolUseFailure", PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"},
+               error="\ud800")
+    assert (r.returncode, r.stderr) == (0, "")
+    assert list(m.state()["not_executed"]) == ["t1"]
+    line = m.log()[-1]
+    assert (line["event"], line["error"]) == ("not executed", None)
+
+
+def test_a_tool_use_id_that_the_gate_cannot_write(m):
+    """A tool_use_id with a lone surrogate, or not a string: pre holds the call before the
+    host module; an event after the call is not recorded and makes no mark, and the
+    journal says so. Wrong gate: tid_unchecked."""
+    reason = "the input of the hook has no tool_use_id that the gate can write"
+    for tid in ("\ud800", 5):
+        assert m.pre(PAY, tid, T0, {"to": "acme"}) == (2, held(reason))
+        r = m.hook("post", "PostToolUse", PAY, tid, "2026-11-13T09:10:01Z", {"to": "acme"},
+                   duration_ms=5)
+        assert (r.returncode, first(r)) == (2, NOT_RECORDED + reason)
+        assert mark_names(m) == []
+        line = m.log()[-1]
+        assert (line["event"], line["tool_use_id"], line["reasons"]) == (
+            "post not recorded", None, [reason])
+    assert m.state()["pending"] == {} and m.state()["history"] == []
+
+
+# --- The mark of an event after a call ------------------------------------------------------
+
+def hold_the_lock(x):
+    holder = subprocess.Popen([sys.executable, "-c", LOCK_HOLDER, str(x.state_dir / "lock")],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    assert holder.stdout.readline().strip() == "locked"
+    return holder
+
+
+def release(holder):
+    holder.stdin.write("release\n")
+    holder.stdin.close()
+    holder.wait()
+
+
+def after_event(x, event, tid, now, tool_input):
+    return x.hook(event, AFTER[event][0], PAY, tid, now, tool_input, **AFTER[event][1])
+
+
+def start_event(x, event, tid, now, tool_input):
+    payload = {"session_id": "s", "transcript_path": "/dev/null", "cwd": str(x.tmp),
+               "permission_mode": "default", "hook_event_name": AFTER[event][0], "tool_name": PAY,
+               "tool_input": tool_input, "tool_use_id": tid,
+               "mcp_server": {"name": "payments", "source": "managed"}, **AFTER[event][1]}
+    p = subprocess.Popen([sys.executable, "-I", GATE, event, "--config", str(x.config_path),
+                          "--now", now], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True)
+    p.stdin.write(json.dumps(payload))
+    p.stdin.close()
+    return p
+
+
+def wait_for(path):
+    deadline = time.monotonic() + 20
+    while not path.exists():
+        assert time.monotonic() < deadline, path
+        time.sleep(0.01)
+
+
+@pytest.mark.parametrize("event,record", [("post", "not executed"), ("failure", "pending"),
+                                          ("denied", "pending")])
+def test_an_event_that_does_not_get_the_lock_leaves_its_mark(m, event, record):
+    """The operator resolved the call as not executed, or it is pending; another process
+    holds the lock longer than three times check_timeout_seconds, and the event after the
+    call gives up: it is not recorded, the journal says so, and its mark stays. The same
+    payment is held by the mark, not allowed again nor held as waiting for the outcome.
+    Wrong gates: the gate without marks, and mark_only_for_post."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    if record == "not executed":
+        assert m.command("resolve", "t1", "--not-executed", now="2026-11-13T09:11:00Z") == (0, "")
+    m.config["check_timeout_seconds"] = 1
+    m.write_config()
+    holder = hold_the_lock(m)
+    r = after_event(m, event, "t1", "2026-11-13T09:11:30Z", {"to": "acme"})
+    release(holder)
+    m.config["check_timeout_seconds"] = 60
+    m.write_config()
+    assert (r.returncode, first(r)) == (
+        2, NOT_RECORDED + "another decision of the gate is still running")
+    assert m.log()[-1]["event"] == f"{event} not recorded"
+    assert mark_names(m) == [f"{sha('t1')}.{event}"]
+    assert m.pre(PAY, "t2", "2026-11-13T09:12:00Z", {"to": "acme"}) == (2, unrecorded(event, "t1"))
+
+
+@pytest.mark.parametrize("record", ["pending", "not executed"])
+@pytest.mark.parametrize("event", sorted(AFTER))
+def test_an_event_killed_while_it_waits_for_the_lock_leaves_its_mark(m, event, record):
+    """The hook is killed while it waits for the lock, as Claude Code kills a hook past
+    its time: the mark it made before the wait stays, dead, and the same payment is held
+    by it. Wrong gate: mark_in_gave_up, which makes the mark only when the wait is over."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    if record == "not executed":
+        assert m.command("resolve", "t1", "--not-executed", now="2026-11-13T09:11:00Z") == (0, "")
+    holder = hold_the_lock(m)
+    p = start_event(m, event, "t1", "2026-11-13T09:11:30Z", {"to": "acme"})
+    try:
+        wait_for(mark_file(m, "t1", event))
+    finally:
+        p.kill()
+        p.wait()
+        release(holder)
+    assert m.pre(PAY, "t2", "2026-11-13T09:12:00Z", {"to": "acme"}) == (2, unrecorded(event, "t1"))
+
+
+MARK_HOLDER = """import json, sys
+sys.path.insert(0, sys.argv[1])
+import gate
+mark = gate.create_mark(json.loads(sys.argv[2]), sys.argv[3], json.loads(sys.argv[4]))
+print("marked", flush=True)
+sys.stdin.readline()
+"""
+
+
+def test_a_live_mark_holds_and_resolve_waits_for_it(m):
+    """A mark whose event still runs (a helper holds its flock, not the lock of the state):
+    resolve refuses with either outcome and changes nothing, byte for byte; pre waits for
+    the event. Once the event ends without removing it, the mark holds as one not
+    recorded. Wrong gates: resolve_removes_live_mark and live_mark_as_dead."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    holder = subprocess.Popen([sys.executable, "-I", "-c", MARK_HOLDER, str(HERE),
+                               json.dumps(m.config), "post", json.dumps(mark_fields())],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    assert holder.stdout.readline().strip() == "marked"
+    path = mark_file(m, "t1", "post")
+    before = (path.read_bytes(), (m.state_dir / "state.json").read_bytes())
+    for args in (["--not-executed"], ["--executed", "--at", "2026-11-13T09:10:01Z"]):
+        assert m.command("resolve", "t1", *args, now="2026-11-13T09:11:00Z") == (
+            2, held("the PostToolUse of the call t1 is still being recorded; run resolve again"))
+        assert path.exists() and (path.read_bytes(),
+                                  (m.state_dir / "state.json").read_bytes()) == before
+    assert m.pre(PAY, "t2", "2026-11-13T09:11:10Z", {"to": "acme"}) == (
+        2, held("waits for the PostToolUse of the call t1 to be recorded"))
+    release(holder)
+    assert m.pre(PAY, "t2", "2026-11-13T09:11:20Z", {"to": "acme"}) == (2, unrecorded("post", "t1"))
+
+
+TRY_LOCK = """import fcntl, sys
+f = open(sys.argv[1])
+try:
+    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    print("locked")
+except BlockingIOError:
+    print("refused")
+"""
+
+
+def test_the_mark_is_locked_before_it_has_its_name(tmp_path, monkeypatch):
+    """Another process that tries the flock of the mark right after the link gives it its
+    name is refused: a mark is never seen dead while its event runs. Wrong gate:
+    lock_after_link."""
+    cfg = {"state_dir": str(tmp_path / "state")}
+    link, tries = os.link, []
+
+    def linked(src, dst, *args, **kwargs):
+        link(src, dst, *args, **kwargs)
+        r = subprocess.run([sys.executable, "-c", TRY_LOCK, str(dst)], capture_output=True,
+                           text=True)
+        tries.append(r.stdout.strip())
+
+    monkeypatch.setattr(os, "link", linked)
+    gate.create_mark(cfg, "post", mark_fields()).close()
+    assert tries == ["refused"]
+
+
+def test_an_event_whose_state_is_not_written_leaves_its_mark(m):
+    """The state cannot be written: the event is not recorded, its mark stays, and the
+    journal says so. Wrong gate: mark_removed_in_finally."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    (m.state_dir / "state.json.tmp").mkdir()
+    r = after_event(m, "post", "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    (m.state_dir / "state.json.tmp").rmdir()
+    assert r.returncode == 2 and first(r).startswith(
+        NOT_RECORDED + "the gate failed: IsADirectoryError"), r.stderr
+    assert mark_names(m) == [f"{sha('t1')}.post"]
+    assert m.log()[-1]["event"] == "post not recorded"
+    assert list(m.state()["pending"]) == ["t1"]
+
+
+def test_an_event_recorded_whose_line_is_not_written_removes_its_mark(m):
+    """The state with the event is written and the journal cannot be: the mark is gone,
+    since it goes once the state is written and before the lines of the journal. Wrong
+    gate: mark_removed_after_save_state_returns."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    journal = m.state_dir / "log.jsonl"
+    journal.unlink()
+    journal.mkdir()
+    r = after_event(m, "post", "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    assert r.returncode == 2 and first(r).startswith(NOT_RECORDED + "the gate failed: "), r.stderr
+    assert [x["tool_use_id"] for x in m.state()["history"]] == ["t1"]
+    assert mark_names(m) == []
+
+
+def test_the_names_of_marks_keep_the_calls_apart(m):
+    """Calls whose ids differ only where a name of a file could not show it, an id longer
+    than a name of a file, and one not in ASCII: each has its own mark, and each mark goes
+    with its own resolve. Wrong gate: mark_named_like_traces."""
+    tids = ["a/b", "a_b", "x" * 300, "caf\u00e9"]
+    for i, tid in enumerate(tids):
+        r = m.run(["failure"], stdin=raw_hook(m, "PostToolUseFailure", PAY, tid,
+                                              '{"to": NaN}', error="Error"),
+                  now=f"2026-11-13T09:10:0{i}Z")
+        assert (r.returncode, first(r)) == (
+            2, NOT_RECORDED + reason_of(NOT_A_NUMBER, 'tool_input["to"]')), tid[:10]
+    assert mark_names(m) == sorted(f"{sha(t)}.failure" for t in tids)
+    for i, tid in enumerate(tids):
+        assert m.command("resolve", tid, "--not-executed", now="2026-11-13T09:11:00Z") == (0, "")
+        assert mark_names(m) == sorted(f"{sha(t)}.failure" for t in tids[i + 1:])
+
+
+def test_a_second_event_leaves_the_mark_of_the_first_as_it_is(m):
+    """A PostToolUse not recorded, then a second PostToolUse of the call that is recorded:
+    the mark of the first stays, byte for byte, and holds. Wrong gates: remove_any_mark and
+    mark_overwritten_by_second_event."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    r = m.run(["post"], stdin=raw_hook(m, "PostToolUse", PAY, "t1", '{"to": NaN}', duration_ms=5),
+              now="2026-11-13T09:10:01Z")
+    assert r.returncode == 2
+    path = mark_file(m, "t1", "post")
+    before = path.read_bytes()
+    m.post(PAY, "t1", "2026-11-13T09:10:02Z", {"to": "acme"})
+    assert [x["tool_use_id"] for x in m.state()["history"]] == ["t1"]
+    assert path.exists() and path.read_bytes() == before
+    assert m.pre(PAY, "t2", "2026-11-13T09:11:00Z", {"to": "acme"}) == (2, unrecorded("post", "t1"))
+
+
+def test_each_event_of_a_call_has_its_own_mark(m):
+    """PostToolUseFailure not recorded, then PostToolUse not recorded: two marks, and since
+    PostToolUse came, resolve --not-executed is refused. Wrong gate: first_mark_wins, one
+    mark for a call."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    for i, event in enumerate(("failure", "post")):
+        r = m.run([event], stdin=raw_hook(m, AFTER[event][0], PAY, "t1", '{"to": NaN}',
+                                          **AFTER[event][1]), now=f"2026-11-13T09:10:0{i + 1}Z")
+        assert r.returncode == 2
+    assert mark_names(m) == sorted([f"{sha('t1')}.failure", f"{sha('t1')}.post"])
+    assert m.command("resolve", "t1", "--not-executed", now="2026-11-13T09:11:00Z") == (
+        2, held("the PostToolUse of the call t1 came: it was executed; resolve it with "
+                "--executed --at TIME"))
+    assert mark_names(m) == sorted([f"{sha('t1')}.failure", f"{sha('t1')}.post"])
+
+
+def test_a_mark_that_cannot_be_written_whole_is_not_there(tmp_path, monkeypatch):
+    """The write of the mark fails (os.write raises): no file stays under the name of the
+    mark, nor any other. Wrong gate: mark_written_in_place."""
+    cfg = {"state_dir": str(tmp_path / "state")}
+
+    def full(fd, data):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(os, "write", full)
+    with pytest.raises(OSError):
+        gate.create_mark(cfg, "post", mark_fields())
+    monkeypatch.undo()
+    assert os.listdir(tmp_path / "state" / "unrecorded") == []
+
+
+def test_other_files_in_the_folder_of_the_marks_are_not_marks(m):
+    """A temporary file .tmp-x with the content of a mark, and files with other names: pre
+    is not held, status does not show them, and an event that is recorded leaves neither a
+    mark nor a temporary file. Wrong gates: temp_counts_as_mark and temp_left."""
+    d = m.state_dir / "unrecorded"
+    d.mkdir()
+    (d / ".tmp-x").write_text(json.dumps(mark_fields()))
+    (d / f"{sha('t1')}.post.old").write_text(json.dumps(mark_fields()))
+    (d / "notes").write_text("x")
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    assert json.loads(m.run(["status"], now=T0).stdout)["unrecorded"] == []
+    m.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    assert sorted(os.listdir(d)) == sorted([".tmp-x", f"{sha('t1')}.post.old", "notes"])
+
+
+def put_mark(x, tid, event, came, tool_input=None, written=True):
+    """A dead mark, made by the gate: the mark of an event that ended without being
+    recorded."""
+    fields = mark_fields(tid, event, came, tool_input)
+    if not written:
+        fields.update(tool_input=None, input_written=False)
+    gate.create_mark(x.config, event, fields).close()
+    return mark_file(x, tid, event)
+
+
+CORRUPT = {  # the content of a mark of PostToolUseFailure that cannot be read, for a call
+    "a piece of JSON": lambda tid: '{"tool_use_id": "' + tid + '", "event"',
+    "an array": lambda tid: "[]",
+    "an empty object": lambda tid: "{}",
+    "no key event": lambda tid: json.dumps({k: v for k, v in mark_fields(tid, "failure").items()
+                                            if k != "event"}),
+    "a key of its own": lambda tid: json.dumps(dict(mark_fields(tid, "failure"), by="x")),
+    "an empty file": lambda tid: "",
+    "input_written the string false": lambda tid: json.dumps(dict(
+        mark_fields(tid, "failure"), tool_input=None, input_written="false")),
+    "input_written null": lambda tid: json.dumps(dict(mark_fields(tid, "failure"),
+                                                      input_written=None)),
+    "came not a time": lambda tid: json.dumps(dict(mark_fields(tid, "failure"), came="yesterday")),
+    "came a number": lambda tid: json.dumps(dict(mark_fields(tid, "failure"), came=1794561001)),
+    "tool_use_id not a string": lambda tid: json.dumps(dict(mark_fields(tid, "failure"),
+                                                            tool_use_id=1)),
+    "tool_use_id of another call": lambda tid: json.dumps(mark_fields(tid + "x", "failure")),
+    "event not of its name": lambda tid: json.dumps(dict(mark_fields(tid, "failure"),
+                                                         event="PostToolUse")),
+    "an input with input_written false": lambda tid: json.dumps(dict(
+        mark_fields(tid, "failure"), input_written=False))}
+
+
+@pytest.mark.parametrize("corruption", list(CORRUPT))
+def test_a_mark_that_cannot_be_read(m, corruption):
+    """A mark that cannot be read holds with its name; status names it, with the call when
+    a record of the state has it. resolve --executed of a pending call puts the input null
+    into the history; without a record --executed is refused and --not-executed removes it;
+    with the call in a conflict or in the history --executed ends and removes it; and
+    --drop-mark removes it. Wrong gates: skip_unreadable_marks,
+    unreadable_mark_uses_record_input, keys_only_mark_check, extra_keys_allowed and
+    unreadable_mark_blocks_conflict."""
+    d = m.state_dir / "unrecorded"
+
+    def put(tid):
+        d.mkdir(exist_ok=True)
+        (d / f"{sha(tid)}.failure").write_text(CORRUPT[corruption](tid))
+        return f"{sha(tid)}.failure"
+
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    name = put("t1")
+    assert m.pre(PAY, "t2", "2026-11-13T09:10:05Z", {"to": "acme"}) == (2, held(
+        f"a mark of an event that was not recorded cannot be read: unrecorded/{name}; every action "
+        "is held until the operator runs gate.py resolve ID for the call whose sha256 begins its "
+        "name"))
+    st = json.loads(m.run(["status"], now="2026-11-13T09:10:06Z").stdout)
+    assert st["unrecorded"] == [{"name": name, "event": "PostToolUseFailure", "live": False,
+                                 "tool_use_id": "t1"}]
+    assert m.command("resolve", "t1", "--executed", "--at", "2026-11-13T09:10:01Z",
+                     now="2026-11-13T09:11:00Z") == (0, "")
+    assert m.state()["history"][-1]["tool_input"] is None and mark_names(m) == []
+    # no record of the call
+    other = put("t9")
+    st = json.loads(m.run(["status"], now="2026-11-13T09:11:01Z").stdout)
+    assert st["unrecorded"] == [{"name": other, "event": "PostToolUseFailure", "live": False}]
+    code, line = m.command("resolve", "t9", "--executed", "--at", "2026-11-13T09:10:30Z",
+                           now="2026-11-13T09:11:02Z")
+    assert (code, line) == (2, held(
+        f"the mark unrecorded/{other} cannot be read, so the tool, the subject and the action of "
+        "the call t9 are not known; the operator decides, and may run gate.py resolve t9 "
+        "--drop-mark"))
+    assert m.command("resolve", "t9", "--not-executed", now="2026-11-13T09:11:03Z") == (0, "")
+    assert mark_names(m) == []
+    # the call in the history, then in a conflict
+    put("t1")
+    assert m.command("resolve", "t1", "--executed", "--at", "2026-11-13T09:10:01Z",
+                     now="2026-11-13T09:11:04Z") == (0, "")
+    assert mark_names(m) == []
+    m.post(PAY, "t1", "2026-11-13T09:11:05Z", {"to": "acme"})
+    assert list(m.state()["conflicts"]) == ["t1"]
+    put("t1")
+    assert m.command("resolve", "t1", "--executed", "--at", "2026-11-13T09:10:01Z",
+                     now="2026-11-13T09:11:06Z") == (0, "")
+    assert m.state()["conflicts"] == {} and mark_names(m) == []
+    put("t1")
+    assert m.command("resolve", "t1", "--drop-mark", now="2026-11-13T09:11:07Z") == (0, "")
+    assert mark_names(m) == []
+    line = m.log()[-1]
+    assert (line["event"], line["tool_use_id"], line["marks"]) == (
+        "mark dropped by the operator", "t1", [name])
+
+
+# The table of resolve for a call with marks (README.md, "Commands of the operator"): each
+# cell and each special case. A mark is made by the gate and left dead, as by an event that
+# ended without being recorded.
+
+def resolve(x, tid, *args, now="2026-11-13T09:20:00Z"):
+    return x.command("resolve", tid, *args, now=now)
+
+
+def test_resolve_with_marks_a_pending_call_executed(m):
+    """Wrong gate: resolve_ignores_mark, which leaves the marks."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    put_mark(m, "t1", "post", "2026-11-13T09:10:01Z")
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:01Z") == (0, "")
+    x = m.state()["history"][-1]
+    assert (x["tool_use_id"], x["executed"], x["tool_input"]) == ("t1", "1794561001", {"to": "acme"})
+    assert mark_names(m) == [] and m.data()["executed"] == {"t1": "pay"}
+    assert [y["event"] for y in m.log()[-2:]] == ["executed", "marks removed"]
+
+
+def test_resolve_with_marks_an_unknown_call_not_executed(m):
+    """Wrong gate: resolve_ignores_mark."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    m.failure(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"}, is_interrupt=True)
+    put_mark(m, "t1", "failure", "2026-11-13T09:10:02Z")
+    assert resolve(m, "t1", "--not-executed") == (0, "")
+    assert list(m.state()["not_executed"]) == ["t1"] and mark_names(m) == []
+
+
+def test_resolve_with_marks_a_call_not_executed_is_executed(m):
+    """A call resolved as not executed whose PostToolUse came and was not recorded:
+    --executed puts it into the history and gives the fact to the module. Wrong gate:
+    resolve_ignores_mark, which refuses it as before."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    assert resolve(m, "t1", "--not-executed", now="2026-11-13T09:11:00Z") == (0, "")
+    put_mark(m, "t1", "post", "2026-11-13T09:11:30Z")
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:01Z") == (0, "")
+    st = m.state()
+    assert st["not_executed"] == {} and [x["tool_use_id"] for x in st["history"]] == ["t1"]
+    assert mark_names(m) == [] and m.data()["executed"] == {"t1": "pay"}
+
+
+def test_resolve_with_marks_a_call_not_executed_stays(m):
+    """Wrong gate: resolve_ignores_mark."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    assert resolve(m, "t1", "--not-executed", now="2026-11-13T09:11:00Z") == (0, "")
+    put_mark(m, "t1", "failure", "2026-11-13T09:11:30Z")
+    assert resolve(m, "t1", "--not-executed") == (0, "")
+    assert list(m.state()["not_executed"]) == ["t1"] and mark_names(m) == []
+    assert m.log()[-1]["event"] == "marks removed"
+
+
+def conflict_of_t1(m):
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    m.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    m.post(PAY, "t1", "2026-11-13T09:10:02Z", {"to": "acme"})
+    assert list(m.state()["conflicts"]) == ["t1"]
+
+
+def test_resolve_with_marks_a_conflict_executed(m):
+    """Wrong gate: resolve_ignores_mark."""
+    conflict_of_t1(m)
+    put_mark(m, "t1", "post", "2026-11-13T09:10:03Z", tool_input={"to": "evil"})
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:01Z") == (0, "")
+    st = m.state()
+    assert st["conflicts"] == {} and st["history"][0]["tool_input"] == {"to": "acme"}
+    assert mark_names(m) == []
+
+
+def test_resolve_with_marks_refusals_keep_the_marks(m):
+    """A conflict with --not-executed, the call in the history with --not-executed, and the
+    mark of PostToolUse of a call recorded as not executed with --not-executed: each is
+    refused, and the marks stay byte for byte. Wrong gates: refusal_removes_mark and
+    not_executed_drops_post_mark."""
+    conflict_of_t1(m)
+    path = put_mark(m, "t1", "failure", "2026-11-13T09:10:03Z")
+    before = path.read_bytes()
+    assert resolve(m, "t1", "--not-executed") == (2, held(
+        "the call t1 is in the history as executed; end the conflict with --executed --at TIME"))
+    assert path.exists() and path.read_bytes() == before
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:01Z") == (0, "")
+    path = put_mark(m, "t1", "failure", "2026-11-13T09:10:03Z")
+    before = path.read_bytes()
+    assert resolve(m, "t1", "--not-executed") == (2, held("the call t1 is in the history as executed"))
+    assert path.exists() and path.read_bytes() == before
+
+
+def test_resolve_with_marks_a_post_of_a_call_not_executed_is_never_not_executed(m):
+    """Wrong gates: not_executed_drops_post_mark and refusal_removes_mark."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    assert resolve(m, "t1", "--not-executed", now="2026-11-13T09:11:00Z") == (0, "")
+    path = put_mark(m, "t1", "post", "2026-11-13T09:11:30Z")
+    before = path.read_bytes()
+    assert resolve(m, "t1", "--not-executed") == (2, held(
+        "the PostToolUse of the call t1 came: it was executed; resolve it with --executed --at TIME"))
+    assert path.exists() and path.read_bytes() == before and list(m.state()["not_executed"]) == ["t1"]
+
+
+def test_resolve_with_marks_a_call_in_the_history(m):
+    """Wrong gate: resolve_ignores_mark."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    m.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    put_mark(m, "t1", "failure", "2026-11-13T09:10:02Z")
+    history = m.state()["history"]
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:05Z") == (0, "")
+    assert m.state()["history"] == history and mark_names(m) == []
+    line = m.log()[-1]
+    assert (line["event"], line["marks"]) == ("marks removed", [f"{sha('t1')}.failure"])
+
+
+def test_resolve_with_marks_a_call_without_a_record(m):
+    """Only the mark of PostToolUse: --executed puts the call into the history with the
+    tool, the subject and the action of the mark, its input, decided at TIME and no data,
+    and gives the fact to the module; TIME with a fraction of a second, earlier than came.
+    Without a mark of PostToolUse, --not-executed removes the mark. Wrong gate:
+    resolve_ignores_mark."""
+    put_mark(m, "t9", "post", "2026-11-13T09:10:30.5Z")
+    assert resolve(m, "t9", "--executed", "--at", "2026-11-13T09:10:30.25Z") == (0, "")
+    assert m.state()["history"] == [{
+        "tool_use_id": "t9", "tool_name": PAY, "subject": "agent", "action": "pay",
+        "decided": "1794561030.25", "executed": "1794561030.25", "data": {},
+        "tool_input": {"to": "acme"}}]
+    assert mark_names(m) == [] and m.data()["executed"] == {"t9": "pay"}
+    put_mark(m, "t8", "failure", "2026-11-13T09:10:40Z")
+    assert resolve(m, "t8", "--not-executed") == (0, "")
+    assert mark_names(m) == [] and len(m.state()["history"]) == 1
+    line = m.log()[-1]
+    assert (line["event"], line["tool_use_id"]) == ("marks removed", "t8")
+
+
+def test_resolve_with_marks_a_call_without_a_record_before_the_activation(m):
+    """--at earlier than the activation would put an entry before entry 0 of every trace,
+    which the evaluator rejects for good. Wrong gate: at_before_the_activation_taken."""
+    path = put_mark(m, "t9", "post", "2026-11-13T09:10:30Z")
+    assert resolve(m, "t9", "--executed", "--at", "2026-11-13T08:59:59Z") == (2, held(
+        "--at 2026-11-13T08:59:59Z is earlier than the activation"))
+    assert path.exists() and m.state()["history"] == []
+
+
+def test_resolve_with_marks_at_no_later_than_the_post_came(m):
+    """--at later than the time PostToolUse came, and later than T, is refused; one equal to
+    it is taken. Wrong gate: at_not_checked_against_came."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    put_mark(m, "t1", "post", "2026-11-13T09:10:02Z")
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:03Z") == (2, held(
+        "--at 2026-11-13T09:10:03Z is later than the PostToolUse of the call t1 came"))
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:02Z") == (0, "")
+    assert m.state()["history"][0]["executed"] == "1794561002"
+
+
+def test_resolve_with_marks_a_post_that_came_before_t(m):
+    """PostToolUse came 0.3 s after the decision, in the same second: --at T, the decision
+    rounded up, is taken, though it is later than came. Wrong gate: at_bounded_by_came_only."""
+    assert m.pre(PAY, "t1", "2026-11-13T09:10:00.2Z", {"to": "acme"}) == (0, "")
+    put_mark(m, "t1", "post", "2026-11-13T09:10:00.5Z")
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:01Z") == (0, "")
+
+
+@pytest.mark.parametrize("mark,expected", [
+    ("another input", {"to": "evil"}), ("an input not written", None),
+    ("the same input", {"to": "acme"})])
+def test_resolve_with_marks_the_input_of_the_history(m, mark, expected):
+    """The input that --executed puts into the history: that of the mark, null when the
+    mark has none written, the input of the record when they are the same. Wrong gate:
+    history_input_from_record."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    put_mark(m, "t1", "post", "2026-11-13T09:10:01Z",
+             tool_input={"to": "evil"} if mark == "another input" else None,
+             written=mark != "an input not written")
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:01Z") == (0, "")
+    assert m.state()["history"][0]["tool_input"] == expected
+
+
+def test_an_event_without_a_state_removes_its_mark(tmp_path):
+    """Without an activation the gate allowed no call: the event removes its mark. Wrong
+    gate: mark_kept_without_state."""
+    x = Mandate(tmp_path)
+    r = after_event(x, "post", "t1", T0, {"to": "acme"})
+    assert (r.returncode, r.stderr) == (0, "")
+    assert x.log()[-1]["event"] == "post without a state" and mark_names(x) == []
+
+
+def test_status_without_a_state_shows_the_marks(tmp_path):
+    """Wrong gate: status_without_marks."""
+    x = Mandate(tmp_path)
+    put_mark(x, "t1", "post", "2026-11-13T09:10:01.5Z")
+    r = x.run(["status"], now=T0)
+    assert json.loads(r.stdout) == {"activation": None, "unrecorded": [
+        {"tool_use_id": "t1", "event": "PostToolUse", "came": "1794561001.5", "live": False}]}
+
+
+def test_the_first_line_names_the_earliest_mark(m):
+    """Two marks whose names and times are in different orders: the first line names the
+    one that came first; a mark that cannot be read, with the first name, comes after them;
+    with equal times, the first name. Wrong gates: marks_by_name, unreadable_first and
+    tie_by_name_reversed."""
+    a, b = sorted(["t1", "t2"], key=sha)
+    put_mark(m, a, "failure", "2026-11-13T09:10:20Z")
+    put_mark(m, b, "failure", "2026-11-13T09:10:10Z")
+    assert m.pre(PAY, "c1", "2026-11-13T09:11:00Z", {"to": "acme"}) == (2, unrecorded("failure", b))
+    (m.state_dir / "unrecorded" / ("0" * 64 + ".post")).write_text("{")
+    assert m.pre(PAY, "c2", "2026-11-13T09:11:01Z", {"to": "acme"}) == (2, unrecorded("failure", b))
+    for name in mark_names(m):
+        (m.state_dir / "unrecorded" / name).unlink()
+    put_mark(m, b, "failure", "2026-11-13T09:10:10Z")
+    put_mark(m, a, "failure", "2026-11-13T09:10:10Z")
+    assert m.pre(PAY, "c3", "2026-11-13T09:11:02Z", {"to": "acme"}) == (2, unrecorded("failure", a))
+
+
+def test_a_mark_and_a_call_whose_time_is_over(m):
+    """A mark and a pending call whose time is over: the call becomes unknown, and the
+    journal has unknown, then held for the mark. Wrong gate: marks_before_expire."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    put_mark(m, "t9", "failure", "2026-11-13T09:10:30Z")
+    assert m.pre(PAY, "t2", "2026-11-13T09:20:00.1Z", {"to": "acme"}) == (
+        2, unrecorded("failure", "t9"))
+    assert [x["event"] for x in m.log()][-2:] == ["unknown", "held"]
+    assert m.log()[-1]["reasons"] == [unrecorded("failure", "t9")[len(HELD):]]
+    assert list(m.state()["unknown"]) == ["t1"]
+
+
+def test_a_mark_comes_before_a_conflict(m):
+    """Wrong gate: conflicts_before_marks."""
+    conflict_of_t1(m)
+    put_mark(m, "t9", "failure", "2026-11-13T09:10:30Z")
+    assert m.pre(PAY, "t2", "2026-11-13T09:11:00Z", {"to": "acme"}) == (
+        2, unrecorded("failure", "t9"))
+
+
+# --- The journal ---------------------------------------------------------------------------
+
+def events(x):
+    """The events of the journal, without the activation, which a mandate copied from an
+    earlier activation does not repeat."""
+    return [y["event"] for y in x.log() if y["event"] != "activated"]
+
+
+def test_the_journal_puts_unknown_before_held_and_a_stray_failure(tmp_path):
+    """A call whose time is over: unknown comes before held, and before a PostToolUseFailure
+    of a call that is not pending. When the state cannot be written, held and the line of
+    the stray failure are written, and unknown is not. Wrong gate: the order of the lines
+    before, held and the stray failure first."""
+    xs = []
+    for name in ("held", "stray", "not written"):
+        x = Mandate(tmp_path / name, data={"approvals": [{"action": "pay",
+                                                          "tool_input": {"to": "acme"}}]})
+        x.activate()
+        assert x.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+        xs.append(x)
+    assert xs[0].pre(PAY, "t2", "2026-11-13T09:20:00.1Z", {"to": "acme"})[0] == 2
+    assert events(xs[0]) == ["allowed", "unknown", "held"]
+    xs[1].failure(PAY, "t3", "2026-11-13T09:20:00.1Z", {"to": "acme"})
+    assert events(xs[1]) == ["allowed", "unknown", "failure for a call that is not pending"]
+    x = xs[2]
+    (x.state_dir / "state.json.tmp").mkdir()
+    assert x.pre(PAY, "t2", "2026-11-13T09:20:00.1Z", {"to": "acme"})[0] == 2
+    r = after_event(x, "failure", "t3", "2026-11-13T09:20:00.2Z", {"to": "acme"})
+    (x.state_dir / "state.json.tmp").rmdir()
+    assert r.returncode == 2
+    assert events(x) == ["allowed", "held", "failure for a call that is not pending",
+                         "failure not recorded"]
+
+
+def blocked(x):
+    """The state cannot be written: a folder in the place of its temporary file."""
+    (x.state_dir / "state.json.tmp").mkdir()
+
+
+def later_expire(m):
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    blocked(m)
+    m.pre(PAY, "t2", "2026-11-13T09:20:00.1Z", {"to": "acme"})
+    return "unknown"
+
+
+def later_post_with_another_input(m):
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    blocked(m)
+    after_event(m, "post", "t1", "2026-11-13T09:10:01Z", {"to": "evil"})
+    return "unknown"
+
+
+def later_denied(m):
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    blocked(m)
+    after_event(m, "denied", "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    return "not executed"
+
+
+def later_interrupt(m):
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    blocked(m)
+    m.hook("failure", "PostToolUseFailure", PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"},
+           error="Error", is_interrupt=True)
+    return "unknown"
+
+
+def later_atomic_failure(m):
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    blocked(m)
+    after_event(m, "failure", "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    return "not executed"
+
+
+def later_failure_not_atomic(m):
+    m.set_data({"approvals": [{"action": "convert", "tool_input": {}}]})
+    assert m.pre(CONVERT, "t1", T0) == (0, "")
+    blocked(m)
+    m.hook("failure", "PostToolUseFailure", CONVERT, "t1", "2026-11-13T09:10:01Z", {},
+           error="Error")
+    return "unknown"
+
+
+def later_executed(m):
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    blocked(m)
+    after_event(m, "post", "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    return "executed"
+
+
+def later_conflict(m):
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    m.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    blocked(m)
+    after_event(m, "post", "t1", "2026-11-13T09:10:02Z", {"to": "acme"})
+    return "conflict"
+
+
+def later_activated(m):
+    for p in (m.state_dir / "state.json", m.state_dir / "log.jsonl"):
+        if p.exists():
+            p.unlink()
+    blocked(m)
+    m.run(["activate"], now=ACT)
+    return "activated"
+
+
+def later_resolved_conflict(m):
+    conflict_of_t1(m)
+    blocked(m)
+    resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:01Z")
+    return "resolved conflict"
+
+
+def later_resolve_not_executed(m):
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    blocked(m)
+    resolve(m, "t1", "--not-executed")
+    return "not executed"
+
+
+def later_marks_removed(m):
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    put_mark(m, "t1", "failure", "2026-11-13T09:10:01Z")
+    blocked(m)
+    resolve(m, "t1", "--not-executed")
+    assert mark_names(m) == [f"{sha('t1')}.failure"]
+    return "marks removed"
+
+
+LATER_LINES = {f.__name__[len("later_"):]: f for f in (
+    later_expire, later_post_with_another_input, later_denied, later_interrupt,
+    later_atomic_failure, later_failure_not_atomic, later_executed, later_conflict,
+    later_activated, later_resolved_conflict, later_resolve_not_executed, later_marks_removed)}
+
+
+@pytest.mark.parametrize("place", list(LATER_LINES))
+def test_a_line_of_an_update_waits_for_its_state(m, place):
+    """Each line that describes an update of the state is written once the state is: with
+    a folder in the place of the temporary file of the state, the line is not there. Wrong
+    gates: log in the place of later, one for each place (gate.py, grep "later(")."""
+    event = LATER_LINES[place](m)
+    (m.state_dir / "state.json.tmp").rmdir()
+    assert event not in [x["event"] for x in m.log()]
+
+
+def test_what_the_host_module_prints_does_not_reach_the_output_of_resolve(tmp_path):
+    """resolve gives the fact to the host module when it ends a conflict, for a call
+    recorded as not executed with the mark of its PostToolUse, and for a call that only a
+    mark names: what the module prints does not reach standard output. Wrong gates: quiet
+    left out where resolve ends a conflict, and in execute."""
+    x = Mandate(tmp_path, terms=COUNTER_SPEC[0], factors=COUNTER_SPEC[1], host="scripted",
+                answers={"paid": 0})
+    (tmp_path / "scripted_host.py").write_text(PRINTING, encoding="utf-8")
+    x.activate()
+    assert x.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    x.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    x.post(PAY, "t1", "2026-11-13T09:10:02Z", {"to": "acme"})
+    runs = [x.run(["resolve", "t1", "--executed", "--at", "2026-11-13T09:10:01Z"],
+                  now="2026-11-13T09:11:00Z")]
+    assert x.pre(PAY, "t2", "2026-11-13T09:12:00Z", {"to": "acme"}) == (0, "")
+    assert resolve(x, "t2", "--not-executed", now="2026-11-13T09:12:10Z") == (0, "")
+    put_mark(x, "t2", "post", "2026-11-13T09:12:20Z")
+    runs.append(x.run(["resolve", "t2", "--executed", "--at", "2026-11-13T09:12:01Z"],
+                      now="2026-11-13T09:13:00Z"))
+    put_mark(x, "t9", "post", "2026-11-13T09:13:30Z")
+    runs.append(x.run(["resolve", "t9", "--executed", "--at", "2026-11-13T09:13:30Z"],
+                      now="2026-11-13T09:14:00Z"))
+    assert [(r.returncode, r.stdout, r.stderr) for r in runs] == [(0, "", "")] * 3
+    assert [f["tool_use_id"] for f in x.facts()] == ["t1", "t1", "t2", "t9"]
+
+
+def test_the_command_is_read_wherever_it_stands(tmp_path):
+    """--config before the command: the first line says not recorded after a call, held
+    before it, and only before it that the call is not to be retried; a command word that is
+    the value of --config is not the command. When the arguments cannot be parsed, the
+    command is the first command word that is not the value of --config, --now or --at.
+    Wrong gates: command = argv[0], and first_command_word_anywhere."""
+    bad = str(tmp_path / "no.json")
+    for command, head in (("pre", "held"), ("post", "not recorded"), ("failure", "not recorded"),
+                          ("denied", "not recorded")):
+        r = subprocess.run([sys.executable, "-I", GATE, "--config", bad, command], input="{}",
+                           capture_output=True, text=True)
+        assert r.returncode == 2 and first(r).startswith(
+            f"TRIEL gate: {head}: configuration: cannot read {bad}"), (command, r.stderr)
+        assert ("  The call is held. Do not retry it;" in r.stderr) == (command == "pre"), command
+    for args, head in ((["--config", "pre", "post"], "not recorded: configuration: the path pre "),
+                       (["--now", "pre", "post"], "not recorded: the arguments: "),
+                       (["--at", "post", "pre", "--bogus"], "held: the arguments: ")):
+        r = subprocess.run([sys.executable, "-I", GATE] + args, input="{}", capture_output=True,
+                           text=True)
+        assert r.returncode == 2 and first(r).startswith(f"TRIEL gate: {head}"), (args, r.stderr)
