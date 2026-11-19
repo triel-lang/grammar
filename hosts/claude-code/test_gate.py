@@ -2604,8 +2604,12 @@ def test_the_writers_refuse_a_value_that_they_cannot_write(tmp_path, writer, val
     for f in ("state.json", "log.jsonl", "traces/t1.json", "module.json"):
         (d / f).write_bytes(b'{"old": 1}\n')
     before = {p: p.read_bytes() for p in d.rglob("*") if p.is_file()}
-    with pytest.raises(ValueError):
+    try:
         writer_of(writer)(cfg, d, float("nan") if value == "NaN" else "\ud800")
+        refused = None
+    except ValueError as e:
+        refused = e
+    assert refused is not None, writer
     assert {p: p.read_bytes() for p in d.rglob("*") if p.is_file()} == before
 
 
