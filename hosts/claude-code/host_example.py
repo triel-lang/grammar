@@ -122,8 +122,9 @@ The earlier form, without the keys above:
      "approvals": [{"action": A, "tool_input": {...}}],
      "executed":  {TOOL_USE_ID: ACTION}}
   executed removes the approval of the call, counts the call, and ignores a
-  fact whose tool_use_id is known; it reads, changes and replaces the whole
-  file. The host changes the file only while no call is pending (gate.py
+  fact whose tool_use_id is known; for a fact with the input None it removes
+  every approval of the action, since it cannot tell which one the call had;
+  it reads, changes and replaces the whole file. The host changes the file only while no call is pending (gate.py
   status), or under a lock of its own that this module takes too. In this
   form answers reads the file without catching an error: a file that cannot
   be read raises, and the gate holds the call, since under DEFAULT or PRESENT
@@ -557,8 +558,11 @@ def _executed_earlier(fact, options):
     if fact["tool_use_id"] in data["executed"]:
         return
     data["executed"][fact["tool_use_id"]] = fact["action"]
-    for i, a in enumerate(data["approvals"]):
-        if a.get("action") == fact["action"] and _same_input(a.get("tool_input"), fact["tool_input"]):
-            del data["approvals"][i]
-            break
+    if fact["tool_input"] is None:  # the input is unknown: no approval of the action stays
+        data["approvals"] = [a for a in data["approvals"] if a.get("action") != fact["action"]]
+    else:
+        for i, a in enumerate(data["approvals"]):
+            if a.get("action") == fact["action"] and _same_input(a.get("tool_input"), fact["tool_input"]):
+                del data["approvals"][i]
+                break
     _write(options["data_file"], data)

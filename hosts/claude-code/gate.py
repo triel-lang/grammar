@@ -1063,7 +1063,7 @@ def after(cfg, hook, h, event) -> int:
     if kind != "managed":
         return 0
     for name, x in (("tool_name", tool), ("tool_use_id", tid)):
-        if not writable_text(x):
+        if not (writable_text(x) and x):
             reasons = [f"the input of the hook has no {name} that the gate can write"]
             note(cfg, h, event=f"{event} not recorded",
                  tool_use_id=tid if writable_text(tid) else None,
@@ -1261,8 +1261,8 @@ def resolve(cfg, args, h) -> int:
         if args.drop_mark:
             if not ks:
                 raise Held([f"the call {tid} has no mark of an event that was not recorded"])
-            remove_marks(ks)
             log(cfg, h, event="mark dropped by the operator", tool_use_id=tid, marks=names)
+            remove_marks(ks)
             return 0
         if st is None:
             raise Held(["the mandate has no state"])
@@ -1402,7 +1402,7 @@ def status(cfg, h) -> int:
                                "came": f["came"], "live": k["live"]})
             continue
         u = {"name": k["name"], "event": k["event"], "live": k["live"]}
-        known = sorted(i for i in ids if k["name"].startswith(mark_name(i, "")))
+        known = sorted(i for i in ids if isinstance(i, str) and k["name"].startswith(mark_name(i, "")))
         if known:
             u["tool_use_id"] = known[0]
         unrecorded.append(u)
