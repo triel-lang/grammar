@@ -15,9 +15,11 @@ The gate calls two functions:
 
   executed(fact, options)
       A call was executed: fact has tool_use_id, tool_name, subject, action,
-      tool_input (the input it was executed with) and time (the time of
-      execution E). Everything that depends on executed actions is updated
-      from these facts only. The gate may give the same fact twice; each file
+      tool_input (the input it was executed with, None when the gate does not
+      know it) and time (the time of execution E). Everything that depends on
+      executed actions is updated from these facts only; an input None is one
+      that is not known, so a payment with it leaves the total of the day
+      without a value. The gate may give the same fact twice; each file
       that the module writes remembers the tool_use_ids it has taken, and a
       fact given again adds only what a file does not have yet, except the
       time of execution, which follows the last fact.
@@ -45,7 +47,10 @@ The example of README.md (config.example.json, mandate.triel):
                     makes the file unreadable; the file is read with its numbers
                     as Python reads them, so an amount written as a JSON number
                     stays a number, and without a value, when the file is
-                    written again
+                    written again; a number that a binary float does not hold,
+                    such as 1e400, makes the file unreadable, as NaN, Infinity
+                    and -Infinity do; a time written as a number with a
+                    fraction or an exponent has no value
   approval_factors  {"approved": F, "age": F, "revoked": F}: the Boolean, the
                     Integer and the Boolean factor of the approval of the call
   payment           {"tool": TOOL, "fields": [KEY], "day_total": F,
@@ -128,6 +133,7 @@ In both forms, a factor without MAX_AGE that is not in values has no value; a
 factor with MAX_AGE that is not in readings has no new reading.
 """
 import json
+import math
 import os
 import re
 from decimal import (ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_EVEN, Context, Decimal, Inexact,
@@ -187,10 +193,19 @@ def _ledger(options):
     return x
 
 
+def _finite(text):
+    x = float(text)
+    if math.isinf(x):
+        raise ValueError(f"not a number that a binary float holds: {text}")
+    return x
+
+
 def _plain_json(text):
     """JSON with its numbers as Python reads them: a number stays a number when the
-    file is written again, and an amount written as a number keeps having no value."""
-    return json.loads(text, parse_constant=_no_constant)
+    file is written again, and an amount written as a number keeps having no value.
+    A number that a binary float does not hold, such as 1e400, makes the file
+    unreadable, as NaN, Infinity and -Infinity do."""
+    return json.loads(text, parse_float=_finite, parse_constant=_no_constant)
 
 
 def _executions(options):
@@ -238,9 +253,14 @@ def _time(t):
 
 
 def _write(path, data):
+    """Replace the file whole. A value that JSON or UTF-8 cannot write, a number that
+    is not finite or a string with a lone surrogate, raises before the file is
+    opened, and the file stays as it was."""
+    raw = json.dumps(data, default=str, indent=1, ensure_ascii=False,
+                     allow_nan=False).encode("utf-8")
     tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(json.dumps(data, default=str, indent=1))
+    with open(tmp, "wb") as f:
+        f.write(raw)
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, path)
