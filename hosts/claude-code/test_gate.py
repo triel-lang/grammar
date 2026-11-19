@@ -1965,6 +1965,18 @@ def test_the_example_host_module_spends_what_it_chose(tmp_path):
     assert d.ask(INVOICE[1], tid="t2")["call_approved"] is True    # A2
 
 
+def test_the_example_host_module_a_fact_with_an_unknown_input(tmp_path):
+    """resolve --executed gives the input None when the input of the call is not known: the
+    approval chosen for the call is spent, and the total of the day has no value, since the
+    amount of that payment is not known. Wrong module: none_input_skipped_in_total, which
+    leaves such a payment out of the total."""
+    d = Direct(tmp_path, limit="0.05", approvals=[approval("A1", INVOICE[1])])
+    assert d.ask(INVOICE[1], tid="t1")["call_approved"] is True
+    d.take("t1", None, "2026-11-13T09:10:01Z")
+    assert d.file("ledger_file")["spent"] == {"A1": "t1"}
+    assert d.ask(INVOICE[2], now="2026-11-13T09:20:00Z", tid="t2")["day_total"] is None
+
+
 def test_the_example_host_module_without_a_choice_spends_every_approval_of_the_call(tmp_path):
     d = Direct(tmp_path, approvals=[approval("A1", INVOICE[1]), approval("A2", INVOICE[1]),
                                     approval("A3", INVOICE[2])])
@@ -2771,7 +2783,8 @@ def test_a_live_mark_holds_and_resolve_waits_for_it(m):
     """A mark whose event still runs (a helper holds its flock, not the lock of the state):
     resolve refuses with either outcome and changes nothing, byte for byte; pre waits for
     the event. Once the event ends without removing it, the mark holds as one not
-    recorded. Wrong gates: resolve_removes_live_mark and live_mark_as_dead."""
+    recorded. Wrong gates: resolve_removes_live_mark, live_mark_as_dead, and
+    drop_removes_live_mark, which lets --drop-mark remove a live mark."""
     assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
     holder = subprocess.Popen([sys.executable, "-I", "-c", MARK_HOLDER, str(HERE),
                                json.dumps(m.config), "post", json.dumps(mark_fields())],
@@ -2779,7 +2792,8 @@ def test_a_live_mark_holds_and_resolve_waits_for_it(m):
     assert holder.stdout.readline().strip() == "marked"
     path = mark_file(m, "t1", "post")
     before = (path.read_bytes(), (m.state_dir / "state.json").read_bytes())
-    for args in (["--not-executed"], ["--executed", "--at", "2026-11-13T09:10:01Z"]):
+    for args in (["--not-executed"], ["--executed", "--at", "2026-11-13T09:10:01Z"],
+                 ["--drop-mark"]):
         assert m.command("resolve", "t1", *args, now="2026-11-13T09:11:00Z") == (
             2, held("the PostToolUse of the call t1 is still being recorded; run resolve again"))
         assert path.exists() and (path.read_bytes(),
@@ -2955,7 +2969,17 @@ CORRUPT = {  # the content of a mark of PostToolUseFailure that cannot be read, 
     "event not of its name": lambda tid: json.dumps(dict(mark_fields(tid, "failure"),
                                                          event="PostToolUse")),
     "an input with input_written false": lambda tid: json.dumps(dict(
-        mark_fields(tid, "failure"), input_written=False))}
+        mark_fields(tid, "failure"), input_written=False)),
+    "an input with NaN": lambda tid: json.dumps(dict(mark_fields(tid, "failure"),
+                                                     tool_input={"to": float("nan")})),
+    "an input with a lone surrogate": lambda tid: json.dumps(dict(
+        mark_fields(tid, "failure"), tool_input={"to": chr(0xD800)})),
+    "a byte that is not UTF-8": lambda tid: json.dumps(dict(
+        mark_fields(tid, "failure"), subject="ag@nt")).encode("ascii").replace(b"@", b"\xff"),
+    "tool_name a number": lambda tid: json.dumps(dict(mark_fields(tid, "failure"), tool_name=5)),
+    "input_written 1": lambda tid: json.dumps(dict(mark_fields(tid, "failure"), input_written=1)),
+    "input_written 0 with the input null": lambda tid: json.dumps(dict(
+        mark_fields(tid, "failure"), input_written=0, tool_input=None))}
 
 
 @pytest.mark.parametrize("corruption", list(CORRUPT))
@@ -2965,13 +2989,19 @@ def test_a_mark_that_cannot_be_read(m, corruption):
     into the history; without a record --executed is refused and --not-executed removes it;
     with the call in a conflict or in the history --executed ends and removes it; and
     --drop-mark removes it. Wrong gates: skip_unreadable_marks,
-    unreadable_mark_uses_record_input, keys_only_mark_check, extra_keys_allowed and
-    unreadable_mark_blocks_conflict."""
+    unreadable_mark_uses_record_input, keys_only_mark_check, extra_keys_allowed,
+    unreadable_mark_blocks_conflict, lenient_parse (which reads a mark without the strict
+    parse), names_unchecked (which does not check that tool_name, subject and action are
+    strings) and input_written_truthy (which takes 1 and 0 for true and false)."""
     d = m.state_dir / "unrecorded"
 
     def put(tid):
         d.mkdir(exist_ok=True)
-        (d / f"{sha(tid)}.failure").write_text(CORRUPT[corruption](tid))
+        content = CORRUPT[corruption](tid)
+        if isinstance(content, bytes):
+            (d / f"{sha(tid)}.failure").write_bytes(content)
+        else:
+            (d / f"{sha(tid)}.failure").write_text(content)
         return f"{sha(tid)}.failure"
 
     assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
@@ -3174,19 +3204,217 @@ def test_resolve_with_marks_a_post_that_came_before_t(m):
     assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:01Z") == (0, "")
 
 
-@pytest.mark.parametrize("mark,expected", [
-    ("another input", {"to": "evil"}), ("an input not written", None),
-    ("the same input", {"to": "acme"})])
-def test_resolve_with_marks_the_input_of_the_history(m, mark, expected):
+@pytest.mark.parametrize("record,mark,expected", [
+    ("pending", "another input", {"to": "evil"}), ("pending", "an input not written", None),
+    ("pending", "the same input", {"to": "acme"}), ("unknown", "another input", {"to": "mark"}),
+    ("not executed", "an input not written", None)])
+def test_resolve_with_marks_the_input_of_the_history(m, record, mark, expected):
     """The input that --executed puts into the history: that of the mark, null when the
-    mark has none written, the input of the record when they are the same. Wrong gate:
-    history_input_from_record."""
+    mark has none written, the input of the record when they are the same; so also for a
+    call that is unknown, since its PostToolUse came with another input, and for a call
+    resolved as not executed. Wrong gates: history_input_from_record, and
+    unknown_executed_record_input, which takes the input of the record for a call that is
+    not pending."""
     assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    if record == "unknown":
+        m.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "evil"})
+        assert list(m.state()["unknown"]) == ["t1"]
+    elif record == "not executed":
+        assert resolve(m, "t1", "--not-executed", now="2026-11-13T09:10:30Z") == (0, "")
+    other = {"pending": {"to": "evil"}, "unknown": {"to": "mark"}}.get(record)
     put_mark(m, "t1", "post", "2026-11-13T09:10:01Z",
-             tool_input={"to": "evil"} if mark == "another input" else None,
+             tool_input=other if mark == "another input" else None,
              written=mark != "an input not written")
     assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:01Z") == (0, "")
     assert m.state()["history"][0]["tool_input"] == expected
+
+
+def test_resolve_with_marks_takes_the_input_of_the_mark_of_post(m):
+    """A mark of PostToolUseFailure that came first and a mark of PostToolUse that came
+    later: the history has the input of the mark of PostToolUse. Wrong gate:
+    history_input_first_mark, which takes the mark that came first."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    put_mark(m, "t1", "failure", "2026-11-13T09:10:01Z", tool_input={"to": "failure"})
+    put_mark(m, "t1", "post", "2026-11-13T09:10:02Z", tool_input={"to": "post"})
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:02Z") == (0, "")
+    assert m.state()["history"][0]["tool_input"] == {"to": "post"}
+
+
+def test_resolve_with_marks_a_call_without_a_record_takes_the_mark_of_post(m):
+    """No record; a mark of PostToolUseFailure of convert that came first, and a mark of
+    PostToolUse of pay that came later: the history has the tool and the action of the mark
+    of PostToolUse. Wrong gate: no_record_first_mark, which takes the mark that came first."""
+    fields = dict(mark_fields("t9", "failure", "2026-11-13T09:10:10Z"), tool_name=CONVERT,
+                  action="convert")
+    gate.create_mark(m.config, "failure", fields).close()
+    put_mark(m, "t9", "post", "2026-11-13T09:10:20Z")
+    assert resolve(m, "t9", "--executed", "--at", "2026-11-13T09:10:15Z") == (0, "")
+    x = m.state()["history"][0]
+    assert (x["tool_use_id"], x["tool_name"], x["action"]) == ("t9", PAY, "pay")
+
+
+def test_resolve_with_marks_a_call_without_a_record_at_no_later_than_the_post_came(m):
+    """Without a record, --at later than the time PostToolUse came is refused, and the mark
+    stays. Wrong gate: post_mark_bound_ignored_without_record."""
+    path = put_mark(m, "t9", "post", "2026-11-13T09:10:30Z")
+    assert resolve(m, "t9", "--executed", "--at", "2026-11-13T09:11:00Z") == (2, held(
+        "--at 2026-11-13T09:11:00Z is later than the PostToolUse of the call t9 came"))
+    assert path.exists() and m.state()["history"] == []
+
+
+def test_resolve_with_marks_a_conflict_at_no_later_than_the_post_came(m):
+    """A conflict with a mark of PostToolUse: --at later than the time PostToolUse came, and
+    later than T, is refused, and the conflict stays. Wrong gate:
+    conflict_at_unbounded_by_came."""
+    conflict_of_t1(m)
+    put_mark(m, "t1", "post", "2026-11-13T09:10:03Z")
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:05Z") == (2, held(
+        "--at 2026-11-13T09:10:05Z is later than the PostToolUse of the call t1 came"))
+    assert list(m.state()["conflicts"]) == ["t1"]
+
+
+def test_resolve_with_marks_a_call_in_the_history_at_no_earlier_than_t(m):
+    """The call in the history with a mark of PostToolUseFailure: --at earlier than T is
+    refused, and the mark stays byte for byte. Wrong gate: in_history_no_at_check."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    m.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    path = put_mark(m, "t1", "failure", "2026-11-13T09:10:02Z")
+    before = path.read_bytes()
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:09:59Z") == (2, held(
+        "--at 2026-11-13T09:09:59Z is earlier than the time of the decision, "
+        "2026-11-13T09:10:00Z"))
+    assert path.exists() and path.read_bytes() == before
+
+
+def test_a_mark_that_cannot_be_opened(tmp_path, monkeypatch):
+    """A mark that cannot be opened (os.open refuses it) is a mark that cannot be read, and
+    not a live one: the operator can end it. Wrong gate: unreadable_live_forever."""
+    cfg = {"state_dir": str(tmp_path / "state")}
+    gate.create_mark(cfg, "post", mark_fields()).close()
+    path = tmp_path / "state" / "unrecorded" / f"{sha('t1')}.post"
+    opened = os.open
+
+    def refused(p, *args, **kwargs):
+        if str(p) == str(path):
+            raise PermissionError(13, "Permission denied", str(p))
+        return opened(p, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", refused)
+    ks = gate.marks(cfg)
+    monkeypatch.undo()
+    assert [(k["name"], k["live"], k["fields"]) for k in ks] == [(path.name, False, None)]
+
+
+ASKED = SCRIPTED + """
+_answers = answers
+
+
+def answers(call, now, factors, options):
+    if call is not None:
+        with open(options["asked"], "a", encoding="utf-8") as f:
+            f.write(call["tool_use_id"] + " ")
+    return _answers(call, now, factors, options)
+"""
+
+
+def test_an_input_that_the_gate_cannot_write_is_held_before_the_host_module_is_asked(tmp_path):
+    """The host module writes down each call it is asked about: a call with NaN in its input
+    is held with the reason of its input before the module is asked; a call with an input
+    that can be written is asked about. Wrong gate: check_after_module, which asks the module
+    first and holds the call for the same reason."""
+    x = Mandate(tmp_path, terms=COUNTER_SPEC[0], factors=COUNTER_SPEC[1], host="scripted",
+                answers={"paid": 0})
+    (tmp_path / "scripted_host.py").write_text(ASKED, encoding="utf-8")
+    x.config["host_options"]["asked"] = str(tmp_path / "asked")
+    x.write_config()
+    x.activate()
+    r = x.run(["pre"], stdin=raw_hook(x, "PreToolUse", PAY, "t1", '{"to": NaN}'), now=T0)
+    assert (r.returncode, first(r)) == (2, held(reason_of(NOT_A_NUMBER, 'tool_input["to"]')))
+    assert not (tmp_path / "asked").exists()
+    assert x.pre(PAY, "t2", "2026-11-13T09:10:05Z", {"to": "acme"}) == (0, "")
+    assert (tmp_path / "asked").read_text(encoding="utf-8") == "t2 "
+
+
+def test_an_event_goes_on_when_its_mark_cannot_be_made(m):
+    """A file in the place of the folder of the marks: the mark of the event cannot be made,
+    and the event is recorded all the same. Wrong gate: event_stops_without_mark."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    (m.state_dir / "unrecorded").write_text("x")
+    r = after_event(m, "post", "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    assert (r.returncode, r.stderr) == (0, "")
+    assert [x["tool_use_id"] for x in m.state()["history"]] == ["t1"]
+
+
+def test_an_event_with_an_empty_tool_use_id_is_not_recorded(m):
+    """As pre holds a call with an empty tool_use_id, an event after a call with one is not
+    recorded and makes no mark, with an input that can be written and with NaN in it; the
+    journal says so. Wrong gate: empty_tid_marked, which takes the empty id for an id."""
+    reason = "the input of the hook has no tool_use_id that the gate can write"
+    for event in sorted(AFTER):
+        for text in ('{"to": "acme"}', '{"to": NaN}'):
+            r = m.run([event], stdin=raw_hook(m, AFTER[event][0], PAY, "", text, **AFTER[event][1]),
+                      now="2026-11-13T09:10:01Z")
+            assert (r.returncode, first(r)) == (2, NOT_RECORDED + reason), (event, text)
+            assert mark_names(m) == [], (event, text)
+            assert m.log()[-1]["event"] == f"{event} not recorded", (event, text)
+    st = m.state()
+    assert (st["history"], st["conflicts"], st["not_executed"]) == ([], {}, {})
+
+
+def test_the_earlier_form_removes_every_approval_of_an_action_for_an_unknown_input(m):
+    """resolve --executed with the input null, from the mark of a PostToolUse whose input
+    the gate could not write: the earlier form of the host module cannot tell which approval
+    the call had, so it removes every approval of the action and keeps those of other
+    actions, and the same payment is held. Wrong module: earlier_form_keeps_approval_for_none,
+    which removes none."""
+    m.set_data({"approvals": [{"action": "pay", "tool_input": {"to": "acme"}},
+                              {"action": "pay", "tool_input": {"to": "bob"}},
+                              {"action": "convert", "tool_input": {"amount": "1"}}]})
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    r = m.run(["post"], stdin=raw_hook(m, "PostToolUse", PAY, "t1", '{"to": "acme", "memo": NaN}',
+                                       duration_ms=5), now="2026-11-13T09:10:01Z")
+    assert r.returncode == 2
+    assert resolve(m, "t1", "--executed", "--at", "2026-11-13T09:10:01Z",
+                   now="2026-11-13T09:11:00Z") == (0, "")
+    assert m.state()["history"][-1]["tool_input"] is None
+    assert m.data()["approvals"] == [{"action": "convert", "tool_input": {"amount": "1"}}]
+    assert m.pre(PAY, "t2", "2026-11-13T09:12:00Z", {"to": "acme"}) == BLOCKED_PAY
+
+
+def test_status_with_an_id_of_the_history_that_is_not_a_string(m):
+    """An entry of the history whose tool_use_id is null, as an earlier gate wrote it, and
+    two marks that cannot be read: status shows each with its name, its event and whether it
+    is live, and with the call t1 only for the mark of its name. Wrong gate:
+    status_non_string_id, which fails on the null id."""
+    assert m.pre(PAY, "t1", T0, {"to": "acme"}) == (0, "")
+    m.post(PAY, "t1", "2026-11-13T09:10:01Z", {"to": "acme"})
+    st = m.state()
+    st["history"].append(dict(st["history"][0], tool_use_id=None))
+    (m.state_dir / "state.json").write_text(json.dumps(st), encoding="utf-8")
+    d = m.state_dir / "unrecorded"
+    d.mkdir(exist_ok=True)
+    other, own = "0" * 64 + ".post", f"{sha('t1')}.failure"
+    for name in (other, own):
+        (d / name).write_text("{")
+    r = m.run(["status"], now="2026-11-13T09:11:00Z")
+    assert (r.returncode, r.stderr) == (0, "")
+    assert json.loads(r.stdout)["unrecorded"] == [
+        {"name": other, "event": "PostToolUse", "live": False},
+        {"name": own, "event": "PostToolUseFailure", "live": False, "tool_use_id": "t1"}]
+
+
+def test_drop_mark_writes_its_line_before_it_removes_the_marks(m):
+    """The journal cannot be written: --drop-mark is refused, and the mark stays byte for
+    byte. Wrong gate: drop_mark_before_journal, which removes the marks first."""
+    path = put_mark(m, "t9", "post", "2026-11-13T09:10:30Z")
+    before = path.read_bytes()
+    journal = m.state_dir / "log.jsonl"
+    if journal.exists():
+        journal.unlink()
+    journal.mkdir()
+    code, line = resolve(m, "t9", "--drop-mark", now="2026-11-13T09:11:00Z")
+    assert code == 2 and line.startswith(held("the gate failed: IsADirectoryError")), line
+    assert path.exists() and path.read_bytes() == before
 
 
 def test_an_event_without_a_state_removes_its_mark(tmp_path):
@@ -3423,7 +3651,8 @@ def test_the_command_is_read_wherever_it_stands(tmp_path):
     before it, and only before it that the call is not to be retried; a command word that is
     the value of --config is not the command. When the arguments cannot be parsed, the
     command is the first command word that is not the value of --config, --now or --at.
-    Wrong gates: command = argv[0], and first_command_word_anywhere."""
+    Wrong gates: command = argv[0], first_command_word_anywhere, and last_command_word,
+    which takes the last command word that is not such a value."""
     bad = str(tmp_path / "no.json")
     for command, head in (("pre", "held"), ("post", "not recorded"), ("failure", "not recorded"),
                           ("denied", "not recorded")):
@@ -3434,7 +3663,8 @@ def test_the_command_is_read_wherever_it_stands(tmp_path):
         assert ("  The call is held. Do not retry it;" in r.stderr) == (command == "pre"), command
     for args, head in ((["--config", "pre", "post"], "not recorded: configuration: the path pre "),
                        (["--now", "pre", "post"], "not recorded: the arguments: "),
-                       (["--at", "post", "pre", "--bogus"], "held: the arguments: ")):
+                       (["--at", "post", "pre", "--bogus"], "held: the arguments: "),
+                       (["pre", "post"], "held: the arguments: ")):
         r = subprocess.run([sys.executable, "-I", GATE] + args, input="{}", capture_output=True,
                            text=True)
         assert r.returncode == 2 and first(r).startswith(f"TRIEL gate: {head}"), (args, r.stderr)

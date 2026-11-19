@@ -488,8 +488,9 @@ def test_an_activation_takes_a_reading_stamped_up_to_until(tmp_path):
     """The activation is at the clock h that the host gave its sources; until, the
     clock read once they answered, bounds the readings. A reading stamped between the
     two is accepted, is not in the data of entry 0, and has its arrive entry after it,
-    so a decision while it is fresh is not held. Wrong libraries: until_ignored, which
-    takes h as the bound, and record_at_until, which records the activation at until."""
+    so a decision while it is fresh is not held; a reading stamped at until is accepted too.
+    Wrong libraries: until_ignored, which takes h as the bound, record_at_until, which
+    records the activation at until, and until_exclusive, which takes until for the future."""
     spec = write_spec(tmp_path, "agent MUST_NOT pay WHEN DEFAULT(f, false)", BLOCK60)
     factors = th.spec_factors(spec.read_text(encoding="utf-8"))
     h, until = t("2026-11-13T09:00:00.25Z"), t("2026-11-13T09:00:00.75Z")
@@ -509,6 +510,10 @@ def test_an_activation_takes_a_reading_stamped_up_to_until(tmp_path):
     assert reasons == ["factor f: a reading from the future"]
     _, _, reasons = th.activation(factors, {"f": Reading(False, "2026-11-13T09:00:00.5Z")}, h)
     assert reasons == ["factor f: a reading from the future"]
+    # a reading stamped at until itself is accepted. Wrong library: until_exclusive.
+    _, store, reasons = th.activation(factors, {"f": Reading(False, "2026-11-13T09:00:00.75Z")}, h,
+                                      until=until)
+    assert reasons == [] and store["f"]["accepted"] == [[th.exact(until), {"bool": False}]]
 
 
 def test_arrive_entries_in_time_order_with_the_history(tmp_path):
