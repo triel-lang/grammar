@@ -342,13 +342,18 @@ def state_data(factors: dict, store: dict, answers: dict, h: Decimal, reasons: l
 
 # --- The activation -------------------------------------------------------------
 
-def activation(factors: dict, answers: dict, h: Decimal, store: dict = None):
+def activation(factors: dict, answers: dict, h: Decimal, store: dict = None,
+               until: Decimal = None):
     """The record of the activation at the host clock h: (record, store, reasons).
     The record is {"time": exact h, "data": the data of entry 0}; the trace
-    gives entry 0 the time h rounded down, so that no later entry is earlier."""
+    gives entry 0 the time h rounded down, so that no later entry is earlier.
+    h is the clock the host gave its sources; until (h if None), the clock it
+    read once they answered, bounds the readings: a reading later than until is
+    from the future, and a reading later than h and not later than until is
+    accepted, is not in the data of entry 0, and has its arrive entry after it."""
     reasons = []
     check_names(factors, answers, reasons)
-    store, more = accept(factors, store or {}, answers, h)
+    store, more = accept(factors, store or {}, answers, h if until is None else until)
     reasons += more
     data = state_data(factors, store, answers, h, reasons)
     return {"time": exact(h), "data": data}, store, reasons
