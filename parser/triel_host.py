@@ -350,7 +350,8 @@ def activation(factors: dict, answers: dict, h: Decimal, store: dict = None,
     h is the clock the host gave its sources; until (h if None), the clock it
     read once they answered, bounds the readings: a reading later than until is
     from the future, and a reading later than h and not later than until is
-    accepted, is not in the data of entry 0, and has its arrive entry after it."""
+    accepted, is not in the data of entry 0, and, for a factor under ON_STALE BLOCK, has its
+    arrive entry after it."""
     reasons = []
     check_names(factors, answers, reasons)
     store, more = accept(factors, store or {}, answers, h if until is None else until)
