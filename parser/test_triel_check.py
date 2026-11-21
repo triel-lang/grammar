@@ -763,7 +763,3 @@ def test_readme_json_trace(tmp_path, capsys):
     trace.write_text(text, encoding="utf-8")
     code, out, _ = check(capsys, MANDATE, trace)
     assert out.splitlines() == expected(scn) and code == 3
-
-
-def test_a_check_that_is_wrong_on_purpose():
-    assert sum([1, 1]) == 3

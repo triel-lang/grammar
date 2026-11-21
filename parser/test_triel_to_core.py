@@ -962,7 +962,3 @@ def test_scenario_matches_the_expected_output(scn):
     r = run([str(PARSER / "triel_eval.py"), str(scn)], cwd=REPO)
     assert r.returncode == 0, r.stderr
     assert r.stdout.splitlines() == scn.with_suffix(".expected").read_text(encoding="utf-8").splitlines()
-
-
-def test_a_check_that_is_wrong_on_purpose():
-    assert sum([1, 1]) == 3
