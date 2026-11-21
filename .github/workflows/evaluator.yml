@@ -12,11 +12,19 @@ env:
   # evaluator is not built.
   TRIEL_REQUIRE_EVALUATOR: "1"
 
+permissions:
+  contents: read
+
 jobs:
-  evaluate:
+  # Isabelle checks the theories and exports the evaluator; the committed code
+  # is the exported code; GHC builds the evaluator once. The check jobs below
+  # run on this binary, which they check by its sha256.
+  build-evaluator:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    outputs:
+      eval_sha256: ${{ steps.eval_sha256.outputs.eval_sha256 }}
     steps:
       - uses: actions/checkout@v7
 
@@ -93,6 +101,97 @@ jobs:
       - name: Compile the evaluator
         run: ghc -O1 -ievaluator/generated -outputdir evaluator/build -o evaluator/triel-eval evaluator/Main.hs
 
+      - name: The sha256 of the evaluator
+        id: eval_sha256
+        run: |
+          sha256sum evaluator/triel-eval
+          sum=$(sha256sum evaluator/triel-eval)
+          echo "eval_sha256=${sum%% *}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: triel-eval
+          path: evaluator/triel-eval
+          if-no-files-found: error
+          retention-days: 1
+
+  # hosts/claude-code/test_gate.py, the longest of the checks, in a job of its own.
+  check-adapter:
+    runs-on: ubuntu-24.04
+    needs: build-evaluator
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: triel-eval
+          path: evaluator
+
+      # The evaluator is the binary that build-evaluator built.
+      - name: The evaluator is the one of build-evaluator
+        run: |
+          chmod +x evaluator/triel-eval
+          echo "${{ needs.build-evaluator.outputs.eval_sha256 }}  evaluator/triel-eval" | sha256sum -c -
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install the translator's dependencies
+        run: pip install lark==1.3.1 pytest
+
+      # hosts/claude-code: the hooks for Claude Code, each run as Claude Code
+      # runs a hook, with the clock as an argument.
+      - name: Tests of the adapter for Claude Code
+        run: python3 -m pytest -q hosts/claude-code/test_gate.py
+
+  # parser/test_triel_to_core.py in a job of its own.
+  check-translator:
+    runs-on: ubuntu-24.04
+    needs: build-evaluator
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: triel-eval
+          path: evaluator
+
+      # The evaluator is the binary that build-evaluator built.
+      - name: The evaluator is the one of build-evaluator
+        run: |
+          chmod +x evaluator/triel-eval
+          echo "${{ needs.build-evaluator.outputs.eval_sha256 }}  evaluator/triel-eval" | sha256sum -c -
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install the translator's dependencies
+        run: pip install lark==1.3.1 pytest
+
+      - name: Tests of the translator and the driver
+        run: python3 -m pytest -q parser/test_triel_to_core.py
+
+  # The classification of the examples, the conformance suite, its manifest and
+  # the self-check of run.py, and the tests of the trace of a host.
+  check-conformance:
+    runs-on: ubuntu-24.04
+    needs: build-evaluator
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: triel-eval
+          path: evaluator
+
+      # The evaluator is the binary that build-evaluator built.
+      - name: The evaluator is the one of build-evaluator
+        run: |
+          chmod +x evaluator/triel-eval
+          echo "${{ needs.build-evaluator.outputs.eval_sha256 }}  evaluator/triel-eval" | sha256sum -c -
+
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -104,15 +203,6 @@ jobs:
         run: |
           python3 parser/triel_to_core.py --classify examples > /tmp/classification.txt
           diff -u examples/core/classification.expected /tmp/classification.txt
-
-      - name: Scenarios against the hand-written expected outputs
-        run: |
-          status=0
-          for scn in examples/core/scenarios/*.scn; do
-            python3 parser/triel_eval.py "$scn" > /tmp/out.txt || status=1
-            diff -u "${scn%.scn}.expected" /tmp/out.txt || status=1
-          done
-          exit $status
 
       # The conformance suite (examples/core/conformance) with the reference
       # implementation, on both levels.
@@ -184,8 +274,45 @@ jobs:
           fi
           tail -n 1 /tmp/self.txt
 
-      - name: Tests of the translator and the driver
-        run: python3 -m pytest -q parser/test_triel_to_core.py
+      # parser/triel_host.py, the trace that a host builds from its own records,
+      # and triel_to_core.py --actions, against the reports of triel check.
+      - name: Tests of the trace of a host and of --actions
+        run: python3 -m pytest -q parser/test_host.py
+
+  # Every scenario against its expected output, the corpus of the translation,
+  # triel check, and the skill for AI agents with AGENTS.md.
+  check-scenarios:
+    runs-on: ubuntu-24.04
+    needs: build-evaluator
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: triel-eval
+          path: evaluator
+
+      # The evaluator is the binary that build-evaluator built.
+      - name: The evaluator is the one of build-evaluator
+        run: |
+          chmod +x evaluator/triel-eval
+          echo "${{ needs.build-evaluator.outputs.eval_sha256 }}  evaluator/triel-eval" | sha256sum -c -
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install the translator's dependencies
+        run: pip install lark==1.3.1 pytest
+
+      - name: Scenarios against the hand-written expected outputs
+        run: |
+          status=0
+          for scn in examples/core/scenarios/*.scn; do
+            python3 parser/triel_eval.py "$scn" > /tmp/out.txt || status=1
+            diff -u "${scn%.scn}.expected" /tmp/out.txt || status=1
+          done
+          exit $status
 
       # parser/corpus: every case of the corpus against the translator, the
       # format of the corpus, the rules of the grammar it covers, a pair of cases
@@ -204,12 +331,24 @@ jobs:
       - name: Tests of the skill for AI agents and of AGENTS.md
         run: python3 -m pytest -q parser/test_skill.py
 
-      # parser/triel_host.py, the trace that a host builds from its own records,
-      # and triel_to_core.py --actions, against the reports of triel check.
-      - name: Tests of the trace of a host and of --actions
-        run: python3 -m pytest -q parser/test_host.py
-
-      # hosts/claude-code: the hooks for Claude Code, each run as Claude Code
-      # runs a hook, with the clock as an argument.
-      - name: Tests of the adapter for Claude Code
-        run: python3 -m pytest -q hosts/claude-code/test_gate.py
+  # The result of the workflow: it fails unless every job above succeeded; a
+  # job that failed, was cancelled or was skipped fails it.
+  evaluate:
+    runs-on: ubuntu-24.04
+    needs: [build-evaluator, check-adapter, check-translator, check-conformance, check-scenarios]
+    if: always()
+    steps:
+      - name: Every job succeeded
+        run: |
+          status=0
+          echo "build-evaluator: ${{ needs.build-evaluator.result }}"
+          if [ "${{ needs.build-evaluator.result }}" != success ]; then status=1; fi
+          echo "check-adapter: ${{ needs.check-adapter.result }}"
+          if [ "${{ needs.check-adapter.result }}" != success ]; then status=1; fi
+          echo "check-translator: ${{ needs.check-translator.result }}"
+          if [ "${{ needs.check-translator.result }}" != success ]; then status=1; fi
+          echo "check-conformance: ${{ needs.check-conformance.result }}"
+          if [ "${{ needs.check-conformance.result }}" != success ]; then status=1; fi
+          echo "check-scenarios: ${{ needs.check-scenarios.result }}"
+          if [ "${{ needs.check-scenarios.result }}" != success ]; then status=1; fi
+          exit $status
