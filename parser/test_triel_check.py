@@ -3,6 +3,7 @@
 Run from the repository root:  python3 -m pytest parser/test_triel_check.py
 The tests that run the evaluator need the evaluator binary (see
 parser/triel_eval.py); they are skipped when it is not built.
+With TRIEL_REQUIRE_EVALUATOR=1 in the environment they fail instead.
 
 Most tests call the command in this process, with the translation of each
 specification computed once; the tests of the exit codes run it as a program.
@@ -28,8 +29,17 @@ SCENARIOS = sorted((REPO / "examples/core/scenarios").glob("*.scn"))
 IDS = [s.stem for s in SCENARIOS]
 MANDATE = "examples/core/merchant_mandate.triel"
 
-needs_evaluator = pytest.mark.skipif(not os.path.exists(default_evaluator()),
-                                     reason="evaluator not built")
+
+def needs_evaluator(test):
+    if os.path.exists(default_evaluator()):
+        return test
+    if os.environ.get("TRIEL_REQUIRE_EVALUATOR") != "1":
+        return pytest.mark.skip(reason="evaluator not built")(test)
+
+    @functools.wraps(test)
+    def fails(*args, **kwargs):
+        pytest.fail("evaluator not built: %s (TRIEL_REQUIRE_EVALUATOR=1)" % default_evaluator())
+    return fails
 
 
 @pytest.fixture(autouse=True)

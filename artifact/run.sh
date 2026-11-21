@@ -136,8 +136,10 @@ scenarios() {
 }
 
 # evaluator.yml: the tests of the translator and the driver, and of triel check.
+# A test that needs the evaluator fails, instead of being skipped, when the
+# evaluator is not built.
 tests() {
-  python3 -m pytest -q -p no:cacheprovider parser/test_triel_to_core.py parser/test_triel_check.py
+  TRIEL_REQUIRE_EVALUATOR=1 python3 -m pytest -q -p no:cacheprovider parser/test_triel_to_core.py parser/test_triel_check.py
 }
 
 # parse-examples.yml: every example parses under parser/triel.lark with exactly

@@ -3,7 +3,9 @@
 Run from the repository root:  python3 -m pytest parser/test_triel_to_core.py
 The scenario tests need the evaluator binary (see parser/triel_eval.py); they
 are skipped when it is not built.
+With TRIEL_REQUIRE_EVALUATOR=1 in the environment they fail instead.
 """
+import functools
 import os
 import re
 import subprocess
@@ -942,7 +944,19 @@ def test_scenario_input_is_well_formed(scn):
     assert r.returncode == 0 and r.stdout.startswith("(input (spec ")
 
 
-@pytest.mark.skipif(not os.path.exists(default_evaluator()), reason="evaluator not built")
+def needs_evaluator(test):
+    if os.path.exists(default_evaluator()):
+        return test
+    if os.environ.get("TRIEL_REQUIRE_EVALUATOR") != "1":
+        return pytest.mark.skip(reason="evaluator not built")(test)
+
+    @functools.wraps(test)
+    def fails(*args, **kwargs):
+        pytest.fail("evaluator not built: %s (TRIEL_REQUIRE_EVALUATOR=1)" % default_evaluator())
+    return fails
+
+
+@needs_evaluator
 @pytest.mark.parametrize("scn", SCENARIOS, ids=[s.stem for s in SCENARIOS])
 def test_scenario_matches_the_expected_output(scn):
     r = run([str(PARSER / "triel_eval.py"), str(scn)], cwd=REPO)

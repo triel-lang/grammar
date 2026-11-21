@@ -8,6 +8,9 @@ on:
 
 env:
   ISABELLE_VERSION: Isabelle2025-2
+  # A test that needs the evaluator fails, instead of being skipped, when the
+  # evaluator is not built.
+  TRIEL_REQUIRE_EVALUATOR: "1"
 
 jobs:
   evaluate:
