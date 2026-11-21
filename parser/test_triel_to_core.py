@@ -78,10 +78,11 @@ def theory_names():
 # Lower-case words in backquotes in these documents that are not names of the theories:
 # HOL and Isabelle names, files and tools, and words of the examples.
 NOT_THEORY_NAMES = {"filter", "find", "fmap", "export_code", "sorry", "oops", "lualatex",
-                    "build.log", "false", "age", "pay", "num"}
+                    "build.log", "false", "age", "pay", "num",
+                    "true", "axiomatization", "quick_and_dirty", "skip_proofs"}
 
 
-@pytest.mark.parametrize("doc", ["formal/core/CORE.md", "FOUNDATIONS.md"])
+@pytest.mark.parametrize("doc", ["formal/core/CORE.md", "FOUNDATIONS.md", "OPEN_PROBLEMS.md"])
 def test_documents_cite_defined_names(doc):
     """Every lower-case identifier of two or more letters in backquotes, such as
     `run_noninterference` or `interleaving.total_and`, is a theorem, definition, type
