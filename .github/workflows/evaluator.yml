@@ -115,6 +115,9 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: A failure on purpose
+        run: exit 1
+
   # hosts/claude-code/test_gate.py, the longest of the checks, in a job of its own.
   check-adapter:
     runs-on: ubuntu-24.04
