@@ -103,21 +103,36 @@ U=$URL perl -0pi -e '
   printf '    "%s"\n' "${DOCFILES[@]}"
 } > "$ENTRY/ROOT"
 
-# Checks.
+# Checks. grep exits with 1 when it finds nothing, 0 when it finds a line, and
+# with any other code when it fails, for example on a file it cannot read; a
+# failure fails the check.
 fail=0
 check() {  # check MESSAGE GREP-OPTIONS PATTERN
-  local hits
-  if hits=$(cd "$ENTRY" && grep -nE $2 -e "$3" -- ROOT *.thy); then
+  local hits rc=0
+  local -a thy=()
+  shopt -s nullglob
+  thy=("$ENTRY"/*.thy)
+  shopt -u nullglob
+  if [ ${#thy[@]} -eq 0 ]; then
+    echo "error: no .thy file in $ENTRY" >&2
+    fail=1
+    return 0
+  fi
+  hits=$(cd "$ENTRY" && grep -nE $2 -e "$3" -- ROOT "${thy[@]##*/}") || rc=$?
+  if [ $rc -eq 0 ]; then
     printf 'error: %s:\n%s\n' "$1" "$hits" >&2
     fail=1
-  else
+  elif [ $rc -eq 1 ]; then
     echo "ok: no $1"
+  else
+    echo "error: grep failed (code $rc)" >&2
+    fail=1
   fi
 }
 check "sorry, oops or axiomatization" -w 'sorry|oops|axiomatization'
 check "sledgehammer or smt_oracle" -w 'sledgehammer|smt_oracle'
-check "quick_and_dirty or skip_proofs" -s 'quick_and_dirty|skip_proofs'
-check "export of files" -s 'export_files|export_generated_files|code_reflect'
+check "quick_and_dirty or skip_proofs" '' 'quick_and_dirty|skip_proofs'
+check "export of files" '' 'export_files|export_generated_files|code_reflect'
 # export_code may not write files: no file or file_prefix up to the end of the
 # command (the next blank line).
 n_export=$(cd "$ENTRY" && cat -- *.thy | grep -c '^export_code' || true)

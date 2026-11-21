@@ -18,15 +18,34 @@ jobs:
       - uses: actions/checkout@v7
 
       # The theories may contain no unproved or assumed results, and the
-      # session may not switch proof checking off.
+      # session may not switch proof checking off. grep exits with 1 when it
+      # finds nothing, 0 when it finds a line, and with any other code when it
+      # fails, for example on a file it cannot read; a failure fails the step.
       - name: Check for sorry, oops and axiomatization
         run: |
-          if grep -nwE 'sorry|oops|axiomatization' formal/core/*.thy; then
-            echo "::error::formal/core contains sorry, oops or axiomatization"
+          shopt -s nullglob
+          thy=(formal/core/*.thy)
+          shopt -u nullglob
+          if [ ${#thy[@]} -eq 0 ]; then
+            echo "::error::formal/core has no .thy file"
             exit 1
           fi
-          if grep -nE 'quick_and_dirty|skip_proofs' formal/core/ROOT; then
+          rc=0
+          grep -nwE 'sorry|oops|axiomatization' "${thy[@]}" || rc=$?
+          if [ $rc -eq 0 ]; then
+            echo "::error::formal/core contains sorry, oops or axiomatization"
+            exit 1
+          elif [ $rc -ne 1 ]; then
+            echo "error: grep failed (code $rc)"
+            exit 1
+          fi
+          rc=0
+          grep -nE 'quick_and_dirty|skip_proofs' formal/core/ROOT || rc=$?
+          if [ $rc -eq 0 ]; then
             echo "::error::formal/core/ROOT switches proof checking off"
+            exit 1
+          elif [ $rc -ne 1 ]; then
+            echo "error: grep failed (code $rc)"
             exit 1
           fi
 

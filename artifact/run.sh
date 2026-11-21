@@ -56,14 +56,37 @@ step() {
 
 # isabelle.yml: no unproved or assumed results, and no session option that
 # switches proof checking off. The paper session is held to the same rule.
+# grep exits with 1 when it finds nothing, 0 when it finds a line, and with any
+# other code when it fails; a failure fails the step.
 no_sorry() {
-  local bad=0
-  if grep -nwE 'sorry|oops|axiomatization' formal/core/*.thy artifact/isabelle/*.thy; then
+  local bad=0 rc dir
+  local -a thy=() files=()
+  for dir in formal/core artifact/isabelle; do
+    shopt -s nullglob
+    thy=("$dir"/*.thy)
+    shopt -u nullglob
+    if [ ${#thy[@]} -eq 0 ]; then
+      echo "error: $dir has no .thy file"
+      return 1
+    fi
+    files+=("${thy[@]}")
+  done
+  grep -nwE 'sorry|oops|axiomatization' "${files[@]}"
+  rc=$?
+  if [ $rc -eq 0 ]; then
     echo "error: sorry, oops or axiomatization found"
     bad=1
+  elif [ $rc -ne 1 ]; then
+    echo "error: grep failed (code $rc)"
+    bad=1
   fi
-  if grep -nE 'quick_and_dirty|skip_proofs' formal/core/ROOT artifact/isabelle/ROOT; then
+  grep -nE 'quick_and_dirty|skip_proofs' formal/core/ROOT artifact/isabelle/ROOT
+  rc=$?
+  if [ $rc -eq 0 ]; then
     echo "error: a ROOT switches proof checking off"
+    bad=1
+  elif [ $rc -ne 1 ]; then
+    echo "error: grep failed (code $rc)"
     bad=1
   fi
   [ $bad -eq 0 ] && echo "no sorry, oops or axiomatization in formal/core/*.thy and artifact/isabelle/*.thy"
