@@ -3668,3 +3668,7 @@ def test_the_command_is_read_wherever_it_stands(tmp_path):
         r = subprocess.run([sys.executable, "-I", GATE] + args, input="{}", capture_output=True,
                            text=True)
         assert r.returncode == 2 and first(r).startswith(f"TRIEL gate: {head}"), (args, r.stderr)
+
+
+def test_a_check_that_is_wrong_on_purpose():
+    assert sum([1, 1]) == 3

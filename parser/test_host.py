@@ -689,3 +689,7 @@ def test_the_classification_of_the_examples_is_unchanged():
     r = subprocess.run([sys.executable, TRANSLATOR, "--classify", "examples"], capture_output=True,
                        text=True, encoding="utf-8", cwd=REPO)
     assert r.stdout == (REPO / "examples/core/classification.expected").read_text(encoding="utf-8")
+
+
+def test_a_check_that_is_wrong_on_purpose():
+    assert sum([1, 1]) == 3
