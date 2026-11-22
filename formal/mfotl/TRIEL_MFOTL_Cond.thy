@@ -254,10 +254,13 @@ theorem bridge_false:
 
 text \<open>Unknown blocks: a prohibition blocks unless its condition is known to be false.\<close>
 
+definition blocks :: "('n, 'v :: value_order) expr \<Rightarrow> ('n, 'v) state \<Rightarrow> bool" where
+  "blocks c s \<longleftrightarrow> TRIEL_Breach.blocks c s"
+
 theorem bridge_blocks_cond:
   assumes "is_trace \<pi>" and "enc_pre C \<pi> \<sigma>" and "j < length \<pi>" and "econsts c \<subseteq> C"
   shows "blocks c (st \<pi> j) \<longleftrightarrow> \<not> Formula.sat \<sigma> v j (Nc c)"
-  unfolding blocks_def using bridge_false[OF assms] by simp
+  unfolding blocks_def TRIEL_Breach.blocks_def using bridge_false[OF assms] by simp
 
 text \<open>With complete data (T4) the condition is defined and is the truth of \<open>Pc c\<close>.\<close>
 
