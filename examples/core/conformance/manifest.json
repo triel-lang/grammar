@@ -2,7 +2,7 @@
   "suite": "TRIEL core conformance suite",
   "language_version": "2.5.1",
   "edition": "Core Language Edition",
-  "revision": 1,
+  "revision": 2,
   "evaluator_sha256": "9b5f10f8f915cc019d9d6ab90acfd34f32f7021367099781c45451e5b8c08c75",
   "levels": {
     "verdicts": {
@@ -1454,6 +1454,344 @@
         "expected": "0c04a6dad2b8ffe484955f04911efea7348009f52fdf72501c8b2df3ffe0547f"
       },
       "monitor_lines": 1,
+      "covers": []
+    },
+    {
+      "id": "treasury_amount_negative",
+      "trace": "examples/core/scenarios/treasury_amount_negative.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_amount_negative.expected",
+      "sha256": {
+        "trace": "5511b7918b85105c03c92890922052c8d594e05099abe410563eb6d068045c83",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "27094064264755dc899ff69eab5b6581c1cdaedf0d1a1c36bafa149f623bed61"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_approval_cleared",
+      "trace": "examples/core/scenarios/treasury_approval_cleared.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_approval_cleared.expected",
+      "sha256": {
+        "trace": "528ee62ed873967cc181fcbae87ead8c08059c1e8cdfff0b1bdf202bc0a44fe9",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "ba7c45c0c00c610d5371b6f0470dbf25136bd2d733def2b77428c88277bb2669"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_approval_other_request",
+      "trace": "examples/core/scenarios/treasury_approval_other_request.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_approval_other_request.expected",
+      "sha256": {
+        "trace": "caab7e738019d21853ac6f95c84846a5f4101bf7032aa1b5ca9973cc09c98751",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "e8798afdbfc77b3f61e4110530ef18c1fcc0f3f38ff2ce0830d287fe9b4f91b3"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_approval_reused",
+      "trace": "examples/core/scenarios/treasury_approval_reused.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_approval_reused.expected",
+      "sha256": {
+        "trace": "a5e63d10013ca5cb50e258e09ec0dd5fec26015c08c945acd79d6f3e22eb28b7",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "77fe4ffbb6b311f7eb2bf0585e3af73c9c00b9276a82966cea053164dee70668"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_approved",
+      "trace": "examples/core/scenarios/treasury_approved.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_approved.expected",
+      "sha256": {
+        "trace": "190a1363655c6bc7508fdb2313061c7d1868ab82895f224444bacbd524d2743c",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "66b949ca7ebc65a3273a2f530588e6be6cc0ea55c7a3972a6c2f5f9ed5e13c12"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_at_threshold",
+      "trace": "examples/core/scenarios/treasury_at_threshold.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_at_threshold.expected",
+      "sha256": {
+        "trace": "92b03db9dac47b43c09552d126c15086c3b28eccfb19410b749e98330f673a08",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "66b949ca7ebc65a3273a2f530588e6be6cc0ea55c7a3972a6c2f5f9ed5e13c12"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_auto",
+      "trace": "examples/core/scenarios/treasury_auto.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_auto.expected",
+      "sha256": {
+        "trace": "63792e5d55574d2d1ab71c8757bb7460809d99855ae3a1193e78d72c2ca4cf0e",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "66b949ca7ebc65a3273a2f530588e6be6cc0ea55c7a3972a6c2f5f9ed5e13c12"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_balance_missing",
+      "trace": "examples/core/scenarios/treasury_balance_missing.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_balance_missing.expected",
+      "sha256": {
+        "trace": "093a122ad1f4937466705422bcd117e2ee1dbc229e7194bc39dc309943156eb0",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "4638d5b97a8bb89413ae26b71722d5390699e0345c5287a81d53e7a1cb89c6f9"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_balance_no_arrival",
+      "trace": "examples/core/scenarios/treasury_balance_no_arrival.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_balance_no_arrival.expected",
+      "sha256": {
+        "trace": "3da10e164415134dfaab68dc64351c287d7f96dd473d33dd31c6eea0e2a0697a",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "4638d5b97a8bb89413ae26b71722d5390699e0345c5287a81d53e7a1cb89c6f9"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_balance_stale",
+      "trace": "examples/core/scenarios/treasury_balance_stale.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_balance_stale.expected",
+      "sha256": {
+        "trace": "053eae04b3dc14d242faa5cb2603834ce0b317f5811622d482fc8806b060b5a3",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "51b563bf8a0c9f0b428333508cb23224566404a23c8fa0da7b92cd3e227092fa"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_day_at_limit",
+      "trace": "examples/core/scenarios/treasury_day_at_limit.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_day_at_limit.expected",
+      "sha256": {
+        "trace": "d75817d3b1fad162db6bead3205ccf46fda149c14484759fe5500201bb95ae4d",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "66b949ca7ebc65a3273a2f530588e6be6cc0ea55c7a3972a6c2f5f9ed5e13c12"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_day_limit",
+      "trace": "examples/core/scenarios/treasury_day_limit.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_day_limit.expected",
+      "sha256": {
+        "trace": "c680d66e6cd355680ff9ea0f87b71b8876e5d893f8751163096a46db02f5ff39",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "a3d259532027d45c67b7b4040d66535d1193fa122dc42a42201a63f364063979"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_day_total_below_amount",
+      "trace": "examples/core/scenarios/treasury_day_total_below_amount.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_day_total_below_amount.expected",
+      "sha256": {
+        "trace": "f78769f9a5da4424c23391afc966425f3576568ff2fbf9985c337491db42cb88",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "a3d259532027d45c67b7b4040d66535d1193fa122dc42a42201a63f364063979"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_held_for_approval",
+      "trace": "examples/core/scenarios/treasury_held_for_approval.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_held_for_approval.expected",
+      "sha256": {
+        "trace": "b9968c3fc83200ff61593bea92b75312e9250bb49210d879fec74398b8018cf3",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "e0dcf0582b8bc717ebab72caaa2504af793a21e17ebe7de031942556247f22e1"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_id_empty",
+      "trace": "examples/core/scenarios/treasury_id_empty.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_id_empty.expected",
+      "sha256": {
+        "trace": "dbd62cfdef7cd044e2a398a48d2a0712e54848b80a08aa7bfccc1c266dc5762f",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "b3fe5505bb2cf381e540db1c6025c8483cec7495c7a72699410582abb6c7959a"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_id_missing",
+      "trace": "examples/core/scenarios/treasury_id_missing.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_id_missing.expected",
+      "sha256": {
+        "trace": "a36492f848b012183cd07daa719643e9865d702a97283cf56ad123e8ccb0516c",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "75c1b2ff8931804f7262bf975ddc6f698f35b8edcc47e61d6c0518dd6349d5c9"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_limit_missing",
+      "trace": "examples/core/scenarios/treasury_limit_missing.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_limit_missing.expected",
+      "sha256": {
+        "trace": "f4d1653d35adec563f7e442da42382b64d2b781d817b62986ba176dd2f586bc3",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "c3edeaf53904caeb43c53c15bcfe0478cc7494a29acbe7ec8733636b85073ae6"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_limits_unordered",
+      "trace": "examples/core/scenarios/treasury_limits_unordered.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_limits_unordered.expected",
+      "sha256": {
+        "trace": "6c8d81620ac72557c714e1a0ff0abc39b62779587c07473dc4ee634ff8b5c271",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "da5e8ff3b8d28289ebc532654e1adf62313e2c741e0fab5cd4e81f6d96366490"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_mandate_inactive",
+      "trace": "examples/core/scenarios/treasury_mandate_inactive.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_mandate_inactive.expected",
+      "sha256": {
+        "trace": "c7bfadd2b5e2c14dc0015c145f75c41f522f3e4533370849aca81552e5b90519",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "71d9a326430f6fda618e584fdb48842413130fc758a73cf81fe1b54668398f7b"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_not_needed",
+      "trace": "examples/core/scenarios/treasury_not_needed.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_not_needed.expected",
+      "sha256": {
+        "trace": "9cdf7ac72bc135cf024e665ea3894ae1470631c7fac8863d5b17f31d0315ceb0",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "85d83962ae5dcf08957450eb65d49e6ac8ec753f2aefdcab122d4bed89b3927b"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_quote_at_max_age",
+      "trace": "examples/core/scenarios/treasury_quote_at_max_age.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_quote_at_max_age.expected",
+      "sha256": {
+        "trace": "d637a6cc248033f1532645723db56ae37dd880b7f814091567658541015bfd9b",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "66b949ca7ebc65a3273a2f530588e6be6cc0ea55c7a3972a6c2f5f9ed5e13c12"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_stale_quote",
+      "trace": "examples/core/scenarios/treasury_stale_quote.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_stale_quote.expected",
+      "sha256": {
+        "trace": "a117e954efa5a904f78a82f673977273b6752da7f60c943c09ca455310a4f8db",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "e9122ac8b0285a387a87923ee6cebbcbb7885c91883894e656d0e96bd9352f43"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_trade_at_limit",
+      "trace": "examples/core/scenarios/treasury_trade_at_limit.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_trade_at_limit.expected",
+      "sha256": {
+        "trace": "80a5154ed10a241e53a35d72f8b592ffb84df381a0a96ff3ae3044f932d4d217",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "66b949ca7ebc65a3273a2f530588e6be6cc0ea55c7a3972a6c2f5f9ed5e13c12"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_trade_limit",
+      "trace": "examples/core/scenarios/treasury_trade_limit.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_trade_limit.expected",
+      "sha256": {
+        "trace": "129516094a34c1f6a4641005f44aa45f2c76d517f1e4b31761c8a88eb0216767",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "27094064264755dc899ff69eab5b6581c1cdaedf0d1a1c36bafa149f623bed61"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_window_closed",
+      "trace": "examples/core/scenarios/treasury_window_closed.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_window_closed.expected",
+      "sha256": {
+        "trace": "aff3e238fddad1a4884a978609fa56645c6c6829eeda091505334ec82c208cdc",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "b10432413cb7aad9f6999374eeedb8b4c31fc53df8277fa9e9633eee85e914ab"
+      },
+      "monitor_lines": 10,
+      "covers": []
+    },
+    {
+      "id": "treasury_wrong_direction",
+      "trace": "examples/core/scenarios/treasury_wrong_direction.scn",
+      "spec": "examples/core/treasury_mandate.triel",
+      "expected": "examples/core/scenarios/treasury_wrong_direction.expected",
+      "sha256": {
+        "trace": "e7eb0489834ce01ea5e50b96564a9d32a934965fdd66ea039c9c86131ab7d0ed",
+        "spec": "83da2318aa2b985e070a0bf31367214824d45383d149b6f0aa3359e90507cff2",
+        "expected": "b1b502c6515b98933f4a928c238eef2ad2d97cbd75192a0647975eceeb71f2b8"
+      },
+      "monitor_lines": 10,
       "covers": []
     },
     {

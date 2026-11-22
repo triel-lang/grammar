@@ -17,6 +17,7 @@ examples/core/merchant_low_stock.triel: ACCEPTED
 examples/core/merchant_mandate.triel: ACCEPTED
 examples/core/purpose_limitation_gate.triel: ACCEPTED
 examples/core/sensor_overheat.triel: ACCEPTED
+examples/core/treasury_mandate.triel: ACCEPTED
 examples/delivery_agreement.triel: ACCEPTED
 examples/eudi/eudi_driving_license.triel: ACCEPTED
 examples/hello_triel.triel: ACCEPTED

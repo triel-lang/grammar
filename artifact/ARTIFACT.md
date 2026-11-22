@@ -18,7 +18,7 @@ behind the paper. It contains:
   `parser/triel_to_core.py` from TRIEL specifications to terms of the core, and
   the command `parser/triel.py` (`triel check`), which runs the translator and
   the evaluator on a trace and prints the report as text or JSON.
-- `examples/`: 33 TRIEL specifications and 101 scenarios (implementation traces
+- `examples/`: 34 TRIEL specifications and 127 scenarios (implementation traces
   with hand-written expected reports).
 - `artifact/`: the Docker image (`Dockerfile`), the script that runs every check
   (`run.sh`), and the Isabelle session `TRIEL_Paper`
@@ -178,7 +178,11 @@ tests); its runs are not in the table. Since then the translator rejects `==`
 and `!=` between values of different types and two invariants with one name,
 and the evaluator and the drivers read and write UTF-8 whatever the locale (483
 tests of `parser/test_triel_to_core.py` and 514 of `parser/test_triel_check.py`,
-997 translator and driver tests); their runs are not in the table. The time on
+997 translator and driver tests); their runs are not in the table. Since then the
+example `treasury_mandate` with 26 scenarios has been added (34 examples, 127
+scenarios, 536 tests of `parser/test_triel_to_core.py` and 618 of
+`parser/test_triel_check.py`, 1154 translator and driver tests); its runs are
+not in the table. The time on
 a shared runner varies from run to run, and so does its CPU.
 
 ## Running
@@ -211,11 +215,11 @@ theories checked by Isabelle (TRIEL_Core)    14 (.thy files in formal/core: 14)
 proved statements (lemma/theorem/corollary)  984
 paper theorems found, without oracles        107 of 107
 named facts of TRIEL_Core without oracles    4160 (excluded: 55 Quickcheck generator facts with Pure.skip_proof)
-scenarios matching .expected                 101 of 101
-examples accepted by the core                31 of 33
-translator and driver tests (pytest)         997 passed in ...
-examples parsed with one derivation          33 of 33
-ambiguity regression checks passed           242
+scenarios matching .expected                 127 of 127
+examples accepted by the core                32 of 34
+translator and driver tests (pytest)         1154 passed in ...
+examples parsed with one derivation          34 of 34
+ambiguity regression checks passed           243
 document excerpts conforming to the grammar  15
 wall-clock time                              ...
 ...
@@ -355,8 +359,8 @@ variables `?x`.
 |---|---|---|
 | The core is machine-checked: 14 theories, 984 proved statements, no unproved or assumed results | `grep -E '^(theories\|proved)' results/summary.txt`; `cat results/01-no-sorry.log` | `14 (.thy files in formal/core: 14)`, `984`; `no sorry, oops or axiomatization ...` |
 | The evaluator is the code exported from the checked theories | `cat results/03-exported-code.log` | `evaluator/generated is the exported code` |
-| The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `101` |
-| 31 of the 33 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `31`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
+| The evaluator gives the expected report on every scenario | `grep -c '^ok ' results/06-scenarios.log` | `127` |
+| 32 of the 34 example specifications are inside the core | `grep -c ': ACCEPTED$' results/classification.txt`; `grep REJECTED results/classification.txt` | `32`; `execute_renaming.triel: REJECTED: EXECUTE` and `prohibition_continuation.triel: REJECTED: §2.6 defines continuations only for obligations` |
 | Every listed theorem (every theorem cited in the paper, and more) exists under its name and depends on no oracle | `tail -1 results/paper_theorems.txt` | `Paper theorems without oracles: 107` |
 | No named theorem of the 14 theories depends on an oracle, except the equations of the Quickcheck generators (`full_exhaustive`, `narrowing`) which Isabelle/HOL generates for a datatype and asserts with the oracle `Pure.skip_proof` instead of proving them; no other named theorem depends on them | `grep '^Named facts of TRIEL_Core' results/no_oracles.txt` | `Named facts of TRIEL_Core without oracles: 4160 (excluded: 55 Quickcheck generator facts with Pure.skip_proof)` |
 | Finality of verdicts: a definite verdict of a prohibition or of an invariant without a deadline does not change when the trace is extended, and on a trace (times that do not decrease) neither does a definite verdict of an obligation with a deadline, of EVENTUALLY … WITHIN or of a breach handler; the evaluator rejects a list of observations whose times decrease, so for `run` a decided line stays the same when observations are appended, unless the longer list is rejected for its time order or its types. A property of the design | `grep -A1 -E '\.(ob_verdict_final\|pr_verdict_final\|inv_final\|sinv_final\|handle_breach_final\|run_final\|time_order_rejected)$' results/paper_theorems.txt` | `TRIEL_Breach.ob_verdict_final`, `TRIEL_Breach.pr_verdict_final`, `TRIEL_Invariants.inv_final`, `TRIEL_Invariants.sinv_final` (EVENTUALLY … WITHIN), `TRIEL_Breach.handle_breach_final` (breach handlers), `TRIEL_Exec.run_final`, `TRIEL_Exec.time_order_rejected`, each with its statement, e.g. `inv_eval ?\<iota> ?\<pi> = Some ?b \<Longrightarrow> inv_eval ?\<iota> (?\<pi> @ ?\<rho>) = Some ?b` |
@@ -403,11 +407,11 @@ The results rest on the following, which are not proved here:
   specifications to terms of the core, written in Python. Nothing proves that it
   translates a specification into the core term with the intended meaning, or
   that it rejects exactly the constructs outside the core. It is checked only
-  by tests: the 483 tests of `parser/test_triel_to_core.py`, the classification
-  of the 33 examples, and the 101 scenarios. The same holds for
+  by tests: the 536 tests of `parser/test_triel_to_core.py`, the classification
+  of the 34 examples, and the 127 scenarios. The same holds for
   `parser/triel_eval.py`, which converts a scenario into the input of the
   evaluator, for `parser/triel.py`, which reads a trace as a scenario or in
-  JSON and converts the report to JSON, checked by the 514 tests of
+  JSON and converts the report to JSON, checked by the 618 tests of
   `parser/test_triel_check.py`, and for the grammar `parser/triel.lark` with the parser library
   lark 1.3.1.
 - **The expected outputs** (`examples/core/classification.expected` and the

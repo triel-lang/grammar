@@ -1,0 +1,15 @@
+; A euro balance of 1200000 is in the data from the activation on, but no
+; arrival of it is recorded; a quote arrives at 09:00:20, and the request r1,
+; of 800000 euros, goes to the monitors at 09:00:30. The balance counts as
+; stale (examples/core/README.md, convention 3), so it is absent, and MONITOR
+; 4 blocks the request.
+(scenario treasury_balance_no_arrival
+  (spec "examples/core/treasury_mandate.triel")
+  (entry "2026-11-20T09:00:00Z" (activate)
+    (data (mandate_active (bool true)) (window_open (bool true)) (eur_target (dec 3000000.00)) (trade_limit (dec 5000000.00)) (day_limit (dec 10000000.00)) (approval_threshold (dec 1000000.00)) (eur_balance (dec 1200000.00))))
+  (entry "2026-11-20T09:00:20Z" (arrive quote_rate)
+    (data (mandate_active (bool true)) (window_open (bool true)) (eur_target (dec 3000000.00)) (trade_limit (dec 5000000.00)) (day_limit (dec 10000000.00)) (approval_threshold (dec 1000000.00)) (eur_balance (dec 1200000.00)) (quote_rate (dec 1.1450))))
+  (entry "2026-11-20T09:00:30Z" (tick)
+    (data (mandate_active (bool true)) (window_open (bool true)) (eur_target (dec 3000000.00)) (trade_limit (dec 5000000.00)) (day_limit (dec 10000000.00)) (approval_threshold (dec 1000000.00)) (eur_balance (dec 1200000.00)) (quote_rate (dec 1.1450)) (request_id (str "r1")) (sell_currency (str "GBP")) (buy_currency (str "EUR")) (amount_eur (dec 800000.00)) (day_total_eur (dec 800000.00))))
+  (entry "2026-11-20T09:00:30Z" (act agent request_conversion must_not)
+    (data (mandate_active (bool true)) (window_open (bool true)) (eur_target (dec 3000000.00)) (trade_limit (dec 5000000.00)) (day_limit (dec 10000000.00)) (approval_threshold (dec 1000000.00)) (eur_balance (dec 1200000.00)) (quote_rate (dec 1.1450)) (request_id (str "r1")) (sell_currency (str "GBP")) (buy_currency (str "EUR")) (amount_eur (dec 800000.00)) (day_total_eur (dec 800000.00)))))

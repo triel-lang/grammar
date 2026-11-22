@@ -1,0 +1,31 @@
+SPEC treasury_mandate
+METADATA PROVENANCE_REQUIRED true
+METADATA SOURCE eur_balance ledger
+METADATA SOURCE quote_rate fx_desk
+ACTIVATION OK
+BLOCK OK
+TYPES OK
+TERM 1 MUST_NOT agent request_conversion : BREACHED 1795165230
+TERM 2 MUST_NOT agent request_conversion : PENDING
+TERM 3 MUST_NOT agent request_conversion : PENDING
+TERM 4 MUST_NOT agent request_conversion : PENDING
+TERM 5 MUST_NOT agent request_conversion : PENDING
+TERM 6 MUST_NOT agent request_conversion : PENDING
+TERM 7 ON_BREACH agent : BOUND 6
+TERM 8 MUST_NOT agent request_conversion : PENDING
+TERM 9 ON_BREACH agent : BOUND 8
+TERM 10 MUST_NOT agent request_conversion : PENDING
+TERM 11 ON_BREACH agent : BOUND 10
+TERM 12 MUST_NOT agent request_conversion : PENDING
+TERM 13 MUST_NOT agent request_conversion : PENDING
+INVARIANT limits_ordered : U
+MONITOR 1 : ENTRY 4 BLOCK
+MONITOR 2 : ENTRY 4 ALLOW
+MONITOR 3 : ENTRY 4 ALLOW
+MONITOR 4 : ENTRY 4 ALLOW
+MONITOR 5 : ENTRY 4 ALLOW
+MONITOR 6 : ENTRY 4 ALLOW
+MONITOR 8 : ENTRY 4 ALLOW
+MONITOR 10 : ENTRY 4 ALLOW
+MONITOR 12 : ENTRY 4 ALLOW
+MONITOR 13 : ENTRY 4 ALLOW

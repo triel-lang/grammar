@@ -10,7 +10,7 @@ The suite is not part of the TRIEL Language Specification. The Specification con
 |---|---|
 | `language_version` | `2.5.1` |
 | `edition` | `Core Language Edition` |
-| `revision` | `1` |
+| `revision` | `2` |
 | `evaluator_sha256` | sha256 of `evaluator/generated/TRIEL.hs` as committed (LF line ends) |
 
 A revision of the suite is identified by `language_version`, `revision`, `evaluator_sha256` and the sha256 of the files of its cases, and by nothing else. `evaluator_sha256` names the exported evaluator whose output CI compared with the `.expected` files of this revision. The sha256 of every file is computed on the file as committed, with LF line ends; a checkout that converts line ends gives other values. When a case, a file of a case or the evaluator changes, `manifest.json` is updated with a new revision.

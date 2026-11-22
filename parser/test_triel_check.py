@@ -123,6 +123,18 @@ CODES = {
     "sequence_prohibition_violated": (6, 5), "sequence_two_payments": (0, 5),
     "sequence_violation_not_last": (6, 5), "sequence_violation_then_done": (6, 5),
     "stale_block_fresh_breach": (3, 3), "stale_block_undefined_guard": (3, 5),
+    "treasury_amount_negative": (3, 3), "treasury_approval_cleared": (3, 3),
+    "treasury_approval_other_request": (3, 3), "treasury_approval_reused": (3, 3),
+    "treasury_approved": (0, 0), "treasury_at_threshold": (0, 0), "treasury_auto": (0, 0),
+    "treasury_balance_missing": (3, 3), "treasury_balance_no_arrival": (3, 3),
+    "treasury_balance_stale": (3, 3), "treasury_day_at_limit": (0, 0), "treasury_day_limit": (3, 3),
+    "treasury_day_total_below_amount": (3, 3), "treasury_held_for_approval": (3, 3),
+    "treasury_id_empty": (3, 3), "treasury_id_missing": (3, 3), "treasury_limit_missing": (3, 3),
+    "treasury_limits_unordered": (3, 3), "treasury_mandate_inactive": (3, 3),
+    "treasury_not_needed": (3, 3), "treasury_quote_at_max_age": (0, 0),
+    "treasury_stale_quote": (3, 3), "treasury_trade_at_limit": (0, 0),
+    "treasury_trade_limit": (3, 3), "treasury_window_closed": (3, 3),
+    "treasury_wrong_direction": (3, 3),
     "unless_records_cancelled": (0, 5), "unless_records_completed": (0, 5),
 }
 
@@ -533,7 +545,7 @@ def test_composite_violated_yes_with_status_done_is_not_a_violation(tmp_path, ca
 
 
 def test_violation_rule_catches_every_breach_line():
-    """Against format drift: in the 101 .expected files, the rule catches
+    """Against format drift: in the 127 .expected files, the rule catches
     exactly the TERM lines with the word BREACHED, the lines with the words
     STATUS VIOLATED, and the invariants F."""
     lines = [line for scn in SCENARIOS for line in expected(scn)]
@@ -541,7 +553,7 @@ def test_violation_rule_catches_every_breach_line():
     breached = [line for line in lines if line.startswith("TERM ") and "BREACHED" in line.split()]
     status_violated = [line for line in lines if " STATUS VIOLATED " in f" {line} "]
     invariant_false = [line for line in lines if line.startswith("INVARIANT ") and line.endswith(" : F")]
-    assert len(breached) == 34 and len(status_violated) == 15 and len(invariant_false) == 13
+    assert len(breached) == 46 and len(status_violated) == 15 and len(invariant_false) == 14
     assert sorted(caught) == sorted(breached + status_violated + invariant_false)
     assert sum(" COMPOSITE " in line for line in caught) == len(status_violated)
 

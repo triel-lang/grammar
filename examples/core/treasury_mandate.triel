@@ -1,0 +1,151 @@
+-- TRIEL example inside the formal core: the mandate of an AI agent that keeps
+-- the euro balance of a company's treasury account. When the euro balance is
+-- below its target, the agent requests a conversion of pounds into euros from
+-- the company's bank; the prohibitions below decide whether a prepared request
+-- may go out. The factors are reported by the system that hosts the agent: the
+-- euro balance and the quote, the request that is about to go out (its
+-- identifier, currencies and size, and the day's total with it), the
+-- status of the mandate and of the operating window, the target and the limits
+-- set by the company, and the company's approval. The specification trusts
+-- the host's numbers and its account of the request, as it trusts an oracle's.
+--
+-- The rules match the action request_conversion of the agent, without
+-- arguments: the host reports every conversion request as this action, with
+-- its currencies and size as factors. An action with another name or with
+-- arguments is matched by no rule, and no monitor decides on it (see the
+-- three outcomes below). Each condition is read in the state of the entry
+-- just before the request; that entry must have the time of the request (a
+-- tick at the time of the decision, evaluator/README.md), since freshness is
+-- counted at its time.
+--
+-- - The mandate must be in force. Whether it is (approved by the company, not
+--   expired, not revoked, the version in force at that moment) is decided by
+--   the host, which gives the answer as mandate_active.
+-- - A request may go out only in the operating window. The window follows a
+--   calendar, which the core does not model (calendar units are rejected), so
+--   the host gives window_open.
+-- - Only pounds into euros: any other pair or direction is blocked.
+-- - No conversion when the euro balance is at or above its target. The balance
+--   comes from the account ledger, an ORACLE, so PROVENANCE_REQUIRED is true
+--   (TECHNICAL_REPORT.md section 2.9); like SOURCE, it is printed as metadata
+--   and no verdict reads it. The balance is fresh for 5 minutes after it
+--   arrives, an age of exactly 5 minutes included (MAX_AGE 5 MINUTES
+--   ON_STALE BLOCK, fresh_at_max_age); a balance that is older, or present at
+--   activation without an arrival, is absent (examples/core/README.md,
+--   conventions 3 and 4). Then the condition is undefined and the fail-closed
+--   monitor blocks the request: without a known balance no conversion goes
+--   out, and no separate rule says so.
+-- - A request needs a fresh quote: the rate quoted by the bank's
+--   foreign-exchange desk, also an ORACLE, is fresh for 30 seconds, an age of
+--   exactly 30 seconds included (MAX_AGE 30 SECONDS ON_STALE BLOCK). A stale
+--   or missing quote makes the condition undefined, and the request is
+--   blocked; a fresh quote must also be positive.
+-- - The size of a request, in euros, must be positive and at most the limit
+--   per trade. The host gives the size as amount_eur.
+-- - The day's total, the euros of the requests that went out that day plus
+--   this request, must be at most the daily limit, and not less than the size
+--   of this request. Conditions compare values and do not compute them, so the
+--   host adds it up, by its own calendar day, and gives it as day_total_eur.
+-- - A request above the approval threshold goes out only with the company's
+--   approval of that very request. Each request has its own identifier,
+--   request_id, which is never empty: a request without one, or with an empty
+--   one, is blocked by the last rule. A request keeps its identifier when it
+--   is checked again with new data (a fresh quote or balance, or the
+--   company's approval); a request with a new size or new currencies gets a
+--   new identifier and needs its own approval. The host reports the
+--   identifier of the request the company approved as approved_request, and
+--   only until that request has gone out: from the next entry on,
+--   approved_request is absent (never an empty string) until the company
+--   approves another request. An approval still reported for another request
+--   is an attempt to reuse it: the condition is then true, and the request is
+--   blocked. With no approval reported the condition is undefined above the
+--   threshold, and the request is blocked too; at or below a known threshold
+--   the condition is false (strong Kleene: false AND undefined is false), so
+--   no approval is needed there.
+-- - The limits must be ordered: the approval threshold at most the limit per
+--   trade, and the limit per trade at most the daily limit. This appears
+--   twice: as a rule, which blocks every request while the limits are out of
+--   order or unknown, and as an invariant, which records in the report that
+--   they were out of order. The invariant is F (false) once limits out of
+--   order are reported, and U (inconclusive) otherwise, since ALWAYS is never
+--   T (true) on a finite trace (always_never_true).
+--
+-- A breach of the size rule (a size that is not positive or above the limit
+-- per trade), of the daily rule or of the approval rule notifies the company.
+-- The verdict of a prohibition records a breach only when its condition is
+-- true, so a request blocked on undefined data is not a breach
+-- (undefined_guard_blocks_not_breach).
+--
+-- Each prohibition has its own monitor. The monitors are numbered by the
+-- elements of TERMS, handlers included: 1, 2, 3, 4, 5, 6, 8, 10, 12 and 13,
+-- with 10 the monitor of the approval rule. A host that needs three outcomes reads
+-- the report of `triel check --last` on the trace that ends with the request
+-- (evaluator/README.md, "Calling from a host"):
+-- - the request goes out only when every monitor decides ALLOW on it: the
+--   exit code is 0 and the LAST line lists ten ALLOW;
+-- - it is held and routed to the company for approval when MONITOR 10 is the
+--   only monitor that blocks it and TERM 10 is not breached, that is, no
+--   approval is reported, unless the company has already declined it: a
+--   decline is not reported to the monitors, and the host refuses such a
+--   request;
+-- - anything else refuses it: another monitor blocks, TERM 10 is breached (an
+--   approval of another request), NO DECISION, or a rejected trace. A later
+--   request needs new data (a fresh quote or balance, an open window, an
+--   approval of that request) or a new mandate; the same request with the
+--   same data is refused again.
+--
+-- What the example does not say: who the agent is and whether a request is
+-- signed by it (identity and signatures are outside the core); whether a
+-- conversion is a good idea, and which quote to take; how a held request
+-- reaches the company (the monitor only reports BLOCK; routing is the host's
+-- job); the record of the decisions; and the settlement of the conversion.
+-- Every construct in this file is accepted by the translator: translated into
+-- the Isabelle/HOL core (formal/core), whose terms the exported evaluator
+-- (evaluator/) runs, or printed as metadata.
+
+SPECIFICATION treasury_mandate VERSION 1.0.0
+    PROVENANCE_REQUIRED: true
+
+SUBJECTS {
+  company : PARTY,
+  agent   : SYSTEM,
+  ledger  : ORACLE,
+  fx_desk : ORACLE
+}
+
+TERMS {
+  agent MUST_NOT request_conversion WHEN NOT mandate_active;
+  agent MUST_NOT request_conversion WHEN NOT window_open;
+  agent MUST_NOT request_conversion WHEN NOT (sell_currency == "GBP" AND buy_currency == "EUR");
+  agent MUST_NOT request_conversion WHEN eur_balance >= eur_target;
+  agent MUST_NOT request_conversion WHEN quote_rate <= 0;
+  agent MUST_NOT request_conversion WHEN amount_eur <= 0 OR amount_eur > trade_limit;
+  agent ON_BREACH NOTIFY company;
+  agent MUST_NOT request_conversion WHEN day_total_eur > day_limit OR day_total_eur < amount_eur;
+  agent ON_BREACH NOTIFY company;
+  agent MUST_NOT request_conversion WHEN amount_eur > approval_threshold AND NOT (approved_request == request_id);
+  agent ON_BREACH NOTIFY company;
+  agent MUST_NOT request_conversion WHEN approval_threshold > trade_limit OR trade_limit > day_limit;
+  agent MUST_NOT request_conversion WHEN request_id == ""
+}
+
+FACTORS {
+  mandate_active     : Boolean METADATA,
+  window_open        : Boolean METADATA,
+  request_id         : String METADATA,
+  sell_currency      : String METADATA,
+  buy_currency       : String METADATA,
+  eur_balance        : Decimal METADATA SOURCE ledger MAX_AGE 5 MINUTES ON_STALE BLOCK,
+  eur_target         : Decimal METADATA,
+  quote_rate         : Decimal METADATA SOURCE fx_desk MAX_AGE 30 SECONDS ON_STALE BLOCK,
+  amount_eur         : Decimal METADATA,
+  trade_limit        : Decimal METADATA,
+  day_total_eur      : Decimal METADATA,
+  day_limit          : Decimal METADATA,
+  approval_threshold : Decimal METADATA,
+  approved_request   : String METADATA
+}
+
+INVARIANTS {
+  limits_ordered : SAFETY : ALWAYS(approval_threshold <= trade_limit AND trade_limit <= day_limit)
+}

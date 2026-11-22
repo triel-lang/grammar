@@ -1,0 +1,17 @@
+; The euro balance of 1200000 arrives at 09:00:05 and a quote at 09:00:10; the
+; request r1, of 800000 euros, goes to the monitors at 09:00:41. The quote is
+; then 31 seconds old, older than MAX_AGE 30 SECONDS, and so absent: the
+; condition of the quote rule is undefined, MONITOR 5 blocks the request, and
+; nothing is breached.
+(scenario treasury_stale_quote
+  (spec "examples/core/treasury_mandate.triel")
+  (entry "2026-11-20T09:00:00Z" (activate)
+    (data (mandate_active (bool true)) (window_open (bool true)) (eur_target (dec 3000000.00)) (trade_limit (dec 5000000.00)) (day_limit (dec 10000000.00)) (approval_threshold (dec 1000000.00))))
+  (entry "2026-11-20T09:00:05Z" (arrive eur_balance)
+    (data (mandate_active (bool true)) (window_open (bool true)) (eur_target (dec 3000000.00)) (trade_limit (dec 5000000.00)) (day_limit (dec 10000000.00)) (approval_threshold (dec 1000000.00)) (eur_balance (dec 1200000.00))))
+  (entry "2026-11-20T09:00:10Z" (arrive quote_rate)
+    (data (mandate_active (bool true)) (window_open (bool true)) (eur_target (dec 3000000.00)) (trade_limit (dec 5000000.00)) (day_limit (dec 10000000.00)) (approval_threshold (dec 1000000.00)) (eur_balance (dec 1200000.00)) (quote_rate (dec 1.1450))))
+  (entry "2026-11-20T09:00:41Z" (tick)
+    (data (mandate_active (bool true)) (window_open (bool true)) (eur_target (dec 3000000.00)) (trade_limit (dec 5000000.00)) (day_limit (dec 10000000.00)) (approval_threshold (dec 1000000.00)) (eur_balance (dec 1200000.00)) (quote_rate (dec 1.1450)) (request_id (str "r1")) (sell_currency (str "GBP")) (buy_currency (str "EUR")) (amount_eur (dec 800000.00)) (day_total_eur (dec 800000.00))))
+  (entry "2026-11-20T09:00:41Z" (act agent request_conversion must_not)
+    (data (mandate_active (bool true)) (window_open (bool true)) (eur_target (dec 3000000.00)) (trade_limit (dec 5000000.00)) (day_limit (dec 10000000.00)) (approval_threshold (dec 1000000.00)) (eur_balance (dec 1200000.00)) (quote_rate (dec 1.1450)) (request_id (str "r1")) (sell_currency (str "GBP")) (buy_currency (str "EUR")) (amount_eur (dec 800000.00)) (day_total_eur (dec 800000.00)))))
