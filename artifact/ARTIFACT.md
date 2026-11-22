@@ -455,7 +455,8 @@ from the Ubuntu 24.04 archive at build time and are not pinned.
 `artifact/anonymize.sh [-w WORDS_FILE] [OUTPUT.tar.gz]` writes a source archive
 of the current commit (or of the commit `REF`, e.g. `REF=v2.5.1`) for
 double-blind review. It leaves out `.git`, the contributor license agreement
-with its workflow, the script itself and `artifact/check_anonymous.sh`. The
+with its workflow, the script itself, `artifact/check_anonymous.sh`, and the
+theories that the artifact does not build, with their workflow. The
 name of the author is found without a list of words: the script reads it from
 the places where the repository states it (`formal/core/document/root.tex`,
 `NOTICE`, `LICENSE.md`, the headers of both EBNF files and the Contact section
