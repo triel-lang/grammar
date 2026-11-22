@@ -9,7 +9,9 @@ disagree. The other functions check the format of the corpus, that the cases
 cover the grammar, that every reason has a pair of cases, and that every reason
 the code can give is in the table of classes; and they check the checks
 themselves: the format and the comparison on spoilt copies of cases, and the
-rule of the README for another implementation on outputs built here.
+rule of the README for another implementation on outputs built here. The last
+test runs the first-order mutant of every place of corpus/killed.json on its
+cases and fails if no case tells it apart from the translator.
 """
 import difflib
 import gc

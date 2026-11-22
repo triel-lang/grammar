@@ -13,6 +13,11 @@ The output is markdown, in five sections:
   4. 100 random first-order mutants of the translator;
   5. the time of each section.
 
+Two runs give the same output except the lines with times. Every such line ends
+with "(time)": grep -v '(time)$' sets them apart. A filter on "(time)" anywhere
+in a line, grep -v '(time)', would also drop the counts "- caught (time): N" of
+sections 2 and 4, which are not times.
+
 --section N (1 to 4) computes one section alone; section 2 then also computes
 the coverage it needs. Without arguments every section is computed.
 

@@ -39,6 +39,16 @@ text of the specification does not decide the question or reads otherwise.
 Another implementation is not bound by it there: a difference on such a case is
 a question about the text, not a failure.
 
+This rule is the function `another_implementation` of `parser/test_corpus.py`.
+Given a case and the output of another implementation on its `source` (the
+outcome; for `accepted`, the term; for `rejected`, the classes of its reasons),
+it gives `passed` if there is no difference, `failed` for a difference, and
+`disputed` for a difference on a case with `disputed`. A difference is: another
+outcome; for `accepted`, another term; for `rejected` with `single_defect`,
+another set of classes; for `rejected` without it, no class in common; for
+`parse_error`, only the outcome is compared. Its test checks it on outputs
+built in the test.
+
 ## Files
 
 | File | What |
@@ -46,8 +56,9 @@ a question about the text, not a failure.
 | `cases.jsonl` | the cases, one JSON object per line, UTF-8, LF, sorted by `id` |
 | `classes.json` | every reason the translator can give: its class, the section of the text the class rests on, and for a reason built by the code, where it comes from |
 | `unreachable.json` | the calls of `reject` that no input reaches, or that are redundant, with the argument for each |
+| `killed.json` | places of first-order mutants of the translator that the corpus catches by a different output, each with the cases that catch it |
 | `rejects.py` | the calls of `reject` and the reasons, read from the source of the translator |
-| `measure.py` | the measurements |
+| `measure.py` | the measurements; `--killed` writes `killed.json` |
 | `../test_corpus.py` | the check of the corpus against the translator |
 
 ### A case
@@ -104,6 +115,38 @@ the grammar that makes such an input impossible. For a redundant call, `other`
 gives the call (`function`, `index`) that adds the same reason on every input
 that reaches this one, and `input`, a case of the corpus, executes both.
 
+### killed.json
+
+A list of objects, one per line, sorted by place. Each is a place of a
+first-order mutant of the translator, as `measure.py` makes them (the places of
+section 4), that the corpus catches by a difference in output: on at least one
+of its cases the mutant gives an output other than an exception that differs
+from the case as `test_case` compares them (the function `mismatches`). The
+fields: `text`, the line of `parser/triel_to_core.py` as it is written;
+`occurrence`, the number of that line among the lines with the same text, from
+1; `line`, the number of the line in the file, which follows from the two;
+`col`, `op` and `variant`, the rest of the place (`op` is `comparison`,
+`and/or`, `not`, `constant` or `statement`); and `ids`, the cases on which the
+mutant and the translator differ.
+
+`parser/test_corpus.py` runs the mutant of every place on its cases, with the
+parse trees it already has, and fails if the line of a place has changed
+("places moved: regenerate with measure.py --killed"), if a case of `ids` is
+not in the corpus, or if no case of a place tells its mutant apart. It also runs
+the translator itself the same way on all these cases, which must agree with
+the corpus, and fails if the mutants take more than 30 seconds. After a change
+of the translator that moves lines,
+
+```bash
+python3 parser/corpus/measure.py --killed
+```
+
+finds every line again by its text and occurrence, checks that the place is
+still a place of mutation and that its mutant is still caught, finds the cases
+again and writes the file (into the repository); if a place is gone or no
+longer caught, it writes nothing and says which. The file does not list every
+mutant that the corpus catches, and the test does not check that it does.
+
 ## Running
 
 The check, from the root of the repository (it runs in CI, workflow
@@ -117,7 +160,13 @@ python3 -m pytest -q parser/test_corpus.py
 the translator and the corpus disagree. The other tests check the format, that
 every rule of `parser/triel.lark` is in the parse tree of some case, that every
 reason has a pair of cases, and that every reason the code of the translator
-can give is in `classes.json`.
+can give is in `classes.json`. Further tests check these checks: the format of
+spoilt copies of cases (a missing, empty or malformed `header`, `header` on a
+`parse_error`, whatever `TERMS_RECORDED`), `pair` and `same_term` among the
+cases given, the reading of a spoilt `cases.jsonl` (the error names the line),
+and that the comparison of `test_case` finds another `header` of a rejected
+case; then the rule for another implementation, and the places of
+`killed.json`.
 
 The measurements, from the root of the repository (not in CI):
 
@@ -138,7 +187,9 @@ and the time of each. `--section N` computes one section alone. The variable
 `TRIEL_TRANSLATOR` names another translator to measure (its grammar and its
 `test_triel_to_core.py` are those next to it), and `TRIEL_EVALUATOR` the
 evaluator for the tests of section 3 and 4. Two runs give the same output except
-the lines with times.
+the lines with times. Every such line ends with `(time)`, so they are set apart
+with `grep -v '(time)$'`; `grep -v '(time)'` would also drop the counts
+`- caught (time): N` of sections 2 and 4, which are not times.
 
 ## What the corpus does not check
 
@@ -154,7 +205,7 @@ the lines with times.
   the deletions of calls of `reject` that no case catches, and those of its 100
   random mutants that no case catches; the random mutants are a sample of the
   places of mutation, and a mutant outside the sample that no case catches is
-  not shown.
+  not shown. `killed.json` holds only the places listed in it.
 - Inputs nested too deeply for the recursion of the parser or the translator.
 - The grammar itself: its ambiguity (`parser/test_ambiguity.py`) and its
   agreement with `TRIEL-grammar-v2_5-core.ebnf`.
