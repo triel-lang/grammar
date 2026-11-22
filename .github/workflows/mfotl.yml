@@ -1,11 +1,12 @@
 name: Bridge from the core to MFOTL
 
-# The work of the stage runs on mfotl1-wip and its probes on mfotl1-probe-*: the other
-# workflows run only on main and stage*, so only the final commit, pushed to the branch of
-# the stage, runs them all.
+# The workflow runs when a push changes the core, its checks, the bridge or this file: on
+# main, so that the heaps of the AFP and of the core are cached for every branch, and on the
+# branches stage* and mfotl*. A branch that changes none of these paths does not run it.
 on:
   push:
-    branches: ['stage*', 'mfotl1-*']
+    branches: [main, 'stage*', 'mfotl*']
+    paths: ['formal/core/**', 'formal/checks/**', 'formal/mfotl/**', '.github/workflows/mfotl.yml']
 
 # The result of every run is posted as a comment on the commit: the logs of this
 # workflow cannot be read from a cloud session.
@@ -33,25 +34,36 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
+      # The token of the job is passed only to the step that posts the comment; the steps
+      # that build the theories of the branch do not get it.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      # (1) The stage changes only formal/mfotl and this workflow; formal/mfotl holds exactly
-      # its six files; the core, its checks and the three files of the maintainers are unchanged.
-      - name: The stage changes only the bridge, and the fixed files are unchanged
+      # (1) A branch that changes the bridge or this workflow changes nothing else: neither the
+      # core and its checks nor any file outside formal/mfotl. A branch that changes the core
+      # and not the bridge passes this part, and the steps below build the bridge on its core.
+      # Always: formal/mfotl holds exactly its six files, and the three fixed files are
+      # unchanged.
+      - name: A change of the bridge changes nothing else, and the fixed files are unchanged
         id: files
         shell: bash
         run: |
           set -euo pipefail
-          # The commit of main the branch starts from; the core may not change against it.
+          # The commit of main the branch starts from (on main itself: the commit pushed).
           START=$(git merge-base HEAD origin/main)
           echo "start: $START"
-          git diff --stat "$START" HEAD -- formal/core formal/checks
-          git diff --quiet "$START" HEAD -- formal/core formal/checks \
-            || { echo "::error::formal/core or formal/checks differ from $START"; exit 1; }
-          other=$(git diff --name-only "$START" HEAD | grep -vE '^(formal/mfotl/|\.github/workflows/mfotl\.yml$)' || true)
-          test -z "$other" || { echo "::error::files outside formal/mfotl changed: $other"; exit 1; }
+          if [ -n "$(git diff --name-only "$START" HEAD -- formal/mfotl .github/workflows/mfotl.yml)" ]; then
+            echo "the branch changes the bridge or this workflow"
+            git diff --stat "$START" HEAD -- formal/core formal/checks
+            git diff --quiet "$START" HEAD -- formal/core formal/checks \
+              || { echo "::error::formal/core or formal/checks differ from $START"; exit 1; }
+            other=$(git diff --name-only "$START" HEAD | grep -vE '^(formal/mfotl/|\.github/workflows/mfotl\.yml$)' || true)
+            test -z "$other" || { echo "::error::files outside formal/mfotl changed: $other"; exit 1; }
+          else
+            echo "the branch changes neither the bridge nor this workflow"
+          fi
           files=$(git ls-files formal/mfotl | LC_ALL=C sort | tr '\n' ' ')
           expected="formal/mfotl/README.md formal/mfotl/ROOT formal/mfotl/TRIEL_MFOTL_Cond.thy formal/mfotl/TRIEL_MFOTL_Enc.thy formal/mfotl/accept/Accept_MFOTL1.thy formal/mfotl/accept/ROOT "
           test "$files" = "$expected" || { echo "::error::formal/mfotl holds: $files"; exit 1; }
@@ -155,10 +167,11 @@ jobs:
           timeout 300m ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -b -v $dirs -o document=false -o timeout_scale=3 \
             MFOTL_Checker TRIEL_Core 2>&1 | tee "$RUNNER_TEMP/deps-build.log"
 
-      # Only on the working branch: the branch of the stage builds once and from scratch, and the
-      # branches of the probes would each store a copy of the same heaps.
+      # Only on main: a cache of main is seen by every branch, and it is built from the sources
+      # of main by this workflow as it is on main. A heap restored for other theories of the core
+      # is not used: Isabelle builds a session again when the digests of its sources differ.
       - name: Save the heaps of the AFP and of TRIEL_Core
-        if: ${{ !cancelled() && steps.deps.outcome == 'success' && steps.heaps.outputs.cache-hit != 'true' && github.ref_name == 'mfotl1-wip' }}
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' && steps.heaps.outputs.cache-hit != 'true' && github.ref_name == 'main' }}
         uses: actions/cache/save@v6
         with:
           path: ~/.isabelle/${{ env.ISABELLE_VERSION }}/heaps
@@ -171,7 +184,7 @@ jobs:
           find ~/.isabelle -path '*heaps*' -name 'TRIEL_MFOTL*' -print -delete || true
 
       # (3) The session of the bridge builds, and (4) the acceptance session, which restates
-      # the theorems of the stage and checks their constants and oracles, builds by name.
+      # the theorems of the bridge and checks their constants and oracles, builds by name.
       - name: Build TRIEL_MFOTL and TRIEL_MFOTL_Accept
         id: bridge
         if: ${{ !cancelled() }}
@@ -186,12 +199,23 @@ jobs:
           grep -q '^Finished TRIEL_MFOTL_Accept ' "$RUNNER_TEMP/mfotl-build.log"
 
       # The messages of the ML block of the acceptance theory, also of a failed build.
+      # "isabelle build_log" of Isabelle2025-2 prints the messages of no theory: it takes the
+      # theories of a session from the theory timings in its database, and this release writes
+      # none. The messages are read from the export PIDE/messages of the theory instead; it is
+      # YXML, in which the text of a message stands between the control characters 5 and 6.
       - name: Messages of the acceptance theory
         if: ${{ !cancelled() }}
         shell: bash
         run: |
-          ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build_log -v -M 'Accept_MFOTL1' TRIEL_MFOTL_Accept \
-            > "$RUNNER_TEMP/accept-messages.txt" 2>&1 || true
+          out="$RUNNER_TEMP/accept-export"
+          rm -rf "$out"
+          : > "$RUNNER_TEMP/accept-messages.txt"
+          ~/isabelle/${ISABELLE_VERSION}/bin/isabelle export -n -O "$out" \
+            -x 'TRIEL_MFOTL_Accept.Accept_MFOTL1:PIDE/messages' TRIEL_MFOTL_Accept || true
+          f="$out/TRIEL_MFOTL_Accept.Accept_MFOTL1/PIDE/messages"
+          if test -s "$f"; then
+            tr '\005\006' '\n\n' < "$f" | grep -a '^Accept_MFOTL1: ' > "$RUNNER_TEMP/accept-messages.txt" || true
+          fi
           cat "$RUNNER_TEMP/accept-messages.txt"
 
       - name: Post the result of the run as a commit comment
@@ -201,6 +225,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           comment="$RUNNER_TEMP/comment.md"
+          # Text of the logs goes into the comment as data: a run of three backquotes would end
+          # the code block and an @ would mention a user, so both are broken up.
+          quote() { sed -e 's/```/`` `/g' -e 's/@/@ /g'; }
           {
             echo "Bridge from the core to MFOTL (run ${{ github.run_id }}):"
             echo
@@ -210,8 +237,9 @@ jobs:
             echo "- (3)-(4) build of TRIEL_MFOTL and TRIEL_MFOTL_Accept: ${{ steps.bridge.outcome }}"
             echo
             echo '```'
-            grep -hE '^(Finished|Building|Running) TRIEL_MFOTL|^TRIEL_MFOTL[A-Za-z_]* (FAILED|CANCELLED)|^Unfinished session' "$RUNNER_TEMP/mfotl-build.log" 2>/dev/null || true
-            test -s "$RUNNER_TEMP/accept-messages.txt" && head -c 4000 "$RUNNER_TEMP/accept-messages.txt"
+            { grep -hE '^(Finished|Building|Running) TRIEL_MFOTL|^TRIEL_MFOTL[A-Za-z_]* (FAILED|CANCELLED)|^Unfinished session' "$RUNNER_TEMP/mfotl-build.log" 2>/dev/null || true
+              if test -s "$RUNNER_TEMP/accept-messages.txt"; then head -c 4000 "$RUNNER_TEMP/accept-messages.txt"; fi
+            } | quote
             echo '```'
             for log in deps-build.log mfotl-build.log; do
               test -s "$RUNNER_TEMP/$log" || continue
@@ -220,7 +248,7 @@ jobs:
               echo "Error lines of $log:"
               echo
               echo '```'
-              grep -n -A12 '^\*\*\*' "$RUNNER_TEMP/$log" | head -c 25000 || true
+              { grep -n -A12 '^\*\*\*' "$RUNNER_TEMP/$log" | head -c 25000 || true; } | quote
               echo '```'
             done
           } > "$comment"

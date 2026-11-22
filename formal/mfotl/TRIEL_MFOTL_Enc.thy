@@ -23,8 +23,8 @@ text \<open>The database of entry \<open>j\<close> of an implementation trace \<
   constants: a fact \<open>val(x, u)\<close> for every name \<open>x\<close> with the value \<open>u\<close> in the state; the
   facts \<open>lt(u, w)\<close> and \<open>le(u, w)\<close> for the values \<open>u\<close>, \<open>w\<close> of the state and of \<open>C\<close> with
   \<open>vless u w\<close> and \<open>vleq u w\<close>; \<open>arr(x)\<close> for the arrival of data for \<open>x\<close>; and \<open>act(s, a)\<close>
-  for an action \<open>a\<close> of \<open>s\<close>. Entry 0 is the activation entry, so its event is not an
-  action and is not encoded.\<close>
+  for an action \<open>a\<close> of \<open>s\<close>. Entry 0 is the activation entry, so a deontic event of
+  entry 0 is not an action and is not encoded; an arrival of entry 0 is.\<close>
 
 definition enc_db ::
   "'v set \<Rightarrow> ('n, 'v :: value_order, 's, 'a) itrace \<Rightarrow> nat \<Rightarrow> (string \<times> ('n, 'v, 's, 'a) mval list) set"
