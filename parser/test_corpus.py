@@ -16,6 +16,7 @@ import gc
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,7 @@ sys.path.insert(0, str(PARSER))
 sys.path.insert(0, str(CORPUS))
 import triel_to_core  # noqa: E402
 from triel_to_core import RULES, header, sexp, translate  # noqa: E402
+import measure  # noqa: E402
 import rejects  # noqa: E402
 
 # False while the accepted cases written before the first run of the translator
@@ -470,3 +472,54 @@ ANOTHER = {
 def test_the_rule_for_another_implementation(name):
     c, outcome, term, classes, verdict = ANOTHER[name]
     assert another_implementation(c, outcome, term, classes) == verdict
+
+
+# --- A.8: the places of mutation that the corpus catches (killed.json) -----------------------
+
+KILLED = json.loads((CORPUS / "killed.json").read_text(encoding="utf-8"))
+KILLED_SECONDS = 30
+
+
+def test_the_mutants_of_killed_json_are_caught():
+    """Every place of killed.json: its first-order mutant (measure.mutant_code),
+    run on the cases of its entry with the parse trees of this module, gives on
+    one of them an output other than an exception that differs from the case."""
+    assert KILLED, "killed.json is empty"
+    lines = SOURCE.splitlines()
+    moved = [(e["line"], e["text"].strip()) for e in KILLED
+             if measure.killed_line(e, lines) != e["line"] or lines[e["line"] - 1] != e["text"]]
+    assert moved == [], "places moved: regenerate with measure.py --killed"
+    place = lambda e: (e["line"], e["col"], e["op"], e["variant"])  # noqa: E731
+    missing = [(place(e), i) for e in KILLED for i in e["ids"] if i not in BY_ID]
+    assert missing == [], "places of killed.json whose cases are not in the corpus"
+    assert measure.SOURCE == SOURCE, "measure.py reads another translator"
+    places = {tuple(p[:4]): p for p in measure.places()}
+    cases = [BY_ID[i] for i in sorted({i for e in KILLED for i in e["ids"]})]
+    for c in cases:
+        tree(c["source"])  # parsed here, so that the time below is that of the translations
+
+    def run(code, ids):
+        ns = {"__name__": "triel_to_core", "__file__": str(measure.TRANSLATOR)}
+        exec(code, ns)
+        ns["parser"] = triel_to_core.parser
+        outs = []
+        for i in ids:
+            try:
+                outs.append((i, output(BY_ID[i], ns)))
+            except Exception as e:  # noqa: BLE001
+                outs.append((i, ("exception", type(e).__name__)))
+        return outs
+
+    start = time.monotonic()
+    not_caught = []
+    for e in KILLED:
+        outs = run(measure.mutant_code(places[place(e)])[0], e["ids"])
+        if not any(o[0] != "exception" and mismatches(BY_ID[i], o) for i, o in outs):
+            not_caught.append((place(e), e["text"].strip()))
+    control = [(i, o) for i, o in run(compile(SOURCE, str(PARSER / "triel_to_core.py"), "exec"),
+                                     [c["id"] for c in cases])
+               if o[0] == "exception" or mismatches(BY_ID[i], o)]
+    seconds = time.monotonic() - start
+    assert control == [], "the mechanism of the test: the translator itself differs from the corpus"
+    assert not_caught == [], "places of killed.json whose mutant no case of its entry tells apart"
+    assert seconds <= KILLED_SECONDS, f"the mutants of killed.json took {seconds:.0f} s"

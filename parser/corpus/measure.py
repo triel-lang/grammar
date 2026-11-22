@@ -16,6 +16,13 @@ The output is markdown, in five sections:
 --section N (1 to 4) computes one section alone; section 2 then also computes
 the coverage it needs. Without arguments every section is computed.
 
+--killed computes no section: it writes parser/corpus/killed.json again, into
+the repository. For every entry of the file as it is, it finds the line of the
+translator by its text and its number among the lines with that text, checks
+that the place is one of places(), finds again the ids of the cases on which
+the mutant differs from the translator, and stops without writing if a place
+is gone or its mutant is no longer caught (divergence).
+
 TRIEL_TRANSLATOR names the translator to measure (default parser/triel_to_core.py
 of this repository). Its grammar is the triel.lark next to it, and its tests are
 the test_triel_to_core.py next to it, run in a temporary copy of the repository
@@ -24,7 +31,8 @@ for those tests (default evaluator/triel-eval of this repository, if it is
 built); without it, the tests that need it skip themselves.
 
 Every temporary file, coverage data included, is written to a temporary
-directory, which is removed at the end; nothing is written to the repository.
+directory, which is removed at the end; nothing is written to the repository,
+except killed.json by --killed.
 """
 import argparse
 import ast
@@ -914,6 +922,52 @@ def section_random(tmp):
     return rows
 
 
+# --- killed.json: the places whose mutants the corpus catches ------------------------------
+
+KILLED = HERE / "killed.json"
+
+
+def killed_line(entry, lines):
+    """The number of the line of an entry of killed.json, found by its text and
+    by its number among the lines with that text; None if there is no such line."""
+    same = [n for n, x in enumerate(lines, 1) if x == entry["text"]]
+    k = entry["occurrence"]
+    return same[k - 1] if 1 <= k <= len(same) else None
+
+
+def write_killed(entries):
+    """killed.json: one entry per line, sorted by place."""
+    entries = sorted(entries, key=lambda e: (e["line"], e["col"], e["op"], e["variant"]))
+    KILLED.write_text("[\n" + ",\n".join(json.dumps(e, ensure_ascii=False) for e in entries) + "\n]\n",
+                      encoding="utf-8")
+
+
+def killed():
+    """--killed: killed.json again, from killed.json as it is (see the docstring)."""
+    base_outputs()
+    lines = SOURCE.splitlines()
+    by_place = {tuple(p[:4]): p for p in places()}
+    out, errors = [], []
+    for e in json.loads(KILLED.read_text(encoding="utf-8")):
+        line = killed_line(e, lines)
+        key = (line, e["col"], e["op"], e["variant"])
+        if line is None:
+            errors.append(f"{e['text'].strip()!r}, occurrence {e['occurrence']}: no such line")
+        elif key not in by_place:
+            errors.append(f"{key}: not a place of places()")
+        else:
+            v, ids = verdict(mutant_code(by_place[key])[0])
+            if v != "caught (divergence)":
+                errors.append(f"{key}: {v}")
+            out.append({"text": e["text"], "occurrence": e["occurrence"], "line": line, "col": e["col"],
+                        "op": e["op"], "variant": e["variant"], "ids": ids})
+    if errors:
+        raise SystemExit("killed.json is not written:\n" + "\n".join(errors))
+    write_killed(out)
+    print(f"killed.json: {len(out)} places, {len({i for e in out for i in e['ids']})} cases")
+    return 0
+
+
 # --- main -------------------------------------------------------------------------------
 
 def main():
@@ -921,7 +975,10 @@ def main():
         return corpus_runner()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--section", type=int, choices=[1, 2, 3, 4])
+    ap.add_argument("--killed", action="store_true", help="write parser/corpus/killed.json again (into the repository)")
     args = ap.parse_args()
+    if args.killed:
+        return killed()
     sections = [args.section] if args.section else [1, 2, 3, 4]
     times = []
     title = TRANSLATOR.relative_to(T_REPO) if TRANSLATOR.is_relative_to(T_REPO) else TRANSLATOR
