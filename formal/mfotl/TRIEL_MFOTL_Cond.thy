@@ -254,7 +254,7 @@ theorem bridge_false:
 
 text \<open>Unknown blocks: a prohibition blocks unless its condition is known to be false.\<close>
 
-theorem bridge_blocks_cond:
+theorem bridge_blocks_cond':
   assumes "is_trace \<pi>" and "enc_pre C \<pi> \<sigma>" and "j < length \<pi>" and "econsts c \<subseteq> C"
   shows "blocks c (st \<pi> j) \<longleftrightarrow> \<not> Formula.sat \<sigma> v j (Nc c)"
   unfolding blocks_def using bridge_false[OF assms] by simp
