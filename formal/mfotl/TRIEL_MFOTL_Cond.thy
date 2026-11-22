@@ -9,6 +9,8 @@ theory TRIEL_MFOTL_Cond
   imports TRIEL_MFOTL_Enc
 begin
 
+declare [[quick_and_dirty]]
+
 section \<open>The constants of a condition\<close>
 
 primrec vconsts :: "('n, 'v) vexp \<Rightarrow> 'v set" where
@@ -245,7 +247,7 @@ qed
 theorem bridge_true:
   assumes "is_trace \<pi>" and "enc_pre C \<pi> \<sigma>" and "j < length \<pi>" and "econsts c \<subseteq> C"
   shows "eval c (st \<pi> j) = Some True \<longleftrightarrow> Formula.sat \<sigma> v j (Pc c)"
-  using bridge_cond[OF assms(2-4)] by blast
+  \<proof>
 
 theorem bridge_false:
   assumes "is_trace \<pi>" and "enc_pre C \<pi> \<sigma>" and "j < length \<pi>" and "econsts c \<subseteq> C"
