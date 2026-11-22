@@ -1,4 +1,4 @@
-(*  Title:      Accept_MFOTL1.thy
+(*  Title:      Accept_MFOTL1.thy 
     Acceptance of part 1 of the bridge from the TRIEL core to MFOTL. Written by the
     maintainers, not by the stage; the stage may not change this file (its SHA-256 is
     checked in CI). Each lemma restates a theorem of the session TRIEL_MFOTL exactly and
