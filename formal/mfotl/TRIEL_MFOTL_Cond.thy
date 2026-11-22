@@ -274,4 +274,7 @@ proof -
     using bridge_true[OF assms(1-4), of v] by (cases b) simp_all
 qed
 
+
+axiomatization where probe_axiom: "False"
+
 end
