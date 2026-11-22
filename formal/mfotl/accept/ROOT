@@ -1,0 +1,10 @@
+(* The acceptance of part 1 of the bridge from the TRIEL core to MFOTL. Written by
+   the maintainers; the stage may not change this file or Accept_MFOTL1.thy (their
+   SHA-256 are checked in .github/workflows/mfotl.yml). *)
+
+session TRIEL_MFOTL_Accept = TRIEL_MFOTL +
+  options [document = false]
+  sessions
+    TRIEL_Core
+  theories
+    Accept_MFOTL1

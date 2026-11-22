@@ -1,0 +1,11 @@
+(* The bridge from the TRIEL core to MFOTL, part 1: conditions. Written by the
+   maintainers; the stage may not change this file (its SHA-256 is checked in
+   .github/workflows/mfotl.yml). *)
+
+session TRIEL_MFOTL = MFOTL_Checker +
+  options [document = false]
+  sessions
+    TRIEL_Core
+  theories
+    TRIEL_MFOTL_Enc
+    TRIEL_MFOTL_Cond
