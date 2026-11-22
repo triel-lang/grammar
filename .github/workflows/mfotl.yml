@@ -1,0 +1,239 @@
+name: Bridge from the core to MFOTL
+
+# The work of the stage runs on mfotl1-wip and its probes on mfotl1-probe-*: the other
+# workflows run only on main and stage*, so only the final commit, pushed to the branch of
+# the stage, runs them all.
+on:
+  push:
+    branches: ['stage*', 'mfotl1-*']
+
+# The result of every run is posted as a comment on the commit: the logs of this
+# workflow cannot be read from a cloud session.
+permissions:
+  contents: write
+
+env:
+  ISABELLE_VERSION: Isabelle2025-2
+  # AFP release afp-2025-2 for Isabelle2025-2, from the mirror isabelle-prover/mirror-afp-2025-2.
+  AFP_COMMIT: fa30b560ab754bfbb7a721ee45a921d4b3c04358
+  # The sessions that TRIEL_MFOTL needs: MFOTL_Checker and everything it builds on.
+  # CAVA_Automata is not built: the ROOT of Collections also defines Collections_Examples,
+  # which names it, and Isabelle checks the structure of every session it loads.
+  AFP_SESSIONS: >-
+    MFOTL_Checker MFOTL_Monitor Containers Deriving Collections Refine_Monadic
+    Automatic_Refinement Finger-Trees Regular-Sets Binomial-Heaps Native_Word Trie Word_Lib
+    CAVA_Automata
+  ACCEPT_THY_SHA256: bb960f54ee75b1ee4c23420ed322deb88d2aad1abb24a8ffd50340c43660b9d2
+  ACCEPT_ROOT_SHA256: 55cfc391d3952933ceccb2b48eecc550c92a9d47a6dcd389fc05fe4933d3b6fc
+  MFOTL_ROOT_SHA256: e6634adce0910b455c36223ed66638448804deb900cf663f4af4b43438141bae
+
+# Every check runs even when an earlier one fails, so that a run shows which of
+# them fail; the job fails if any does.
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # (1) The stage changes only formal/mfotl and this workflow; formal/mfotl holds exactly
+      # its six files; the core, its checks and the three files of the maintainers are unchanged.
+      - name: The stage changes only the bridge, and the fixed files are unchanged
+        id: files
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The commit of main the branch starts from; the core may not change against it.
+          START=$(git merge-base HEAD origin/main)
+          echo "start: $START"
+          git diff --stat "$START" HEAD -- formal/core formal/checks
+          git diff --quiet "$START" HEAD -- formal/core formal/checks \
+            || { echo "::error::formal/core or formal/checks differ from $START"; exit 1; }
+          other=$(git diff --name-only "$START" HEAD | grep -vE '^(formal/mfotl/|\.github/workflows/mfotl\.yml$)' || true)
+          test -z "$other" || { echo "::error::files outside formal/mfotl changed: $other"; exit 1; }
+          files=$(git ls-files formal/mfotl | LC_ALL=C sort | tr '\n' ' ')
+          expected="formal/mfotl/README.md formal/mfotl/ROOT formal/mfotl/TRIEL_MFOTL_Cond.thy formal/mfotl/TRIEL_MFOTL_Enc.thy formal/mfotl/accept/Accept_MFOTL1.thy formal/mfotl/accept/ROOT "
+          test "$files" = "$expected" || { echo "::error::formal/mfotl holds: $files"; exit 1; }
+          echo "$ACCEPT_THY_SHA256  formal/mfotl/accept/Accept_MFOTL1.thy" | sha256sum -c -
+          echo "$ACCEPT_ROOT_SHA256  formal/mfotl/accept/ROOT" | sha256sum -c -
+          echo "$MFOTL_ROOT_SHA256  formal/mfotl/ROOT" | sha256sum -c -
+
+      # (2) In the two theories of the bridge: no unproved or assumed result, no ML code, and no
+      # change of the syntax or of the names that the acceptance theory reads. Words are matched
+      # whole, anywhere, also in comments and text. grep exits 1 when nothing is found; any
+      # other code than 0 or 1 is an error of the step, not a pass.
+      - name: Check the theories of the bridge for sorry, axioms, ML and syntax
+        id: words
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          T="formal/mfotl/TRIEL_MFOTL_Enc.thy formal/mfotl/TRIEL_MFOTL_Cond.thy"
+          for f in $T; do test -f "$f" || { echo "::error::$f is missing"; exit 1; }; done
+          bad=0
+          refuse() {
+            local rc=0
+            grep -nwE "$1" $T || rc=$?
+            case $rc in
+              1) ;;
+              0) echo "::error::$2"; bad=1 ;;
+              *) echo "::error::grep failed (code $rc)"; bad=1 ;;
+            esac
+          }
+          refuse 'sorry|oops|axiomatization|bnf_axiomatization|axioms|defs|oracle|unchecked' \
+            'a theory of the bridge has sorry, oops, an axiom, an oracle or an unchecked definition'
+          refuse 'ML|ML_file|ML_file_debug|ML_file_no_debug|ML_val|ML_command|ML_prf|ML_export|SML_file|SML_file_debug|SML_file_no_debug|SML_import|SML_export|tactic|raw_tactic|setup|local_setup|declaration|syntax_declaration|attribute_setup|method_setup|simproc_setup|parse_translation|print_translation|parse_ast_translation|print_ast_translation|typed_print_translation|compile_generated_files|code_reflect|code_printing' \
+            'a theory of the bridge runs ML code'
+          refuse 'abbreviation|notation|no_notation|type_notation|no_type_notation|syntax|no_syntax|syntax_consts|syntax_types|translations|no_translations|alias|type_alias|hide_const|hide_fact|hide_type|hide_class|adhoc_overloading|no_adhoc_overloading|default_sort|coercion|coercion_enabled|interpretation|global_interpretation|sublocale' \
+            'a theory of the bridge changes the syntax or the names'
+          exit $bad
+
+      - name: Cache the Isabelle distribution
+        id: cache-isabelle
+        if: ${{ !cancelled() }}
+        uses: actions/cache@v6
+        with:
+          path: ~/isabelle/${{ env.ISABELLE_VERSION }}
+          key: ${{ env.ISABELLE_VERSION }}-linux-x86_64
+
+      - name: Download Isabelle
+        if: ${{ !cancelled() && steps.cache-isabelle.outputs.cache-hit != 'true' }}
+        run: |
+          archive="${ISABELLE_VERSION}_linux.tar.gz"
+          for base in https://isabelle.in.tum.de/dist https://www.cl.cam.ac.uk/research/hvg/Isabelle/dist; do
+            if curl -fL --retry 3 -o "/tmp/$archive" "$base/$archive"; then
+              break
+            fi
+          done
+          test -s "/tmp/$archive"
+          mkdir -p ~/isabelle
+          tar -xzf "/tmp/$archive" -C ~/isabelle
+          rm "/tmp/$archive"
+
+      - name: Fetch the AFP sessions
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init -q afp
+          git -C afp remote add origin https://github.com/isabelle-prover/mirror-afp-2025-2.git
+          git -C afp sparse-checkout set $(for s in $AFP_SESSIONS; do printf 'thys/%s ' "$s"; done)
+          git -C afp fetch -q --depth 1 --filter=blob:none origin "$AFP_COMMIT"
+          git -C afp checkout -q FETCH_HEAD
+          test "$(git -C afp rev-parse HEAD)" = "$AFP_COMMIT"
+          for s in $AFP_SESSIONS; do test -f "afp/thys/$s/ROOT"; done
+
+      - name: Switch off the PDF document of TRIEL_Core for this build
+        if: ${{ !cancelled() }}
+        run: |
+          sed -i -E 's/options \[document = pdf, document_output = "output"\]/options [document = false]/' formal/core/ROOT
+          grep -q 'options \[document = false\]' formal/core/ROOT
+
+      # The heaps of the AFP sessions and of TRIEL_Core. They are restored here and saved right
+      # after they are built, before the bridge: a red run still keeps them, and a saved cache
+      # never holds a heap of the bridge. The key does not depend on formal/mfotl.
+      - name: Restore the heaps of the AFP and of TRIEL_Core
+        id: heaps
+        if: ${{ !cancelled() }}
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.isabelle/${{ env.ISABELLE_VERSION }}/heaps
+          key: heaps-${{ env.ISABELLE_VERSION }}-afp-${{ env.AFP_COMMIT }}-${{ hashFiles('formal/core/*.thy', 'formal/core/ROOT') }}
+          restore-keys: |
+            heaps-${{ env.ISABELLE_VERSION }}-afp-${{ env.AFP_COMMIT }}-
+
+      - name: Build the AFP sessions and TRIEL_Core
+        id: deps
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dirs="-d formal/core"
+          for s in $AFP_SESSIONS; do dirs="$dirs -d afp/thys/$s"; done
+          # Below the limit of a job (6 h), so that a run that does not finish still posts its comment.
+          timeout 300m ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -b -v $dirs -o document=false -o timeout_scale=3 \
+            MFOTL_Checker TRIEL_Core 2>&1 | tee "$RUNNER_TEMP/deps-build.log"
+
+      # Only on the working branch: the branch of the stage builds once and from scratch, and the
+      # branches of the probes would each store a copy of the same heaps.
+      - name: Save the heaps of the AFP and of TRIEL_Core
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' && steps.heaps.outputs.cache-hit != 'true' && github.ref_name == 'mfotl1-wip' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.isabelle/${{ env.ISABELLE_VERSION }}/heaps
+          key: ${{ steps.heaps.outputs.cache-primary-key }}
+
+      # The sessions of the bridge are always built anew.
+      - name: Drop heaps of the bridge
+        if: ${{ !cancelled() }}
+        run: |
+          find ~/.isabelle -path '*heaps*' -name 'TRIEL_MFOTL*' -print -delete || true
+
+      # (3) The session of the bridge builds, and (4) the acceptance session, which restates
+      # the theorems of the stage and checks their constants and oracles, builds by name.
+      - name: Build TRIEL_MFOTL and TRIEL_MFOTL_Accept
+        id: bridge
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dirs="-d formal/core -d formal/mfotl -d formal/mfotl/accept"
+          for s in $AFP_SESSIONS; do dirs="$dirs -d afp/thys/$s"; done
+          ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -b -v $dirs -o document=false -o timeout_scale=3 \
+            TRIEL_MFOTL TRIEL_MFOTL_Accept 2>&1 | tee "$RUNNER_TEMP/mfotl-build.log"
+          grep -q '^Finished TRIEL_MFOTL ' "$RUNNER_TEMP/mfotl-build.log"
+          grep -q '^Finished TRIEL_MFOTL_Accept ' "$RUNNER_TEMP/mfotl-build.log"
+
+      # The messages of the ML block of the acceptance theory, also of a failed build.
+      - name: Messages of the acceptance theory
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build_log -v -M 'Accept_MFOTL1' TRIEL_MFOTL_Accept \
+            > "$RUNNER_TEMP/accept-messages.txt" 2>&1 || true
+          cat "$RUNNER_TEMP/accept-messages.txt"
+
+      - name: Post the result of the run as a commit comment
+        if: ${{ !cancelled() && github.event_name == 'push' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          comment="$RUNNER_TEMP/comment.md"
+          {
+            echo "Bridge from the core to MFOTL (run ${{ github.run_id }}):"
+            echo
+            echo "- (1) files: ${{ steps.files.outcome }}"
+            echo "- (2) words: ${{ steps.words.outcome }}"
+            echo "- build of the AFP sessions and TRIEL_Core: ${{ steps.deps.outcome }} (heaps restored: ${{ steps.heaps.outputs.cache-matched-key || 'none' }})"
+            echo "- (3)-(4) build of TRIEL_MFOTL and TRIEL_MFOTL_Accept: ${{ steps.bridge.outcome }}"
+            echo
+            echo '```'
+            grep -hE '^(Finished|Building|Running) TRIEL_MFOTL|^TRIEL_MFOTL[A-Za-z_]* (FAILED|CANCELLED)|^Unfinished session' "$RUNNER_TEMP/mfotl-build.log" 2>/dev/null || true
+            test -s "$RUNNER_TEMP/accept-messages.txt" && head -c 4000 "$RUNNER_TEMP/accept-messages.txt"
+            echo '```'
+            for log in deps-build.log mfotl-build.log; do
+              test -s "$RUNNER_TEMP/$log" || continue
+              grep -q '^\*\*\*' "$RUNNER_TEMP/$log" || continue
+              echo
+              echo "Error lines of $log:"
+              echo
+              echo '```'
+              grep -n -A12 '^\*\*\*' "$RUNNER_TEMP/$log" | head -c 25000 || true
+              echo '```'
+            done
+          } > "$comment"
+          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
+            -F body=@"$comment" > /dev/null
+
+      - name: Keep the build logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mfotl-build-log
+          path: |
+            ${{ runner.temp }}/deps-build.log
+            ${{ runner.temp }}/mfotl-build.log
+            ${{ runner.temp }}/accept-messages.txt
+          if-no-files-found: ignore
