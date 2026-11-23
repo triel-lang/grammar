@@ -132,10 +132,14 @@ mutant and the translator differ.
 `parser/test_corpus.py` runs the mutant of every place on its cases, with the
 parse trees it already has, and fails if the line of a place has changed
 ("places moved: regenerate with measure.py --killed"), if a case of `ids` is
-not in the corpus, or if no case of a place tells its mutant apart. It also runs
-the translator itself the same way on all these cases, which must agree with
-the corpus, and fails if the mutants take more than 30 seconds. After a change
-of the translator that moves lines,
+not in the corpus, if the entries are not sorted by place ("killed.json: not
+sorted by place") or list a place twice ("killed.json: a place is listed
+twice"), if a place is not a place of mutation ("killed.json: (line, col, op,
+variant) is not a place of mutation: regenerate with measure.py --killed"), or
+if no case of a place tells its mutant apart: an output that is an exception
+does not. It also runs the translator itself the same way on all these cases,
+which must agree with the corpus, and fails if the mutants take more than 30
+seconds. After a change of the translator that moves lines,
 
 ```bash
 python3 parser/corpus/measure.py --killed
@@ -160,13 +164,22 @@ python3 -m pytest -q parser/test_corpus.py
 the translator and the corpus disagree. The other tests check the format, that
 every rule of `parser/triel.lark` is in the parse tree of some case, that every
 reason has a pair of cases, and that every reason the code of the translator
-can give is in `classes.json`. Further tests check these checks: the format of
-spoilt copies of cases (a missing, empty or malformed `header`, `header` on a
-`parse_error`, whatever `TERMS_RECORDED`), `pair` and `same_term` among the
-cases given, the reading of a spoilt `cases.jsonl` (the error names the line),
-and that the comparison of `test_case` finds another `header` of a rejected
-case; then the rule for another implementation, and the places of
-`killed.json`.
+can give is in `classes.json`. Further tests check these checks: the format
+of spoilt copies of cases, of an accepted case as well as of a rejected one,
+each copy with the one error it must give (among them a missing, empty or
+malformed `header`, `header` on a `parse_error` whatever `TERMS_RECORDED`, and
+a field of a case of another outcome); `pair` and `same_term` among the cases
+given; the reading of a spoilt `cases.jsonl`, an empty line among them (the
+error names the line), and of the file itself with a line cut short: the
+collection of `parser/test_corpus.py` fails with an error that names the line,
+whichever of `measure.py` and `parser/test_corpus.py` reads the file first;
+that the comparison of `test_case` finds each field it compares changed in a
+copy of a case (the term and the header of an accepted case, the header, the
+classes and the reasons of a rejected case, the checks of `contains`); and that
+an output of a mutant that is an exception does not catch it (`caught`). Then
+the rule for another implementation, the format of `killed.json`, and the
+places of `killed.json`. A test that takes a case of the corpus by its `id`
+looks it up when it runs: without that case only the tests that take it fail.
 
 The measurements, from the root of the repository (not in CI):
 

@@ -71,7 +71,26 @@ from lark import UnexpectedInput  # noqa: E402
 TRANSLATOR = Path(os.environ.get("TRIEL_TRANSLATOR", REPO / "parser" / "triel_to_core.py")).resolve()
 T_REPO = TRANSLATOR.parent.parent
 EVALUATOR = os.environ.get("TRIEL_EVALUATOR", str(REPO / "evaluator" / "triel-eval"))
-CASES = [json.loads(x) for x in (HERE / "cases.jsonl").read_text(encoding="utf-8").splitlines()]
+
+
+def read_cases(text):
+    """The cases in the text of cases.jsonl, one JSON object per line. A line
+    that is not a JSON object, an empty line among them, is an error that names
+    the line. parser/test_corpus.py reads the corpus with this function too, so
+    the error is the same whichever of the two reads the file first."""
+    cases = []
+    for n, line in enumerate(text.splitlines(), 1):
+        try:
+            c = json.loads(line)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"cases.jsonl, line {n}: not JSON ({e.msg})") from None
+        if not isinstance(c, dict):
+            raise ValueError(f"cases.jsonl, line {n}: not a JSON object")
+        cases.append(c)
+    return cases
+
+
+CASES = read_cases((HERE / "cases.jsonl").read_text(encoding="utf-8"))
 CLASSES = json.loads((HERE / "classes.json").read_text(encoding="utf-8"))["reasons"]
 UNREACHABLE = json.loads((HERE / "unreachable.json").read_text(encoding="utf-8"))
 SOURCE = TRANSLATOR.read_text(encoding="utf-8")

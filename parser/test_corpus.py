@@ -8,15 +8,23 @@ parameters is the number of cases on which the translator and the corpus
 disagree. The other functions check the format of the corpus, that the cases
 cover the grammar, that every reason has a pair of cases, and that every reason
 the code can give is in the table of classes; and they check the checks
-themselves: the format and the comparison on spoilt copies of cases, and the
-rule of the README for another implementation on outputs built here. The last
-test runs the first-order mutant of every place of corpus/killed.json on its
-cases and fails if no case tells it apart from the translator.
+themselves: the format and the comparison on spoilt copies of cases, the
+reading of a spoilt corpus (also of the file itself, as the collection of this
+module reads it), and the rule of the README for another implementation on
+outputs built here. The last tests check the format of corpus/killed.json and
+run the first-order mutant of every place of killed.json on its cases: they
+fail if no case tells it apart from the translator.
+
+A test that takes a case of the corpus by its id looks it up when it runs
+(case), so that without that case only the tests that take it fail.
 """
 import difflib
 import gc
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -41,23 +49,25 @@ TERMS_RECORDED = True
 
 def read_cases(text):
     """The cases in the text of cases.jsonl, one JSON object per line. A line
-    that is not a JSON object is an error that names the line."""
-    cases = []
-    for n, line in enumerate(text.splitlines(), 1):
-        try:
-            c = json.loads(line)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"cases.jsonl, line {n}: not JSON ({e.msg})") from None
-        if not isinstance(c, dict):
-            raise ValueError(f"cases.jsonl, line {n}: not a JSON object")
-        cases.append(c)
-    return cases
+    that is not a JSON object, an empty line among them, is an error that names
+    the line. It is measure.read_cases, with which measure.py reads the corpus
+    when it is imported, before this module reads it."""
+    return measure.read_cases(text)
 
 
 CASES_TEXT = (CORPUS / "cases.jsonl").read_bytes().decode("utf-8")
 CASES = read_cases(CASES_TEXT)
 BY_ID = {c["id"]: c for c in CASES}
-TABLE = json.loads((CORPUS / "classes.json").read_text(encoding="utf-8"))
+
+
+def case(case_id):
+    """The case of the corpus with this id, looked up when a test runs: without
+    it, the test that takes it fails, and the collection of the module does not."""
+    assert case_id in BY_ID, f"the case {case_id} is not in the corpus"
+    return BY_ID[case_id]
+
+
+TABLE =json.loads((CORPUS / "classes.json").read_text(encoding="utf-8"))
 CLASSES = TABLE["reasons"]
 UNREACHABLE = json.loads((CORPUS / "unreachable.json").read_text(encoding="utf-8"))
 SOURCE = (PARSER / "triel_to_core.py").read_text(encoding="utf-8")
@@ -170,6 +180,12 @@ def mismatches(c, out):
         if "metadata" in ch and not (head is not None and head[1:] == ch["metadata"]):
             bad.append(f"metadata {None if head is None else head[1:]!r}, not {ch['metadata']!r}")
     return bad
+
+
+def caught(c, out):
+    """Whether the output out of a mutant on the source of case c catches the
+    mutant: out is not an exception, and it differs from the case (mismatches)."""
+    return out[0] != "exception" and bool(mismatches(c, out))
 
 
 # --- A.1: format -----------------------------------------------------------------
@@ -347,14 +363,36 @@ def test_every_reason_of_the_code_is_in_the_table():
 
 # --- A.6: the checks of the format and the comparison, on spoilt copies of cases -----------
 
-REJECTED = "new.gap.deadline_in_the_branch_of_when"   # rejected, header ["SPEC gaps"], no pair
+REJECTED = "new.gap.deadline_in_the_branch_of_when"   # rejected, header ["SPEC gaps"], single_defect, no pair
 WITH_METADATA = "moved.caused_by_is_rejected.01"      # rejected, with a METADATA line, no pair
 NOT_PARSED = "moved.float_and_exponents_do_not_parse.01"
 
+# An accepted case written here rather than taken from the corpus: every accepted case of the
+# corpus is a case of killed.json (the places of the head "spec" of the term), so that its test
+# would fail too without it. test_a_spoilt_case_is_a_mismatch checks that the translator gives
+# exactly this term and this header.
+ACCEPTED_CASE = {
+    "id": "new.x.accepted",
+    "source": 'SPECIFICATION s VERSION 1.0\nJURISDICTION "EU"\nSUBJECTS { a: PARTY }\nTERMS { a MUST pay }\n'
+              'FACTORS { g: Integer POLARITY 1.0 }\nINVARIANTS { i: ALWAYS(g > 0) }\n',
+    "outcome": "accepted",
+    "term": '(spec (factors (factor "g" (prim int) (none))) (terms (must "a" "pay" (none) (none))) '
+            '(invariants (invariant "i" (always (lt (const (int 0)) (name (path "g")))))))',
+    "header": ["SPEC s", 'METADATA JURISDICTION "EU"', "METADATA POLARITY g 1.0"],
+    "rules": ["obligation_stmt"],
+    "origin": "new",
+    "contains": [{"substring": '(must "a" "pay" (none) (none))'}],
+}
 
-def spoilt(case_id, **fields):
-    """A copy of a case of the corpus with fields replaced; None removes a field."""
-    c = dict(BY_ID[case_id])
+
+def base(b):
+    """A copy of the case b: ACCEPTED_CASE, or the case of the corpus with id b."""
+    return dict(b) if isinstance(b, dict) else dict(case(b))
+
+
+def spoilt(c, **fields):
+    """A copy of case c with fields replaced; None removes a field."""
+    c = dict(c)
     for k, v in fields.items():
         if v is None:
             c.pop(k, None)
@@ -363,35 +401,111 @@ def spoilt(case_id, **fields):
     return c
 
 
+def another_reason(reason):
+    """A reason of the same class as reason, other than it."""
+    cls = CLASSES[reason]["class"]
+    return sorted(r for r, row in CLASSES.items() if row["class"] == cls and r != reason)[0]
+
+
+# name -> (the case spoilt, the fields replaced, the errors of format_errors, after "<id>: ").
+# A callable gives the fields from the case.
 SPOILT_FORMAT = {
-    "rejected_without_header": (spoilt(REJECTED, header=None), "rejected without header"),
-    "header_on_a_parse_error": (spoilt(NOT_PARSED, header=["SPEC t"]), "header on a case that does not parse"),
-    "empty_header": (spoilt(REJECTED, header=[]), "header is not SPEC and METADATA lines"),
-    "header_line_not_a_string": (spoilt(REJECTED, header=["SPEC gaps", 5]), "header is not SPEC and METADATA lines"),
-    "two_spec_lines": (spoilt(REJECTED, header=["SPEC gaps", "SPEC gaps"]), "header is not SPEC and METADATA lines"),
+    "rejected_without_header": (REJECTED, {"header": None}, ["rejected without header"]),
+    "header_on_a_parse_error": (NOT_PARSED, {"header": ["SPEC t"]}, ["header on a case that does not parse"]),
+    "empty_header": (REJECTED, {"header": []}, ["header is not SPEC and METADATA lines"]),
+    "header_line_not_a_string": (REJECTED, {"header": ["SPEC gaps", 5]}, ["header is not SPEC and METADATA lines"]),
+    "two_spec_lines": (REJECTED, {"header": ["SPEC gaps", "SPEC gaps"]}, ["header is not SPEC and METADATA lines"]),
+    "accepted_without_header": (ACCEPTED_CASE, {"header": None}, ["accepted without header"]),
+    "empty_header_of_an_accepted_case": (ACCEPTED_CASE, {"header": []}, ["header is not SPEC and METADATA lines"]),
+    "two_spec_lines_of_an_accepted_case": (ACCEPTED_CASE, {"header": ["SPEC s", "SPEC s"]},
+                                           ["header is not SPEC and METADATA lines"]),
+    "header_without_spec_of_an_accepted_case": (ACCEPTED_CASE, {"header": ["METADATA POLARITY g 1.0"]},
+                                                ["header is not SPEC and METADATA lines"]),
+    "header_not_a_list": (WITH_METADATA, {"header": "SPEC t"}, ["header is not SPEC and METADATA lines"]),
+    "unknown_field": (REJECTED, {"note": "x"}, ["unknown fields ['note']"]),
+    "id_with_a_space": (REJECTED, {"id": "new.gap.a b"}, ["id is not of Latin letters, digits, '.', '_' and '-'"]),
+    "no_source": (REJECTED, {"source": None}, ["no source"]),
+    "blank_source": (REJECTED, {"source": " \n"}, ["no source"]),
+    "another_outcome_word": (NOT_PARSED, {"outcome": "refused"}, ["outcome 'refused'"]),
+    "a_rule_not_of_the_grammar": (REJECTED, {"rules": ["no_such_rule"]}, ["rules is not a list of rules of triel.lark"]),
+    "rules_not_a_list": (REJECTED, {"rules": "matched_condition"}, ["rules is not a list of rules of triel.lark"]),
+    "origin_not_sorted": (WITH_METADATA, {"origin": ["test_triel_to_core.py::test_b", "test_triel_to_core.py::test_a"]},
+                          ["origin is neither new nor a sorted list of test_triel_to_core.py::<test>"]),
+    "origin_of_another_file": (WITH_METADATA, {"origin": ["test_other.py::test_a"]},
+                               ["origin is neither new nor a sorted list of test_triel_to_core.py::<test>"]),
+    "origin_new_of_a_moved_id": (WITH_METADATA, {"origin": "new"},
+                                 ["an id starts with new. exactly when origin is new"]),
+    "term_on_a_rejected_case": (REJECTED, {"term": "(spec)"}, ["term on a case that is not accepted"]),
+    "accepted_without_term": (ACCEPTED_CASE, {"term": None}, ["accepted without term"]),
+    "term_not_a_string": (ACCEPTED_CASE, {"term": ["spec"]}, ["term is not a string"]),
+    "classes_on_an_accepted_case": (ACCEPTED_CASE, {"classes": ["types"]}, ["classes on a case that is not rejected"]),
+    "reasons_on_a_parse_error": (NOT_PARSED, {"reasons": ["CAUSED_BY"]}, ["reasons on a case that is not rejected"]),
+    "single_defect_on_an_accepted_case": (ACCEPTED_CASE, {"single_defect": True},
+                                          ["single_defect on a case that is not rejected"]),
+    "reasons_not_sorted": (WITH_METADATA, {"reasons": ["field DEFAULT", "CAUSED_BY"], "classes": ["fragment"]},
+                           ["reasons is not a sorted list without repetitions"]),
+    "a_reason_twice": (WITH_METADATA, {"reasons": ["CAUSED_BY", "CAUSED_BY"]},
+                       ["reasons is not a sorted list without repetitions"]),
+    "no_reasons": (WITH_METADATA, {"reasons": []}, ["reasons is not a sorted list without repetitions"]),
+    "a_reason_not_in_the_table": (WITH_METADATA, {"reasons": ["no such reason"]},
+                                  ["reasons not in classes.json: ['no such reason']"]),
+    "classes_not_of_the_reasons": (WITH_METADATA, {"classes": ["names"]},
+                                   ["classes is not the sorted list of the classes of reasons"]),
+    "single_defect_not_true": (REJECTED, {"single_defect": False}, ["single_defect is not true"]),
+    "single_defect_with_two_reasons": (REJECTED, lambda c: {"reasons": sorted(c["reasons"] + [another_reason(c["reasons"][0])])},
+                                       ["single_defect with more than one reason"]),
+    "disputed_empty": (REJECTED, {"disputed": " "}, ["disputed is not a text"]),
+    "disputed_not_a_string": (REJECTED, {"disputed": 1}, ["disputed is not a text"]),
+    "a_moved_case_without_contains": (WITH_METADATA, {"contains": None}, ["no contains"]),
+    "an_accepted_case_without_contains": (ACCEPTED_CASE, {"contains": None},
+                                          ["no contains", "a new accepted case without a substring"]),
+    "a_check_of_two_keys": (WITH_METADATA, {"contains": [{"reasons": ["CAUSED_BY"], "substring": "x"}]},
+                            ["check {'reasons': ['CAUSED_BY'], 'substring': 'x'} is not one of substring, reasons, "
+                             "metadata"]),
+    "a_check_of_another_key": (WITH_METADATA, {"contains": [{"term": "x"}]},
+                               ["check {'term': 'x'} is not one of substring, reasons, metadata"]),
+    "substring_not_a_string": (ACCEPTED_CASE, {"contains": [{"substring": 5}]}, ["substring is not a string"]),
+    "reasons_of_a_check_not_a_list": (WITH_METADATA, {"contains": [{"reasons": "CAUSED_BY"}]},
+                                      ["reasons is not a list"]),
+    "a_new_accepted_case_without_a_substring": (ACCEPTED_CASE, {"contains": [{"metadata": ['METADATA JURISDICTION "EU"']}]},
+                                                ["a new accepted case without a substring"]),
 }
 
 
 @pytest.mark.parametrize("name", SPOILT_FORMAT)
 def test_format_of_a_spoilt_case(name):
-    c, message = SPOILT_FORMAT[name]
-    assert format_errors([BY_ID[c["id"]]]) == []
-    assert format_errors([c]) == [f"{c['id']}: {message}"]
+    b, fields, messages = SPOILT_FORMAT[name]
+    c = base(b)
+    assert format_errors([c]) == []
+    s = spoilt(c, **(fields(c) if callable(fields) else fields))
+    assert format_errors([s]) == [f"{s['id']}: {m}" for m in messages]
 
 
 def test_header_on_a_parse_error_whatever_terms_recorded(monkeypatch):
     monkeypatch.setattr(sys.modules[__name__], "TERMS_RECORDED", False)
-    c, message = SPOILT_FORMAT["header_on_a_parse_error"]
-    assert format_errors([c]) == [f"{c['id']}: {message}"]
+    b, fields, messages = SPOILT_FORMAT["header_on_a_parse_error"]
+    s = spoilt(base(b), **fields)
+    assert format_errors([s]) == [f"{s['id']}: {m}" for m in messages]
+
+
+def test_format_of_a_spoilt_list_of_cases():
+    first, second = case(NOT_PARSED), case(REJECTED)   # in the order of their ids
+    text = json.dumps(first) + "\n" + json.dumps(second) + "\n"
+    assert format_errors([first, second], text) == []
+    assert format_errors([second, first]) == ["cases.jsonl: the lines are not sorted by id"]
+    assert format_errors([first, first]) == ["cases.jsonl: an id is used twice"]
+    assert format_errors([first, second], text[:-1]) == ["cases.jsonl: not LF line ends with a final line end"]
+    assert format_errors([first, second], text.replace("\n", "\r\n")) == [
+        "cases.jsonl: not LF line ends with a final line end"]
 
 
 def test_pair_and_same_term_refer_to_the_cases_given():
-    bad, fix = BY_ID["new.field_default.bad"], BY_ID["new.field_default.fix"]
+    bad, fix = case("new.field_default.bad"), case("new.field_default.fix")
     assert format_errors([bad, fix]) == []
     assert format_errors([bad]) == [f"{bad['id']}: pair {fix['id']!r} does not refer back"]
     copies = [dict(bad, id="new.x.bad", pair="new.x.fix"), dict(fix, id="new.x.fix", pair="new.x.bad")]
     assert format_errors(copies) == []
-    raw, escaped = BY_ID["new.string_literal.raw"], BY_ID["new.string_literal.escaped"]
+    raw, escaped = case("new.string_literal.raw"), case("new.string_literal.escaped")
     assert format_errors([escaped, raw]) == []
     assert format_errors([raw]) == [f"{raw['id']}: same_term {escaped['id']!r} does not refer back",
                                     f"{raw['id']}: same_term between cases that are not both accepted"]
@@ -405,23 +519,119 @@ def test_reading_a_spoilt_corpus():
     assert read_cases("".join(lines)) == CASES[:3]
     with pytest.raises(ValueError, match=r"^cases\.jsonl, line 2: not JSON "):
         read_cases(lines[0] + lines[1][:60] + "\n" + lines[2])
+    with pytest.raises(ValueError, match=r"^cases\.jsonl, line 1: not JSON "):
+        read_cases(lines[0][:60] + "\n" + lines[1] + lines[2])
     with pytest.raises(ValueError, match=r"^cases\.jsonl, line 3: not a JSON object$"):
         read_cases(lines[0] + lines[1] + '["id", "source"]\n')
+    with pytest.raises(ValueError, match=r"^cases\.jsonl, line 2: not JSON "):
+        read_cases(lines[0] + "\n" + lines[1] + lines[2])
+    with pytest.raises(ValueError, match=r"^cases\.jsonl, line 4: not JSON "):
+        read_cases("".join(lines) + "\n")
 
 
-SPOILT_HEADER = {
-    "another_spec_line": (REJECTED, ["SPEC gapsX"]),
-    "another_metadata_line": (WITH_METADATA, [BY_ID[WITH_METADATA]["header"][0], "METADATA POLARITY g 2.0"]),
+def test_a_cut_line_of_the_corpus_file_is_named(tmp_path):
+    """cases.jsonl itself with a line cut short, in a copy of the files the
+    collection of this module reads: the collection fails with an error that
+    names that line, whichever module reads the file first (measure.py reads it
+    when this module imports it)."""
+    lines = CASES_TEXT.splitlines(keepends=True)
+    for n in sorted({1, len(lines) // 2, len(lines)}):
+        copy = tmp_path / f"copy{n}"
+        (copy / "parser").mkdir(parents=True)
+        for name in ("test_corpus.py", "triel_to_core.py", "triel.lark"):
+            shutil.copy2(PARSER / name, copy / "parser" / name)
+        shutil.copytree(CORPUS, copy / "parser" / "corpus", ignore=shutil.ignore_patterns("__pycache__"))
+        cut = lines[:n - 1] + [lines[n - 1][:60] + "\n"] + lines[n:]
+        (copy / "parser" / "corpus" / "cases.jsonl").write_text("".join(cut), encoding="utf-8")
+        env = {k: v for k, v in os.environ.items() if k not in ("TRIEL_TRANSLATOR", "PYTHONPATH")}
+        r = subprocess.run([sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", "--collect-only",
+                            "parser/test_corpus.py"], cwd=copy, env=env, capture_output=True, text=True, timeout=300)
+        assert r.returncode != 0, f"line {n} cut, the collection passed"
+        assert f"cases.jsonl, line {n}: not JSON" in r.stdout + r.stderr, f"line {n} cut, not named"
+
+
+# name -> (the case, the case spoilt, the output if not that of the translator on the case,
+# the mismatches of the spoilt case with the output).
+MISMATCHES = {
+    "another_spec_line_of_a_rejected_case": (
+        REJECTED, lambda c: spoilt(c, header=["SPEC gapsX"]), None,
+        lambda c, s, o: [f"header {c['header']!r}, not {s['header']!r}"]),
+    "another_metadata_line_of_a_rejected_case": (
+        WITH_METADATA, lambda c: spoilt(c, header=[c["header"][0], "METADATA POLARITY g 2.0"]), None,
+        lambda c, s, o: [f"header {c['header']!r}, not {s['header']!r}"]),
+    "another_spec_line_of_an_accepted_case": (
+        ACCEPTED_CASE, lambda c: spoilt(c, header=["SPEC t"] + c["header"][1:]), None,
+        lambda c, s, o: [f"header {c['header']!r}, not {s['header']!r}"]),
+    "a_metadata_line_less_of_an_accepted_case": (
+        ACCEPTED_CASE, lambda c: spoilt(c, header=c["header"][:-1]), None,
+        lambda c, s, o: [f"header {c['header']!r}, not {s['header']!r}"]),
+    "another_term_by_one_character": (
+        ACCEPTED_CASE, lambda c: spoilt(c, term=c["term"].replace('"pay"', '"paz"')), None,
+        lambda c, s, o: [f"term {c['term']!r}, not {s['term']!r}"]),
+    "another_term_a_prefix": (
+        ACCEPTED_CASE, lambda c: spoilt(c, term=c["term"][:-1]), None,
+        lambda c, s, o: [f"term {c['term']!r}, not {s['term']!r}"]),
+    "another_term_a_space_more": (
+        ACCEPTED_CASE, lambda c: spoilt(c, term=c["term"] + " "), None,
+        lambda c, s, o: [f"term {c['term']!r}, not {s['term']!r}"]),
+    "a_substring_not_in_the_term": (
+        ACCEPTED_CASE, lambda c: spoilt(c, contains=[{"substring": '(must "a" "ship"'}]), None,
+        lambda c, s, o: [f"no substring {chr(39)}(must \"a\" \"ship\"{chr(39)}"]),
+    "other_metadata_of_contains": (
+        ACCEPTED_CASE, lambda c: spoilt(c, contains=c["contains"] + [{"metadata": ['METADATA JURISDICTION "US"']}]), None,
+        lambda c, s, o: [f"metadata {c['header'][1:]!r}, not {s['contains'][-1]['metadata']!r}"]),
+    "other_classes": (
+        REJECTED, lambda c: spoilt(c, classes=["names"]), None,
+        lambda c, s, o: [f"classes {c['classes']!r}, not ['names']"]),
+    "other_reasons_of_the_same_class": (
+        REJECTED, lambda c: spoilt(c, reasons=[another_reason(c["reasons"][0])]), None,
+        lambda c, s, o: [f"reasons {c['reasons']!r}, not {s['reasons']!r}"]),
+    "other_reasons_of_contains": (
+        WITH_METADATA, lambda c: spoilt(c, contains=[{"reasons": ["field DEFAULT"]}]), None,
+        lambda c, s, o: [f"reasons {c['reasons']!r}, not ['field DEFAULT'] of contains"]),
+    "another_outcome_of_a_rejected_case": (
+        REJECTED, lambda c: spoilt(c, outcome="accepted"), None,
+        lambda c, s, o: ["outcome 'rejected', not 'accepted'"]),
+    "another_outcome_of_an_accepted_case": (
+        ACCEPTED_CASE, lambda c: spoilt(c, outcome="rejected"), None,
+        lambda c, s, o: ["outcome 'accepted', not 'rejected'"]),
+    "another_outcome_of_a_parse_error": (
+        NOT_PARSED, lambda c: spoilt(c, outcome="rejected"), None,
+        lambda c, s, o: ["outcome 'parse_error', not 'rejected'"]),
+    "a_reason_not_in_the_table": (
+        REJECTED, lambda c: c, lambda c: ("rejected", None, c["header"], ["no such reason"]),
+        lambda c, s, o: ["reasons not in classes.json: ['no such reason']",
+                         f"reasons ['no such reason'], not {c['reasons']!r}"]),
+    "two_reasons_of_a_single_defect": (
+        REJECTED, lambda c: c,
+        lambda c: ("rejected", None, c["header"], sorted(c["reasons"] + [another_reason(c["reasons"][0])])),
+        lambda c, s, o: [f"reasons {o[3]!r}, not {c['reasons']!r}", "single_defect with more than one reason"]),
 }
 
 
-@pytest.mark.parametrize("name", SPOILT_HEADER)
-def test_another_header_of_a_rejected_case_is_a_mismatch(name):
-    case_id, head = SPOILT_HEADER[name]
-    c = BY_ID[case_id]
+@pytest.mark.parametrize("name", MISMATCHES)
+def test_a_spoilt_case_is_a_mismatch(name):
+    b, spoil, out_of, expected = MISMATCHES[name]
+    c = base(b)
     out = output(c)
     assert mismatches(c, out) == []
-    assert mismatches(dict(c, header=head), out) == [f"header {c['header']!r}, not {head!r}"]
+    if out_of is not None:
+        out = out_of(c)
+    s = spoil(c)
+    assert mismatches(s, out) == expected(c, s, out)
+
+
+def test_caught():
+    c, a = case(REJECTED), dict(ACCEPTED_CASE)
+    out, acc = output(c), output(a)
+    assert not caught(c, out) and not caught(a, acc)
+    assert not caught(c, ("exception", "KeyError")) and not caught(a, ("exception", "TypeError"))
+    assert caught(c, acc) and caught(a, out)
+    assert caught(c, ("parse_error", None, None, None))
+    assert caught(c, ("rejected", None, out[2], [another_reason(c["reasons"][0])]))   # the class is the same
+    assert caught(c, ("rejected", None, ["SPEC other"], out[3]))
+    assert caught(a, ("accepted", acc[1] + " ", acc[2], []))
+    assert caught(a, ("accepted", acc[1], acc[2][:1], []))
 
 
 # --- A.7: the rule for another implementation (README) ---------------------------------------
@@ -450,6 +660,7 @@ def another_implementation(c, outcome, term=None, classes=()):
 TERM = "(spec (factors) (terms (must \"a\" \"pay\" (none) (none))) (invariants))"
 ACCEPTED = {"outcome": "accepted", "term": TERM}
 SINGLE = {"outcome": "rejected", "classes": ["types"], "single_defect": True}
+SINGLE_NAMES = {"outcome": "rejected", "classes": ["names"], "single_defect": True}
 SEVERAL = {"outcome": "rejected", "classes": ["names", "types"]}
 PARSE_ERROR = {"outcome": "parse_error"}
 DISPUTED = {"disputed": "The text does not decide the question."}
@@ -458,6 +669,9 @@ DISPUTED = {"disputed": "The text does not decide the question."}
 ANOTHER = {
     "single_defect_with_another_class": (SINGLE, "rejected", None, ["names", "types"], "failed"),
     "single_defect_with_the_classes": (SINGLE, "rejected", None, ["types"], "passed"),
+    "single_defect_with_a_class_more_after_it": (SINGLE_NAMES, "rejected", None, ["names", "types"], "failed"),
+    "single_defect_with_another_class_disputed": (dict(SINGLE, **DISPUTED), "rejected", None, ["names"], "disputed"),
+    "single_defect_without_a_class": (SINGLE, "rejected", None, [], "failed"),
     "several_with_one_class_in_common": (SEVERAL, "rejected", None, ["time", "types"], "passed"),
     "several_without_a_class_in_common": (SEVERAL, "rejected", None, ["time"], "failed"),
     "several_without_a_class_in_common_disputed": (dict(SEVERAL, **DISPUTED), "rejected", None, ["time"], "disputed"),
@@ -482,6 +696,61 @@ KILLED = json.loads((CORPUS / "killed.json").read_text(encoding="utf-8"))
 KILLED_SECONDS = 30
 
 
+def place(e):
+    """The place of mutation of an entry of killed.json: (line, col, op, variant)."""
+    return (e["line"], e["col"], e["op"], e["variant"])
+
+
+def killed_format_errors(entries, places):
+    """The errors of format of the entries of killed.json, given the places of
+    mutation (a dict keyed by (line, col, op, variant), as measure.places()
+    gives them): the entries are sorted by place, no place is listed twice, and
+    every place is a place of mutation."""
+    errors = []
+    keys = [place(e) for e in entries]
+    if keys != sorted(keys):
+        errors.append("killed.json: not sorted by place")
+    if len(set(keys)) != len(keys):
+        errors.append("killed.json: a place is listed twice")
+    for k in keys:
+        if k not in places:
+            errors.append(f"killed.json: {k} is not a place of mutation: regenerate with measure.py --killed")
+    return errors
+
+
+def spoilt_killed(name, entries):
+    """A spoilt copy of the entries of killed.json, and the place that is not a place of mutation."""
+    es = [dict(e) for e in entries]
+    if name == "reversed":
+        return es[::-1], None
+    if name == "a_place_twice":
+        return es[:1] + es, None
+    if name == "variants_reversed":
+        k = next(k for k in range(len(es) - 1) if place(es[k])[:3] == place(es[k + 1])[:3])
+        es[k], es[k + 1] = es[k + 1], es[k]
+        return es, None
+    if name == "not_a_place":
+        es[-1]["variant"] += 5
+        return es, place(es[-1])
+    return es, None
+
+
+KILLED_SPOILT = {
+    "as_it_is": [],
+    "reversed": ["killed.json: not sorted by place"],
+    "a_place_twice": ["killed.json: a place is listed twice"],
+    "variants_reversed": ["killed.json: not sorted by place"],
+    "not_a_place": ["killed.json: {} is not a place of mutation: regenerate with measure.py --killed"],
+}
+
+
+@pytest.mark.parametrize("name", KILLED_SPOILT)
+def test_the_format_of_killed_json(name):
+    places = {tuple(p[:4]): p for p in measure.places()}
+    entries, wrong = spoilt_killed(name, KILLED)
+    assert killed_format_errors(entries, places) == [m.format(wrong) for m in KILLED_SPOILT[name]]
+
+
 def test_the_mutants_of_killed_json_are_caught():
     """Every place of killed.json: its first-order mutant (measure.mutant_code),
     run on the cases of its entry with the parse trees of this module, gives on
@@ -491,11 +760,11 @@ def test_the_mutants_of_killed_json_are_caught():
     moved = [(e["line"], e["text"].strip()) for e in KILLED
              if measure.killed_line(e, lines) != e["line"] or lines[e["line"] - 1] != e["text"]]
     assert moved == [], "places moved: regenerate with measure.py --killed"
-    place = lambda e: (e["line"], e["col"], e["op"], e["variant"])  # noqa: E731
     missing = [(place(e), i) for e in KILLED for i in e["ids"] if i not in BY_ID]
     assert missing == [], "places of killed.json whose cases are not in the corpus"
     assert measure.SOURCE == SOURCE, "measure.py reads another translator"
     places = {tuple(p[:4]): p for p in measure.places()}
+    assert killed_format_errors(KILLED, places) == []
     cases = [BY_ID[i] for i in sorted({i for e in KILLED for i in e["ids"]})]
     for c in cases:
         tree(c["source"])  # parsed here, so that the time below is that of the translations
@@ -516,7 +785,7 @@ def test_the_mutants_of_killed_json_are_caught():
     not_caught = []
     for e in KILLED:
         outs = run(measure.mutant_code(places[place(e)])[0], e["ids"])
-        if not any(o[0] != "exception" and mismatches(BY_ID[i], o) for i, o in outs):
+        if not any(caught(BY_ID[i], o) for i, o in outs):
             not_caught.append((place(e), e["text"].strip()))
     control = [(i, o) for i, o in run(compile(SOURCE, str(PARSER / "triel_to_core.py"), "exec"),
                                      [c["id"] for c in cases])
