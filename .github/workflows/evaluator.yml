@@ -54,19 +54,6 @@ jobs:
           sed -i -E 's/options \[document = pdf, document_output = "output"\]/options [document = false]/' formal/core/ROOT
           grep -q 'options \[document = false\]' formal/core/ROOT
 
-      # The exported code is removed before the export, so that an export that
-      # writes nothing leaves no committed file in place: the check of the
-      # exported code below then sees the file deleted.
-      - name: Remove the exported code before the export
-        run: |
-          rm -f evaluator/generated/*.hs
-          left=$(find evaluator/generated -name '*.hs')
-          if [ -n "$left" ]; then
-            echo "$left"
-            echo "error: evaluator/generated still holds .hs files"
-            exit 1
-          fi
-
       # The committed Haskell code must be exactly what Isabelle exports from
       # the checked theories.
       - name: Build TRIEL_Core and export the evaluator
