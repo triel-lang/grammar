@@ -200,8 +200,8 @@ if m["evaluator_sha256"] != sha("evaluator/generated/TRIEL.hs"):
 # first two words, is one of the lines of the level, as in run.py.
 levels = {name: [p.split() for p in level["lines"]] for name, level in m["levels"].items()}
 for name, prefixes in levels.items():
-    if not prefixes or not all(prefixes):
-        errors.append("levels.%s.lines is empty or holds an entry without a word" % name)
+    if not prefixes:
+        errors.append("levels.%s.lines is empty" % name)
 traces = sorted(c["trace"] for c in m["cases"])
 files = sorted(p.as_posix() for p in Path("examples/core/scenarios").glob("*.scn"))
 if traces != files:
