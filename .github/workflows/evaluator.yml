@@ -97,6 +97,9 @@ jobs:
             gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" -F body=@"$RUNNER_TEMP/body.txt" > /dev/null
           done
 
+      - name: An ignored file beside the exported code
+        run: echo x > evaluator/generated/triel-eval
+
       # Every file of evaluator/generated is committed: the export wrote no
       # file that is not in the commit, ignored files included (the patterns
       # triel-eval and build/ of evaluator/.gitignore also match in
