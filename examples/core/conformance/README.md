@@ -83,7 +83,7 @@ python3 examples/core/conformance/run.py [--impl "COMMAND"] [--level verdicts|mo
 python3 examples/core/conformance/run.py --impl "python3 parser/triel.py check {spec} {trace}" --level monitor
 ```
 
-CI runs the suite with the reference on both levels, checks `manifest.json` against the files (`evaluator_sha256`, the set of cases, and every sha256), and checks `run.py` itself: a command that prints the `.expected` file passes, and a command that prints nothing fails (`.github/workflows/evaluator.yml`).
+CI runs the suite with the reference on both levels, checks `manifest.json` against the files (`evaluator_sha256`, the set of cases, and every sha256; every level has lines, each line of a level has a word, and every `.expected` file has a line of every level), and checks `run.py` itself: a command that prints the `.expected` file passes on both levels, a command that prints nothing fails on both levels, and a command that prints the `.expected` file without the `MONITOR` lines passes on the level `verdicts` and fails on the level `monitor` (`.github/workflows/evaluator.yml`).
 
 ## Limits
 

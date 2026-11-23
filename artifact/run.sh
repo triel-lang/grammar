@@ -96,10 +96,13 @@ no_sorry() {
 # isabelle.yml and evaluator.yml: the PDF document needs LaTeX, which is not in
 # the image, so it is switched off in the scratch copy of ROOT only (the same
 # sed as CI); then a clean build of TRIEL_Core that also exports the evaluator
-# and keeps the heap image (-b) for the session of the paper theorems.
+# and keeps the heap image (-b) for the session of the paper theorems. The
+# exported code is removed from the scratch copy (never from the checkout)
+# before the export, so that exported_code fails if the export writes nothing.
 isabelle_build() {
   sed -i -E 's/options \[document = pdf, document_output = "output"\]/options [document = false]/' formal/core/ROOT
   grep -q 'options \[document = false\]' formal/core/ROOT || { echo "error: ROOT not as expected"; return 1; }
+  rm -f evaluator/generated/*.hs
   isabelle build -b -c -e -v -D formal/core
 }
 
@@ -181,8 +184,9 @@ conformance() {
 }
 
 # evaluator.yml: manifest.json names the committed evaluator, every scenario,
-# and the sha256 of every file it lists; every level names lines, and every
-# expected output has a line of every level. The same code as in CI.
+# and the sha256 of every file it lists; every level names lines, each with a
+# word (an entry without a word would match every line), and every expected
+# output has a line of every level. The same code as in CI.
 conformance_manifest() {
   python3 - <<'EOF'
 import hashlib, json, re, sys
@@ -196,8 +200,8 @@ if m["evaluator_sha256"] != sha("evaluator/generated/TRIEL.hs"):
 # first two words, is one of the lines of the level, as in run.py.
 levels = {name: [p.split() for p in level["lines"]] for name, level in m["levels"].items()}
 for name, prefixes in levels.items():
-    if not prefixes:
-        errors.append("levels.%s.lines is empty" % name)
+    if not prefixes or not all(prefixes):
+        errors.append("levels.%s.lines is empty or holds an entry without a word" % name)
 traces = sorted(c["trace"] for c in m["cases"])
 files = sorted(p.as_posix() for p in Path("examples/core/scenarios").glob("*.scn"))
 if traces != files:
@@ -238,6 +242,7 @@ conformance_self_check() {
       echo "run.py passed a command without output on the level $level"; return 1
     fi
   done
+  echo "self-check: the command without the MONITOR lines on the level verdicts:"
   python3 examples/core/conformance/run.py --level verdicts --impl "sh -c 'grep -v \"^MONITOR \" \"\${0%.scn}.expected\"' {trace}" > "$SCRATCH/self.txt" || return 1
   if python3 examples/core/conformance/run.py --level monitor --impl "sh -c 'grep -v \"^MONITOR \" \"\${0%.scn}.expected\"' {trace}" > "$SCRATCH/self.txt"; then
     echo "run.py passed a command without the MONITOR lines on the level monitor"; return 1

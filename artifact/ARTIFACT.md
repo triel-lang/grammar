@@ -249,7 +249,7 @@ docker run --rm -it --entrypoint bash triel-artifact
 | 11-paper-theorems | the session `TRIEL_Paper` builds: each of the 107 names is a theorem of `TRIEL_Core` that depends on no oracle, and each of the 21 definitions and 5 functions exists | — |
 | 12-conformance | the conformance suite (`examples/core/conformance/run.py`) with the reference implementation, on the levels `verdicts` and `monitor` | evaluator.yml |
 | 13-conformance-manifest | `examples/core/conformance/manifest.json` names the committed evaluator and every scenario, and the sha256 of every file it lists matches | evaluator.yml |
-| 14-conformance-self-check | `run.py` passes a command that prints the expected reports, on both levels, and fails a command that prints nothing | evaluator.yml |
+| 14-conformance-self-check | `run.py` passes a command that prints the expected reports, on both levels, fails a command that prints nothing, on both levels, and passes a command that prints the expected reports without the `MONITOR` lines on the level `verdicts` and fails it on the level `monitor` | evaluator.yml |
 | 15-no-oracles | the imports of `formal/checks/No_Oracles.thy` are the theories of `formal/core/ROOT`; the session `TRIEL_Core_Checks` builds on the heap of `TRIEL_Core`: no named theorem of these theories depends on an oracle, except the equations of the Quickcheck generators (`full_exhaustive`, `narrowing`) which Isabelle/HOL generates for a datatype and asserts with the oracle `Pure.skip_proof` instead of proving them, and no other named theorem depends on them; the theories in `no_oracles.txt` are those of `ROOT` | isabelle.yml |
 
 As in CI, the PDF document of `TRIEL_Core` is switched off (it needs LaTeX):

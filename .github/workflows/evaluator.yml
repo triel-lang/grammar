@@ -54,6 +54,19 @@ jobs:
           sed -i -E 's/options \[document = pdf, document_output = "output"\]/options [document = false]/' formal/core/ROOT
           grep -q 'options \[document = false\]' formal/core/ROOT
 
+      # The exported code is removed before the export, so that an export that
+      # writes nothing leaves no committed file in place: the check of the
+      # exported code below then sees the file deleted.
+      - name: Remove the exported code before the export
+        run: |
+          rm -f evaluator/generated/*.hs
+          left=$(find evaluator/generated -name '*.hs')
+          if [ -n "$left" ]; then
+            echo "$left"
+            echo "error: evaluator/generated still holds .hs files"
+            exit 1
+          fi
+
       # The committed Haskell code must be exactly what Isabelle exports from
       # the checked theories.
       - name: Build TRIEL_Core and export the evaluator
@@ -64,7 +77,8 @@ jobs:
       # stage branch, or the export wrote a file that is not committed, the
       # exported file is posted on the commit, gzip-compressed and
       # base64-encoded, in parts of at most 60 000 characters, so that the
-      # session can commit it.
+      # session can commit it. An export that wrote no TRIEL.hs posts nothing;
+      # the check of the exported code below fails on it.
       - name: Post the exported code as commit comments when it differs
         if: startsWith(github.ref_name, 'stage')
         shell: bash
@@ -72,6 +86,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if git diff --quiet -- evaluator/generated && [ -z "$(git status --porcelain --untracked-files=all -- evaluator/generated)" ]; then exit 0; fi
+          if [ ! -f evaluator/generated/TRIEL.hs ]; then echo "the export wrote no TRIEL.hs: nothing to post"; exit 0; fi
           gzip -9 -c evaluator/generated/TRIEL.hs | base64 -w0 > "$RUNNER_TEMP/TRIEL.hs.gz.b64"
           split -b 60000 -d "$RUNNER_TEMP/TRIEL.hs.gz.b64" "$RUNNER_TEMP/part."
           n=$(ls "$RUNNER_TEMP"/part.* | wc -l)
@@ -83,11 +98,13 @@ jobs:
           done
 
       # Every file of evaluator/generated is committed: the export wrote no
-      # file that is not in the commit.
+      # file that is not in the commit, ignored files included (the patterns
+      # triel-eval and build/ of evaluator/.gitignore also match in
+      # evaluator/generated).
       - name: The committed code is the exported code
         run: |
           git diff --exit-code -- evaluator/generated
-          status=$(git status --porcelain --untracked-files=all -- evaluator/generated)
+          status=$(git status --porcelain --untracked-files=all --ignored -- evaluator/generated)
           if [ -n "$status" ]; then
             echo "$status"
             echo "error: evaluator/generated holds files that are not committed"
@@ -212,7 +229,8 @@ jobs:
           python3 examples/core/conformance/run.py --level monitor
 
       # manifest.json names the committed evaluator, every scenario, and the
-      # sha256 of every file it lists; every level names lines, and every
+      # sha256 of every file it lists; every level names lines, each with a
+      # word (an entry without a word would match every line), and every
       # expected output has a line of every level.
       - name: The manifest of the conformance suite matches the files
         shell: python3 {0}
@@ -228,8 +246,8 @@ jobs:
           # first two words, is one of the lines of the level, as in run.py.
           levels = {name: [p.split() for p in level["lines"]] for name, level in m["levels"].items()}
           for name, prefixes in levels.items():
-              if not prefixes:
-                  errors.append("levels.%s.lines is empty" % name)
+              if not prefixes or not all(prefixes):
+                  errors.append("levels.%s.lines is empty or holds an entry without a word" % name)
           traces = sorted(c["trace"] for c in m["cases"])
           files = sorted(p.as_posix() for p in Path("examples/core/scenarios").glob("*.scn"))
           if traces != files:
@@ -268,6 +286,7 @@ jobs:
               echo "run.py passed a command without output on the level $level"; exit 1
             fi
           done
+          echo "self-check: the command without the MONITOR lines on the level verdicts:"
           python3 examples/core/conformance/run.py --level verdicts --impl "sh -c 'grep -v \"^MONITOR \" \"\${0%.scn}.expected\"' {trace}" > /tmp/self.txt
           if python3 examples/core/conformance/run.py --level monitor --impl "sh -c 'grep -v \"^MONITOR \" \"\${0%.scn}.expected\"' {trace}" > /tmp/self.txt; then
             echo "run.py passed a command without the MONITOR lines on the level monitor"; exit 1
