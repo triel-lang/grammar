@@ -274,6 +274,18 @@ jobs:
           fi
           tail -n 1 /tmp/self.txt
 
+      - name: test_ci61 G1
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh g1
+
+      - name: test_ci61 G2
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh g2
+
+      - name: test_ci61 G3
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh g3
+
       # parser/triel_host.py, the trace that a host builds from its own records,
       # and triel_to_core.py --actions, against the reports of triel check.
       - name: Tests of the trace of a host and of --actions
