@@ -20,4 +20,3 @@ session TRIEL_Core = HOL +
   document_files
     "root.bib"
     "root.tex"
-  export_files (in "../../evaluator/generated") [3] "*:code/**"

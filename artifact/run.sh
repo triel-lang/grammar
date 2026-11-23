@@ -102,7 +102,6 @@ no_sorry() {
 isabelle_build() {
   sed -i -E 's/options \[document = pdf, document_output = "output"\]/options [document = false]/' formal/core/ROOT
   grep -q 'options \[document = false\]' formal/core/ROOT || { echo "error: ROOT not as expected"; return 1; }
-  rm -f evaluator/generated/*.hs
   isabelle build -b -c -e -v -D formal/core
 }
 
