@@ -139,7 +139,10 @@ variant) is not a place of mutation: regenerate with measure.py --killed"), or
 if no case of a place tells its mutant apart: an output that is an exception
 does not. It also runs the translator itself the same way on all these cases,
 which must agree with the corpus, and fails if the mutants take more than 30
-seconds. After a change of the translator that moves lines,
+seconds. Four places, the strings `"spec"` and `"factors"` of the term changed
+or replaced by `None`, are told apart only by the term: on every case of their
+entries the mutant gives the outcome, the header and the reasons of the
+translator. After a change of the translator that moves lines,
 
 ```bash
 python3 parser/corpus/measure.py --killed
