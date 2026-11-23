@@ -220,8 +220,9 @@ copy of a case (the term and the header of an accepted case, the header, the
 classes and the reasons of a rejected case, the checks of `contains`); and that
 an output of a mutant that is an exception does not catch it (`caught`). Then
 the rule for another implementation, the format of `killed.json` and of
-`survivors.json`, and the places of both. A test that takes a case of the corpus by its `id`
-looks it up when it runs: without that case only the tests that take it fail.
+`survivors.json`, and the places of both. A test that takes a case of the
+corpus by its `id` looks it up when it runs: without that case only the tests
+that take it fail.
 
 The measurements, from the root of the repository (not in CI):
 
