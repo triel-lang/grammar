@@ -57,8 +57,9 @@ built in the test.
 | `classes.json` | every reason the translator can give: its class, the section of the text the class rests on, and for a reason built by the code, where it comes from |
 | `unreachable.json` | the calls of `reject` that no input reaches, or that are redundant, with the argument for each |
 | `killed.json` | places of first-order mutants of the translator that the corpus catches by a different output, each with the cases that catch it |
+| `survivors.json` | the places of first-order mutants of the translator that the corpus does not catch, each with why: no input tells the mutant apart, or what was tried |
 | `rejects.py` | the calls of `reject` and the reasons, read from the source of the translator |
-| `measure.py` | the measurements; `--killed` writes `killed.json` |
+| `measure.py` | the measurements; `--killed` writes `killed.json` and `survivors.json` |
 | `../test_corpus.py` | the check of the corpus against the translator |
 
 ### A case
@@ -150,9 +151,47 @@ python3 parser/corpus/measure.py --killed
 
 finds every line again by its text and occurrence, checks that the place is
 still a place of mutation and that its mutant is still caught, finds the cases
-again and writes the file (into the repository); if a place is gone or no
-longer caught, it writes nothing and says which. The file does not list every
-mutant that the corpus catches, and the test does not check that it does.
+again and writes the file (into the repository), and does the same for
+`survivors.json`, without the cases; if a place is gone or no longer caught,
+it writes nothing and says which. The file does not list every mutant that the
+corpus catches, and the test does not check that it does.
+
+### survivors.json
+
+The places of first-order mutants of the translator (the places of section 4
+of `measure.py`) that the corpus does not catch: on every case the mutant gives
+the output of the translator. A list of objects, one per line, sorted by place,
+with the fields of `killed.json` but `ids` (`text`, `occurrence`, `line`,
+`col`, `op`, `variant`), and two more:
+
+- `kind`: `equivalent`, no input of the grammar gives the mutant an output
+  other than the output of the translator; or `open`, no such input has been
+  found and the equivalence is not shown;
+- `argument`: for `equivalent`, why, by the kind of the mutation, with the
+  rules of `parser/triel.lark` and the lines of `parser/triel_to_core.py` it
+  rests on: for an index `[0]` changed to `[-1]`, the rule that makes the node
+  and why it has exactly one such child there; for a constant changed, where
+  its value goes and why it never reaches the output; for a statement deleted,
+  why its value is never read or the line never runs; for `and` and `or`
+  swapped, why the operands never make the two differ. For `open`, what was
+  tried.
+
+An exception is not an output: a mutant that raises an exception on some input
+and otherwise gives the output of the translator is `equivalent`, and the
+argument says on which inputs it raises. The dictionary `EQUIVALENT` of
+`measure.py`, with which section 4 names the random mutants that no input
+tells apart, is read from the places of kind `equivalent`.
+
+`parser/test_corpus.py` fails if the file is empty, if it is not in the format
+of `killed.json` ("survivors.json: not sorted by place", "survivors.json: a
+place is listed twice", "survivors.json: (line, col, op, variant) is not a
+place of mutation: regenerate with measure.py --killed"), if an entry has
+other fields or no `kind` and `argument`, if a place is also in `killed.json`,
+if the line of a place has changed ("places moved: regenerate with measure.py
+--killed"), or if `EQUIVALENT` is not its places of kind `equivalent`. That
+the mutants of these places are still not caught, and that no other place is
+not caught, the test does not check: a run of every mutant on the corpus
+does, as `measure.py` computes the verdict of a place (`verdict`).
 
 ## Running
 
@@ -180,8 +219,8 @@ that the comparison of `test_case` finds each field it compares changed in a
 copy of a case (the term and the header of an accepted case, the header, the
 classes and the reasons of a rejected case, the checks of `contains`); and that
 an output of a mutant that is an exception does not catch it (`caught`). Then
-the rule for another implementation, the format of `killed.json`, and the
-places of `killed.json`. A test that takes a case of the corpus by its `id`
+the rule for another implementation, the format of `killed.json` and of
+`survivors.json`, and the places of both. A test that takes a case of the corpus by its `id`
 looks it up when it runs: without that case only the tests that take it fail.
 
 The measurements, from the root of the repository (not in CI):

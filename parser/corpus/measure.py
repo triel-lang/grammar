@@ -21,12 +21,14 @@ sections 2 and 4, which are not times.
 --section N (1 to 4) computes one section alone; section 2 then also computes
 the coverage it needs. Without arguments every section is computed.
 
---killed computes no section: it writes parser/corpus/killed.json again, into
-the repository. For every entry of the file as it is, it finds the line of the
-translator by its text and its number among the lines with that text, checks
-that the place is one of places(), finds again the ids of the cases on which
-the mutant differs from the translator, and stops without writing if a place
-is gone or its mutant is no longer caught (divergence).
+--killed computes no section: it writes parser/corpus/killed.json and
+parser/corpus/survivors.json again, into the repository. For every entry of
+each file as it is, it finds the line of the translator by its text and its
+number among the lines with that text and checks that the place is one of
+places(); for killed.json it also finds again the ids of the cases on which the
+mutant differs from the translator. It stops without writing if a place is
+gone or the mutant of a place of killed.json is no longer caught (divergence).
+That the mutants of survivors.json are still not caught it does not check.
 
 TRIEL_TRANSLATOR names the translator to measure (default parser/triel_to_core.py
 of this repository). Its grammar is the triel.lark next to it, and its tests are
@@ -37,7 +39,7 @@ built); without it, the tests that need it skip themselves.
 
 Every temporary file, coverage data included, is written to a temporary
 directory, which is removed at the end; nothing is written to the repository,
-except killed.json by --killed.
+except killed.json and survivors.json by --killed.
 """
 import argparse
 import ast
@@ -118,27 +120,12 @@ UNREACHABLE_LINES = {
         "called, so walk finds a reason only at the top of an element.",
 }
 
-# Random mutants that no input tells apart from the translator:
-# (line, column, operator, variant) of the place -> the argument.
-EQUIVALENT = {
-    (282, 4, "statement", 0): "ident is called only on nodes that the grammar makes identifier nodes, so the "
-                              "assertion never fails.",
-    (343, 48, "constant", 0): "VERSION is followed only by version_literal, which no branch of declaration reads, "
-                              "and every later subtree comes after a keyword of the list, which sets key again.",
-    (387, 24, "constant", 1): "Every alternative of type_base but Optional (handled above) has exactly one "
-                              "subtree, so [-1] is [0].",
-    (498, 38, "constant", 1): "A stale_action has exactly one token, its keyword (the subject of ESCALATE_TO is a "
-                              "subtree), so [-1] is [0].",
-    (611, 8, "statement", 0): "A translation function returns None only after a reason was added, so the "
-                              "specification is rejected and the term built with None is never printed.",
-    (675, 27, "constant", 1): "u is a unary_expr, which has exactly one subtree, so [-1] is [0].",
-    (739, 31, "constant", 2): "The line is unreachable (unreachable.json: value, call 3).",
-    (846, 24, "constant", 1): "c is a matched_term or an unmatched_term, each with exactly one subtree, so [-1] "
-                              "is [0].",
-    (887, 15, "and/or", 0): "a and c are None only after a reason was added, so with one of them None the "
-                            "specification is rejected anyway and no term is printed.",
-    (1089, 28, "constant", 1): "The loop goes on only while x has exactly one subtree, so [-1] is [0].",
-}
+# Random mutants that no input tells apart from the translator by an output:
+# the places of survivors.json of kind "equivalent", (line, column, operator,
+# variant) of the place -> the argument (README.md, survivors.json).
+EQUIVALENT = {(e["line"], e["col"], e["op"], e["variant"]): e["argument"]
+              for e in json.loads((HERE / "survivors.json").read_text(encoding="utf-8"))
+              if e["kind"] == "equivalent"}
 
 OUT = []
 
@@ -949,46 +936,54 @@ def section_random(tmp):
 # --- killed.json: the places whose mutants the corpus catches ------------------------------
 
 KILLED = HERE / "killed.json"
+SURVIVORS = HERE / "survivors.json"
 
 
 def killed_line(entry, lines):
-    """The number of the line of an entry of killed.json, found by its text and
-    by its number among the lines with that text; None if there is no such line."""
+    """The number of the line of an entry of killed.json or survivors.json, found
+    by its text and by its number among the lines with that text; None if there
+    is no such line."""
     same = [n for n, x in enumerate(lines, 1) if x == entry["text"]]
     k = entry["occurrence"]
     return same[k - 1] if 1 <= k <= len(same) else None
 
 
-def write_killed(entries):
-    """killed.json: one entry per line, sorted by place."""
+def write_entries(path, entries):
+    """killed.json or survivors.json: one entry per line, sorted by place."""
     entries = sorted(entries, key=lambda e: (e["line"], e["col"], e["op"], e["variant"]))
-    KILLED.write_text("[\n" + ",\n".join(json.dumps(e, ensure_ascii=False) for e in entries) + "\n]\n",
-                      encoding="utf-8")
+    path.write_text("[\n" + ",\n".join(json.dumps(e, ensure_ascii=False) for e in entries) + "\n]\n",
+                    encoding="utf-8")
 
 
 def killed():
-    """--killed: killed.json again, from killed.json as it is (see the docstring)."""
+    """--killed: killed.json and survivors.json again, from the files as they are
+    (see the docstring)."""
     base_outputs()
     lines = SOURCE.splitlines()
     by_place = {tuple(p[:4]): p for p in places()}
-    out, errors = [], []
-    for e in json.loads(KILLED.read_text(encoding="utf-8")):
-        line = killed_line(e, lines)
-        key = (line, e["col"], e["op"], e["variant"])
-        if line is None:
-            errors.append(f"{e['text'].strip()!r}, occurrence {e['occurrence']}: no such line")
-        elif key not in by_place:
-            errors.append(f"{key}: not a place of places()")
-        else:
-            v, ids = verdict(mutant_code(by_place[key])[0])
-            if v != "caught (divergence)":
-                errors.append(f"{key}: {v}")
-            out.append({"text": e["text"], "occurrence": e["occurrence"], "line": line, "col": e["col"],
-                        "op": e["op"], "variant": e["variant"], "ids": ids})
+    out, survivors, errors = [], [], []
+    for name, path in (("killed.json", KILLED), ("survivors.json", SURVIVORS)):
+        for e in json.loads(path.read_text(encoding="utf-8")):
+            line = killed_line(e, lines)
+            key = (line, e["col"], e["op"], e["variant"])
+            if line is None:
+                errors.append(f"{name}: {e['text'].strip()!r}, occurrence {e['occurrence']}: no such line")
+            elif key not in by_place:
+                errors.append(f"{name}: {key}: not a place of places()")
+            elif path == SURVIVORS:
+                survivors.append(dict(e, line=line))
+            else:
+                v, ids = verdict(mutant_code(by_place[key])[0])
+                if v != "caught (divergence)":
+                    errors.append(f"{name}: {key}: {v}")
+                out.append({"text": e["text"], "occurrence": e["occurrence"], "line": line, "col": e["col"],
+                            "op": e["op"], "variant": e["variant"], "ids": ids})
     if errors:
-        raise SystemExit("killed.json is not written:\n" + "\n".join(errors))
-    write_killed(out)
-    print(f"killed.json: {len(out)} places, {len({i for e in out for i in e['ids']})} cases")
+        raise SystemExit("killed.json and survivors.json are not written:\n" + "\n".join(errors))
+    write_entries(KILLED, out)
+    write_entries(SURVIVORS, survivors)
+    print(f"killed.json: {len(out)} places, {len({i for e in out for i in e['ids']})} cases; "
+          f"survivors.json: {len(survivors)} places")
     return 0
 
 
@@ -999,7 +994,8 @@ def main():
         return corpus_runner()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--section", type=int, choices=[1, 2, 3, 4])
-    ap.add_argument("--killed", action="store_true", help="write parser/corpus/killed.json again (into the repository)")
+    ap.add_argument("--killed", action="store_true",
+                    help="write parser/corpus/killed.json and survivors.json again (into the repository)")
     args = ap.parse_args()
     if args.killed:
         return killed()

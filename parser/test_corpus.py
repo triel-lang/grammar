@@ -12,8 +12,9 @@ themselves: the format and the comparison on spoilt copies of cases, the
 reading of a spoilt corpus (also of the file itself, as the collection of this
 module reads it), and the rule of the README for another implementation on
 outputs built here. The last tests check the format of corpus/killed.json and
-run the first-order mutant of every place of killed.json on its cases: they
-fail if no case tells it apart from the translator.
+of corpus/survivors.json, and run the first-order mutant of every place of
+killed.json on its cases: they fail if no case tells it apart from the
+translator.
 
 A test that takes a case of the corpus by its id looks it up when it runs
 (case), so that without that case only the tests that take it fail.
@@ -751,15 +752,83 @@ def test_the_format_of_killed_json(name):
     assert killed_format_errors(entries, places) == [m.format(wrong) for m in KILLED_SPOILT[name]]
 
 
+# --- A.9: the places of mutation that the corpus does not catch (survivors.json) --------------
+
+SURVIVORS = json.loads((CORPUS / "survivors.json").read_text(encoding="utf-8"))
+SURVIVOR_FIELDS = {"text", "occurrence", "line", "col", "op", "variant", "kind", "argument"}
+
+
+def moved_places(entries):
+    """The entries of killed.json or survivors.json whose line is no longer at its number."""
+    lines = SOURCE.splitlines()
+    return [(e["line"], e["text"].strip()) for e in entries
+            if measure.killed_line(e, lines) != e["line"] or lines[e["line"] - 1] != e["text"]]
+
+
+def survivors_errors(entries, killed, places):
+    """The errors of the entries of survivors.json: the format of killed.json
+    (killed_format_errors), the fields, kind equivalent or open with an argument,
+    and the places that are also in killed (the entries of killed.json)."""
+    errors = [m.replace("killed.json", "survivors.json", 1) for m in killed_format_errors(entries, places)]
+    for e in entries:
+        if set(e) != SURVIVOR_FIELDS or e["kind"] not in ("equivalent", "open") \
+                or not isinstance(e["argument"], str) or not e["argument"].strip():
+            errors.append(f"survivors.json: {place(e)} is not text, occurrence, place, kind (equivalent or open) "
+                          f"and argument")
+    both = sorted(set(map(place, entries)) & set(map(place, killed)))
+    if both:
+        errors.append(f"survivors.json: {both} also in killed.json")
+    return errors
+
+
+def spoilt_survivors(name, entries):
+    """A spoilt copy of the entries of survivors.json."""
+    es = [dict(e) for e in entries]
+    if name == "reversed":
+        return es[::-1]
+    if name == "a_place_of_killed_json":
+        k = dict(KILLED[0])
+        return sorted(es + [dict(text=k["text"], occurrence=k["occurrence"], line=k["line"], col=k["col"], op=k["op"],
+                                 variant=k["variant"], kind="open", argument="x")], key=place)
+    if name == "another_kind":
+        es[0]["kind"] = "caught"
+    if name == "no_argument":
+        es[0]["argument"] = " "
+    return es
+
+
+SURVIVORS_SPOILT = {
+    "as_it_is": lambda es: [],
+    "reversed": lambda es: ["survivors.json: not sorted by place"],
+    "a_place_of_killed_json": lambda es: [f"survivors.json: {[place(KILLED[0])]} also in killed.json"],
+    "another_kind": lambda es: [f"survivors.json: {place(es[0])} is not text, occurrence, place, kind (equivalent "
+                                f"or open) and argument"],
+    "no_argument": lambda es: [f"survivors.json: {place(es[0])} is not text, occurrence, place, kind (equivalent "
+                               f"or open) and argument"],
+}
+
+
+@pytest.mark.parametrize("name", SURVIVORS_SPOILT)
+def test_the_format_of_survivors_json(name):
+    places = {tuple(p[:4]): p for p in measure.places()}
+    entries = spoilt_survivors(name, SURVIVORS)
+    assert survivors_errors(entries, KILLED, places) == SURVIVORS_SPOILT[name](entries)
+
+
+def test_the_places_of_survivors_json():
+    """survivors.json is not empty, its lines are where it says, and the
+    dictionary EQUIVALENT of measure.py is its places of kind equivalent."""
+    assert SURVIVORS, "survivors.json is empty"
+    assert moved_places(SURVIVORS) == [], "places moved: regenerate with measure.py --killed"
+    assert measure.EQUIVALENT == {place(e): e["argument"] for e in SURVIVORS if e["kind"] == "equivalent"}
+
+
 def test_the_mutants_of_killed_json_are_caught():
     """Every place of killed.json: its first-order mutant (measure.mutant_code),
     run on the cases of its entry with the parse trees of this module, gives on
     one of them an output other than an exception that differs from the case."""
     assert KILLED, "killed.json is empty"
-    lines = SOURCE.splitlines()
-    moved = [(e["line"], e["text"].strip()) for e in KILLED
-             if measure.killed_line(e, lines) != e["line"] or lines[e["line"] - 1] != e["text"]]
-    assert moved == [], "places moved: regenerate with measure.py --killed"
+    assert moved_places(KILLED) == [], "places moved: regenerate with measure.py --killed"
     missing = [(place(e), i) for e in KILLED for i in e["ids"] if i not in BY_ID]
     assert missing == [], "places of killed.json whose cases are not in the corpus"
     assert measure.SOURCE == SOURCE, "measure.py reads another translator"
