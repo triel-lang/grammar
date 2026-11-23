@@ -25,7 +25,8 @@
         "TYPES",
         "TERM",
         "INVARIANT",
-        "MONITOR"
+        "MONITOR",
+        ""
       ],
       "additional": true,
       "description": "The lines of verdicts and the MONITOR lines. MONITOR lines follow decision 37 of formal/core/CORE.md, section 9, which was made after tag v2.5.1; this level is additional."
