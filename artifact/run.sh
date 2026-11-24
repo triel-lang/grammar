@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # Reproduce every check of the CI workflows isabelle.yml, evaluator.yml and
-# parse-examples.yml with one command, except the check of the corpus of the
-# translator (parser/test_corpus.py), the test of the documentation for
+# parse-examples.yml with one command, except: in isabelle.yml, the jobs
+# build-log (the build with the PDF document), afp, afp-2026 and afp-2026-lint
+# (the build and the lint of the copy for the Archive of Formal Proofs that
+# tools/make_afp_copy.sh writes); in evaluator.yml, the check of the corpus of
+# the translator (parser/test_corpus.py), the test of the documentation for
 # AI agents (parser/test_skill.py), the tests of the trace of a host
 # (parser/test_host.py) and of the adapter for Claude Code
-# (hosts/claude-code/test_gate.py), then build the session of the theorems
-# cited in the paper (and further ones) and print a summary. All numbers in the summary are
-# computed by this run.
+# (hosts/claude-code/test_gate.py), the tests of the checks of CI
+# (tools/test_ci61.sh) and the check of the workflow files
+# (tools/check_workflows.py). Then build the session of the theorems cited in
+# the paper (and further ones) and print a summary. All numbers in the summary
+# are computed by this run.
 #
 # Usage:
 #   artifact/run.sh            (in the artifact image: docker run --rm triel-artifact)
@@ -96,13 +101,25 @@ no_sorry() {
 # isabelle.yml and evaluator.yml: the PDF document needs LaTeX, which is not in
 # the image, so it is switched off in the scratch copy of ROOT only (the same
 # sed as CI); then a clean build of TRIEL_Core that also exports the evaluator
-# and keeps the heap image (-b) for the session of the paper theorems. The
-# exported code is removed from the scratch copy (never from the checkout)
-# before the export, so that exported_code fails if the export writes nothing.
+# and keeps the heap image (-b) for the session of the paper theorems. Every
+# .hs file under evaluator/generated, also in a subdirectory, is removed from
+# the scratch copy (never from the checkout) before the export, so that
+# exported_code fails if the export writes nothing or no longer writes a file
+# of the checkout. A directory or a link named *.hs is not removed: the
+# function prints it with "error: evaluator/generated still holds .hs files"
+# and fails before isabelle runs, as it fails when find fails or when
+# evaluator/generated is missing.
 isabelle_build() {
+  local left
   sed -i -E 's/options \[document = pdf, document_output = "output"\]/options [document = false]/' formal/core/ROOT
   grep -q 'options \[document = false\]' formal/core/ROOT || { echo "error: ROOT not as expected"; return 1; }
-  rm -f evaluator/generated/*.hs
+  find evaluator/generated -type f -name '*.hs' -delete || return 1
+  left=$(find evaluator/generated -name '*.hs') || return 1
+  if [ -n "$left" ]; then
+    echo "$left"
+    echo "error: evaluator/generated still holds .hs files"
+    return 1
+  fi
   isabelle build -b -c -e -v -D formal/core
 }
 
@@ -244,6 +261,7 @@ conformance_self_check() {
   done
   echo "self-check: the command without the MONITOR lines on the level verdicts:"
   python3 examples/core/conformance/run.py --level verdicts --impl "sh -c 'grep -v \"^MONITOR \" \"\${0%.scn}.expected\"' {trace}" > "$SCRATCH/self.txt" || return 1
+  echo "self-check: the same command on the level monitor, which must fail:"
   if python3 examples/core/conformance/run.py --level monitor --impl "sh -c 'grep -v \"^MONITOR \" \"\${0%.scn}.expected\"' {trace}" > "$SCRATCH/self.txt"; then
     echo "run.py passed a command without the MONITOR lines on the level monitor"; return 1
   fi
