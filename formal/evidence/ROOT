@@ -1,0 +1,8 @@
+(* The evidence of the value of a condition. Written by the maintainers; the stage may not
+   change this file (its SHA-256 is checked). *)
+
+session TRIEL_Evidence = TRIEL_Core +
+  options [document = false]
+  theories
+    TRIEL_Evidence_Def
+    TRIEL_Evidence

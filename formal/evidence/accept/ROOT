@@ -1,0 +1,9 @@
+(* The acceptance of the evidence of the value of a condition. Written by the maintainers;
+   the stage may not change this file or Accept_Evidence.thy (their SHA-256 are checked). *)
+
+session TRIEL_Evidence_Accept = TRIEL_Evidence +
+  options [document = false]
+  sessions
+    TRIEL_Core
+  theories
+    Accept_Evidence

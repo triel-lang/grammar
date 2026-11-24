@@ -24,11 +24,13 @@ Full text of the agreement: https://www.openwebfoundation.org/the-agreements/the
 
 **Earlier versions.** The OWFa 1.0 statements made on July 17, 2026 for the TRIEL Language Specification, version 2.4 (Core Language Edition), and on October 16, 2026 for version 2.5 (Core Language Edition), which consists of the same three files in the state of tag `v2.5` (commit `57c5410`), remain in effect for those versions.
 
-## 2. Code: Apache License 2.0, or BSD-3-Clause for `formal/core/` and `formal/mfotl/`
+## 2. Code: Apache License 2.0, or BSD-3-Clause for `formal/core/`, `formal/mfotl/` and `formal/evidence/`
 
 The code in `formal/core/` is available, at your option, under the Apache License, Version 2.0, or under the BSD 3-Clause License (SPDX: `Apache-2.0 OR BSD-3-Clause`). It comprises the Isabelle theories, `ROOT`, `document/` and the build log. `formal/core/CORE.md` is not code; it is part of the Specification (section 1).
 
 The code in `formal/mfotl/` is available on the same terms. It comprises the Isabelle theories and the `ROOT` files in `formal/mfotl/` and its subfolders.
+
+The code in `formal/evidence/` is available on the same terms. It comprises the Isabelle theories and the `ROOT` files in `formal/evidence/` and its subfolders.
 
 All other code is licensed under the Apache License, Version 2.0:
 

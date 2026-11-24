@@ -1,0 +1,235 @@
+name: Evidence of the value of a condition
+
+# The workflow runs when a push changes the core, the evidence or this file: on main and on
+# the branches stage*, and on a pull request into main. It builds the sessions of formal/evidence on the core: first the
+# lexical check TRIEL_Evidence_Lex, then, if it passes, TRIEL_Evidence and its acceptance
+# TRIEL_Evidence_Accept.
+on:
+  push:
+    branches: [main, 'stage*']
+    paths: ['formal/core/**', 'formal/checks/**', 'formal/evidence/**', '.github/workflows/evidence.yml']
+  pull_request:
+    branches: [main]
+    paths: ['formal/core/**', 'formal/checks/**', 'formal/evidence/**', '.github/workflows/evidence.yml']
+
+# The result of every push is posted as a comment on the commit, so that it can be read
+# without the logs of the run.
+permissions:
+  contents: write
+
+env:
+  ISABELLE_VERSION: Isabelle2025-2
+  # The files of the maintainers: the definitions, the sessions and their acceptance. A change
+  # of one of them is a change of this workflow too.
+  EVIDENCE_DEF_SHA256: 441c880ccc80187229c5b1f0c3ba86db4fd6a630359a9a98a5888a467513e0f3
+  EVIDENCE_ROOT_SHA256: 0e984ed9483203d47a3caa8a4accf25de75516a4021f2515fe278b1530f90ab5
+  ACCEPT_ROOT_SHA256: 724e090cfd1c1eb682ff38f74fc92835e05f408d33e4351965dc2d6484deb7ab
+  ACCEPT_THY_SHA256: dd2498ca5bca7093c30cf1c5980012cbeee3ce119958ca1cce2177bad9e21bb4
+  LEX_ROOT_SHA256: c4f608ff0492f2a96967f3726d5daa0b72fda66c25201afe2838cadd97c1a7c0
+  LEX_THY_SHA256: a325fb14d3e439b8d6c48b416fe4b3eb01f0cef60d66b0236b26c492c66decb0
+
+jobs:
+  evidence:
+    runs-on: ubuntu-24.04
+    steps:
+      # The token of the job is passed only to the step that posts the comment; the steps
+      # that build the theories of the branch do not get it.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # (1) A branch that changes the evidence or this workflow does not change the core or its
+      # checks, so that "the core" in the acceptance is the core of main. Always:
+      # formal/evidence holds exactly its eight files, and the six files of the maintainers are
+      # unchanged.
+      - name: The files of formal/evidence are those expected
+        id: files
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The commit of main the branch starts from (on main itself: the commit pushed).
+          START=$(git merge-base HEAD refs/remotes/origin/main)
+          echo "start: $START"
+          changed=$(git diff --name-only "$START" HEAD -- formal/evidence .github/workflows/evidence.yml)
+          if [ -n "$changed" ]; then
+            echo "the branch changes the evidence or this workflow"
+            git diff --stat "$START" HEAD -- formal/core formal/checks
+            git diff --quiet "$START" HEAD -- formal/core formal/checks \
+              || { echo "::error::the branch changes the evidence and also formal/core or formal/checks"; exit 1; }
+          fi
+          files=$(git ls-files formal/evidence | LC_ALL=C sort | tr '\n' ' ')
+          expected="formal/evidence/README.md formal/evidence/ROOT formal/evidence/TRIEL_Evidence.thy formal/evidence/TRIEL_Evidence_Def.thy formal/evidence/accept/Accept_Evidence.thy formal/evidence/accept/ROOT formal/evidence/lex/Lex_Evidence.thy formal/evidence/lex/ROOT "
+          test "$files" = "$expected" || { echo "::error::formal/evidence holds: $files"; exit 1; }
+          echo "$EVIDENCE_DEF_SHA256  formal/evidence/TRIEL_Evidence_Def.thy" | sha256sum -c -
+          echo "$EVIDENCE_ROOT_SHA256  formal/evidence/ROOT" | sha256sum -c -
+          echo "$ACCEPT_ROOT_SHA256  formal/evidence/accept/ROOT" | sha256sum -c -
+          echo "$ACCEPT_THY_SHA256  formal/evidence/accept/Accept_Evidence.thy" | sha256sum -c -
+          echo "$LEX_ROOT_SHA256  formal/evidence/lex/ROOT" | sha256sum -c -
+          echo "$LEX_THY_SHA256  formal/evidence/lex/Lex_Evidence.thy" | sha256sum -c -
+
+      # (2) In the two theories of the evidence: none of the listed commands and words, matched
+      # whole, anywhere, also in comments and text; nor, anywhere and inside a word, ML_,
+      # an antiquotation @{, a control symbol other than sub and sup, the symbol proof that
+      # stands for sorry, sorry, tactic, quick_and_dirty or skip_proofs; nor the word ML after
+      # a digit or a sign; no ROOT switches proof checking off. Every file is read as text
+      # (grep -a). grep exits 1 when nothing is found; any other code than 0 or 1 is an error
+      # of the step, not a pass. The definitions are also fixed by their SHA-256 (step 1), and
+      # TRIEL_Evidence_Lex reads TRIEL_Evidence.thy with the lexer and a list of allowed
+      # commands.
+      - name: Check the theories of the evidence for sorry, axioms, ML and syntax
+        id: words
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          T="formal/evidence/TRIEL_Evidence_Def.thy formal/evidence/TRIEL_Evidence.thy"
+          R="formal/evidence/ROOT formal/evidence/accept/ROOT formal/evidence/lex/ROOT"
+          for f in $T $R; do test -f "$f" || { echo "::error::$f is missing"; exit 1; }; done
+          bad=0
+          refuse() {
+            local rc=0
+            grep -anwE "$1" $2 || rc=$?
+            case $rc in
+              1) ;;
+              0) echo "::error::$3"; bad=1 ;;
+              *) echo "::error::grep failed (code $rc)"; bad=1 ;;
+            esac
+          }
+          refuse 'sorry|oops|axiomatization|bnf_axiomatization|axioms|defs|oracle|unchecked' "$T" \
+            'a theory of the evidence has sorry, oops, an axiom, an oracle or an unchecked definition'
+          refuse 'ML|ML_file|ML_file_debug|ML_file_no_debug|ML_val|ML_command|ML_prf|ML_export|SML_file|SML_file_debug|SML_file_no_debug|SML_import|SML_export|tactic|raw_tactic|setup|local_setup|declaration|syntax_declaration|attribute_setup|method_setup|simproc_setup|parse_translation|print_translation|parse_ast_translation|print_ast_translation|typed_print_translation|compile_generated_files|code_reflect|code_printing' "$T" \
+            'a theory of the evidence runs ML code'
+          refuse 'abbreviation|notation|no_notation|type_notation|no_type_notation|syntax|no_syntax|syntax_consts|syntax_types|translations|no_translations|alias|type_alias|hide_const|hide_fact|hide_type|hide_class|adhoc_overloading|no_adhoc_overloading|default_sort|coercion|coercion_enabled|interpretation|global_interpretation|sublocale' "$T" \
+            'a theory of the evidence changes the syntax or the names'
+          refuse 'quick_and_dirty|skip_proofs' "$R" 'a ROOT of formal/evidence switches proof checking off'
+          rc=0
+          grep -anF -e 'ML_' -e '@{' -e '\<proof>' -e 'quick_and_dirty' -e 'skip_proofs' -e 'sorry' -e 'tactic' $T || rc=$?
+          case $rc in
+            1) ;;
+            0) echo "::error::a theory of the evidence has ML_, an antiquotation, the proof symbol, sorry, tactic or a switch of proof checking"; bad=1 ;;
+            *) echo "::error::grep failed (code $rc)"; bad=1 ;;
+          esac
+          rc=0
+          grep -anE '(^|[^A-Za-z])ML([^A-Za-z0-9]|$)' $T || rc=$?
+          case $rc in
+            1) ;;
+            0) echo "::error::a theory of the evidence has the word ML after a digit or a sign"; bad=1 ;;
+            *) echo "::error::grep failed (code $rc)"; bad=1 ;;
+          esac
+          rc=0
+          ctl=$(grep -anoE '\\<\^[A-Za-z_]*>?' $T) || rc=$?
+          case $rc in
+            0) test -n "$ctl" || { echo "::error::grep found a control symbol but printed none"; bad=1; } ;;
+            1) ;;
+            *) echo "::error::grep failed (code $rc)"; bad=1 ;;
+          esac
+          other=$(printf '%s\n' "$ctl" | grep -vE ':\\<\^(sub|sup)>$' | grep -v '^$' || true)
+          if [ -n "$other" ]; then
+            printf '%s\n' "$other"
+            echo "::error::a theory of the evidence has a control symbol other than sub and sup"; bad=1
+          fi
+          exit $bad
+
+      # Same Isabelle release as the other workflows; the unpacked distribution is cached.
+      - name: Cache the Isabelle distribution
+        id: cache-isabelle
+        if: ${{ !cancelled() }}
+        uses: actions/cache@v6
+        with:
+          path: ~/isabelle/${{ env.ISABELLE_VERSION }}
+          key: ${{ env.ISABELLE_VERSION }}-linux-x86_64
+
+      - name: Download Isabelle
+        if: ${{ !cancelled() && steps.cache-isabelle.outputs.cache-hit != 'true' }}
+        run: |
+          archive="${ISABELLE_VERSION}_linux.tar.gz"
+          for base in https://isabelle.in.tum.de/dist https://www.cl.cam.ac.uk/research/hvg/Isabelle/dist; do
+            if curl -fL --retry 3 -o "/tmp/$archive" "$base/$archive"; then
+              break
+            fi
+          done
+          test -s "/tmp/$archive"
+          mkdir -p ~/isabelle
+          tar -xzf "/tmp/$archive" -C ~/isabelle
+          rm "/tmp/$archive"
+
+      # The PDF document of the core needs LaTeX, which is not installed here; it is
+      # switched off in the runner's copy of formal/core/ROOT only.
+      - name: Switch off the PDF document of the core for this build
+        if: ${{ !cancelled() }}
+        run: |
+          sed -i -E 's/options \[document = pdf, document_output = "output"\]/options [document = false]/' formal/core/ROOT
+          grep -q 'options \[document = false\]' formal/core/ROOT
+
+      # (3) Only after steps (1) and (2) pass: the lexical check. TRIEL_Evidence_Lex reads
+      # TRIEL_Evidence.thy as text and fails on a command outside its list. It builds
+      # TRIEL_Core on the way.
+      - name: Build session TRIEL_Evidence_Lex
+        id: lex
+        if: ${{ !cancelled() && steps.files.outcome == 'success' && steps.words.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          D="-d formal/core -d formal/evidence -d formal/evidence/accept -d formal/evidence/lex"
+          ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -b -v $D TRIEL_Evidence_Lex 2>&1 | tee "$RUNNER_TEMP/lex.log"
+          grep -q '^Finished TRIEL_Evidence_Lex' "$RUNNER_TEMP/lex.log"
+
+      # (4) Only after the lexical check: the theories of the evidence and the acceptance,
+      # which fails if a lemma uses a constant it may not use or depends on an oracle.
+      - name: Build sessions TRIEL_Evidence and TRIEL_Evidence_Accept
+        id: accept
+        if: ${{ !cancelled() && steps.files.outcome == 'success' && steps.words.outcome == 'success' && steps.lex.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          D="-d formal/core -d formal/evidence -d formal/evidence/accept -d formal/evidence/lex"
+          ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -v $D TRIEL_Evidence TRIEL_Evidence_Accept 2>&1 | tee "$RUNNER_TEMP/accept.log"
+          grep -q '^Finished TRIEL_Evidence ' "$RUNNER_TEMP/accept.log"
+          grep -q '^Finished TRIEL_Evidence_Accept' "$RUNNER_TEMP/accept.log"
+
+      - name: Post the result of the run as a commit comment
+        if: ${{ !cancelled() && github.event_name == 'push' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          comment="$RUNNER_TEMP/comment.md"
+          # Text of the logs goes into the comment as data: a run of three backquotes would end
+          # the code block and an @ would mention a user, so both are broken up.
+          quote() { sed -e 's/```/`` `/g' -e 's/@/@ /g'; }
+          {
+            echo "Evidence of the value of a condition (run ${{ github.run_id }}):"
+            echo
+            echo "- (1) files: ${{ steps.files.outcome }}"
+            echo "- (2) words: ${{ steps.words.outcome }}"
+            echo "- (3) build of TRIEL_Evidence_Lex: ${{ steps.lex.outcome }}"
+            echo "- (4) build of TRIEL_Evidence and TRIEL_Evidence_Accept: ${{ steps.accept.outcome }}"
+            echo
+            echo '```'
+            { grep -hE '^(Finished|Building|Running) TRIEL_|^TRIEL_[A-Za-z_]* (FAILED|CANCELLED)|^Unfinished session' \
+                "$RUNNER_TEMP/lex.log" "$RUNNER_TEMP/accept.log" 2>/dev/null || true; } | quote
+            echo '```'
+            for log in lex.log accept.log; do
+              test -s "$RUNNER_TEMP/$log" || continue
+              grep -q '^\*\*\*' "$RUNNER_TEMP/$log" || continue
+              echo
+              echo "Error lines of $log:"
+              echo
+              echo '```'
+              { grep -n -A12 '^\*\*\*' "$RUNNER_TEMP/$log" | head -c 25000 || true; } | quote
+              echo '```'
+            done
+          } > "$comment"
+          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
+            -F body=@"$comment" > /dev/null
+
+      - name: Keep the build logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: evidence-build-logs
+          path: |
+            ${{ runner.temp }}/lex.log
+            ${{ runner.temp }}/accept.log
+          if-no-files-found: ignore

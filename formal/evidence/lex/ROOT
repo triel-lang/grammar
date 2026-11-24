@@ -1,0 +1,8 @@
+(* The lexical check of TRIEL_Evidence.thy. Written by the maintainers; the stage may not
+   change this file or Lex_Evidence.thy (their SHA-256 are checked). The session reads
+   ../TRIEL_Evidence.thy as text and does not build it. *)
+
+session TRIEL_Evidence_Lex = TRIEL_Core +
+  options [document = false]
+  theories
+    Lex_Evidence

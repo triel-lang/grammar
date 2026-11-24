@@ -133,7 +133,8 @@ git -C "$REPO" -c core.autocrlf=false -c core.eol=lf archive --format=tar "$REF"
 rm -rf "$TREE/CLA.md" "$TREE/signatures" "$TREE/.github/workflows/cla.yml" "$TREE/artifact/anonymize.sh" \
        "$TREE/artifact/check_anonymous.sh"
 # Theories that the artifact does not build, with their workflow.
-rm -rf "$TREE/formal/mfotl" "$TREE/.github/workflows/mfotl.yml"
+rm -rf "$TREE/formal/mfotl" "$TREE/.github/workflows/mfotl.yml" \
+       "$TREE/formal/evidence" "$TREE/.github/workflows/evidence.yml"
 
 # The name of the author, from the places where the repository states it.
 author_lines() {
