@@ -176,22 +176,27 @@ with the fields of `killed.json` but `ids` (`text`, `occurrence`, `line`,
   swapped, why the operands never make the two differ. For `open`, what was
   tried.
 
-An exception is not an output: a mutant that raises an exception on some input
-and otherwise gives the output of the translator is `equivalent`, and the
-argument says on which inputs it raises. The dictionary `EQUIVALENT` of
-`measure.py`, with which section 4 names the random mutants that no input
-tells apart, is read from the places of kind `equivalent`.
+A place whose mutant a case of the corpus tells apart only by an exception
+(the verdict `caught (exceptions only)` of `measure.py`) is in neither file.
+Of its random mutants that no test catches, section 4 of `measure.py` names
+`equivalent` those whose places are of kind `equivalent` here
+(`equivalent_places`); it reads the file when it runs, not when `measure.py`
+is imported.
 
 `parser/test_corpus.py` fails if the file is empty, if it is not in the format
 of `killed.json` ("survivors.json: not sorted by place", "survivors.json: a
 place is listed twice", "survivors.json: (line, col, op, variant) is not a
 place of mutation: regenerate with measure.py --killed"), if an entry has
 other fields or no `kind` and `argument`, if a place is also in `killed.json`,
-if the line of a place has changed ("places moved: regenerate with measure.py
---killed"), or if `EQUIVALENT` is not its places of kind `equivalent`. That
-the mutants of these places are still not caught, and that no other place is
-not caught, the test does not check: a run of every mutant on the corpus
-does, as `measure.py` computes the verdict of a place (`verdict`).
+or if the line of a place has changed ("places moved: regenerate with
+measure.py --killed"). It also checks `equivalent_places` on a copy of three
+entries, one of them `open` and one without `kind`. That the mutants of these
+places are still not caught, and that no other place is not caught, the test
+does not check: a run of every mutant on the corpus does, as `measure.py`
+computes the verdict of a place (`verdict`). `measure.py` has no command for
+that run; it is a loop over `places()` that computes
+`verdict(mutant_code(p)[0])` for every place `p` and compares the places whose
+verdict is `not caught` with the places of this file.
 
 ## Running
 
@@ -220,9 +225,10 @@ copy of a case (the term and the header of an accepted case, the header, the
 classes and the reasons of a rejected case, the checks of `contains`); and that
 an output of a mutant that is an exception does not catch it (`caught`). Then
 the rule for another implementation, the format of `killed.json` and of
-`survivors.json`, and the places of both. A test that takes a case of the
-corpus by its `id` looks it up when it runs: without that case only the tests
-that take it fail.
+`survivors.json`, and the places of both, also on a copy of each with a line
+number changed and a text changed. A test that takes a case of the corpus by
+its `id` looks it up when it runs: without that case only the tests that take
+it fail.
 
 The measurements, from the root of the repository (not in CI):
 

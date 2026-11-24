@@ -120,12 +120,18 @@ UNREACHABLE_LINES = {
         "called, so walk finds a reason only at the top of an element.",
 }
 
-# Random mutants that no input tells apart from the translator by an output:
-# the places of survivors.json of kind "equivalent", (line, column, operator,
-# variant) of the place -> the argument (README.md, survivors.json).
-EQUIVALENT = {(e["line"], e["col"], e["op"], e["variant"]): e["argument"]
-              for e in json.loads((HERE / "survivors.json").read_text(encoding="utf-8"))
-              if e["kind"] == "equivalent"}
+
+def equivalent_places(entries):
+    """The random mutants that no input tells apart from the translator by an
+    output: of the entries of survivors.json, those of kind "equivalent",
+    (line, column, operator, variant) of the place -> the argument (README.md,
+    survivors.json). An entry without kind is not one of them. Section 4 reads
+    survivors.json when it runs, not when this module is imported, so that an
+    entry spoilt in the file is named by the test of the file (survivors_errors
+    of parser/test_corpus.py), and not by an error of the import."""
+    return {(e["line"], e["col"], e["op"], e["variant"]): e["argument"]
+            for e in entries if e.get("kind") == "equivalent"}
+
 
 OUT = []
 
@@ -910,13 +916,14 @@ def section_random(tmp):
             with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:
                 done = list(pool.map(lambda k: run_tests(tmp, survivors[k][1], f"mutant{k}", no_eval),
                                      range(len(survivors))))
+        equivalent = equivalent_places(json.loads(SURVIVORS.read_text(encoding="utf-8")))
         for (row, text), (rc, last) in zip(survivors, done):
             if rc != 0:
                 row[1] = "caught by test_triel_to_core.py"
             else:
                 key = tuple(row[0][:4])
-                row[1] = "equivalent" if key in EQUIVALENT else "gap"
-                row[3] = EQUIVALENT.get(key, "")
+                row[1] = "equivalent" if key in equivalent else "gap"
+                row[3] = equivalent.get(key, "")
             row[2] = [last]
     names = ["caught (divergence)", "caught (exceptions only)", "caught (time)", "caught by test_triel_to_core.py",
              "equivalent", "gap"]

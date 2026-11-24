@@ -68,7 +68,7 @@ def case(case_id):
     return BY_ID[case_id]
 
 
-TABLE =json.loads((CORPUS / "classes.json").read_text(encoding="utf-8"))
+TABLE = json.loads((CORPUS / "classes.json").read_text(encoding="utf-8"))
 CLASSES = TABLE["reasons"]
 UNREACHABLE = json.loads((CORPUS / "unreachable.json").read_text(encoding="utf-8"))
 SOURCE = (PARSER / "triel_to_core.py").read_text(encoding="utf-8")
@@ -794,17 +794,28 @@ def spoilt_survivors(name, entries):
         es[0]["kind"] = "caught"
     if name == "no_argument":
         es[0]["argument"] = " "
+    if name == "a_field_more":
+        es[0]["ids"] = []
+    if name == "no_text":
+        del es[0]["text"]
+    if name == "no_kind":
+        del es[0]["kind"]
     return es
+
+
+def not_an_entry(es):
+    return [f"survivors.json: {place(es[0])} is not text, occurrence, place, kind (equivalent or open) and argument"]
 
 
 SURVIVORS_SPOILT = {
     "as_it_is": lambda es: [],
     "reversed": lambda es: ["survivors.json: not sorted by place"],
     "a_place_of_killed_json": lambda es: [f"survivors.json: {[place(KILLED[0])]} also in killed.json"],
-    "another_kind": lambda es: [f"survivors.json: {place(es[0])} is not text, occurrence, place, kind (equivalent "
-                                f"or open) and argument"],
-    "no_argument": lambda es: [f"survivors.json: {place(es[0])} is not text, occurrence, place, kind (equivalent "
-                               f"or open) and argument"],
+    "another_kind": not_an_entry,
+    "no_argument": not_an_entry,
+    "a_field_more": not_an_entry,
+    "no_text": not_an_entry,
+    "no_kind": not_an_entry,
 }
 
 
@@ -816,11 +827,56 @@ def test_the_format_of_survivors_json(name):
 
 
 def test_the_places_of_survivors_json():
-    """survivors.json is not empty, its lines are where it says, and the
-    dictionary EQUIVALENT of measure.py is its places of kind equivalent."""
+    """survivors.json is not empty, and its lines are where it says."""
     assert SURVIVORS, "survivors.json is empty"
     assert moved_places(SURVIVORS) == [], "places moved: regenerate with measure.py --killed"
-    assert measure.EQUIVALENT == {place(e): e["argument"] for e in SURVIVORS if e["kind"] == "equivalent"}
+
+
+def test_the_places_of_kind_equivalent():
+    """measure.equivalent_places, with which section 4 of measure.py names the
+    random mutants that no input tells apart, on a copy of three entries of
+    survivors.json: one open, one equivalent and one without kind. It gives the
+    place of the equivalent one with its argument, and no other."""
+    es = [dict(e) for e in SURVIVORS[:3]]
+    es[0]["kind"] = "open"
+    es[1]["kind"] = "equivalent"
+    del es[2]["kind"]
+    assert measure.equivalent_places(es) == {place(es[1]): es[1]["argument"]}
+
+
+@pytest.mark.parametrize("name", ["killed.json", "survivors.json"])
+def test_moved_places_of_a_spoilt_copy(name):
+    """moved_places on a copy of the entries of the file in which the first
+    entry has the number of the line after its own, and the last one another
+    text: both are named, and no other entry."""
+    es = [dict(e) for e in (KILLED if name == "killed.json" else SURVIVORS)]
+    es[0]["line"] += 1
+    es[-1]["text"] += "  # changed"
+    assert moved_places(es) == [(es[0]["line"], es[0]["text"].strip()), (es[-1]["line"], es[-1]["text"].strip())]
+
+
+def test_an_entry_of_survivors_json_without_kind_is_named(tmp_path):
+    """survivors.json itself with an entry without kind, in a copy of the files
+    the collection of this module reads: the module is imported (measure.py,
+    which it imports, does not read survivors.json then), and survivors_errors
+    names the entry."""
+    copy = tmp_path / "copy"
+    (copy / "parser").mkdir(parents=True)
+    for name in ("test_corpus.py", "triel_to_core.py", "triel.lark"):
+        shutil.copy2(PARSER / name, copy / "parser" / name)
+    shutil.copytree(CORPUS, copy / "parser" / "corpus", ignore=shutil.ignore_patterns("__pycache__"))
+    es = spoilt_survivors("no_kind", SURVIVORS)
+    (copy / "parser" / "corpus" / "survivors.json").write_text(json.dumps(es, ensure_ascii=False), encoding="utf-8")
+    program = ("import json, sys\n"
+               "sys.path[:0] = ['parser', 'parser/corpus']\n"
+               "import test_corpus as T\n"
+               "places = {tuple(p[:4]): p for p in T.measure.places()}\n"
+               "print(json.dumps(T.survivors_errors(T.SURVIVORS, T.KILLED, places)))\n")
+    env = {k: v for k, v in os.environ.items() if k not in ("TRIEL_TRANSLATOR", "PYTHONPATH")}
+    r = subprocess.run([sys.executable, "-B", "-c", program], cwd=copy, env=env, capture_output=True, text=True,
+                       timeout=300)
+    assert r.returncode == 0, f"the import or survivors_errors fails: {r.stderr.strip().splitlines()[-1:]}"
+    assert json.loads(r.stdout.strip().splitlines()[-1]) == not_an_entry(es)
 
 
 def test_the_mutants_of_killed_json_are_caught():
