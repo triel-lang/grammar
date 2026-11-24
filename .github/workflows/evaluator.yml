@@ -305,6 +305,26 @@ jobs:
         if: ${{ !cancelled() }}
         run: tools/test_ci61.sh g3
 
+      - name: test_ci61 G4
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh g4
+
+      - name: test_ci61 G1 run.sh
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh g1run
+
+      - name: test_ci61 G4 run.sh
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh g4run
+
+      - name: test_ci61 steps
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh steps
+
+      - name: test_ci61 jobs
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh jobs
+
       # parser/triel_host.py, the trace that a host builds from its own records,
       # and triel_to_core.py --actions, against the reports of triel check.
       - name: Tests of the trace of a host and of --actions
