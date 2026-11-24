@@ -1,6 +1,6 @@
-(* The bridge from the TRIEL core to MFOTL, part 1: conditions. Written by the
-   maintainers; the stage may not change this file (its SHA-256 is checked in
-   .github/workflows/mfotl.yml). *)
+(* The bridge from the TRIEL core to MFOTL: part 1, conditions, and part 2, norms and
+   deadlines. Written by the maintainers; the stage may not change this file (its
+   SHA-256 is checked in .github/workflows/mfotl.yml). *)
 
 session TRIEL_MFOTL = MFOTL_Checker +
   options [document = false]
@@ -9,3 +9,6 @@ session TRIEL_MFOTL = MFOTL_Checker +
   theories
     TRIEL_MFOTL_Enc
     TRIEL_MFOTL_Cond
+    TRIEL_MFOTL_Time
+    TRIEL_MFOTL_Norm
+    TRIEL_MFOTL_Future

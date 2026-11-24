@@ -25,8 +25,9 @@ env:
     Automatic_Refinement Finger-Trees Regular-Sets Binomial-Heaps Native_Word Trie Word_Lib
     CAVA_Automata
   ACCEPT_THY_SHA256: bb960f54ee75b1ee4c23420ed322deb88d2aad1abb24a8ffd50340c43660b9d2
-  ACCEPT_ROOT_SHA256: 55cfc391d3952933ceccb2b48eecc550c92a9d47a6dcd389fc05fe4933d3b6fc
-  MFOTL_ROOT_SHA256: e6634adce0910b455c36223ed66638448804deb900cf663f4af4b43438141bae
+  ACCEPT2_THY_SHA256: b0715455b1addab8315b94c386cb6bf6bfdda1ba3fc8d9786166d1aac0969885
+  ACCEPT_ROOT_SHA256: 2e708e0367ace480c0a55bc863d23c91aee56debd7805d709b1cc285cad32afd
+  MFOTL_ROOT_SHA256: 53aaead91e4a28cc4336a31ee5c63de7e341e969a456536b585f85aa699be394
 
 # Every check runs even when an earlier one fails, so that a run shows which of
 # them fail; the job fails if any does.
@@ -44,7 +45,7 @@ jobs:
       # (1) A branch that changes the bridge or this workflow changes nothing else: neither the
       # core and its checks nor any file outside formal/mfotl. A branch that changes the core
       # and not the bridge passes this part, and the steps below build the bridge on its core.
-      # Always: formal/mfotl holds exactly its six files, and the three fixed files are
+      # Always: formal/mfotl holds exactly its ten files, and the four fixed files are
       # unchanged.
       - name: A change of the bridge changes nothing else, and the fixed files are unchanged
         id: files
@@ -52,41 +53,63 @@ jobs:
         run: |
           set -euo pipefail
           # The commit of main the branch starts from (on main itself: the commit pushed).
-          START=$(git merge-base HEAD origin/main)
+          START=$(git merge-base HEAD refs/remotes/origin/main)
           echo "start: $START"
-          if [ -n "$(git diff --name-only "$START" HEAD -- formal/mfotl .github/workflows/mfotl.yml)" ]; then
+          changed=$(git diff --no-renames --name-only "$START" HEAD -- formal/mfotl .github/workflows/mfotl.yml)
+          if [ -n "$changed" ]; then
             echo "the branch changes the bridge or this workflow"
             git diff --stat "$START" HEAD -- formal/core formal/checks
             git diff --quiet "$START" HEAD -- formal/core formal/checks \
               || { echo "::error::formal/core or formal/checks differ from $START"; exit 1; }
-            other=$(git diff --name-only "$START" HEAD | grep -vE '^(formal/mfotl/|\.github/workflows/mfotl\.yml$)' || true)
+            # A failure of git stops the step (set -e); the names are filtered without grep.
+            all=$(git diff --no-renames --name-only "$START" HEAD)
+            other=
+            while IFS= read -r f; do
+              case $f in ''|formal/mfotl/*|.github/workflows/mfotl.yml) ;; *) other+="$f"$'\n' ;; esac
+            done <<<"$all"
             test -z "$other" || { echo "::error::files outside formal/mfotl changed: $other"; exit 1; }
           else
             echo "the branch changes neither the bridge nor this workflow"
           fi
           files=$(git ls-files formal/mfotl | LC_ALL=C sort | tr '\n' ' ')
-          expected="formal/mfotl/README.md formal/mfotl/ROOT formal/mfotl/TRIEL_MFOTL_Cond.thy formal/mfotl/TRIEL_MFOTL_Enc.thy formal/mfotl/accept/Accept_MFOTL1.thy formal/mfotl/accept/ROOT "
+          expected="formal/mfotl/README.md formal/mfotl/ROOT formal/mfotl/TRIEL_MFOTL_Cond.thy formal/mfotl/TRIEL_MFOTL_Enc.thy formal/mfotl/TRIEL_MFOTL_Future.thy formal/mfotl/TRIEL_MFOTL_Norm.thy formal/mfotl/TRIEL_MFOTL_Time.thy formal/mfotl/accept/Accept_MFOTL1.thy formal/mfotl/accept/Accept_MFOTL2.thy formal/mfotl/accept/ROOT "
           test "$files" = "$expected" || { echo "::error::formal/mfotl holds: $files"; exit 1; }
           echo "$ACCEPT_THY_SHA256  formal/mfotl/accept/Accept_MFOTL1.thy" | sha256sum -c -
+          echo "$ACCEPT2_THY_SHA256  formal/mfotl/accept/Accept_MFOTL2.thy" | sha256sum -c -
           echo "$ACCEPT_ROOT_SHA256  formal/mfotl/accept/ROOT" | sha256sum -c -
           echo "$MFOTL_ROOT_SHA256  formal/mfotl/ROOT" | sha256sum -c -
 
-      # (2) In the two theories of the bridge: no unproved or assumed result, no ML code, and no
-      # change of the syntax or of the names that the acceptance theory reads. Words are matched
-      # whole, anywhere, also in comments and text. grep exits 1 when nothing is found; any
-      # other code than 0 or 1 is an error of the step, not a pass.
+      # (2) In the five theories of the bridge: no unproved or assumed result, no ML code, and no
+      # change of the syntax or of the names that the acceptance theories read. A listed word is
+      # found anywhere, also in comments and text, when no letter stands before it and no
+      # letter, digit, _ or ' after it: so also right after a digit, _ or a sign, which the
+      # lexer of Isabelle reads as a token of its own. Some patterns are found also inside a
+      # word. A mixfix annotation is looked for in the text of each file joined into one line:
+      # a parenthesis followed, after blanks, by a string, a cartouche or a comment. The theories are
+      # ASCII without carriage returns. grep exits 1 when nothing is found; any other code than
+      # 0 or 1 is an error of the step, not a pass.
       - name: Check the theories of the bridge for sorry, axioms, ML and syntax
         id: words
         if: ${{ !cancelled() }}
         shell: bash
         run: |
           set -euo pipefail
-          T="formal/mfotl/TRIEL_MFOTL_Enc.thy formal/mfotl/TRIEL_MFOTL_Cond.thy"
+          T="formal/mfotl/TRIEL_MFOTL_Enc.thy formal/mfotl/TRIEL_MFOTL_Cond.thy formal/mfotl/TRIEL_MFOTL_Time.thy formal/mfotl/TRIEL_MFOTL_Norm.thy formal/mfotl/TRIEL_MFOTL_Future.thy"
           for f in $T; do test -f "$f" || { echo "::error::$f is missing"; exit 1; }; done
           bad=0
           refuse() {
             local rc=0
-            grep -nwE "$1" $T || rc=$?
+            grep -anE "(^|[^A-Za-z])($1)([^A-Za-z0-9_']|\$)" $T || rc=$?
+            case $rc in
+              1) ;;
+              0) echo "::error::$2"; bad=1 ;;
+              *) echo "::error::grep failed (code $rc)"; bad=1 ;;
+            esac
+          }
+          # The same with a pattern matched anywhere, also inside a word.
+          refuse_in() {
+            local rc=0
+            grep -anE "$1" $T || rc=$?
             case $rc in
               1) ;;
               0) echo "::error::$2"; bad=1 ;;
@@ -99,6 +122,42 @@ jobs:
             'a theory of the bridge runs ML code'
           refuse 'abbreviation|notation|no_notation|type_notation|no_type_notation|syntax|no_syntax|syntax_consts|syntax_types|translations|no_translations|alias|type_alias|hide_const|hide_fact|hide_type|hide_class|adhoc_overloading|no_adhoc_overloading|default_sort|coercion|coercion_enabled|interpretation|global_interpretation|sublocale' \
             'a theory of the bridge changes the syntax or the names'
+          refuse 'unbundle|bundle|open_bundle|overloading|consts|lemmas|locale|infix|infixl|infixr|binder' \
+            'a theory of the bridge changes the syntax or the names'
+          refuse_in 'ML_|@\{|\\<proof>|quick_and_dirty|skip_proofs|smt_oracle|sorry|tactic|(^|[^A-Za-z])ML([^A-Za-z0-9]|$)' \
+            'a theory of the bridge has ML_, an antiquotation, the proof symbol, sorry, tactic, ML after a digit or a sign, or a switch of proof checking'
+          for f in $T; do
+            joined=$(tr '\n\r' '  ' < "$f")
+            rc=0
+            grep -aqE '\([[:space:]]*("|\\<open>|\(\*|\\<comment>)' <<<"$joined" || rc=$?
+            case $rc in
+              1) ;;
+              0) echo "::error::$f declares mixfix syntax"; bad=1 ;;
+              *) echo "::error::grep failed (code $rc)"; bad=1 ;;
+            esac
+          done
+          rc=0
+          LC_ALL=C grep -anP '[^\x09\x0A\x20-\x7E]' $T || rc=$?
+          case $rc in
+            1) ;;
+            0) echo "::error::a theory of the bridge has a byte outside printable ASCII, tab and newline"; bad=1 ;;
+            *) echo "::error::grep failed (code $rc)"; bad=1 ;;
+          esac
+          rc=0
+          ctl=$(grep -anoE '\\<\^[A-Za-z_]*>?' $T) || rc=$?
+          case $rc in
+            0) test -n "$ctl" || { echo "::error::grep found a control symbol but printed none"; bad=1; } ;;
+            1) ;;
+            *) echo "::error::grep failed (code $rc)"; bad=1 ;;
+          esac
+          other=
+          while IFS= read -r l; do
+            case $l in ''|*':\<^sub>'|*':\<^sup>') ;; *) other+="$l"$'\n' ;; esac
+          done <<<"$ctl"
+          if [ -n "$other" ]; then
+            printf '%s\n' "$other"
+            echo "::error::a theory of the bridge has a control symbol other than sub and sup"; bad=1
+          fi
           exit $bad
 
       - name: Cache the Isabelle distribution
@@ -183,8 +242,9 @@ jobs:
         run: |
           find ~/.isabelle -path '*heaps*' -name 'TRIEL_MFOTL*' -print -delete || true
 
-      # (3) The session of the bridge builds, and (4) the acceptance session, which restates
-      # the theorems of the bridge and checks their constants and oracles, builds by name.
+      # (3) The session of the bridge builds, and (4) the acceptance session, whose two theories
+      # restate the theorems of parts 1 and 2 and check their constants and oracles, builds by
+      # name.
       - name: Build TRIEL_MFOTL and TRIEL_MFOTL_Accept
         id: bridge
         if: ${{ !cancelled() }}
@@ -198,12 +258,12 @@ jobs:
           grep -q '^Finished TRIEL_MFOTL ' "$RUNNER_TEMP/mfotl-build.log"
           grep -q '^Finished TRIEL_MFOTL_Accept ' "$RUNNER_TEMP/mfotl-build.log"
 
-      # The messages of the ML block of the acceptance theory, also of a failed build.
+      # The messages of the ML blocks of the two acceptance theories, also of a failed build.
       # "isabelle build_log" of Isabelle2025-2 prints the messages of no theory: it takes the
       # theories of a session from the theory timings in its database, and this release writes
       # none. The messages are read from the export PIDE/messages of the theory instead; it is
       # YXML, in which the text of a message stands between the control characters 5 and 6.
-      - name: Messages of the acceptance theory
+      - name: Messages of the acceptance theories
         if: ${{ !cancelled() }}
         shell: bash
         run: |
@@ -211,12 +271,98 @@ jobs:
           rm -rf "$out"
           : > "$RUNNER_TEMP/accept-messages.txt"
           ~/isabelle/${ISABELLE_VERSION}/bin/isabelle export -n -O "$out" \
-            -x 'TRIEL_MFOTL_Accept.Accept_MFOTL1:PIDE/messages' TRIEL_MFOTL_Accept || true
-          f="$out/TRIEL_MFOTL_Accept.Accept_MFOTL1/PIDE/messages"
-          if test -s "$f"; then
-            tr '\005\006' '\n\n' < "$f" | grep -a '^Accept_MFOTL1: ' > "$RUNNER_TEMP/accept-messages.txt" || true
-          fi
+            -x 'TRIEL_MFOTL_Accept.Accept_MFOTL1:PIDE/messages' \
+            -x 'TRIEL_MFOTL_Accept.Accept_MFOTL2:PIDE/messages' TRIEL_MFOTL_Accept || true
+          for k in 1 2; do
+            f="$out/TRIEL_MFOTL_Accept.Accept_MFOTL$k/PIDE/messages"
+            if test -s "$f"; then
+              tr '\005\006' '\n\n' < "$f" | grep -a "^Accept_MFOTL$k: " >> "$RUNNER_TEMP/accept-messages.txt" || true
+            fi
+          done
           cat "$RUNNER_TEMP/accept-messages.txt"
+
+      # (5) The build is sensitive to the formulas of part 2. Each of the five mutations M1-M5
+      # replaces one piece of a definition in a copy of formal/mfotl, and the build of the two
+      # sessions of the bridge on the copy must fail. The pieces are given literally: the
+      # definitions of the stage are the ones that Accept_MFOTL2.thy writes out; a piece that is
+      # not in its theory exactly once is an error of this step.
+      # The AFP sessions and TRIEL_Core are not built again: their heaps are those of the steps
+      # above. A build that starts another session than the two of the bridge, that is stopped
+      # by the time limit, or that fails without a failed session of the bridge and an error at
+      # a command is an error of this step, not a pass. The step runs after the messages of the
+      # acceptance theories are read, since each build replaces the heaps and the databases of
+      # the two sessions; they are dropped at the end, and no cache is saved after this step.
+      - name: Mutations of the formulas of part 2 fail the build
+        id: mutations
+        if: ${{ !cancelled() && steps.bridge.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/mutations.txt"
+          : > "$report"
+          dirs="-d formal/core"
+          for s in $AFP_SESSIONS; do dirs="$dirs -d afp/thys/$s"; done
+          bad=0
+          # Replaces the one occurrence of the text $2 in the file $1 by the text $3; fails
+          # if the text is not there exactly once. The texts are taken literally.
+          replace_once() {
+            local text rest
+            text=$(cat "$1"; printf x); text=${text%x}
+            rest=${text#*"$2"}
+            test "$rest" != "$text" || return 1
+            test "${rest#*"$2"}" = "$rest" || return 1
+            printf '%s' "${text%%"$2"*}$3$rest" > "$1"
+          }
+          mutate() {
+            local name=$1 file=$2 from=$3 to=$4
+            local copy="$RUNNER_TEMP/mutation-$name" log="$RUNNER_TEMP/mutation-$name.log" rc=0 verdict
+            rm -rf "$copy"; mkdir -p "$copy"
+            cp -R formal/mfotl "$copy/mfotl"
+            if ! replace_once "$copy/mfotl/$file" "$from" "$to"; then
+              echo "$name: NOT APPLIED (its text is not exactly once in $file)" >> "$report"
+              echo "::error::mutation $name does not apply to formal/mfotl/$file"; bad=1; return 0
+            fi
+            timeout 20m ~/isabelle/${ISABELLE_VERSION}/bin/isabelle build -v $dirs \
+              -d "$copy/mfotl" -d "$copy/mfotl/accept" -o document=false -o timeout_scale=3 \
+              TRIEL_MFOTL TRIEL_MFOTL_Accept > "$log" 2>&1 || rc=$?
+            if grep -E '^Building ' "$log" | grep -qvE '^Building TRIEL_MFOTL(_Accept)? '; then
+              verdict="ERROR (the build started a session that is not of the bridge)"; bad=1
+            elif [ "$rc" -eq 0 ]; then
+              verdict="SURVIVED (the build passes)"; bad=1
+            elif grep -qE '^TRIEL_MFOTL(_Accept)? FAILED' "$log" && grep -qE '^\*\*\* At command' "$log"; then
+              verdict="killed: $(grep -E '^TRIEL_MFOTL(_Accept)? FAILED' "$log" | sed -E 's/ \(see also.*//' | paste -sd ' ' -)"
+            else
+              verdict="ERROR (code $rc of the build, and no failed session of the bridge with an error at a command)"; bad=1
+            fi
+            echo "$name: $verdict" >> "$report"
+            case $verdict in
+              killed*) grep -E '^\*\*\* At command' "$log" | sed -E "s|$copy/mfotl/||" | sort -u | head -n 6 | sed 's/^/  /' >> "$report" || true ;;
+              *) echo "::error::mutation $name: $verdict" ;;
+            esac
+          }
+          # M1: "passed" from the deadline on, not strictly after it.
+          mutate M1 TRIEL_MFOTL_Time.thy \
+            'At (Interval.interval (Suc (nat (d - \<tau>\<^sub>0))) \<infinity>)' \
+            'At (Interval.interval (nat (d - \<tau>\<^sub>0)) \<infinity>)'
+          # M2: the lower bound of a window one time unit too early.
+          mutate M2 TRIEL_MFOTL_Time.thy \
+            'Some l \<Rightarrow> nat (l + 1 - \<tau>\<^sub>0)' \
+            'Some l \<Rightarrow> nat (l - \<tau>\<^sub>0)'
+          # M3: the condition of a prohibition read at the entry of the action, not before it.
+          mutate M3 TRIEL_MFOTL_Norm.thy \
+            '"Forb s a c = formula.And (Act s a) (formula.Prev Interval.all (Pc c))"' \
+            '"Forb s a c = formula.And (Act s a) (Pc c)"'
+          # M4: the monitor blocks only when the condition is true, not when it is unknown.
+          mutate M4 TRIEL_MFOTL_Norm.thy \
+            '"Blk s a c = formula.And (Act s a) (formula.Prev Interval.all (formula.Neg (Nc c)))"' \
+            '"Blk s a c = formula.And (Act s a) (formula.Prev Interval.all (Pc c))"'
+          # M5: "breached" as soon as the deadline has passed, also after an action in time.
+          mutate M5 TRIEL_MFOTL_Norm.thy \
+            '"ObBre \<tau>\<^sub>0 s a lo d = formula.And (formula.Neg (Acted \<tau>\<^sub>0 s a lo d)) (Passed \<tau>\<^sub>0 d)"' \
+            '"ObBre \<tau>\<^sub>0 s a lo d = Passed \<tau>\<^sub>0 d"'
+          find ~/.isabelle -path '*heaps*' -name 'TRIEL_MFOTL*' -delete || true
+          cat "$report"
+          exit $bad
 
       - name: Post the result of the run as a commit comment
         if: ${{ !cancelled() && github.event_name == 'push' }}
@@ -235,10 +381,12 @@ jobs:
             echo "- (2) words: ${{ steps.words.outcome }}"
             echo "- build of the AFP sessions and TRIEL_Core: ${{ steps.deps.outcome }} (heaps restored: ${{ steps.heaps.outputs.cache-matched-key || 'none' }})"
             echo "- (3)-(4) build of TRIEL_MFOTL and TRIEL_MFOTL_Accept: ${{ steps.bridge.outcome }}"
+            echo "- (5) mutations M1-M5 of the formulas of part 2: ${{ steps.mutations.outcome }}"
             echo
             echo '```'
             { grep -hE '^(Finished|Building|Running) TRIEL_MFOTL|^TRIEL_MFOTL[A-Za-z_]* (FAILED|CANCELLED)|^Unfinished session' "$RUNNER_TEMP/mfotl-build.log" 2>/dev/null || true
               if test -s "$RUNNER_TEMP/accept-messages.txt"; then head -c 4000 "$RUNNER_TEMP/accept-messages.txt"; fi
+              if test -s "$RUNNER_TEMP/mutations.txt"; then head -c 4000 "$RUNNER_TEMP/mutations.txt"; fi
             } | quote
             echo '```'
             for log in deps-build.log mfotl-build.log; do
@@ -264,4 +412,6 @@ jobs:
             ${{ runner.temp }}/deps-build.log
             ${{ runner.temp }}/mfotl-build.log
             ${{ runner.temp }}/accept-messages.txt
+            ${{ runner.temp }}/mutations.txt
+            ${{ runner.temp }}/mutation-M*.log
           if-no-files-found: ignore

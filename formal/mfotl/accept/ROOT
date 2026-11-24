@@ -1,10 +1,14 @@
-(* The acceptance of part 1 of the bridge from the TRIEL core to MFOTL. Written by
-   the maintainers; the stage may not change this file or Accept_MFOTL1.thy (their
-   SHA-256 are checked in .github/workflows/mfotl.yml). *)
+(* The acceptance of parts 1 and 2 of the bridge from the TRIEL core to MFOTL. Written
+   by the maintainers; the stage may not change this file, Accept_MFOTL1.thy or
+   Accept_MFOTL2.thy (their SHA-256 are checked in .github/workflows/mfotl.yml). The two
+   theories do not import each other: each restates and checks its own part. The session
+   has a time limit (in seconds, before the scale of the build): the two theories take a
+   few seconds, and a proof of theirs that does not end is a failure, not a wait. *)
 
 session TRIEL_MFOTL_Accept = TRIEL_MFOTL +
-  options [document = false]
+  options [document = false, timeout = 300]
   sessions
     TRIEL_Core
   theories
     Accept_MFOTL1
+    Accept_MFOTL2
