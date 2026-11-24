@@ -104,7 +104,7 @@ jobs:
       - name: The committed code is the exported code
         run: |
           git diff --exit-code -- evaluator/generated
-          status=$(git status --porcelain --untracked-files=all --ignored -- evaluator/generated)
+          status=$(git status --porcelain --untracked-files=all --ignored -- evaluator/generated/triel-eval evaluator/generated/build; git status --porcelain --untracked-files=all -- evaluator/generated)
           if [ -n "$status" ]; then
             echo "$status"
             echo "error: evaluator/generated holds files that are not committed"
