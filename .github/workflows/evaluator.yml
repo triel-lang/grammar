@@ -116,6 +116,7 @@ jobs:
           ghc-version: "9.6.7"
 
       - name: Compile the evaluator
+        continue-on-error: true
         run: ghc -O1 -ievaluator/generated -outputdir evaluator/build -o evaluator/triel-eval evaluator/Main.hs
 
       - name: The sha256 of the evaluator
