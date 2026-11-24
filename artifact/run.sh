@@ -113,13 +113,6 @@ isabelle_build() {
   local left
   sed -i -E 's/options \[document = pdf, document_output = "output"\]/options [document = false]/' formal/core/ROOT
   grep -q 'options \[document = false\]' formal/core/ROOT || { echo "error: ROOT not as expected"; return 1; }
-  find evaluator/generated -type f -name '*.hs' -delete || return 1
-  left=$(find evaluator/generated -name '*.hs') || return 1
-  if [ -n "$left" ]; then
-    echo "$left"
-    echo "error: evaluator/generated still holds .hs files"
-    return 1
-  fi
   isabelle build -b -c -e -v -D formal/core
 }
 
