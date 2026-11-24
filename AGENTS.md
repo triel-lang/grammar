@@ -10,7 +10,7 @@ This repository holds TRIEL: the grammar of the language, the semantics of its c
 - `parser/`: the reference parser, the translator to the core, the scenario driver, `triel check` and their tests (`parser/README.md`).
 - `examples/`: example specifications; `examples/core/` holds those inside the core, with scenarios, expected reports and the conformance suite.
 - `hosts/`: adapters that call `triel check` from the system that runs an agent; `hosts/claude-code/` holds the hooks for Claude Code (`hosts/claude-code/README.md`).
-- `artifact/`: Docker image and `run.sh`, which repeats the CI checks in one command, except `parser/test_corpus.py`, `parser/test_skill.py`, `parser/test_host.py` and `hosts/claude-code/test_gate.py`.
+- `artifact/`: Docker image and `run.sh`, which repeats the checks of the CI workflows `isabelle.yml`, `evaluator.yml` and `parse-examples.yml` in one command, except the jobs build-log, afp, afp-2026 and afp-2026-lint of `isabelle.yml` (the build with the PDF document, and the build and the lint of the copy for the AFP that `tools/make_afp_copy.sh` writes) and, of `evaluator.yml`, `parser/test_corpus.py`, `parser/test_skill.py`, `parser/test_host.py`, `hosts/claude-code/test_gate.py`, `tools/test_ci61.sh` and `tools/check_workflows.py`.
 - `tools/`: helper scripts.
 - `.github/workflows/`: the CI workflows.
 - `.agents/skills/triel/`: the skill for agents that use TRIEL; `.claude/skills/triel` is a link to it.

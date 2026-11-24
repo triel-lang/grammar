@@ -34,11 +34,16 @@ behind the paper. It contains:
   The tools need network access to install, so this is not a step of `run.sh`.
 
 `artifact/run.sh` runs, in one command, every check of the repository's CI
-(`isabelle.yml`, `evaluator.yml`, `parse-examples.yml`) except the check of the
-corpus of the translator (`parser/test_corpus.py`), the test of the
-documentation for AI agents (`parser/test_skill.py`), the tests of the trace of
-a host (`parser/test_host.py`) and of the adapter for Claude Code
-(`hosts/claude-code/test_gate.py`), builds `TRIEL_Paper`, and prints a
+workflows `isabelle.yml`, `evaluator.yml` and `parse-examples.yml` except: in
+`isabelle.yml`, the jobs build-log (the build with the PDF document), afp,
+afp-2026 and afp-2026-lint (the build and the lint of the copy for the Archive
+of Formal Proofs that `tools/make_afp_copy.sh` writes); in `evaluator.yml`, the
+check of the corpus of the translator (`parser/test_corpus.py`), the test of
+the documentation for AI agents (`parser/test_skill.py`), the tests of the
+trace of a host (`parser/test_host.py`) and of the adapter for Claude Code
+(`hosts/claude-code/test_gate.py`), the tests of the checks of CI
+(`tools/test_ci61.sh`) and the check of the workflow files
+(`tools/check_workflows.py`). It then builds `TRIEL_Paper` and prints a
 summary whose numbers are all computed by the run.
 
 ## Requirements
