@@ -32,7 +32,7 @@ env:
 # Every check runs even when an earlier one fails, so that a run shows which of
 # them fail; the job fails if any does.
 jobs:
-  build:
+  bridge:
     runs-on: ubuntu-24.04
     steps:
       # The token of the job is passed only to the step that posts the comment; the steps
