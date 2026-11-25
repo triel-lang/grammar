@@ -1,8 +1,13 @@
 # TRIEL
 
-[![Parse examples against grammar](https://github.com/triel-lang/grammar/actions/workflows/parse-examples.yml/badge.svg)](https://github.com/triel-lang/grammar/actions/workflows/parse-examples.yml)
-[![Isabelle build of formal/core](https://github.com/triel-lang/grammar/actions/workflows/isabelle.yml/badge.svg)](https://github.com/triel-lang/grammar/actions/workflows/isabelle.yml)
-[![Evaluator exported from formal/core](https://github.com/triel-lang/grammar/actions/workflows/evaluator.yml/badge.svg)](https://github.com/triel-lang/grammar/actions/workflows/evaluator.yml)
+[![Parse examples against grammar](https://github.com/triel-lang/grammar/actions/workflows/parse-examples.yml/badge.svg?branch=main)](https://github.com/triel-lang/grammar/actions/workflows/parse-examples.yml?query=branch%3Amain)
+[![Isabelle build of formal/core](https://github.com/triel-lang/grammar/actions/workflows/isabelle.yml/badge.svg?branch=main)](https://github.com/triel-lang/grammar/actions/workflows/isabelle.yml?query=branch%3Amain)
+[![Evaluator exported from formal/core](https://github.com/triel-lang/grammar/actions/workflows/evaluator.yml/badge.svg?branch=main)](https://github.com/triel-lang/grammar/actions/workflows/evaluator.yml?query=branch%3Amain)
+[![Bridge from the core to MFOTL](https://github.com/triel-lang/grammar/actions/workflows/mfotl.yml/badge.svg?branch=main)](https://github.com/triel-lang/grammar/actions/workflows/mfotl.yml?query=branch%3Amain)
+[![Evidence of the value of a condition](https://github.com/triel-lang/grammar/actions/workflows/evidence.yml/badge.svg?branch=main)](https://github.com/triel-lang/grammar/actions/workflows/evidence.yml?query=branch%3Amain)
+[![Artifact image](https://github.com/triel-lang/grammar/actions/workflows/artifact.yml/badge.svg?branch=main)](https://github.com/triel-lang/grammar/actions/workflows/artifact.yml?query=branch%3Amain)
+
+The badges show the branch `main` only. Some runs in the Actions tab are red on purpose: they run a check of CI on a copy with a deliberate fault, to show that the check catches that fault.
 
 An open specification language for rules with one precise, checkable meaning.
 
