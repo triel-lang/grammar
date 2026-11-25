@@ -40,7 +40,7 @@ IF = {
     ("evaluate", None): "always()",
 }
 for name in ("test_ci61 G1", "test_ci61 G2", "test_ci61 G3", "test_ci61 G4", "test_ci61 G1 run.sh",
-             "test_ci61 G4 run.sh", "test_ci61 steps", "test_ci61 jobs",
+             "test_ci61 G4 run.sh", "test_ci61 steps", "test_ci61 jobs", "test_ci61 digit", "test_ci61 order",
              "No step of evaluator.yml continues on error or is skipped unless named",
              "Every required check is one job that runs on every branch"):
     IF[("check-conformance", name)] = NOT_CANCELLED

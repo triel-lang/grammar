@@ -329,6 +329,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: tools/test_ci61.sh jobs
 
+      - name: test_ci61 digit
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh digit
+
+      - name: test_ci61 order
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh order
+
       # The keys of the steps of this file and the required checks of the rule
       # of the branch main: tools/check_workflows.py.
       - name: No step of evaluator.yml continues on error or is skipped unless named

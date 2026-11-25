@@ -3,7 +3,7 @@
 # reject (and, where named, on copies it must pass).
 #
 # Usage:
-#   tools/test_ci61.sh g1|g2|g3|g4|g1run|g4run|steps|jobs
+#   tools/test_ci61.sh g1|g2|g3|g4|g1run|g4run|steps|jobs|digit|order
 #
 #   g1     the step "The manifest of the conformance suite matches the files"
 #          of .github/workflows/evaluator.yml (job check-conformance). It must
@@ -41,23 +41,72 @@
 #          nothing fails; TRIEL.hs as in SRC passes; a Sub/M.hs in both copies
 #          that the export does not write fails; a directory Old.hs with a file
 #          in the copy fails isabelle_build with "evaluator/generated still
-#          holds .hs files" before isabelle is called. SRC never changes.
+#          holds .hs files" before isabelle is called. isabelle_build alone
+#          must also fail before isabelle is called in a copy without
+#          evaluator/generated; under a find of the test first on PATH that,
+#          with -delete, runs the real find (the files are deleted) and exits
+#          with 1; and under a find of the test that, without -delete, prints
+#          nothing and exits with 1 (with -delete it runs the real find). SRC
+#          never changes.
 #   steps  python3 tools/check_workflows.py steps of the working tree, run in a
 #          copy of .github/workflows of HEAD in which one corruption is made as
 #          text: continue-on-error at a step (also as a quoted key) and at a
 #          job, an if: at a step that may not have one, an if: of the list with
 #          another value at a step and at a job, an if: at a step of
 #          check-conformance chosen at random among those with a name and no
-#          if:, an evaluator.yml that is not YAML and an empty one. The check
-#          must exit with 1 and print a line that names the job, the step (for
-#          a step) and the key (continue-on-error or if:), or evaluator.yml.
+#          if:, a new step without a name with if: false and one with
+#          continue-on-error: true in check-conformance, the step test_ci61 G3
+#          removed, a second step test_ci61 G3 with its if:, the key
+#          Continue-On-Error at the step test_ci61 G1, an evaluator.yml that is
+#          not YAML and an empty one. The check must exit with 1 and print a line
+#          that names the job, the step (for a step with a name) and the key as
+#          written (continue-on-error, if:, Continue-On-Error; name for a
+#          second step of the same name), or evaluator.yml.
 #   jobs   python3 tools/check_workflows.py jobs, in the same way: a second job
 #          build in a new extra.yml that runs on push with paths, a second job
 #          evaluate in a new extra.yaml, name: afp at the job parse, paths at
 #          the push of parse-examples.yml, an if: at the job bench, the job
-#          afp-2026-lint renamed, and a new workflow file that is not YAML. The
-#          check must exit with 1 and name each check concerned as a word of its
-#          own (no letter, digit, _ or - next to it), or the file.
+#          afp-2026-lint renamed, a new workflow file that is not YAML;
+#          paths-ignore at the push of parse-examples.yml, paths at the
+#          pull_request of isabelle.yml, the branches of the push of
+#          parse-examples.yml without stage* and with '!stagex*' added,
+#          continue-on-error at the job bench, strategy at the job parse as a
+#          mapping with matrix and as an expression, uses at the job artifact,
+#          the needs of the job evaluate without check-scenarios, a new job
+#          extra-check of evaluator.yml outside those needs, a second key "on"
+#          at the end of parse-examples.yml, a new file extra.YML, and a new
+#          extra.yml whose job has name: "", name: ${{ 'build' }} or
+#          name: "build ". The check must exit with 1 and name each check
+#          concerned as a word of its own (no letter, digit, _ or - next to it),
+#          or the file.
+#   digit  the search for sorry, oops and axiomatization in three places, each
+#          run as CI or its script runs it, in a copy of HEAD: the step "Check
+#          for sorry, oops and axiomatization" of the job build of
+#          .github/workflows/isabelle.yml (bash -e -c), the function no_sorry of
+#          artifact/run.sh (bash -u; the line goes into formal/core/*.thy and,
+#          as cases of their own, into artifact/isabelle/*.thy), and the
+#          function check of tools/make_afp_copy.sh with its line check "sorry,
+#          oops or axiomatization", on an ENTRY with the theory and a ROOT. Each
+#          must pass on the theories of HEAD and with the line
+#          lemma sorry_free: "True" by simp added to a theory; with each of the
+#          lines lemma "False" prefer 1sorry, lemma "False" prefer 1oops and
+#          term 2axiomatization digit_c :: bool added, it must fail (exit code
+#          not 0, or fail=1 for check) and print the line.
+#   order  python3 tools/check_workflows.py order of the working tree, run in a
+#          copy of .github/workflows and artifact/run.sh of HEAD with one
+#          corruption: in the job build-evaluator of evaluator.yml the step
+#          "The committed code is the exported code" moved before "Remove the
+#          exported code before the export", the removal moved to the end of the
+#          job, "Build TRIEL_Core and export the evaluator" moved before the
+#          removal, a copy of the removal after the export; in run.sh the lines
+#          step 02-... and step 03-... swapped, the line step 13-... removed, the
+#          line step 03-... removed, the line "exported_code() {" renamed;
+#          run.sh deleted; an empty evaluator.yml. The check must exit with 1
+#          and print a line that names build-evaluator and the three steps
+#          (build-evaluator and the step for the copy), run.sh and the function
+#          the order needs at a place where it is broken (for a swap, at one of
+#          the two places; for a removed line, at one of the places from it
+#          on), or the file.
 #
 # The code of a step, a function or the check is read from the file that CI
 # runs, in the working tree, by the name of the step (and its job), of the
@@ -66,14 +115,14 @@
 # reads no git configuration of the machine.
 #
 # Exit code: 0 if the check rejected every corrupted copy; otherwise 1 and the
-# line "not caught: G1" (G2, G3, G4, G1RUN, G4RUN, STEPS, JOBS); 2 on a usage
-# error.
+# line "not caught: G1" (G2, G3, G4, G1RUN, G4RUN, STEPS, JOBS, DIGIT, ORDER); 2
+# on a usage error.
 
 set -uo pipefail
 
-usage() { echo "usage: $0 g1|g2|g3|g4|g1run|g4run|steps|jobs" >&2; exit 2; }
+usage() { echo "usage: $0 g1|g2|g3|g4|g1run|g4run|steps|jobs|digit|order" >&2; exit 2; }
 [ $# -eq 1 ] || usage
-case $1 in g1|g2|g3|g4|g1run|g4run|steps|jobs) ;; *) usage ;; esac
+case $1 in g1|g2|g3|g4|g1run|g4run|steps|jobs|digit|order) ;; *) usage ;; esac
 G=$(printf '%s' "$1" | tr a-z A-Z)
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -91,7 +140,12 @@ miss() { echo "missed: $G: $1"; missed=1; }
 # step_run JOB NAME: the run: block of the step NAME of the job JOB of
 # evaluator.yml, without its indentation.
 step_run() {
-  python3 - "$WORKFLOW" "$1" "$2" <<'EOF'
+  step_run_in "$WORKFLOW" "$1" "$2"
+}
+
+# step_run_in FILE JOB NAME: the same for the workflow file FILE.
+step_run_in() {
+  python3 - "$1" "$2" "$3" <<'EOF'
 import sys
 path, job, name = sys.argv[1:4]
 lines = open(path, encoding="utf-8").read().split("\n")
@@ -330,11 +384,30 @@ if [ "$EXPORT" = TRIEL.hs ]; then
 fi
 EOF
   chmod +x "$base/bin/isabelle"
-  # g4run_case NAME EXPORT CALL: CALL run in $base/NAME/work with SRC
-  # $base/NAME/src; sets out, rc, called (yes or no) and src_kept (yes or no).
+  # The find of the test: with FIND_FAILS=delete, a call with -delete runs
+  # the real find and exits with 1; with FIND_FAILS=list, a call without
+  # -delete prints nothing and exits with 1; every other call is the real find.
+  local real_find
+  real_find=$(command -v find) && [ -n "$real_find" ] || { miss "no find on PATH"; return; }
+  mkdir -p "$base/findbin" || { miss "no directory for the find of the test"; return; }
+  cat > "$base/findbin/find" <<EOF
+#!/bin/sh
+case " \$* " in
+  *" -delete "*)
+    if [ "\$FIND_FAILS" = delete ]; then "$real_find" "\$@"; exit 1; fi ;;
+  *)
+    if [ "\$FIND_FAILS" = list ]; then exit 1; fi ;;
+esac
+exec "$real_find" "\$@"
+EOF
+  chmod +x "$base/findbin/find"
+  # g4run_case NAME EXPORT CALL [FIND_FAILS]: CALL run in $base/NAME/work with
+  # SRC $base/NAME/src, with the find of the test first on PATH if FIND_FAILS
+  # is given; sets out, rc, called (yes or no) and src_kept (yes or no).
   g4run_case() {
-    local d="$base/$1"
-    out=$(cd "$d/work" && PATH="$base/bin:$PATH" SRC="$d/src" CALLS="$d/calls" EXPORT="$2" \
+    local d="$base/$1" path="$base/bin:$PATH"
+    [ -n "${4:-}" ] && path="$base/findbin:$path"
+    out=$(cd "$d/work" && PATH="$path" FIND_FAILS="${4:-}" SRC="$d/src" CALLS="$d/calls" EXPORT="$2" \
       bash -u -c "$fns
 $3" 2>&1); rc=$?
     called=no; [ -e "$d/calls" ] && called=yes
@@ -385,6 +458,27 @@ $3" 2>&1); rc=$?
   else
     miss "a directory Old.hs: exit $rc, isabelle called: $called, SRC unchanged: $src_kept, output: $(tail -n 3 <<<"$out")"
   fi
+  # 5. No directory evaluator/generated in the working copy.
+  g4run_copies nodir && g4run_keep nodir && rm -rf "$base/nodir/work/evaluator/generated" \
+    || { miss "no copies"; return; }
+  g4run_case nodir TRIEL.hs "isabelle_build"
+  if [ $rc -ne 0 ] && [ $called = no ] && [ $src_kept = yes ]; then
+    caught "no evaluator/generated: exit $rc, isabelle not called"
+  else
+    miss "no evaluator/generated: exit $rc, isabelle called: $called, SRC unchanged: $src_kept, output: $(tail -n 3 <<<"$out")"
+  fi
+  # 6. A find that deletes the files and exits with 1; 7. a find without
+  # -delete that prints nothing and exits with 1.
+  local mode
+  for mode in delete list; do
+    g4run_copies "find-$mode" && g4run_keep "find-$mode" || { miss "no copies"; return; }
+    g4run_case "find-$mode" TRIEL.hs "isabelle_build" "$mode"
+    if [ $rc -ne 0 ] && [ $called = no ] && [ $src_kept = yes ]; then
+      caught "a find that fails ($mode): exit $rc, isabelle not called"
+    else
+      miss "a find that fails ($mode): exit $rc, isabelle called: $called, SRC unchanged: $src_kept, output: $(tail -n 3 <<<"$out")"
+    fi
+  done
 }
 
 # wf_copy DIR: the files of .github/workflows of HEAD in DIR.
@@ -399,9 +493,26 @@ wf_copy() {
 #   job-key JOB LINE        LINE as a key of the job JOB
 #   job-if JOB VALUE        the value of the if: of the job JOB replaced
 #   push-key LINE           LINE as a key of on.push
+#   pr-key LINE             LINE as a key of on.pull_request
 #   rename-job JOB NEW      the key of the job JOB is NEW
 #   pick-step JOB           print the name of a step of JOB with a name and
 #                           without if:, chosen at random
+#   add-step JOB AFTER LINE...  a new step of the lines LINE (the first starts
+#                           with "- ", the others with two blanks) after the
+#                           step AFTER of the job JOB, or at its end if AFTER
+#                           is empty
+#   del-step JOB STEP       the step STEP of the job JOB removed
+#   move-step JOB STEP BEFORE  the step STEP moved before the step BEFORE, or
+#                           to the end of the job if BEFORE is empty
+#   copy-step JOB STEP AFTER  a copy of the step STEP after the step AFTER
+#   branches-drop ITEM      ITEM removed from the list on.push.branches
+#   branches-add ITEM       ITEM added at the end of that list
+#   needs-drop JOB ITEM     ITEM removed from the list needs of the job JOB
+#   add-job LINE...         the lines LINE right after the line jobs:
+#   append LINE             LINE at the end of the file
+#   swap-lines A B          the lines that start with A and with B swapped
+#   del-line A              the line that starts with A removed
+#   replace-line OLD NEW    the line OLD replaced by NEW
 edit_wf() {
   python3 - "$@" <<'EOF'
 import random, sys
@@ -435,6 +546,42 @@ def step(jname, sname):
 def key_line(start, stop, indent, key):
     return one([m for m in range(start, stop) if ind(lines[m]) == indent and lines[m].strip().startswith(key + ":")],
                "the key %s" % key)
+def trim(start, stop):
+    # stop moved back over the blank lines and comments before the next code
+    while stop > start + 1 and not code(lines[stop - 1]):
+        stop -= 1
+    return stop
+def block(jname, sname):
+    n, k, dash, stop = step(jname, sname)
+    return k, trim(k, stop), dash
+def job_end(name):
+    j, end = job(name)
+    return trim(j, end)
+def event(name):
+    o = one([k for k, l in enumerate(lines) if l == "on:"], "on:")
+    p = one([k for k in range(o + 1, len(lines)) if lines[k] == "  %s:" % name
+             and all(ind(lines[m]) > 0 or not code(lines[m]) for m in range(o + 1, k))], "on." + name)
+    end = next((k for k in range(p + 1, len(lines)) if code(lines[k]) and ind(lines[k]) <= 2), len(lines))
+    return p, end
+def flow(m, key, add=None, drop=None):
+    # the flow list [a, 'b', ...] of the line m, key: [...], changed
+    head, value = lines[m].split(key + ":", 1)
+    value = value.strip()
+    if not (value.startswith("[") and value.endswith("]")):
+        sys.exit("%s: the value of %s is not a list in brackets: %r" % (action, key, value))
+    items = [i.strip() for i in value[1:-1].split(",") if i.strip()]
+    if drop is not None:
+        k = one([i for i, x in enumerate(items) if x.strip("'\"") == drop], "the item " + drop)
+        del items[k]
+    if add is not None:
+        items.append(add)
+    lines[m] = "%s%s: [%s]" % (head, key, ", ".join(items))
+def remove(k, stop):
+    del lines[k:stop]
+    if 0 < k < len(lines) and not lines[k - 1].strip() and not lines[k].strip():
+        del lines[k]
+def at_start(prefix):
+    return one([k for k, l in enumerate(lines) if l.startswith(prefix)], "a line starting with %r" % prefix)
 if action == "step-key":
     n, k, dash, stop = step(args[0], args[1])
     lines.insert(k + 1, " " * (dash + 2) + args[2])
@@ -450,10 +597,54 @@ elif action == "job-if":
     m = key_line(j + 1, end, 4, "if")
     lines[m] = "    if: " + args[1]
 elif action == "push-key":
-    o = one([k for k, l in enumerate(lines) if l == "on:"], "on:")
-    p = one([k for k in range(o + 1, len(lines)) if lines[k] == "  push:"
-             and all(ind(lines[m]) > 0 or not code(lines[m]) for m in range(o + 1, k))], "on.push")
+    p, end = event("push")
     lines.insert(p + 1, "    " + args[0])
+elif action == "pr-key":
+    p, end = event("pull_request")
+    lines.insert(p + 1, "    " + args[0])
+elif action in ("branches-drop", "branches-add"):
+    p, end = event("push")
+    m = key_line(p + 1, end, 4, "branches")
+    flow(m, "branches", **({"drop": args[0]} if action == "branches-drop" else {"add": args[0]}))
+elif action == "needs-drop":
+    j, end = job(args[0])
+    flow(key_line(j + 1, end, 4, "needs"), "needs", drop=args[1])
+elif action == "add-step":
+    dash = steps_of(args[0])[0][2]
+    at = block(args[0], args[1])[1] if args[1] else job_end(args[0])
+    lines[at:at] = [""] + [" " * dash + l for l in args[2:]]
+elif action == "del-step":
+    k, stop, dash = block(args[0], args[1])
+    remove(k, stop)
+elif action == "move-step":
+    k, stop, dash = block(args[0], args[1])
+    moved = lines[k:stop]
+    remove(k, stop)
+    if args[2]:
+        at = block(args[0], args[2])[0]
+        lines[at:at] = moved + [""]
+    else:
+        at = job_end(args[0])
+        lines[at:at] = [""] + moved
+elif action == "copy-step":
+    k, stop, dash = block(args[0], args[1])
+    copied = lines[k:stop]
+    at = block(args[0], args[2])[1]
+    lines[at:at] = [""] + copied
+elif action == "add-job":
+    j = one([k for k, l in enumerate(lines) if l == "jobs:"], "jobs:")
+    lines[j + 1:j + 1] = list(args) + [""]
+elif action == "append":
+    while lines and lines[-1] == "":
+        lines.pop()
+    lines += [args[0], ""]
+elif action == "swap-lines":
+    a, b = at_start(args[0]), at_start(args[1])
+    lines[a], lines[b] = lines[b], lines[a]
+elif action == "del-line":
+    del lines[at_start(args[0])]
+elif action == "replace-line":
+    lines[one([k for k, l in enumerate(lines) if l == args[0]], "the line %r" % args[0])] = args[1]
 elif action == "rename-job":
     j, end = job(args[0])
     lines[j] = "  %s:" % args[1]
@@ -530,6 +721,16 @@ test_steps() {
     steps_case "if: \${{ !cancelled() }} at the step \"$pick\" of check-conformance" check-conformance "$pick" "if:" \
       step-key check-conformance "$pick" 'if: ${{ !cancelled() }}'
   fi
+  steps_case "a new step without a name with if: false in check-conformance" check-conformance "" "if:" \
+    add-step check-conformance "" '- run: "true"' '  if: false'
+  steps_case "a new step without a name with continue-on-error: true in check-conformance" check-conformance "" \
+    continue-on-error add-step check-conformance "" '- run: "true"' '  continue-on-error: true'
+  steps_case "the step test_ci61 G3 removed" check-conformance "test_ci61 G3" "if:" \
+    del-step check-conformance "test_ci61 G3"
+  steps_case "a second step test_ci61 G3 with its if:" check-conformance "test_ci61 G3" name \
+    add-step check-conformance "test_ci61 G3" "- name: test_ci61 G3" '  if: ${{ !cancelled() }}' '  run: "true"'
+  steps_case "the key Continue-On-Error at the step test_ci61 G1" check-conformance "test_ci61 G1" \
+    Continue-On-Error step-key check-conformance "test_ci61 G1" "Continue-On-Error: true"
   for label in "not YAML" "empty"; do
     wf_copy "$c" || { miss "no copy of .github/workflows"; return; }
     if [ "$label" = "not YAML" ]; then printf 'jobs: [\n' > "$c/$ev"; else : > "$c/$ev"; fi
@@ -560,8 +761,9 @@ test_jobs() {
       miss "$label: exit $rc, $names named: $ok, output: $(tail -n 3 <<<"$out")"
     fi
   }
+  # extra FILE JOB ON-LINE [JOB-LINE]: a new workflow file FILE with the job JOB.
   extra() {
-    printf '%s\n' "name: Extra" "on:" "  push:" "    branches: [main, 'stage*']" "$3" "jobs:" "  $2:" \
+    printf '%s\n' "name: Extra" "on:" "  push:" "    branches: [main, 'stage*']" "$3" "jobs:" "  $2:" "${4:-}" \
       "    runs-on: ubuntu-24.04" "    steps:" "      - run: true" > "$c/$w/$1"
   }
   jobs_case "a second job build in extra.yml, on push with paths" build \
@@ -576,6 +778,36 @@ test_jobs() {
     edit_wf "$c/$w/artifact.yml" job-key bench "if: github.ref_name == 'main'"
   jobs_case "the job afp-2026-lint renamed" afp-2026-lint \
     edit_wf "$c/$w/isabelle.yml" rename-job afp-2026-lint lint-of-the-copy
+  jobs_case "paths-ignore at the push of parse-examples.yml" parse \
+    edit_wf "$c/$w/parse-examples.yml" push-key "paths-ignore: ['docs/**']"
+  jobs_case "paths at the pull_request of isabelle.yml" build \
+    edit_wf "$c/$w/isabelle.yml" pr-key "paths: ['formal/**']"
+  jobs_case "the branches of the push of parse-examples.yml without stage*" parse \
+    edit_wf "$c/$w/parse-examples.yml" branches-drop "stage*"
+  jobs_case "'!stagex*' in the branches of the push of parse-examples.yml" parse \
+    edit_wf "$c/$w/parse-examples.yml" branches-add "'!stagex*'"
+  jobs_case "continue-on-error at the job bench" bench \
+    edit_wf "$c/$w/artifact.yml" job-key bench "continue-on-error: true"
+  jobs_case "strategy with a matrix at the job parse" parse \
+    edit_wf "$c/$w/parse-examples.yml" job-key parse "strategy: {matrix: {python: ['3.12']}}"
+  jobs_case "strategy as an expression at the job parse" parse \
+    edit_wf "$c/$w/parse-examples.yml" job-key parse 'strategy: ${{ fromJSON(vars.STRATEGY) }}'
+  jobs_case "uses at the job artifact" artifact \
+    edit_wf "$c/$w/artifact.yml" job-key artifact "uses: ./.github/workflows/extra.yml"
+  jobs_case "the needs of the job evaluate without check-scenarios" evaluate \
+    edit_wf "$c/$w/evaluator.yml" needs-drop evaluate check-scenarios
+  jobs_case "a new job extra-check of evaluator.yml outside the needs of evaluate" evaluate \
+    edit_wf "$c/$w/evaluator.yml" add-job "  extra-check:" "    runs-on: ubuntu-24.04" "    steps:" '      - run: "true"'
+  jobs_case "a second key on at the end of parse-examples.yml" parse-examples.yml \
+    edit_wf "$c/$w/parse-examples.yml" append "\"on\": {push: {branches: [main, 'stage*']}, pull_request: {branches: [main]}}"
+  jobs_case "a new file extra.YML" extra.YML \
+    extra extra.YML other ""
+  jobs_case "name: \"\" at the job of a new extra.yml" extra.yml \
+    extra extra.yml other "" '    name: ""'
+  jobs_case "name: \${{ 'build' }} at the job of a new extra.yml" extra.yml \
+    extra extra.yml other "" "    name: \${{ 'build' }}"
+  jobs_case "name: \"build \" at the job of a new extra.yml" extra.yml \
+    extra extra.yml other "" '    name: "build "'
   wf_copy "$c" || { miss "no copy of .github/workflows"; return; }
   printf 'jobs: [\n' > "$c/$w/broken.yml"
   run_check jobs "$c"
@@ -584,6 +816,139 @@ test_jobs() {
   else
     miss "a workflow file that is not YAML: exit $rc, output: $(tail -n 3 <<<"$out")"
   fi
+}
+
+# line_with OUT SPEC...: a line of OUT holds every word of one SPEC, a list of
+# words separated by |.
+line_with() {
+  python3 - "$@" <<'EOF'
+import sys
+out, specs = sys.argv[1], sys.argv[2:]
+sys.exit(0 if any(all(w in l for w in s.split("|")) for s in specs for l in out.split("\n")) else 1)
+EOF
+}
+
+test_order() {
+  local c="$TMP/order" ev=".github/workflows/evaluator.yml" run="artifact/run.sh" out rc
+  local rm_s="Remove the exported code before the export" ex_s="Build TRIEL_Core and export the evaluator"
+  local ck_s="The committed code is the exported code"
+  local all="build-evaluator|$rm_s|$ex_s|$ck_s"
+  local -a want
+  order_copy() {
+    rm -rf "$c" && mkdir -p "$c" \
+      && git -C "$REPO" archive --format=tar HEAD .github/workflows "$run" | tar -C "$c" -xf -
+  }
+  # order_case LABEL SETUP...: SETUP run in the copy; the check must exit with
+  # 1 and print a line that holds every word of one of the lists in want.
+  order_case() {
+    local label=$1
+    shift
+    order_copy || { miss "no copy of .github/workflows and $run"; return; }
+    "$@" || { miss "$label: the corruption is not made"; return; }
+    run_check order "$c"
+    if [ $rc -eq 1 ] && line_with "$out" "${want[@]}"; then
+      caught "$label: exit 1, ${want[0]//|/, } named"
+    else
+      miss "$label: exit $rc, output: $(tail -n 3 <<<"$out")"
+    fi
+  }
+  want=("$all")
+  order_case "the check of the exported code before the removal" \
+    edit_wf "$c/$ev" move-step build-evaluator "$ck_s" "$rm_s"
+  order_case "the removal at the end of the job" \
+    edit_wf "$c/$ev" move-step build-evaluator "$rm_s" ""
+  order_case "the export before the removal" \
+    edit_wf "$c/$ev" move-step build-evaluator "$ex_s" "$rm_s"
+  want=("build-evaluator|$rm_s")
+  order_case "a copy of the removal after the export" \
+    edit_wf "$c/$ev" copy-step build-evaluator "$rm_s" "$ex_s"
+  want=("run.sh|isabelle_build" "run.sh|exported_code")
+  order_case "the lines step 02 and step 03 of run.sh swapped" \
+    edit_wf "$c/$run" swap-lines "step 02-" "step 03-"
+  # A line removed: the function that the order needs at one of the places
+  # from the removed line on.
+  local -a fns=(no_sorry isabelle_build exported_code build_evaluator classification scenarios tests
+    parse_examples ambiguity_tests document_excerpts paper_theorems conformance conformance_manifest
+    conformance_self_check no_oracles)
+  local f
+  want=()
+  for f in "${fns[@]:12}"; do want+=("run.sh|$f"); done
+  order_case "the line step 13 of run.sh removed" \
+    edit_wf "$c/$run" del-line "step 13-"
+  want=()
+  for f in "${fns[@]:2}"; do want+=("run.sh|$f"); done
+  order_case "the line step 03 of run.sh removed" \
+    edit_wf "$c/$run" del-line "step 03-"
+  want=("run.sh|exported_code")
+  order_case "the function exported_code of run.sh not defined" \
+    edit_wf "$c/$run" replace-line "exported_code() {" "exported_code_renamed() {"
+  want=("run.sh")
+  order_case "run.sh deleted" rm "$c/$run"
+  want=("evaluator.yml")
+  order_case "an empty evaluator.yml" truncate -s 0 "$c/$ev"
+}
+
+test_digit() {
+  local step="Check for sorry, oops and axiomatization" c="$TMP/digit"
+  local code fn_ns fn_ck line_ck n core art out rc line mech place
+  local -a good=('lemma sorry_free: "True" by simp')
+  local -a bad=('lemma "False" prefer 1sorry' 'lemma "False" prefer 1oops' 'term 2axiomatization digit_c :: bool')
+  code=$(step_run_in "$REPO/.github/workflows/isabelle.yml" build "$step") \
+    || { miss "the step \"$step\" was not found in isabelle.yml"; return; }
+  fn_ns=$(fn_of "$REPO/artifact/run.sh" no_sorry)
+  fn_ck=$(fn_of "$REPO/tools/make_afp_copy.sh" check)
+  [ -n "$fn_ns" ] && [ -n "$fn_ck" ] \
+    || { miss "no function no_sorry in artifact/run.sh or check in tools/make_afp_copy.sh"; return; }
+  n=$(grep -c '^check "sorry, oops or axiomatization" ' "$REPO/tools/make_afp_copy.sh")
+  [ "$n" = 1 ] || { miss "$n lines check \"sorry, oops or axiomatization\" in tools/make_afp_copy.sh"; return; }
+  line_ck=$(grep '^check "sorry, oops or axiomatization" ' "$REPO/tools/make_afp_copy.sh")
+  copy_of_head "$c/head" || { miss "no copy of HEAD"; return; }
+  core=$(cd "$c/head" && ls formal/core/*.thy | head -n 1)
+  art=$(cd "$c/head" && ls artifact/isabelle/*.thy | head -n 1)
+  [ -n "$core" ] && [ -n "$art" ] || { miss "no theory in formal/core or artifact/isabelle"; return; }
+  printf '%s\nno_sorry\n' "$fn_ns" > "$TMP/digit_no_sorry.sh"
+  printf 'fail=0\n%s\n%s\necho "fail=$fail"\n' "$fn_ck" "$line_ck" > "$TMP/digit_check.sh"
+  mkdir -p "$c/entry" "$c/cwd" && printf 'session A\n' > "$c/entry/ROOT" \
+    && cp "$c/head/$core" "$c/entry/" || { miss "no entry for check"; return; }
+  # digit_run MECH PLACE LINE: LINE (none if empty) added to the theory PLACE,
+  # then the mechanism MECH run; sets out and rc (for check: 0 if fail=0, 1 if
+  # fail=1, 2 otherwise). The theory is restored afterwards.
+  digit_run() {
+    local f
+    if [ "$1" = check ]; then f="$c/entry/${core##*/}"; else f="$c/head/$2"; fi
+    cp "$f" "$TMP/digit.thy" || return 1
+    [ -z "$3" ] || printf '\n%s\n' "$3" >> "$f"
+    case $1 in
+      isabelle.yml) out=$(cd "$c/head" && bash -e -c "$code" 2>&1); rc=$? ;;
+      no_sorry) out=$(cd "$c/head" && bash -u "$TMP/digit_no_sorry.sh" 2>&1); rc=$? ;;
+      check)
+        out=$(cd "$c/cwd" && ENTRY="$c/entry" bash "$TMP/digit_check.sh" 2>&1); rc=2
+        grep -qx "fail=0" <<<"$out" && rc=0
+        grep -qx "fail=1" <<<"$out" && rc=1 ;;
+    esac
+    cp "$TMP/digit.thy" "$f"
+  }
+  for mech in isabelle.yml no_sorry check; do
+    for place in "$core" "$art"; do
+      [ "$place" = "$art" ] && [ "$mech" != no_sorry ] && continue
+      for line in "" "${good[@]}"; do
+        digit_run "$mech" "$place" "$line"
+        if [ $rc -eq 0 ]; then
+          caught "$mech, $place ${line:-of HEAD}: passes"
+        else
+          miss "$mech, $place ${line:-of HEAD}: exit $rc, output: $(tail -n 3 <<<"$out")"
+        fi
+      done
+      for line in "${bad[@]}"; do
+        digit_run "$mech" "$place" "$line"
+        if [ $rc -ne 0 ] && grep -qF -- "$line" <<<"$out"; then
+          caught "$mech, $place with $line: exit $rc, the line printed"
+        else
+          miss "$mech, $place with $line: exit $rc, output: $(tail -n 3 <<<"$out")"
+        fi
+      done
+    done
+  done
 }
 
 "test_$1"
