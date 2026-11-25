@@ -130,7 +130,9 @@ check() {  # check MESSAGE GREP-OPTIONS PATTERN
     fail=1
   fi
 }
-check "sorry, oops or axiomatization" -w 'sorry|oops|axiomatization'
+# A word counts after a digit too (Isabelle reads 1sorry as 1 and sorry), but
+# not before a letter, a digit, _ or ' (sorry_free is a name).
+check "sorry, oops or axiomatization" '' "(^|[^A-Za-z])(sorry|oops|axiomatization)([^A-Za-z0-9_']|\$)"
 check "sledgehammer or smt_oracle" -w 'sledgehammer|smt_oracle'
 check "quick_and_dirty or skip_proofs" '' 'quick_and_dirty|skip_proofs'
 check "export of files" '' 'export_files|export_generated_files|code_reflect'

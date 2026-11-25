@@ -57,6 +57,8 @@ Relative to v2.3.3, v2.4 added three extensions:
 * an optional `WITHIN` deadline on `EVENTUALLY(...)` invariants, for bounded liveness properties
 * a `Progress<T>` composite type, for expressing graduated status (not just boolean done/not-done)
 
+The work on this repository is done with the help of AI assistants. Its claims do not rest on trust in the authors: Isabelle checks the theorems, and on every commit the CI workflows check that the evaluator is the code exported from them and that it gives the reports expected.
+
 ## Formal core
 
 [`formal/core`](formal/core/CORE.md) formalises the semantics of a core of TRIEL in Isabelle/HOL: its definitions, the theorems proved about them, and the design decisions they forced. An evaluator exported from these theories ([`evaluator/`](evaluator/README.md)) computes the verdicts of a specification on a trace, and the decisions of the fail-closed monitor of each prohibition, a function on traces proved sound, and transparent when the condition of the prohibition is defined at every entry of the trace. [`parser/triel_to_core.py`](parser/README.md) translates a specification into the core and checks the semantic rules that apply to it, or rejects by name the constructs that lie outside it. [`examples/core/`](examples/core/README.md) holds specifications and scenarios with their expected reports; `examples/core/classification.expected` lists which examples the core accepts.

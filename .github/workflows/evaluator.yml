@@ -347,6 +347,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 tools/check_workflows.py jobs
 
+      - name: The checks of the export and of run.sh run in order
+        if: ${{ !cancelled() }}
+        run: python3 tools/check_workflows.py order
+
       # parser/triel_host.py, the trace that a host builds from its own records,
       # and triel_to_core.py --actions, against the reports of triel check.
       - name: Tests of the trace of a host and of --actions

@@ -76,7 +76,9 @@ no_sorry() {
     fi
     files+=("${thy[@]}")
   done
-  grep -nwE 'sorry|oops|axiomatization' "${files[@]}"
+  # A word counts after a digit too (Isabelle reads 1sorry as 1 and sorry),
+  # but not before a letter, a digit, _ or ' (sorry_free is a name).
+  grep -nE "(^|[^A-Za-z])(sorry|oops|axiomatization)([^A-Za-z0-9_']|\$)" "${files[@]}"
   rc=$?
   if [ $rc -eq 0 ]; then
     echo "error: sorry, oops or axiomatization found"

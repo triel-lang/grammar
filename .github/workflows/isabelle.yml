@@ -21,6 +21,9 @@ jobs:
       # session may not switch proof checking off. grep exits with 1 when it
       # finds nothing, 0 when it finds a line, and with any other code when it
       # fails, for example on a file it cannot read; a failure fails the step.
+      # A word counts after any character that is not a letter, a digit too:
+      # Isabelle reads 1sorry as 1 and sorry. A letter, a digit, _ or ' after
+      # it makes it part of a longer name, as in sorry_free.
       - name: Check for sorry, oops and axiomatization
         run: |
           shopt -s nullglob
@@ -31,7 +34,7 @@ jobs:
             exit 1
           fi
           rc=0
-          grep -nwE 'sorry|oops|axiomatization' "${thy[@]}" || rc=$?
+          grep -nE "(^|[^A-Za-z])(sorry|oops|axiomatization)([^A-Za-z0-9_']|\$)" "${thy[@]}" || rc=$?
           if [ $rc -eq 0 ]; then
             echo "::error::formal/core contains sorry, oops or axiomatization"
             exit 1
