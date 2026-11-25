@@ -62,7 +62,7 @@ jobs:
         if: steps.cache-isabelle.outputs.cache-hit != 'true'
         run: |
           archive="${ISABELLE_VERSION}_linux.tar.gz"
-          for base in https://isabelle.in.tum.de/dist https://www.cl.cam.ac.uk/research/hvg/Isabelle/dist; do
+          for base in "https://isabelle.in.tum.de/website-${ISABELLE_VERSION}/dist" https://isabelle.in.tum.de/dist https://www.cl.cam.ac.uk/research/hvg/Isabelle/dist; do
             if curl -fL --retry 3 -o "/tmp/$archive" "$base/$archive"; then
               break
             fi
