@@ -337,6 +337,18 @@ jobs:
         if: ${{ !cancelled() }}
         run: tools/test_ci61.sh order
 
+      - name: test_ci61 download
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh download
+
+      - name: test_ci61 needs
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh needs
+
+      - name: test_ci61 summary
+        if: ${{ !cancelled() }}
+        run: tools/test_ci61.sh summary
+
       # The keys of the steps of this file and the required checks of the rule
       # of the branch main: tools/check_workflows.py.
       - name: No step of evaluator.yml continues on error or is skipped unless named

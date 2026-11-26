@@ -3,7 +3,7 @@
 # reject (and, where named, on copies it must pass).
 #
 # Usage:
-#   tools/test_ci61.sh g1|g2|g3|g4|g1run|g4run|steps|jobs|digit|order
+#   tools/test_ci61.sh g1|g2|g3|g4|g1run|g4run|steps|jobs|digit|order|download|needs|summary
 #
 #   g1     the step "The manifest of the conformance suite matches the files"
 #          of .github/workflows/evaluator.yml (job check-conformance). It must
@@ -57,10 +57,13 @@
 #          if:, a new step without a name with if: false and one with
 #          continue-on-error: true in check-conformance, the step test_ci61 G3
 #          removed, a second step test_ci61 G3 with its if:, the key
-#          Continue-On-Error at the step test_ci61 G1, an evaluator.yml that is
-#          not YAML and an empty one. The check must exit with 1 and print a line
-#          that names the job, the step (for a step with a name) and the key as
-#          written (continue-on-error, if:, Continue-On-Error; name for a
+#          Continue-On-Error at the step test_ci61 G1, the key If: false at the
+#          step test_ci61 G2, the key IF: false at the step test_ci61 G4, a
+#          second step "Compile the evaluator" without if: (run: "true") after
+#          the first in build-evaluator, an evaluator.yml that is not YAML and
+#          an empty one. The check must exit with 1 and print a line that names
+#          the job, the step (for a step with a name) and the key as written
+#          (continue-on-error, if:, Continue-On-Error, If, IF; name for a
 #          second step of the same name), or evaluator.yml.
 #   jobs   python3 tools/check_workflows.py jobs, in the same way: a second job
 #          build in a new extra.yml that runs on push with paths, a second job
@@ -76,9 +79,24 @@
 #          extra-check of evaluator.yml outside those needs, a second key "on"
 #          at the end of parse-examples.yml, a new file extra.YML, and a new
 #          extra.yml whose job has name: "", name: ${{ 'build' }} or
-#          name: "build ". The check must exit with 1 and name each check
-#          concerned as a word of its own (no letter, digit, _ or - next to it),
-#          or the file.
+#          name: "build ". Further: '!main' in the branches of the push of
+#          parse-examples.yml; '!stage*' and, as a case of its own, '!stage*b'
+#          in the branches of artifact.yml; new files extra.Yaml and extra.YAML
+#          with a job other; a new extra.yml whose job has name: without a
+#          value or name: 1; extra-job added to the needs of evaluate; needs:
+#          anonymous-archive at the job bench; a new job gate with if: false in
+#          parse-examples.yml and needs: gate at the job parse; keys in another
+#          case: If: false at the job parse, Continue-On-Error: true at bench,
+#          Paths-Ignore at the push of parse-examples.yml, Strategy at parse,
+#          Paths at the pull_request of isabelle.yml, Needs at bench, and the
+#          line "  pull_request:" of isabelle.yml as "  Pull_Request:"; the
+#          pull_request of isabelle.yml as a list (its line "    branches:
+#          [main]" replaced by "    - paths: ['formal/**']"); at the end of
+#          parse-examples.yml the line Name: extra, and the line true: or on:
+#          with the same events as its first on (YAML 1.1 reads on and true as
+#          one key, so the file repeats a key and nothing else is wrong). The
+#          check must exit with 1 and name each check concerned as a word of
+#          its own (no letter, digit, _ or - next to it), or the file.
 #   digit  the search for sorry, oops and axiomatization in three places, each
 #          run as CI or its script runs it, in a copy of HEAD: the step "Check
 #          for sorry, oops and axiomatization" of the job build of
@@ -87,11 +105,21 @@
 #          as cases of their own, into artifact/isabelle/*.thy), and the
 #          function check of tools/make_afp_copy.sh with its line check "sorry,
 #          oops or axiomatization", on an ENTRY with the theory and a ROOT. Each
-#          must pass on the theories of HEAD and with the line
-#          lemma sorry_free: "True" by simp added to a theory; with each of the
-#          lines lemma "False" prefer 1sorry, lemma "False" prefer 1oops and
-#          term 2axiomatization digit_c :: bool added, it must fail (exit code
-#          not 0, or fail=1 for check) and print the line.
+#          runs with LC_ALL=C.UTF-8 in its environment, the locale of the
+#          runners; before the runs the test checks that the locale is in
+#          effect (a byte A0 between two letters is then not a match of
+#          [^A-Za-z]), and without it the test misses. Each mechanism must pass
+#          on the theories of HEAD and with each line of the list good added to
+#          a theory: lemma sorry_free: "True" by simp, lemma sorry': "True" by
+#          simp, lemma sorry2: "True" by simp. With each line of the list bad
+#          added, it must fail (exit code not 0, or fail=1 for check) and print
+#          the line, searched for with LC_ALL=C grep -qF: lemma "False" prefer
+#          1sorry, lemma "False" prefer 1oops, term 2axiomatization digit_c ::
+#          bool, lemma "False" sorry, sorry and oops alone on a line from the
+#          first column, axiomatization digit_c :: bool, sorry(* c *),
+#          "x"sorry, \<close>oops, x _sorry, and lines with bytes that are not
+#          UTF-8: lemma "False" <A0>sorry, lemma "False" sorry<A0>,
+#          x<FF>sorry<FF>, lemma "False" <C3>sorry.
 #   order  python3 tools/check_workflows.py order of the working tree, run in a
 #          copy of .github/workflows and artifact/run.sh of HEAD with one
 #          corruption: in the job build-evaluator of evaluator.yml the step
@@ -106,23 +134,91 @@
 #          (build-evaluator and the step for the copy), run.sh and the function
 #          the order needs at a place where it is broken (for a swap, at one of
 #          the two places; for a removed line, at one of the places from it
-#          on), or the file.
+#          on), or the file. Further cases, each with the line it needs:
+#          the removal renamed "Remove the code" (build-evaluator and the
+#          former name); after the line step 15-... a line "step 16-extra
+#          extra_fn" (run.sh and extra_fn); the label of the line step 02-...
+#          replaced by 99-x (run.sh and isabelle_build); a line "# between"
+#          between the lines step 05-... and step 06-... (run.sh and
+#          scenarios); before the line total_start= a line "no_sorry() {
+#          return 0; }" (run.sh and no_sorry()), "step() { :; }" (run.sh and
+#          step()), "function no_oracles { return 0; }" (run.sh and
+#          no_oracles()) or ": ; no_sorry() { return 0; }" (run.sh and
+#          no_sorry()); after the line total_seconds= a line "failures=()"
+#          (run.sh and sha256); a line true at the end of the run: of the
+#          removal (build-evaluator, the removal and sha256); a new step
+#          "Restore the exported code" (run: git checkout --
+#          evaluator/generated) after "Build TRIEL_Core and export the
+#          evaluator" (build-evaluator and Restore the exported code).
+#   download  the step "Download Isabelle" of the job build of isabelle.yml,
+#          build-evaluator of evaluator.yml, bridge of mfotl.yml and evidence of
+#          evidence.yml: its run: from the working tree, run with bash -e -c,
+#          HOME a directory of the test, and first on PATH a curl of the test.
+#          That curl reads -o FILE, the address (an argument that starts with
+#          http) and --retry-all-errors from its arguments, writes the address
+#          to a log, and does what the first line of a plan whose prefix starts
+#          the address says: good writes the good archive of the test (a
+#          tar.gz with <version>/bin/isabelle holding "good"), other another
+#          valid archive (holding "other"), html a page of HTML, reset the good
+#          archive with --retry-all-errors and else a part of it and the exit
+#          code 56; any other line, the exit code 22. ISABELLE_VERSION is read
+#          from the file; ISABELLE_SHA256 is the sha256 of the good archive of
+#          the test. /tmp/<version>_linux.tar.gz is removed before each case.
+#          The prefixes are https://isabelle.in.tum.de/website-,
+#          https://isabelle.in.tum.de/dist and https://www.cl.cam.ac.uk/. For
+#          each file: good at the archive of the release passes, unpacks the
+#          good archive, and the first address of the log is that of the
+#          archive of the release; reset at all three passes with the good
+#          archive; other at the first and good at the second passes with the
+#          good archive; html, other, other fails and leaves no
+#          ~/isabelle/<version>; the code 22 at all three fails, as does 22,
+#          22 and other at the last. The line key: of the step "Cache the
+#          Isabelle distribution" of the same job is exactly
+#          key: ${{ env.ISABELLE_VERSION }}-linux-x86_64-${{ env.ISABELLE_SHA256 }}.
+#          The ISABELLE_SHA256 of the top env of the four files (the lines
+#          "  ISABELLE_VERSION:" and "  ISABELLE_SHA256:", read without a YAML
+#          library) is 64 hexadecimal digits, the same in all four.
+#   needs  the step "Every job succeeded" of the job evaluate of evaluator.yml.
+#          Read as text: the step has exactly one key env:, and under it the
+#          line NEEDS: ${{ toJSON(needs) }}. Its run: is run with bash -e -c
+#          and NEEDS a JSON text as toJSON(needs) writes it ({"<job>":
+#          {"result": "...", "outputs": {}}, ...}). With the five jobs
+#          build-evaluator, check-adapter, check-translator,
+#          check-conformance and check-scenarios all success it passes; with
+#          failure, cancelled or skipped at the first or at the last job (six
+#          cases), with a sixth job extra-check: failure beside five success,
+#          with {} and with a text that is not JSON it fails.
+#   summary  the step "Run the artifact" of the job artifact of artifact.yml,
+#          run with bash -e -c in an empty directory, with a docker of the test
+#          first on PATH: docker run writes into the directory mounted on
+#          /results (the part before : of the argument after -v) a file
+#          summary.txt with the line "=== Summary" and the line of the case, or
+#          writes none, and prints an id; docker logs prints a line; docker
+#          wait prints the exit code of the case; other calls print nothing.
+#          The step passes with "RESULT: all 15 steps passed" and the code 0;
+#          it fails with "RESULT: all 14 steps passed", "RESULT: all 0 steps
+#          passed", "RESULT: FAILED: 03-exported-code" (code 0), without
+#          summary.txt (code 0), with "RESULT: all 15 steps passed" and the
+#          code 1, and when the container writes no summary.txt but
+#          results/summary.txt with "RESULT: all 15 steps passed" was there
+#          before the step (code 0).
 #
 # The code of a step, a function or the check is read from the file that CI
 # runs, in the working tree, by the name of the step (and its job), of the
 # function or of the script; it is not copied here. The scratch copies are made
 # from git archive HEAD. The test needs bash, git and python3 (no PyYAML), and
-# reads no git configuration of the machine.
+# for download tar, gzip and sha256sum; it reads no git configuration of the
+# machine.
 #
 # Exit code: 0 if the check rejected every corrupted copy; otherwise 1 and the
-# line "not caught: G1" (G2, G3, G4, G1RUN, G4RUN, STEPS, JOBS, DIGIT, ORDER); 2
-# on a usage error.
+# line "not caught: G1" (G2, G3, G4, G1RUN, G4RUN, STEPS, JOBS, DIGIT, ORDER,
+# DOWNLOAD, NEEDS, SUMMARY); 2 on a usage error.
 
 set -uo pipefail
 
-usage() { echo "usage: $0 g1|g2|g3|g4|g1run|g4run|steps|jobs|digit|order" >&2; exit 2; }
+usage() { echo "usage: $0 g1|g2|g3|g4|g1run|g4run|steps|jobs|digit|order|download|needs|summary" >&2; exit 2; }
 [ $# -eq 1 ] || usage
-case $1 in g1|g2|g3|g4|g1run|g4run|steps|jobs|digit|order) ;; *) usage ;; esac
+case $1 in g1|g2|g3|g4|g1run|g4run|steps|jobs|digit|order|download|needs|summary) ;; *) usage ;; esac
 G=$(printf '%s' "$1" | tr a-z A-Z)
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -508,11 +604,18 @@ wf_copy() {
 #   branches-drop ITEM      ITEM removed from the list on.push.branches
 #   branches-add ITEM       ITEM added at the end of that list
 #   needs-drop JOB ITEM     ITEM removed from the list needs of the job JOB
+#   needs-add JOB ITEM      ITEM added at the end of that list
 #   add-job LINE...         the lines LINE right after the line jobs:
 #   append LINE             LINE at the end of the file
 #   swap-lines A B          the lines that start with A and with B swapped
 #   del-line A              the line that starts with A removed
 #   replace-line OLD NEW    the line OLD replaced by NEW
+#   insert-before A LINE    LINE before the line that starts with A
+#   insert-after A LINE     LINE after the line that starts with A
+#   replace-part A OLD NEW  in the line that starts with A, OLD (there once)
+#                           replaced by NEW
+#   run-append JOB STEP LINE  LINE at the end of the run: | of the step STEP of
+#                           the job JOB, with the indentation of its lines
 edit_wf() {
   python3 - "$@" <<'EOF'
 import random, sys
@@ -609,6 +712,9 @@ elif action in ("branches-drop", "branches-add"):
 elif action == "needs-drop":
     j, end = job(args[0])
     flow(key_line(j + 1, end, 4, "needs"), "needs", drop=args[1])
+elif action == "needs-add":
+    j, end = job(args[0])
+    flow(key_line(j + 1, end, 4, "needs"), "needs", add=args[1])
 elif action == "add-step":
     dash = steps_of(args[0])[0][2]
     at = block(args[0], args[1])[1] if args[1] else job_end(args[0])
@@ -645,6 +751,30 @@ elif action == "del-line":
     del lines[at_start(args[0])]
 elif action == "replace-line":
     lines[one([k for k, l in enumerate(lines) if l == args[0]], "the line %r" % args[0])] = args[1]
+elif action == "insert-before":
+    lines.insert(at_start(args[0]), args[1])
+elif action == "insert-after":
+    lines.insert(at_start(args[0]) + 1, args[1])
+elif action == "replace-part":
+    k = at_start(args[0])
+    if lines[k].count(args[1]) != 1:
+        sys.exit("%s: %r is not once in the line %r" % (action, args[1], lines[k]))
+    lines[k] = lines[k].replace(args[1], args[2])
+elif action == "run-append":
+    k, stop, dash = block(args[0], args[1])
+    m = key_line(k + 1, stop, dash + 2, "run")
+    if lines[m].strip()[len("run:"):].strip() not in ("|", "|-", "|+"):
+        sys.exit("%s: the run: of the step %r is not a block |" % (action, args[1]))
+    last = m
+    for n in range(m + 1, stop):
+        if lines[n].strip() and ind(lines[n]) <= dash + 2:
+            break
+        if lines[n].strip():
+            last = n
+    if last == m:
+        sys.exit("%s: the run: of the step %r is empty" % (action, args[1]))
+    body = [l for l in lines[m + 1:last + 1] if l.strip()]
+    lines.insert(last + 1, " " * min(ind(l) for l in body) + args[2])
 elif action == "rename-job":
     j, end = job(args[0])
     lines[j] = "  %s:" % args[1]
@@ -731,6 +861,12 @@ test_steps() {
     add-step check-conformance "test_ci61 G3" "- name: test_ci61 G3" '  if: ${{ !cancelled() }}' '  run: "true"'
   steps_case "the key Continue-On-Error at the step test_ci61 G1" check-conformance "test_ci61 G1" \
     Continue-On-Error step-key check-conformance "test_ci61 G1" "Continue-On-Error: true"
+  steps_case "the key If: false at the step test_ci61 G2" check-conformance "test_ci61 G2" If \
+    step-key check-conformance "test_ci61 G2" "If: false"
+  steps_case "the key IF: false at the step test_ci61 G4" check-conformance "test_ci61 G4" IF \
+    step-key check-conformance "test_ci61 G4" "IF: false"
+  steps_case "a second step Compile the evaluator without if:" build-evaluator "Compile the evaluator" name \
+    add-step build-evaluator "Compile the evaluator" "- name: Compile the evaluator" '  run: "true"'
   for label in "not YAML" "empty"; do
     wf_copy "$c" || { miss "no copy of .github/workflows"; return; }
     if [ "$label" = "not YAML" ]; then printf 'jobs: [\n' > "$c/$ev"; else : > "$c/$ev"; fi
@@ -808,6 +944,53 @@ test_jobs() {
     extra extra.yml other "" "    name: \${{ 'build' }}"
   jobs_case "name: \"build \" at the job of a new extra.yml" extra.yml \
     extra extra.yml other "" '    name: "build "'
+  jobs_case "'!main' in the branches of the push of parse-examples.yml" parse \
+    edit_wf "$c/$w/parse-examples.yml" branches-add "'!main'"
+  jobs_case "'!stage*' in the branches of artifact.yml" "artifact bench anonymous-archive" \
+    edit_wf "$c/$w/artifact.yml" branches-add "'!stage*'"
+  jobs_case "'!stage*b' in the branches of artifact.yml" artifact \
+    edit_wf "$c/$w/artifact.yml" branches-add "'!stage*b'"
+  jobs_case "a new file extra.Yaml" extra.Yaml \
+    extra extra.Yaml other ""
+  jobs_case "a new file extra.YAML" extra.YAML \
+    extra extra.YAML other ""
+  jobs_case "name: without a value at the job of a new extra.yml" extra.yml \
+    extra extra.yml other "" '    name:'
+  jobs_case "name: 1 at the job of a new extra.yml" extra.yml \
+    extra extra.yml other "" '    name: 1'
+  jobs_case "extra-job, which is no job, in the needs of evaluate" evaluate \
+    edit_wf "$c/$w/evaluator.yml" needs-add evaluate extra-job
+  jobs_case "needs: anonymous-archive at the job bench" bench \
+    edit_wf "$c/$w/artifact.yml" job-key bench "needs: anonymous-archive"
+  # gate: a new job gate with if: false, and needs: gate at the job parse.
+  gate() {
+    edit_wf "$c/$w/parse-examples.yml" add-job "  gate:" "    if: false" "    runs-on: ubuntu-24.04" \
+      "    steps:" '      - run: "true"' \
+      && edit_wf "$c/$w/parse-examples.yml" job-key parse "needs: gate"
+  }
+  jobs_case "a job gate with if: false and needs: gate at the job parse" parse gate
+  jobs_case "If: false at the job parse" parse \
+    edit_wf "$c/$w/parse-examples.yml" job-key parse "If: false"
+  jobs_case "Continue-On-Error: true at the job bench" bench \
+    edit_wf "$c/$w/artifact.yml" job-key bench "Continue-On-Error: true"
+  jobs_case "Paths-Ignore at the push of parse-examples.yml" parse \
+    edit_wf "$c/$w/parse-examples.yml" push-key "Paths-Ignore: ['**']"
+  jobs_case "Strategy at the job parse" parse \
+    edit_wf "$c/$w/parse-examples.yml" job-key parse "Strategy: {matrix: {python: ['3.12']}}"
+  jobs_case "Paths at the pull_request of isabelle.yml" build \
+    edit_wf "$c/$w/isabelle.yml" pr-key "Paths: ['formal/**']"
+  jobs_case "Needs: anonymous-archive at the job bench" bench \
+    edit_wf "$c/$w/artifact.yml" job-key bench "Needs: anonymous-archive"
+  jobs_case "Pull_Request instead of pull_request in isabelle.yml" build \
+    edit_wf "$c/$w/isabelle.yml" replace-line "  pull_request:" "  Pull_Request:"
+  jobs_case "the pull_request of isabelle.yml as a list" build \
+    edit_wf "$c/$w/isabelle.yml" replace-line "    branches: [main]" "    - paths: ['formal/**']"
+  jobs_case "Name: extra at the end of parse-examples.yml" parse-examples.yml \
+    edit_wf "$c/$w/parse-examples.yml" append "Name: extra"
+  jobs_case "a key true with the events of on at the end of parse-examples.yml" parse-examples.yml \
+    edit_wf "$c/$w/parse-examples.yml" append "true: {push: {branches: [main, 'stage*']}, pull_request: {branches: [main]}}"
+  jobs_case "a second key on at the end of parse-examples.yml, unquoted" parse-examples.yml \
+    edit_wf "$c/$w/parse-examples.yml" append "on: {push: {branches: [main, 'stage*']}, pull_request: {branches: [main]}}"
   wf_copy "$c" || { miss "no copy of .github/workflows"; return; }
   printf 'jobs: [\n' > "$c/$w/broken.yml"
   run_check jobs "$c"
@@ -886,13 +1069,54 @@ test_order() {
   order_case "run.sh deleted" rm "$c/$run"
   want=("evaluator.yml")
   order_case "an empty evaluator.yml" truncate -s 0 "$c/$ev"
+  want=("build-evaluator|$rm_s")
+  order_case "the removal renamed Remove the code" \
+    edit_wf "$c/$ev" replace-line "      - name: $rm_s" "      - name: Remove the code"
+  want=("run.sh|extra_fn")
+  order_case "a line step 16-extra after the line step 15" \
+    edit_wf "$c/$run" insert-after "step 15-" "step 16-extra               extra_fn"
+  want=("run.sh|isabelle_build")
+  order_case "the label of the line step 02 replaced by 99-x" \
+    edit_wf "$c/$run" replace-part "step 02-" "02-isabelle-build" "99-x"
+  want=("run.sh|scenarios")
+  order_case "a line # between the lines step 05 and step 06" \
+    edit_wf "$c/$run" insert-after "step 05-" "# between"
+  want=("run.sh|no_sorry()")
+  order_case "no_sorry() { return 0; } before the line total_start=" \
+    edit_wf "$c/$run" insert-before "total_start=" "no_sorry() { return 0; }"
+  want=("run.sh|step()")
+  order_case "step() { :; } before the line total_start=" \
+    edit_wf "$c/$run" insert-before "total_start=" "step() { :; }"
+  want=("run.sh|no_oracles()")
+  order_case "function no_oracles { return 0; } before the line total_start=" \
+    edit_wf "$c/$run" insert-before "total_start=" "function no_oracles { return 0; }"
+  want=("run.sh|no_sorry()")
+  order_case ": ; no_sorry() { return 0; } before the line total_start=" \
+    edit_wf "$c/$run" insert-before "total_start=" ": ; no_sorry() { return 0; }"
+  want=("run.sh|sha256")
+  order_case "failures=() after the line total_seconds=" \
+    edit_wf "$c/$run" insert-after "total_seconds=" "failures=()"
+  want=("build-evaluator|$rm_s|sha256")
+  order_case "a line true at the end of the run: of the removal" \
+    edit_wf "$c/$ev" run-append build-evaluator "$rm_s" "true"
+  want=("build-evaluator|Restore the exported code")
+  order_case "a step Restore the exported code after the export" \
+    edit_wf "$c/$ev" add-step build-evaluator "$ex_s" "- name: Restore the exported code" \
+    "  run: git checkout -- evaluator/generated"
 }
 
 test_digit() {
   local step="Check for sorry, oops and axiomatization" c="$TMP/digit"
   local code fn_ns fn_ck line_ck n core art out rc line mech place
-  local -a good=('lemma sorry_free: "True" by simp')
-  local -a bad=('lemma "False" prefer 1sorry' 'lemma "False" prefer 1oops' 'term 2axiomatization digit_c :: bool')
+  local -a good=('lemma sorry_free: "True" by simp' "lemma sorry': \"True\" by simp" 'lemma sorry2: "True" by simp')
+  local -a bad=('lemma "False" prefer 1sorry' 'lemma "False" prefer 1oops' 'term 2axiomatization digit_c :: bool'
+    'lemma "False" sorry' 'sorry' 'oops' 'axiomatization digit_c :: bool' 'sorry(* c *)' '"x"sorry'
+    '\<close>oops' 'x _sorry'
+    $'lemma "False" \xa0sorry' $'lemma "False" sorry\xa0' $'x\xffsorry\xff' $'lemma "False" \xc3sorry')
+  # The locale of the runners: in C.UTF-8 a byte that is not UTF-8 is no
+  # match of [^A-Za-z]. Without the locale the cases with bytes test nothing.
+  n=$(printf 'a\xa0b\n' | LC_ALL=C.UTF-8 grep -cE 'a[^A-Za-z]b')
+  [ "$n" = 0 ] || { miss "no locale C.UTF-8: a byte A0 matches [^A-Za-z] (count ${n:-none})"; return; }
   code=$(step_run_in "$REPO/.github/workflows/isabelle.yml" build "$step") \
     || { miss "the step \"$step\" was not found in isabelle.yml"; return; }
   fn_ns=$(fn_of "$REPO/artifact/run.sh" no_sorry)
@@ -919,10 +1143,10 @@ test_digit() {
     cp "$f" "$TMP/digit.thy" || return 1
     [ -z "$3" ] || printf '\n%s\n' "$3" >> "$f"
     case $1 in
-      isabelle.yml) out=$(cd "$c/head" && bash -e -c "$code" 2>&1); rc=$? ;;
-      no_sorry) out=$(cd "$c/head" && bash -u "$TMP/digit_no_sorry.sh" 2>&1); rc=$? ;;
+      isabelle.yml) out=$(cd "$c/head" && LC_ALL=C.UTF-8 bash -e -c "$code" 2>&1); rc=$? ;;
+      no_sorry) out=$(cd "$c/head" && LC_ALL=C.UTF-8 bash -u "$TMP/digit_no_sorry.sh" 2>&1); rc=$? ;;
       check)
-        out=$(cd "$c/cwd" && ENTRY="$c/entry" bash "$TMP/digit_check.sh" 2>&1); rc=2
+        out=$(cd "$c/cwd" && ENTRY="$c/entry" LC_ALL=C.UTF-8 bash "$TMP/digit_check.sh" 2>&1); rc=2
         grep -qx "fail=0" <<<"$out" && rc=0
         grep -qx "fail=1" <<<"$out" && rc=1 ;;
     esac
@@ -941,14 +1165,275 @@ test_digit() {
       done
       for line in "${bad[@]}"; do
         digit_run "$mech" "$place" "$line"
-        if [ $rc -ne 0 ] && grep -qF -- "$line" <<<"$out"; then
-          caught "$mech, $place with $line: exit $rc, the line printed"
+        if [ $rc -ne 0 ] && LC_ALL=C grep -qF -- "$line" <<<"$out"; then
+          caught "$mech, $place with ${line@Q}: exit $rc, the line printed"
         else
-          miss "$mech, $place with $line: exit $rc, output: $(tail -n 3 <<<"$out")"
+          miss "$mech, $place with ${line@Q}: exit $rc, output: $(tail -n 3 <<<"$out" | cat -v)"
         fi
       done
     done
   done
+}
+
+# step_lines FILE JOB STEP: the lines of the step STEP of the job JOB of FILE,
+# from its line "- name:" to the last line before the next step or job; the
+# first line printed is the indentation of the dash.
+step_lines() {
+  python3 - "$1" "$2" "$3" <<'EOF'
+import sys
+path, job, name = sys.argv[1:4]
+lines = open(path, encoding="utf-8").read().split("\n")
+ind = lambda l: len(l) - len(l.lstrip(" "))
+code = lambda l: l.strip() and not l.lstrip().startswith("#")
+js = [k for k, l in enumerate(lines) if l == "  %s:" % job]
+if len(js) != 1:
+    sys.exit("the job %s is %d times in %s" % (job, len(js), path))
+j = js[0]
+end = next((k for k in range(j + 1, len(lines)) if code(lines[k]) and ind(lines[k]) <= 2), len(lines))
+names = {"- name: " + q + name + q for q in ("", '"', "'")}
+ks = [k for k in range(j + 1, end) if lines[k].strip() in names]
+if len(ks) != 1:
+    sys.exit("the step %r is %d times in the job %s of %s" % (name, len(ks), job, path))
+k = ks[0]
+dash = ind(lines[k])
+stop = next((m for m in range(k + 1, end) if code(lines[m]) and ind(lines[m]) <= dash), end)
+print(dash)
+print("\n".join(lines[k:stop]))
+EOF
+}
+
+# top_env FILE NAME: the value of the line "  NAME: <value>" of FILE, if
+# there is exactly one such line.
+top_env() {
+  local v
+  v=$(grep -E "^  $2:" "$1") && [ "$(grep -cE "^  $2:" "$1")" = 1 ] || return 1
+  v=${v#*:}
+  v=${v#"${v%%[! ]*}"}
+  printf '%s\n' "${v%"${v##*[! ]}"}"
+}
+
+test_download() {
+  local d="$TMP/download" w="$REPO/.github/workflows" step="Download Isabelle"
+  local cache="Cache the Isabelle distribution"
+  local key='key: ${{ env.ISABELLE_VERSION }}-linux-x86_64-${{ env.ISABELLE_SHA256 }}'
+  local web="https://isabelle.in.tum.de/website-" dist="https://isabelle.in.tum.de/dist"
+  local cam="https://www.cl.cam.ac.uk/"
+  local i f job ver sha code keys out rc first sum first_sha=
+  local -a files=(isabelle.yml evaluator.yml mfotl.yml evidence.yml) jobs=(build build-evaluator bridge evidence)
+  mkdir -p "$d/bin" || { miss "no directory for the test"; return; }
+  # The curl of the test.
+  cat > "$d/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+out= url= all=no
+while [ $# -gt 0 ]; do
+  case $1 in
+    -o) out=$2; shift ;;
+    --retry-all-errors) all=yes ;;
+    http*) url=$1 ;;
+  esac
+  shift
+done
+echo "$url" >> "$CURL_LOG"
+action=
+while read -r prefix act; do
+  case $url in "$prefix"*) action=$act; break ;; esac
+done < "$CURL_PLAN"
+case $action in
+  good) cp "$CURL_GOOD" "$out" ;;
+  other) cp "$CURL_OTHER" "$out" ;;
+  html) printf '<!DOCTYPE html>\n<html><head><title>Moved</title></head><body>moved</body></html>\n' > "$out" ;;
+  reset)
+    if [ $all = yes ]; then
+      cp "$CURL_GOOD" "$out"
+    else
+      head -c 100 "$CURL_GOOD" > "$out"
+      exit 56
+    fi ;;
+  *) exit 22 ;;
+esac
+EOF
+  chmod +x "$d/bin/curl"
+  # download_case LABEL A1 A2 A3 WANT: the plan A1, A2, A3 for the three
+  # prefixes; WANT good: exit 0 and the good archive unpacked; none: exit not
+  # 0 and no ~/isabelle/<version>. Sets out, rc and first (the first address).
+  download_case() {
+    local label="$f: $1" home="$d/home" isa
+    rm -rf "$home" && mkdir -p "$home" || { miss "$label: no HOME"; return; }
+    rm -f "/tmp/${ver}_linux.tar.gz"
+    [ ! -e "/tmp/${ver}_linux.tar.gz" ] || { miss "$label: /tmp/${ver}_linux.tar.gz cannot be removed"; return; }
+    printf '%s %s\n' "$web" "$2" "$dist" "$3" "$cam" "$4" > "$d/plan"
+    : > "$d/log"
+    out=$(cd "$home" && HOME="$home" PATH="$d/bin:$PATH" CURL_PLAN="$d/plan" CURL_LOG="$d/log" \
+      CURL_GOOD="$d/good.tar.gz" CURL_OTHER="$d/other.tar.gz" ISABELLE_VERSION="$ver" ISABELLE_SHA256="$sum" \
+      bash -e -c "$code" 2>&1); rc=$?
+    first=$(head -n 1 "$d/log")
+    isa="$home/isabelle/$ver/bin/isabelle"
+    if [ "$5" = good ]; then
+      if [ $rc -eq 0 ] && [ "$(cat "$isa" 2>/dev/null)" = good ]; then
+        caught "$label: exit 0, the good archive unpacked"
+      else
+        miss "$label: exit $rc, $isa: $(cat "$isa" 2>/dev/null || echo none), output: $(tail -n 3 <<<"$out")"
+      fi
+    elif [ $rc -ne 0 ] && [ ! -e "$home/isabelle/$ver" ]; then
+      caught "$label: exit $rc, no Isabelle"
+    else
+      miss "$label: exit $rc, ~/isabelle/$ver there: $([ -e "$home/isabelle/$ver" ] && echo yes || echo no)"
+    fi
+    rm -f "/tmp/${ver}_linux.tar.gz"
+  }
+  for i in 0 1 2 3; do
+    f=${files[$i]} job=${jobs[$i]}
+    ver=$(top_env "$w/$f" ISABELLE_VERSION) && [ -n "$ver" ] \
+      || { miss "$f: no single line \"  ISABELLE_VERSION:\""; continue; }
+    sha=$(top_env "$w/$f" ISABELLE_SHA256) || sha=
+    if [[ $sha =~ ^[0-9a-fA-F]{64}$ ]]; then
+      caught "$f: ISABELLE_SHA256 has 64 hexadecimal digits"
+    else
+      miss "$f: ISABELLE_SHA256 is not one line of 64 hexadecimal digits: ${sha:-none}"
+    fi
+    if [ -z "$first_sha" ]; then
+      first_sha=$sha
+    elif [ "$sha" = "$first_sha" ]; then
+      caught "$f: the ISABELLE_SHA256 of ${files[0]}"
+    else
+      miss "$f: ISABELLE_SHA256 $sha differs from that of ${files[0]}, $first_sha"
+    fi
+    keys=$(step_lines "$w/$f" "$job" "$cache" | sed 1d | sed -E 's/^ +//' | grep -E '^key:')
+    if [ "$keys" = "$key" ]; then
+      caught "$f: the key of the cache"
+    else
+      miss "$f: the key: of the step \"$cache\" of the job $job is ${keys:-none}"
+    fi
+    code=$(step_run_in "$w/$f" "$job" "$step") || { miss "$f: no run: of the step \"$step\" of the job $job"; continue; }
+    # The archives of the test, with the version of the file.
+    rm -rf "$d/tree" && mkdir -p "$d/tree/$ver/bin" || { miss "$f: no archives of the test"; continue; }
+    echo good > "$d/tree/$ver/bin/isabelle" && tar -C "$d/tree" -czf "$d/good.tar.gz" "$ver" \
+      && echo other > "$d/tree/$ver/bin/isabelle" && tar -C "$d/tree" -czf "$d/other.tar.gz" "$ver" \
+      || { miss "$f: no archives of the test"; continue; }
+    sum=$(sha256sum "$d/good.tar.gz" | cut -c1-64)
+    download_case "good at the archive of the release" good fail fail good
+    if [ "$first" = "$web$ver/dist/${ver}_linux.tar.gz" ]; then
+      caught "$f: the first address is that of the archive of the release"
+    else
+      miss "$f: the first address is ${first:-none}"
+    fi
+    download_case "reset at all three" reset reset reset good
+    download_case "other, then good" other good fail good
+    download_case "html, other, other" html other other none
+    download_case "the code 22 at all three" fail fail fail none
+    download_case "22, 22, other" fail fail other none
+  done
+}
+
+test_needs() {
+  local ev="$REPO/.github/workflows/evaluator.yml" step="Every job succeeded" code text out rc r
+  local -a five=(build-evaluator check-adapter check-translator check-conformance check-scenarios)
+  # The text: exactly one key env: of the step, and under it NEEDS.
+  text=$(step_lines "$ev" evaluate "$step") || { miss "the step \"$step\" of the job evaluate was not found"; return; }
+  if python3 - "$text" <<'EOF'
+import sys
+lines = sys.argv[1].split("\n")
+dash = int(lines[0])
+lines = lines[1:]
+ind = lambda l: len(l) - len(l.lstrip(" "))
+env = [k for k, l in enumerate(lines) if ind(l) == dash + 2 and l.strip().split(":")[0] == "env"]
+if len(env) != 1 or lines[env[0]].strip() != "env:":
+    sys.exit(1)
+k = env[0]
+under = []
+for l in lines[k + 1:]:
+    if l.strip() and ind(l) <= dash + 2:
+        break
+    under.append(l.strip())
+sys.exit(0 if "NEEDS: ${{ toJSON(needs) }}" in under else 1)
+EOF
+  then
+    caught "the step has one key env: with NEEDS: \${{ toJSON(needs) }}"
+  else
+    miss "the step has no single key env: with the line NEEDS: \${{ toJSON(needs) }}"
+  fi
+  code=$(step_run_in "$ev" evaluate "$step") || { miss "no run: of the step \"$step\""; return; }
+  # needs_json JOB=RESULT...: NEEDS as toJSON(needs) writes it.
+  needs_json() {
+    local s= sep= p
+    for p in "$@"; do
+      s+="$sep\"${p%%=*}\": {\"result\": \"${p#*=}\", \"outputs\": {}}"
+      sep=", "
+    done
+    printf '{%s}' "$s"
+  }
+  # needs_case LABEL WANT NEEDS: WANT 0 (passes) or 1 (fails).
+  needs_case() {
+    out=$(cd "$TMP" && NEEDS="$3" bash -e -c "$code" 2>&1); rc=$?
+    if { [ "$2" = 0 ] && [ $rc -eq 0 ]; } || { [ "$2" = 1 ] && [ $rc -ne 0 ]; }; then
+      caught "$1: exit $rc"
+    else
+      miss "$1: exit $rc, output: $(tail -n 3 <<<"$out")"
+    fi
+  }
+  local -a ok=()
+  for r in "${five[@]}"; do ok+=("$r=success"); done
+  needs_case "five jobs, all success" 0 "$(needs_json "${ok[@]}")"
+  for r in failure cancelled skipped; do
+    needs_case "${five[0]} $r" 1 "$(needs_json "${five[0]}=$r" "${ok[@]:1}")"
+    needs_case "${five[4]} $r" 1 "$(needs_json "${ok[@]:0:4}" "${five[4]}=$r")"
+  done
+  needs_case "five success and extra-check failure" 1 "$(needs_json "${ok[@]}" extra-check=failure)"
+  needs_case "{}" 1 "{}"
+  needs_case "a text that is not JSON" 1 "not json"
+}
+
+test_summary() {
+  local d="$TMP/summary" step="Run the artifact" code out rc
+  code=$(step_run_in "$REPO/.github/workflows/artifact.yml" artifact "$step") \
+    || { miss "the step \"$step\" of the job artifact was not found"; return; }
+  mkdir -p "$d/bin" || { miss "no directory for the test"; return; }
+  # The docker of the test.
+  cat > "$d/bin/docker" <<'EOF'
+#!/usr/bin/env bash
+case $1 in
+  run)
+    shift
+    dir=
+    while [ $# -gt 0 ]; do
+      if [ "$1" = -v ]; then dir=${2%%:*}; shift; fi
+      shift
+    done
+    if [ -n "$SUMMARY_LINE" ]; then
+      printf '=== Summary\n%s\n' "$SUMMARY_LINE" > "$dir/summary.txt"
+    fi
+    echo container-of-the-test ;;
+  logs) echo "the log of the container" ;;
+  wait) echo "$SUMMARY_CODE" ;;
+esac
+exit 0
+EOF
+  chmod +x "$d/bin/docker"
+  # summary_case LABEL WANT LINE CODE [BEFORE]: the container writes LINE (no
+  # summary.txt if empty) and exits with CODE; BEFORE, if given, is the line
+  # of a results/summary.txt there before the step. WANT 0: the step passes;
+  # 1: it fails.
+  summary_case() {
+    local work="$d/work"
+    rm -rf "$work" && mkdir -p "$work" || { miss "$1: no directory"; return; }
+    if [ -n "${5:-}" ]; then
+      mkdir -p "$work/results" && printf '=== Summary\n%s\n' "$5" > "$work/results/summary.txt"
+    fi
+    out=$(cd "$work" && PATH="$d/bin:$PATH" SUMMARY_LINE="$3" SUMMARY_CODE="$4" bash -e -c "$code" 2>&1); rc=$?
+    if { [ "$2" = 0 ] && [ $rc -eq 0 ]; } || { [ "$2" = 1 ] && [ $rc -ne 0 ]; }; then
+      caught "$1: exit $rc"
+    else
+      miss "$1: exit $rc, output: $(tail -n 3 <<<"$out")"
+    fi
+  }
+  summary_case "all 15 steps passed, code 0" 0 "RESULT: all 15 steps passed" 0
+  summary_case "all 14 steps passed, code 0" 1 "RESULT: all 14 steps passed" 0
+  summary_case "all 0 steps passed, code 0" 1 "RESULT: all 0 steps passed" 0
+  summary_case "FAILED: 03-exported-code, code 0" 1 "RESULT: FAILED: 03-exported-code" 0
+  summary_case "no summary.txt, code 0" 1 "" 0
+  summary_case "all 15 steps passed, code 1" 1 "RESULT: all 15 steps passed" 1
+  summary_case "no summary.txt from the container, an old one with all 15 steps passed" 1 "" 0 \
+    "RESULT: all 15 steps passed"
 }
 
 "test_$1"

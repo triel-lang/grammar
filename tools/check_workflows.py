@@ -60,6 +60,7 @@ IF = {
 }
 for name in ("test_ci61 G1", "test_ci61 G2", "test_ci61 G3", "test_ci61 G4", "test_ci61 G1 run.sh",
              "test_ci61 G4 run.sh", "test_ci61 steps", "test_ci61 jobs", "test_ci61 digit", "test_ci61 order",
+             "test_ci61 download", "test_ci61 needs", "test_ci61 summary",
              "No step of evaluator.yml continues on error or is skipped unless named",
              "Every required check is one job that runs on every branch",
              "The checks of the export and of run.sh run in order"):
