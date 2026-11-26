@@ -77,8 +77,10 @@ no_sorry() {
     files+=("${thy[@]}")
   done
   # A word counts after a digit too (Isabelle reads 1sorry as 1 and sorry),
-  # but not before a letter, a digit, _ or ' (sorry_free is a name).
-  grep -nE "(^|[^A-Za-z])(sorry|oops|axiomatization)([^A-Za-z0-9_']|\$)" "${files[@]}"
+  # but not before a letter, a digit, _ or ' (sorry_free is a name). The
+  # search reads bytes (LC_ALL=C, -a): in a UTF-8 locale a byte that is not
+  # UTF-8 is no match of [^A-Za-z], and the word after it would be missed.
+  LC_ALL=C grep -anE "(^|[^A-Za-z])(sorry|oops|axiomatization)([^A-Za-z0-9_']|\$)" "${files[@]}"
   rc=$?
   if [ $rc -eq 0 ]; then
     echo "error: sorry, oops or axiomatization found"

@@ -15,6 +15,10 @@ permissions:
 
 env:
   ISABELLE_VERSION: Isabelle2025-2
+  # The sha256 of the archive, from the page of the archives of the release
+  # (https://isabelle.in.tum.de/website-Isabelle2025-2/dist/); it is also part
+  # of the key of the cache, so that only a checked archive is cached.
+  ISABELLE_SHA256: a20a507bc7c1270d8be96a9f3fbec06345387789d2dc2c4d3df6260d47bfb33c
   # AFP release afp-2025-2 for Isabelle2025-2, from the mirror isabelle-prover/mirror-afp-2025-2.
   AFP_COMMIT: fa30b560ab754bfbb7a721ee45a921d4b3c04358
   # The sessions that TRIEL_MFOTL needs: MFOTL_Checker and everything it builds on.
@@ -166,18 +170,20 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/isabelle/${{ env.ISABELLE_VERSION }}
-          key: ${{ env.ISABELLE_VERSION }}-linux-x86_64
+          key: ${{ env.ISABELLE_VERSION }}-linux-x86_64-${{ env.ISABELLE_SHA256 }}
 
       - name: Download Isabelle
         if: ${{ !cancelled() && steps.cache-isabelle.outputs.cache-hit != 'true' }}
         run: |
           archive="${ISABELLE_VERSION}_linux.tar.gz"
-          for base in https://isabelle.in.tum.de/dist https://www.cl.cam.ac.uk/research/hvg/Isabelle/dist; do
-            if curl -fL --retry 3 -o "/tmp/$archive" "$base/$archive"; then
+          for base in "https://isabelle.in.tum.de/website-${ISABELLE_VERSION}/dist" https://isabelle.in.tum.de/dist https://www.cl.cam.ac.uk/research/hvg/Isabelle/dist; do
+            rm -f "/tmp/$archive"
+            if curl -fL --connect-timeout 30 --retry 5 --retry-all-errors --retry-delay 10 -o "/tmp/$archive" "$base/$archive" \
+                && echo "$ISABELLE_SHA256  /tmp/$archive" | sha256sum -c -; then
               break
             fi
           done
-          test -s "/tmp/$archive"
+          echo "$ISABELLE_SHA256  /tmp/$archive" | sha256sum -c -
           mkdir -p ~/isabelle
           tar -xzf "/tmp/$archive" -C ~/isabelle
           rm "/tmp/$archive"

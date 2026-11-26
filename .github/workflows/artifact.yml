@@ -1,8 +1,10 @@
 name: Artifact image
 
+# The image is built on main and on the final branch of a stage, not on its
+# working branches stage*-*.
 on:
   push:
-    branches: [main, 'stage*']
+    branches: [main, 'stage*', '!stage*-*']
 
 jobs:
   artifact:
@@ -41,6 +43,7 @@ jobs:
       # and the peak is in the clean Isabelle build, long before the end.
       - name: Run the artifact
         run: |
+          rm -rf results
           mkdir -p results
           chmod 777 results
           id=$(docker run -d -e RESULTS_DIR=/results -v "$PWD/results:/results" triel-artifact)
@@ -62,7 +65,9 @@ jobs:
           else
             echo "memory peak of the container: not measured (no memory.peak found)" | tee results/memory-peak.txt
           fi
-          exit "$status"
+          [ "$status" -eq 0 ] || exit "$status"
+          # run.sh writes the summary last: all fifteen steps ran and passed.
+          grep -qx 'RESULT: all 15 steps passed' results/summary.txt
 
       - name: Keep the logs
         if: always()

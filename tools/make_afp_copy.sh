@@ -106,7 +106,9 @@ U=$URL perl -0pi -e '
 # Checks. grep exits with 1 when it finds nothing, 0 when it finds a line, and
 # with any other code when it fails, for example on a file it cannot read; a
 # failure fails the check. A failed cd into the entry gives the code 2, so it
-# fails the check too, instead of reading as a grep that found nothing.
+# fails the check too, instead of reading as a grep that found nothing. The
+# search reads bytes (LC_ALL=C, -a): in a UTF-8 locale a byte that is not UTF-8
+# is no match of [^A-Za-z], and the word after it would be missed.
 fail=0
 check() {  # check MESSAGE GREP-OPTIONS PATTERN
   local hits rc=0
@@ -119,7 +121,7 @@ check() {  # check MESSAGE GREP-OPTIONS PATTERN
     fail=1
     return 0
   fi
-  hits=$(cd "$ENTRY" || exit 2; grep -nE $2 -e "$3" -- ROOT "${thy[@]##*/}") || rc=$?
+  hits=$(cd "$ENTRY" || exit 2; LC_ALL=C grep -anE $2 -e "$3" -- ROOT "${thy[@]##*/}") || rc=$?
   if [ $rc -eq 0 ]; then
     printf 'error: %s:\n%s\n' "$1" "$hits" >&2
     fail=1

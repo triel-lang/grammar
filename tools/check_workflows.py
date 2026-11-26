@@ -29,18 +29,44 @@ jobs   Each check in REQUIRED is the name of exactly one job of all the files
        A file whose name ends in .yml or .yaml with a capital letter is a
        problem, and is read as the others; so is a file with both the key on
        and the key "on" (YAML 1.1 reads the key on as true).
+       Further, for each check of REQUIRED: its on.pull_request, if there is
+       one with a value, is a mapping; a pattern of the branches of on.push
+       that starts with ! is a problem unless it is exactly FINAL_ONLY (the
+       image of the artifact is built on main and on the final branch of a
+       stage, not on its working branches); its job, unless it is evaluate,
+       has no needs (a job it waits for could be skipped, and the check with
+       it). A key that differs from one of CASE_KEYS only in the case of its
+       letters is a problem at the top level of every file, and in on,
+       on.push, on.pull_request and the job of each check of REQUIRED: GitHub
+       does not read it as that key.
 order  In the job build-evaluator of evaluator.yml each of the steps of ORDER
        is there exactly once, in the order of ORDER (other steps may stand
-       between them). The lines of artifact/run.sh that start with "step " are
-       exactly the lines of RUN_STEPS, in that order, and each function of
-       RUN_STEPS is defined in run.sh by a line "<function>() {".
+       between them). The steps of EXPORT are there exactly once each, one
+       right after the other in the order of EXPORT, and the sha256 of each,
+       read as JSON (json.dumps with sort_keys, ensure_ascii=False and the
+       separators "," and ":", as UTF-8), is the one of EXPORT_SHA256. The
+       lines of artifact/run.sh that start with "step " are exactly the lines
+       of RUN_STEPS, in that order, one right after the other. Each function
+       of RUN_STEPS and the function step is defined in run.sh by a line
+       "<function>() {" and nowhere else: the file holds exactly one
+       definition of it, <function>(), <function> () or function <function>
+       anywhere in a line after the start of the line, a blank, ;, &, |, (, {,
+       a backquote or a quote, and that is its line "<function>() {". The
+       sha256 of the lines of run.sh outside these sixteen functions (each
+       from its line "<function>() {" to the next line "}"), joined by line
+       breaks, as UTF-8, is RUN_OUTSIDE: no line between, before or after the
+       steps changes what they do.
 
-A file that cannot be read, is not YAML, is empty or has no jobs is a problem
-too, not a file left out.
+Every workflow file is read so that a key repeated in a mapping is a problem
+of the file (YAML 1.1 reads on, On and true as one key, and PyYAML would keep
+the last of them without a word). A file that cannot be read, is not YAML, is
+empty or has no jobs is a problem too, not a file left out.
 
 Exit code: 0 if the check passes (one line of summary); 1 with one line for
 each problem found; 2 on a usage error or without PyYAML.
 """
+import hashlib
+import json
 import re
 import sys
 from pathlib import Path
@@ -69,6 +95,11 @@ for name in ("test_ci61 G1", "test_ci61 G2", "test_ci61 G3", "test_ci61 G4", "te
 # The checks that the rule of the branch main requires.
 REQUIRED = ["parse", "evaluate", "build", "build-log", "afp", "afp-2026", "afp-2026-lint",
             "artifact", "anonymous-archive", "bench"]
+# The one pattern with ! that the branches of on.push of a required check may hold.
+FINAL_ONLY = "!stage*-*"
+# The keys that a key may not differ from only in case.
+CASE_KEYS = ["on", "jobs", "push", "pull_request", "branches", "branches-ignore", "paths", "paths-ignore", "tags",
+             "tags-ignore", "if", "continue-on-error", "strategy", "uses", "needs", "name"]
 PUSH_KEYS_NOT_ALLOWED = ["paths", "paths-ignore", "branches-ignore", "tags", "tags-ignore"]
 PR_KEYS_NOT_ALLOWED = ["paths", "paths-ignore"]
 JOB_KEYS_NOT_ALLOWED = ["continue-on-error", "strategy", "uses"]
@@ -79,6 +110,16 @@ BRANCHES = ["main", "stage*"]
 ORDER_JOB = "build-evaluator"
 ORDER = ["Remove the exported code before the export", "Build TRIEL_Core and export the evaluator",
          "The committed code is the exported code"]
+# The four steps of the export, one right after the other, each pinned by the
+# sha256 of its JSON.
+EXPORT = ["Remove the exported code before the export", "Build TRIEL_Core and export the evaluator",
+          "Post the exported code as commit comments when it differs", "The committed code is the exported code"]
+EXPORT_SHA256 = {
+    EXPORT[0]: "5e7fd16098620bc921c157eefae2e9816c7117dc369122f64c1ab326cc5bd1ad",
+    EXPORT[1]: "190ea20bdc4622c18b6525fadb7019a98d4989489a44ec0c4e1fdfa365c27ed3",
+    EXPORT[2]: "41652b5ce4fa46dbeb2ce1f5237da23c2df709d128aa3dca760b7dcba95e4317",
+    EXPORT[3]: "49d2a2f5e43017a6395e73671cd9a60c62607a8090378e295fc79f10057e447d",
+}
 
 # The lines "step <label> <function>" of artifact/run.sh, in their order.
 RUN_STEPS = [("01-no-sorry", "no_sorry"), ("02-isabelle-build", "isabelle_build"),
@@ -88,6 +129,39 @@ RUN_STEPS = [("01-no-sorry", "no_sorry"), ("02-isabelle-build", "isabelle_build"
              ("10-document-excerpts", "document_excerpts"), ("11-paper-theorems", "paper_theorems"),
              ("12-conformance", "conformance"), ("13-conformance-manifest", "conformance_manifest"),
              ("14-conformance-self-check", "conformance_self_check"), ("15-no-oracles", "no_oracles")]
+# The functions of run.sh that the order pins: step and those of RUN_STEPS.
+RUN_FUNCTIONS = ["step"] + [fn for _, fn in RUN_STEPS]
+# The sha256 of the lines of run.sh outside the functions of RUN_FUNCTIONS.
+RUN_OUTSIDE = "05807f0b364fa4384392e03cada6a9c4bfff2848ebdcff87f8fdb5485cb94bea"
+
+
+class Repeated(Exception):
+    """A key repeated in a mapping of a workflow file."""
+
+
+def unique_loader():
+    """A SafeLoader that raises Repeated on a key repeated in a mapping, as read by YAML 1.1."""
+    class Loader(yaml.SafeLoader):
+        pass
+
+    def mapping(loader, node, deep=False):
+        loader.flatten_mapping(node)
+        lines = {}
+        for key_node, _ in node.value:
+            key = loader.construct_object(key_node, deep=deep)
+            try:
+                first = lines.get(key)
+            except TypeError:
+                continue
+            line = key_node.start_mark.line + 1
+            if first is not None:
+                raise Repeated("the key %r of line %d repeats the key %r of line %d in one mapping"
+                               % (key_node.value, line, first[1], first[0]))
+            lines[key] = (line, key_node.value)
+        return yaml.SafeLoader.construct_mapping(loader, node, deep=deep)
+
+    Loader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, mapping)
+    return Loader
 
 
 def read(path, problems):
@@ -109,7 +183,10 @@ def load(path, problems):
     if text is None:
         return None
     try:
-        w = yaml.safe_load(text)
+        w = yaml.load(text, Loader=unique_loader())
+    except Repeated as e:
+        problems.append("%s: %s; YAML 1.1 reads on, On and true as one key, and only the last is read" % (path, e))
+        return None
     except yaml.YAMLError as e:
         problems.append("%s: not YAML: %s" % (path, " ".join(str(e).split())))
         return None
@@ -217,6 +294,16 @@ def workflow_files(problems):
     return files
 
 
+def case_keys(d, at, problems):
+    """A key of the mapping d that differs from one of CASE_KEYS only in case; at names d."""
+    if not isinstance(d, dict):
+        return
+    for k in d:
+        if isinstance(k, str) and k not in CASE_KEYS and k.lower() in CASE_KEYS:
+            problems.append("%s: the key %r differs from %s only in case, and is not read as it"
+                            % (at, k, k.lower()))
+
+
 def jobs():
     problems = []
     found, loaded = {}, {}
@@ -225,6 +312,7 @@ def jobs():
         if w is None:
             continue
         loaded[f.name] = w
+        case_keys(w, str(f), problems)
         if "on" in w and True in w:
             problems.append('%s: both the key on and the key "on"; YAML 1.1 reads on: as true, and only one '
                             "of the two is read as the events" % f)
@@ -250,10 +338,13 @@ def jobs():
             continue
         f, key, j, w = fs[0]
         on = events(w)
+        at = "%s: %s" % (r, f.name)
+        case_keys(on, at + " on", problems)
         if "push" not in on:
             problems.append("%s: %s does not run on push" % (r, f.name))
         else:
             push = on["push"] if isinstance(on["push"], dict) else {}
+            case_keys(on["push"], at + " on.push", problems)
             for k in PUSH_KEYS_NOT_ALLOWED:
                 if k in push:
                     problems.append("%s: on.push of %s has %s" % (r, f.name, k))
@@ -263,19 +354,26 @@ def jobs():
                 problems.append("%s: on.push.branches of %s is %r, without %s"
                                 % (r, f.name, push.get("branches"), " and ".join(missing)))
             for b in branches:
-                if b.startswith("!"):
-                    problems.append("%s: on.push.branches of %s has %r; a pattern with ! leaves branches out"
-                                    % (r, f.name, b))
+                if b.startswith("!") and b != FINAL_ONLY:
+                    problems.append("%s: on.push.branches of %s has %r; a pattern with ! leaves branches out, "
+                                    "and only %r may" % (r, f.name, b, FINAL_ONLY))
         pr = on.get("pull_request")
+        if pr is not None and not isinstance(pr, dict):
+            problems.append("%s: on.pull_request of %s is %r, not a mapping" % (r, f.name, pr))
         if isinstance(pr, dict):
+            case_keys(pr, at + " on.pull_request", problems)
             for k in PR_KEYS_NOT_ALLOWED:
                 if k in pr:
                     problems.append("%s: on.pull_request of %s has %s" % (r, f.name, k))
+        case_keys(j, "%s: the job %s of %s" % (r, key, f.name), problems)
         if "if" in j and j["if"] != "always()":
             problems.append("%s: the job %s of %s has if: %r" % (r, key, f.name, j["if"]))
         for k in JOB_KEYS_NOT_ALLOWED:
             if k in j:
                 problems.append("%s: the job %s of %s has %s" % (r, key, f.name, k))
+        if r != "evaluate" and "needs" in j:
+            problems.append("%s: the job %s of %s has needs: %r; a required job other than evaluate waits for no "
+                            "job" % (r, key, f.name, j["needs"]))
     # The needs of evaluate: the other jobs of evaluator.yml, as the file lists them.
     w = loaded.get(EVALUATOR.name)
     e = w["jobs"].get("evaluate") if w else None
@@ -313,27 +411,99 @@ def order():
             if len(at) == len(ORDER) and [at[s] for s in ORDER] != sorted(at.values()):
                 problems.append("%s: job %s: the steps are not in the order %s"
                                 % (EVALUATOR, ORDER_JOB, ", then ".join('"%s"' % s for s in ORDER)))
+            export_steps(st, names, problems)
     text = read(RUN_SH, problems)
     if text is not None:
-        lines = text.split("\n")
-        got = [l.split() for l in lines if re.match(r"step\s", l)]
-        want = [["step", label, fn] for label, fn in RUN_STEPS]
-        for i in range(max(len(got), len(want))):
-            if i >= len(got):
-                problems.append("%s: the line %d of the steps is missing; the order needs step %s %s there"
-                                % (RUN_SH, i + 1, want[i][1], want[i][2]))
-            elif i >= len(want):
-                fn = got[i][2] if len(got[i]) > 2 else ""
-                problems.append("%s: the line %d of the steps, %s, is one more than the %d of the order; function %s"
-                                % (RUN_SH, i + 1, " ".join(got[i]), len(want), fn))
-            elif got[i] != want[i]:
-                problems.append("%s: the line %d of the steps is %s; the order needs step %s %s there"
-                                % (RUN_SH, i + 1, " ".join(got[i]), want[i][1], want[i][2]))
-        for label, fn in RUN_STEPS:
-            if not any(re.match(r"%s\(\) \{(\s|$)" % re.escape(fn), l) for l in lines):
-                problems.append("%s: the function %s of the step %s is not defined by a line %s() {"
-                                % (RUN_SH, fn, label, fn))
+        run_sh(text.split("\n"), problems)
     return problems
+
+
+def export_steps(st, names, problems):
+    """The steps of EXPORT in st (names: their names), one after the other and each with its sha256."""
+    at = {}
+    for s in EXPORT:
+        k = [i for i, n in enumerate(names) if n == s]
+        if len(k) != 1:
+            problems.append('%s: job %s, step "%s": there %d times; each step of the export is there once'
+                            % (EVALUATOR, ORDER_JOB, s, len(k)))
+        else:
+            at[s] = k[0]
+    if len(at) != len(EXPORT):
+        return
+    start = at[EXPORT[0]]
+    for i, s in enumerate(EXPORT[1:], 1):
+        if start + i >= len(names) or names[start + i] != s:
+            there = names[start + i] if start + i < len(names) else None
+            problems.append('%s: job %s, step "%s": it stands where "%s" belongs; the steps %s follow each other'
+                            % (EVALUATOR, ORDER_JOB, there if there is not None else s, s,
+                               ", ".join('"%s"' % e for e in EXPORT)))
+            break
+    for s in EXPORT:
+        h = hashlib.sha256(json.dumps(st[at[s]], sort_keys=True, ensure_ascii=False,
+                                      separators=(",", ":")).encode("utf-8")).hexdigest()
+        if h != EXPORT_SHA256[s]:
+            problems.append('%s: job %s, step "%s": the sha256 of the step is %s; the check pins %s'
+                            % (EVALUATOR, ORDER_JOB, s, h, EXPORT_SHA256[s]))
+
+
+def definitions(lines, fn):
+    """The numbers of the lines of lines with a definition of the function fn of bash, a line once for each
+    definition in it."""
+    p = re.compile(r"""(?<![^ \t;&|({`"'])(function[ \t]+%s(?=[ \t({]|$)|%s[ \t]*\([ \t]*\))"""
+                   % (re.escape(fn), re.escape(fn)))
+    return [i + 1 for i, l in enumerate(lines) for _ in p.finditer(l)]
+
+
+def outside(lines):
+    """The sha256 of the lines outside the functions of RUN_FUNCTIONS, each from its line "<function>() {"
+    to the next line "}"."""
+    start = re.compile(r"(%s)\(\) \{(\s|$)" % "|".join(re.escape(fn) for fn in RUN_FUNCTIONS))
+    kept, i = [], 0
+    while i < len(lines):
+        if start.match(lines[i]):
+            i = next((k for k in range(i + 1, len(lines)) if lines[k].strip() == "}"), len(lines)) + 1
+        else:
+            kept.append(lines[i])
+            i += 1
+    return hashlib.sha256("\n".join(kept).encode("utf-8")).hexdigest()
+
+
+def run_sh(lines, problems):
+    """The lines step of run.sh, the definitions of its functions and its lines outside them."""
+    got = [l.split() for l in lines if re.match(r"step\s", l)]
+    want = [["step", label, fn] for label, fn in RUN_STEPS]
+    for i in range(max(len(got), len(want))):
+        if i >= len(got):
+            problems.append("%s: the line %d of the steps is missing; the order needs step %s %s there"
+                            % (RUN_SH, i + 1, want[i][1], want[i][2]))
+        elif i >= len(want):
+            fn = got[i][2] if len(got[i]) > 2 else ""
+            problems.append("%s: the line %d of the steps, %s, is one more than the %d of the order; function %s"
+                            % (RUN_SH, i + 1, " ".join(got[i]), len(want), fn))
+        elif got[i] != want[i]:
+            problems.append("%s: the line %d of the steps is %s; the order needs step %s %s there"
+                            % (RUN_SH, i + 1, " ".join(got[i]), want[i][1], want[i][2]))
+    at = [i for i, l in enumerate(lines) if re.match(r"step\s", l)]
+    for i in range(1, len(at)):
+        if at[i] != at[i - 1] + 1:
+            fn = got[i][2] if len(got[i]) > 2 else ""
+            problems.append("%s: the line %d, %s, does not follow the line step before it (line %d); the lines "
+                            "step follow each other; function %s" % (RUN_SH, at[i] + 1, " ".join(got[i]),
+                                                                     at[i - 1] + 1, fn))
+            break
+    label = dict((fn, label) for label, fn in RUN_STEPS)
+    for fn in RUN_FUNCTIONS:
+        of = "the function %s of the step %s" % (fn, label[fn]) if fn in label else "the function %s" % fn
+        if not any(re.match(r"%s\(\) \{(\s|$)" % re.escape(fn), l) for l in lines):
+            problems.append("%s: %s is not defined by a line %s() {" % (RUN_SH, of, fn))
+        d = definitions(lines, fn)
+        if len(d) > 1:
+            problems.append("%s: %s() is defined %d times (lines %s); %s is defined once, by its line %s() {"
+                            % (RUN_SH, fn, len(d), ", ".join(map(str, d)), of, fn))
+    h = outside(lines)
+    if h != RUN_OUTSIDE:
+        problems.append("%s: the sha256 of the lines outside the %d functions is %s; the check pins %s"
+                        % (RUN_SH, len(RUN_FUNCTIONS), h, RUN_OUTSIDE))
 
 
 def main(argv):
@@ -349,10 +519,12 @@ def main(argv):
         print("%s: no continue-on-error; if: at the %d jobs and steps of the list only, each with its value"
               % (EVALUATOR, len(IF)))
     elif argv[0] == "jobs":
-        print("each of the %d required checks is one job that runs on every push to main and stage*" % len(REQUIRED))
+        print("each of the %d required checks is one job that runs on every push to main and stage* (a branch of "
+              "%s left out only by %r)" % (len(REQUIRED), "stage*", FINAL_ONLY))
     else:
-        print("%s: the %d steps of the export in order; %s: the %d steps in order, each function defined"
-              % (EVALUATOR, len(ORDER), RUN_SH, len(RUN_STEPS)))
+        print("%s: the %d steps of the export in order, one after the other, each as pinned; %s: the %d steps in "
+              "order, one after the other, each function defined once, the lines outside them as pinned"
+              % (EVALUATOR, len(EXPORT), RUN_SH, len(RUN_STEPS)))
     return 0
 
 
